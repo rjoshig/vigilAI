@@ -1,8 +1,10 @@
 # Phase 6.1 — Richer inputs and a trainable rule loop
 
-**Status:** ⬜ **not started** — specified 2026-09-18 at the user's request, to be
-scheduled. Depends on Phase 4 (checks as data) and ADR-020 (the catalog as data). It
-does **not** depend on Phase 6 finishing, and it does not touch Phase 7.
+**Status:** ⬜ **not started** — specified 2026-09-18, design questions answered the
+same day (see "Decisions"), scheduled **after Phase 6.2** so the training loop is
+attributed to real people from the first day rather than retrofitted. Depends on
+Phase 4 (checks as data) and ADR-020 (the catalog as data). It does **not** depend on
+Phase 6 finishing, and it does not touch Phase 7.
 
 **Goal:** two things the tool cannot do today.
 
@@ -201,6 +203,19 @@ on.
       assembled (ADR-018 extended). A reviewer typing while looking at real data is
       exactly where an account number gets pasted, and rejecting it at the source with
       a clear message is the only place the person can still fix it.
+- [ ] **Anyone may file an observation**, with their name recorded (the placeholder
+      while login is off, per ADR-022). Observations are inert until an administrator
+      acts, so approval is the real control and a permission list would be machinery
+      guarding nothing.
+- [ ] **The form shows the rules that already cover the field or anchor** being
+      commented on. This is the cheapest defence against a queue that fills with five
+      versions of one insight, and it teaches people what the tool already checks.
+- [ ] **An observation is editable by its author until an administrator queues it**,
+      after which it freezes. Every edit is versioned, so the audit trail survives the
+      convenience.
+- [ ] **An observation that contradicts an active rule is flagged as a conflict**, not
+      filtered out. Someone on the ground saying the opposite of a live rule is often
+      the most valuable thing in the queue, and the administrator sees both.
 - [ ] A reviewer can raise an observation straight from a finding — "this fired but it
       is fine, because…" — which turns the dismissals the tool already collects into
       training input instead of leaving them as a review note nobody reads again.
@@ -257,6 +272,10 @@ The administrator-facing half. Nothing here runs by itself.
       at when tuning the prompt. From approval on, the pipeline treats the rule like
       any other. The run fingerprint already includes active check versions, so a new
       rule correctly invalidates the duplicate shortcut.
+- [ ] **The author hears back.** A status list shows each observation as queued,
+      synthesized, approved, or rejected, with the administrator's reason on a
+      rejection and a link to the rule on an approval. Without this, contributions
+      stop within a month.
 - [ ] `field_constraints`: `field` (canonical name, resolved through the alias table),
       `constraint` (`not_blank` | `allowed_values` | `forbidden_values` | `range` |
       `format` | `fill_rate_min`), `value` (JSON), `scope`, `severity`, `reasoning`,
@@ -274,10 +293,12 @@ The part that makes "smarter over time" true rather than aspirational.
       it. Warn-then-enforce is standard practice for exactly this reason: a new rule's
       precision is unknown until it has met real data, and going straight to enforcing
       spends reviewer trust that is slow to earn back.
-- [ ] **The promotion gate is a minimum sample and a precision floor**, not a hunch:
-      the rule must have been evaluated on at least N runs, and the share of its
-      findings a reviewer dismissed must sit under a ceiling. The numbers are an open
-      question below; having them written down at all is the point.
+- [ ] **An administrator activates, with the numbers in front of them.** No automatic
+      bar: the activation screen shows fired count, dismissal rate, and the shadow
+      findings themselves, and a person decides. This was chosen over a fixed
+      threshold because a rule that fires rarely would sit in shadow forever waiting
+      for a sample it never gets. The cost is that the bar moves with whoever is
+      looking, which is why the numbers are shown rather than summarised.
 - [ ] Per-rule statistics on the usage dashboard: times fired, share of its findings
       marked **Not OK** (kept) versus **OK** (dismissed), last fired, age.
 - [ ] **Noisy-rule and dead-rule reports.** A rule whose findings are dismissed above a
@@ -330,27 +351,26 @@ The part that makes "smarter over time" true rather than aspirational.
 10. [ ] An observation containing an instruction to the model does not change the shape
     of the synthesized rule, and one containing PII is refused when saved.
 
-## Open questions for the user
+## Decisions (2026-09-18)
 
-These change the design, not just the implementation. Answers become ADRs.
+Answered by the user; the reasoning is in ADR-021.
 
-- [ ] **Who may train?** Every user, or a named group? v1 has no login (ADR-008), so
-      today "author" is a typed name and anyone can file an observation. Only an
-      administrator can promote, which is the real control — but it is worth saying out
-      loud whether that is enough.
-- [ ] **Default scope for a learned rule.** The request says rules apply globally. The
-      safer default is the narrowest scope the observation supports — the customer or
-      the programme it came from — with "make global" as a deliberate second action.
-      Global by default is faster; narrow by default is far easier to live with.
-- [ ] **Shadow period and precision floor.** How many runs must a rule survive, and
-      what dismissal rate is too high? A commonly used starting point elsewhere is a
-      false-positive ceiling around one in ten, but the right number depends on how
-      costly a wasted review is here.
+| Question | Decision |
+| --- | --- |
+| Default scope of a learned rule | **The narrowest that fits** — the customer or programme the observation came from. Going global is a separate, deliberate action. Under-scoped assumptions are the top cause of false positives, and a rule that fires wrongly everywhere is what stops people reading findings. |
+| Who may file an observation | **Anyone**, with their name recorded. Approval is the real control. |
+| Several files per report type | **One finding per failing part**, naming the part. Precise, and never silently wrong. |
+| Leaving shadow mode | **An administrator activates**, with fired count, dismissal rate, and the shadow findings shown. No automatic threshold. |
+| How much history replay may read | **The golden set plus recent finalized runs.** Replay re-reads stored customer files on the server, which is accepted; nothing leaves it. |
+| Do observations outlive the 90-day purge | **Yes, kept indefinitely**, including their text. They are institutional knowledge, and the tripwire is what keeps customer data out of them at save time. |
+| Editing an observation | **Editable until an administrator queues it**, then frozen. Versioned throughout. |
+| Showing existing rules while writing | **Yes, inline**, to stop duplicate observations. |
+| An observation contradicting an active rule | **Flagged as a conflict** for the administrator, as a signal the old rule may be wrong. |
+| Telling the author the outcome | **Yes, with the reason.** |
+
+## Still open
+
 - [ ] **Does a learned rule ever expire?** A rule nobody has seen fire in a year is
-      either load-bearing or dead, and there is no way to tell from the inside.
-- [ ] **Several files per report type: one finding or many?** The proposal is one per
-      part. If a campaign routinely ships twenty parts, that is twenty findings a
-      reviewer must decide, and grouping them may be better.
-- [ ] **How much history may replay use?** Replaying against finalized runs means
-      re-reading stored customer files. That is allowed and stays on the server, but it
-      deserves an explicit yes.
+      either load-bearing or dead, and there is no way to tell from the inside. The
+      dead-rule report in 6.1g surfaces the candidates; whether anything expires on its
+      own is undecided.

@@ -1,9 +1,9 @@
 # Phase 6.2 — Optional login and attribution
 
-**Status:** ⬜ **not started** — specified 2026-09-18 at the user's request, to be
-scheduled. Depends on nothing; it can be built before, during, or after Phase 6.1,
-though the two meet in 6.2e and building 6.1 first makes that milestone concrete
-rather than speculative.
+**Status:** ⬜ **not started** — specified 2026-09-18, design questions answered the
+same day (see "Decisions"). **This is the next phase to build**, ahead of Phase 6.1,
+so the training loop is attributed to real people from its first day rather than
+retrofitted. Depends on nothing.
 
 **Goal:** know who did what, without making anyone log in.
 
@@ -51,11 +51,15 @@ at startup saying so.
 
 The bootstrap account is `admin` / `admin123`, as requested. That is a fine way to get
 into a fresh install on a laptop and an unacceptable thing to leave running anywhere
-else, so three things hold it in place: the account must change its password at first
-sign-in before it can do anything else, the API logs a warning on every startup while
-the default is unchanged, and the admin console shows a banner until it is. Whether a
-production deployment should refuse to serve at all while the default stands is an
-open question below; the recommendation is that it should.
+else, so four things hold it in place.
+
+- The account must change its password at first sign-in before it can do anything else.
+- The API logs a warning on every startup while the default is unchanged.
+- The admin console shows a banner until it is changed.
+- **The API refuses to serve at all** when admin auth is on, the password is still the
+  default, and it is bound to anything other than loopback. A warning is easy to miss,
+  and this is the one credential everybody knows. A laptop install is unaffected,
+  because loopback is exempt.
 
 ## Scope · ⬜ not started
 
@@ -99,10 +103,11 @@ both sides.
       accounts, because there is no second place to administer people from.
 - [ ] **Deactivate, never delete.** An account that did things keeps existing so its
       work stays attributed. Deletion is not offered.
-- [ ] Sensible account rules, each of which is one line of code and saves an
-      afternoon later: a minimum password length, a lockout after repeated failures
-      that clears itself after a cooling-off period, and a refusal to reuse the
-      password being replaced.
+- [ ] Account rules, deliberately short: **a twelve-character minimum** and **a
+      lockout after repeated failures** that clears itself after a cooling-off period.
+      No complexity classes and no expiry, because forced rotation and character-class
+      rules push people toward predictable patterns and current guidance treats both
+      as doing more harm than good. Reusing the password being replaced is refused.
 
 ### 6.2c — Sessions · ⬜ not started
 
@@ -114,8 +119,13 @@ both sides.
       over TLS. It holds the session id and nothing else.
 - [ ] Sign out revokes the row. An administrator can revoke another account's
       sessions, which is what deactivating an account does as a side effect.
-- [ ] An absolute lifetime and an idle timeout, both configurable, both with defaults
-      that suit an internal tool rather than a bank.
+- [ ] **Eight hours absolute, one hour idle**, both configurable. That suits a tool
+      people use in bursts through a working day, and it does not leave a session open
+      overnight on a shared machine.
+- [ ] The table is shaped so an external identity provider can attach to it later: a
+      session records how it was established, and nothing assumes the credential was a
+      local password. Single sign-on is expected eventually, and this costs nothing
+      now.
 - [ ] Login pages in both UIs, shown only when the relevant switch is on, plus the
       forced password-change screen. Nothing else in either UI changes.
 
@@ -193,23 +203,16 @@ milestone is a no-op.
 9. [ ] A synthesized observation is marked as synthesized with its date and target, is
    still present and readable, and asking again says so rather than repeating the work.
 
-## Open questions for the user
+## Decisions (2026-09-18)
 
-- [ ] **Should production refuse to start on the default password?** The
-      recommendation is yes when admin auth is on and the process is not on loopback.
-      A warning is easy to miss, and this is the one credential everybody knows.
-- [ ] **Session lifetime and idle timeout.** A working day and an hour idle are a
-      reasonable internal default. Longer is friendlier; shorter is safer.
-- [ ] **Password rules.** A minimum length is assumed. Expiry, complexity requirements,
-      and history are not, because current guidance treats forced rotation as harmful
-      more often than helpful. Say if a policy applies here.
-- [ ] **Who creates user accounts?** The proposal is that an administrator does, from
-      the admin console, for both roles. The alternative is a separate people-manager
-      role, which seems like more machinery than this needs.
-- [ ] **Should observations outlive their run?** The 90-day purge would take them with
-      the run. An observation is institutional knowledge, and the rule it produced
-      outlives the run already, so keeping them longer is probably right — but it
-      means keeping text a person typed while looking at customer data.
-- [ ] **Do you want a real directory later?** Nothing here rules out single sign-on,
-      and the session table is where it would attach. Worth knowing whether it is
-      coming, because it changes nothing now and quite a lot in a year.
+Answered by the user; the reasoning is in ADR-022.
+
+| Question | Decision |
+| --- | --- |
+| Default password in production | **Refuse to serve** when admin auth is on, the password is unchanged, and the bind address is not loopback. Laptops are exempt. |
+| Session lifetime | **Eight hours absolute, one hour idle.** |
+| Identity while login is off | **The placeholder only.** No free-text submitted-by box: an unverified typed name looks like a strong signal and is not one. |
+| Password policy | **Twelve-character minimum and lockout.** No complexity classes, no expiry. |
+| Single sign-on | **Expected eventually.** The session table is built to accept an external provider; nothing else changes now. |
+| Who creates accounts | **An administrator**, from the admin console, for both roles. No self-registration, no separate people-manager role. |
+| Do observations outlive the purge | **Yes, indefinitely** (decided with Phase 6.1). |

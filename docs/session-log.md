@@ -11,7 +11,7 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**; **6 in progress**; **6.1 and 6.2 specified, not started**; **7 dormant** (runs only on request) |
+| Phases complete | **0–5**; **6 in progress**; **6.1 and 6.2 specified and decided, not started**; **7 dormant** (runs only on request) |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
@@ -63,7 +63,26 @@ runs in shadow before it counts. ADR-021 holds the shape and is **proposed**, no
 accepted, because six open questions at the foot of the phase doc change the design.
 Answer those first.
 
-### Phase 6.2 is specified and waiting on five answers
+### Next: build Phase 6.2, then Phase 6.1
+
+Sixteen design questions across both phases were answered on 2026-09-18 and are
+recorded in the **Decisions** table of each phase doc. ADR-021 and ADR-022 are
+accepted. The user chose to **build 6.2 first**, so the training loop is attributed to
+real people from its first day rather than retrofitted.
+
+The load-bearing answers: the API refuses to serve on the default password off
+loopback; sessions last eight hours with an hour idle; twelve-character minimum and
+lockout, no complexity rules and no expiry; with login off everything is attributed to
+the placeholder and there is no free-text name box; single sign-on is expected
+eventually and the session table is shaped for it. On the training side: a learned
+rule starts at the narrowest scope that fits, anyone may file an observation under
+their name, an administrator activates a shadowed rule with the numbers shown rather
+than a fixed threshold, replay reads the golden set plus recent finalized runs,
+observations are kept indefinitely, and authors hear the outcome with a reason.
+
+One question is still open: whether a learned rule ever expires.
+
+### Phase 6.2 (specified 2026-09-18)
 
 [`phase-6.2.md`](phase-6.2.md) adds login that **ships off**. Two `.env` switches, one
 per app. An administrator creates every account; there is no self-registration. The
@@ -90,6 +109,41 @@ is one of the open questions.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-18 (design questions answered; ADR-021 and ADR-022 accepted)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 6.1 and 6.2 (specification) ·
+**Status:** decided, nothing built.
+
+### What was completed
+
+- Sixteen open design questions put to the user and answered. Each phase doc now
+  carries a **Decisions** table in place of its open-questions list, and both ADRs
+  moved from proposed to accepted.
+- Two answers went against the recommendation and are recorded as chosen, not as
+  suggested: **an administrator activates a shadowed rule by judgement** with the
+  numbers shown, rather than passing a fixed sample-and-precision bar, because a
+  rarely-firing rule would otherwise wait forever for a sample it never gets. And
+  single sign-on is **expected**, so the session table is shaped to accept an external
+  provider.
+- Build order set by the user: **6.2 first, then 6.1.**
+
+### Pending
+
+- Everything in both phases; they are specified and decided but unbuilt.
+- One open question: does a learned rule ever expire?
+
+### Blockers
+
+None. Phase 6.2 can start.
+
+### Next concrete action
+
+Build Phase 6.2 milestone 6.2a: give `current_user()` a real body, seed the
+placeholder account, and add the `admin_required` dependency, with both switches
+defaulting to off so the existing suite passes unchanged.
 
 ---
 

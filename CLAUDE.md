@@ -41,8 +41,8 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 4 | admin-ui and configurable checks | `docs/phase-4.md` | ✅ complete |
 | 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ✅ complete |
 | 6 | Hardening and in-house fit | `docs/phase-6.md` | 🟡 in progress (rest is in-house) |
-| 6.1 | Richer inputs (several samples per type, several files per report, type detection) and Train AI mode: observations synthesized into rules an admin approves | `docs/phase-6.1.md` | ⬜ not started — specified, open questions pending |
-| 6.2 | Optional login and attribution: two `.env` switches (default off), admin-created accounts, sessions, who-did-what everywhere | `docs/phase-6.2.md` | ⬜ not started — specified, open questions pending |
+| 6.1 | Richer inputs (several samples per type, several files per report, type detection) and Train AI mode: observations synthesized into rules an admin approves | `docs/phase-6.1.md` | ⬜ not started — specified and decided (ADR-021); build after 6.2 |
+| 6.2 | Optional login and attribution: two `.env` switches (default off), admin-created accounts, sessions, who-did-what everywhere | `docs/phase-6.2.md` | ⬜ not started — specified and decided (ADR-022); **next to build** |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same

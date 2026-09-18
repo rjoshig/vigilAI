@@ -461,8 +461,10 @@ the sample workbook it held is now a field on the type.
 
 ## ADR-021 — Learned rules are proposed by the model, approved by a person, and shadowed before they count
 
-**Status:** proposed 2026-09-18 — the shape is settled; the open questions in
-[`phase-6.1.md`](phase-6.1.md) must be answered before it is accepted.
+**Status:** accepted 2026-09-18 (user decision). The questions this ADR waited on are
+answered and recorded in [`phase-6.1.md`](phase-6.1.md) "Decisions"; the ones that
+change this ADR are folded into the decision below. One question stays open — whether
+a learned rule ever expires — and it does not affect the shape.
 
 **Context:** The tool's rules are fixed at two points today: the checks an
 administrator writes by hand, and the reference data they maintain. The people who know
@@ -501,10 +503,21 @@ matters.
    finalized runs, and the administrator sees what would have changed before deciding.
    The golden set already exists for prompt changes; this is the same instrument
    pointed at rule changes.
-6. **Shadow before it counts.** An approved rule runs silently until it has met a
-   minimum number of runs with a dismissal rate under a ceiling. Precision is unknown
-   until a rule has met real data, and a false-positive flood costs reviewer trust that
-   takes months to earn back.
+6. **Shadow before it counts.** An approved rule runs silently until an administrator
+   activates it, with its fired count, its dismissal rate, and its shadow findings in
+   front of them. Precision is unknown until a rule has met real data, and a
+   false-positive flood costs reviewer trust that takes months to earn back. A fixed
+   threshold was considered and rejected: a rule that fires rarely would wait forever
+   for a sample it never gets, so the judgement is a person's and the evidence is
+   shown rather than summarised.
+9. **The narrowest scope that fits.** A learned rule applies to the customer or
+   programme its observation came from; going global is a separate action. The most
+   common cause of a noisy rule is an assumption that holds for most records and not
+   all, and widening on evidence is easy where narrowing after the complaints is not.
+10. **The author is named and hears back.** Anyone may file an observation, recorded
+    against their name, and the outcome comes back to them with the administrator's
+    reason. Approval is the real control, so a permission list would guard nothing,
+    and a loop that never answers its contributors stops receiving contributions.
 7. **Provenance is stored, including the diff.** Source observations, model, provider,
    prompt version, approver, timestamp, and what changed between the model's draft and
    the approved rule. The diff is the only measure of how much correcting the model
@@ -525,8 +538,8 @@ human-oversight provisions both expect of a system where a model shapes a decisi
 
 ## ADR-022 — Login exists, ships off, and there is always a current user
 
-**Status:** proposed 2026-09-18 — pending the open questions in
-[`phase-6.2.md`](phase-6.2.md). **Amends ADR-008**, which stands as the record of why
+**Status:** accepted 2026-09-18 (user decision); the answers are recorded in
+[`phase-6.2.md`](phase-6.2.md) "Decisions". **Amends ADR-008**, which stands as the record of why
 v1 shipped without login and why the seam was left in place.
 
 **Context:** ADR-008 chose no login for v1: the tool runs on an internal network, and
@@ -563,6 +576,13 @@ it small.
    candidate rather than editing an old one.
 7. **Sign-in, sign-out, failure, password change, and every account change are audit
    events**, because "who signed in" is the question the phase exists to answer.
+8. **The bootstrap password blocks a real deployment.** With admin auth on, the
+   default unchanged, and a bind address other than loopback, the API refuses to
+   serve. A warning is easy to miss and this is the one credential everybody knows.
+9. **Eight hours absolute, one hour idle**, a twelve-character minimum, and lockout
+   after repeated failures. No complexity classes and no expiry: both push people
+   toward predictable passwords, and current guidance treats forced rotation as
+   harmful more often than helpful.
 
 **Consequences:** ADR-008's "no login in v1" becomes "no login by default", and the
 provision it kept turns out to have been sufficient: one function body, a session
@@ -570,5 +590,6 @@ table, and columns on the tables that record actions. The bootstrap credential i
 real exposure for as long as it stands, which is why the first sign-in forces a change
 and the deployment checklist names it; whether the process should refuse to serve while
 the default is unchanged is left open deliberately, because it is a policy call rather
-than an engineering one. Single sign-on is not ruled out and would attach at the
-session table.
+than an engineering one. Single sign-on is expected eventually and attaches at the session
+table, which records how a session was established rather than assuming a local
+password.
