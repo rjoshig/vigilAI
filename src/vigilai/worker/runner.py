@@ -15,7 +15,7 @@ from typing import Final
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models, repository
+from vigilai.db import catalog, models, repository
 from vigilai.db.cache import DbCache, record_calls
 from vigilai.db.session import session_scope
 from vigilai.db.types import utcnow
@@ -24,24 +24,40 @@ from vigilai.llm.client import CallLog
 from vigilai.llm.factory import build_client
 from vigilai.llm.settings import LLMSettings
 from vigilai.pipeline.context import RECHECK_STAGES, STAGE_ORDER, RunContext, StageRecord
+from vigilai.pipeline.guidance import RunGuidance
 from vigilai.pipeline.run import PipelineError, run_pipeline
 
 __all__ = ["execute_run", "recheck_run", "build_context"]
 
 _LOG: Final = logging.getLogger(__name__)
 
-#: Which uploaded file kinds are reports rather than the OSL or the config.
-_REPORT_KINDS: Final[frozenset[str]] = frozenset(
-    {
-        "dirt",
-        "field_distribution",
-        "state_distribution",
-        "score_distribution",
-        "counts",
-        "cross_tab",
-        "billing",
-    }
-)
+#: The two uploaded kinds that are not reports. Everything else a run carries is one,
+#: including report types an administrator defined (ADR-020).
+_NON_REPORT_KINDS: Final[frozenset[str]] = frozenset({"osl", "config"})
+
+
+def build_guidance(session: Session, run: models.Run) -> RunGuidance:
+    """Collect what an administrator configured about this run's context.
+
+    Args:
+        session: An open session.
+        run: The run row.
+
+    Returns:
+        The guidance. Empty when nothing is configured, in which case every prompt is
+        exactly what it was before any of this existed (ADR-020).
+    """
+    scope = catalog.scope_for(session, run.scope)
+    return RunGuidance(
+        scope_label=scope.label if scope else "",
+        scope_instructions=scope.standing_instructions if scope else "",
+        has_suppressions=run.has_suppressions,
+        artifact_context={
+            artifact.key: artifact.ai_context
+            for artifact in catalog.load_artifacts(session)
+            if artifact.ai_context.strip()
+        },
+    )
 
 
 def build_context(
@@ -86,10 +102,11 @@ def build_context(
         run_id=str(run.id),
         osl_path=paths["osl"],
         config_path=paths["config"],
-        report_paths={k: v for k, v in paths.items() if k in _REPORT_KINDS},  # type: ignore[misc]
+        report_paths={k: v for k, v in paths.items() if k not in _NON_REPORT_KINDS},
         client=client,
         customer=run.customer_name,
         admin=repository.load_admin_config(session, run.customer_name),
+        guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
         masked_columns=repository.load_masked_columns(session),
         rules_version=run.rules_version,

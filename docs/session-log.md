@@ -31,9 +31,14 @@ cd user-ui && npm run dev                             # :3000
 cd admin-ui && npm run dev                            # :3001
 ```
 
-`scripts/seed_demo.py` loads the aliases, the five report templates, the design doc's
-three example checks, the compliance rules, and runs sitting at queued, needs review,
-finalized OK, finalized Not OK, and failed.
+`scripts/seed_demo.py` loads the aliases, the artifact catalog with five sample
+workbooks and one worked example of AI context, the design doc's three example checks,
+the compliance rules, and runs sitting at queued, needs review, finalized OK, finalized
+Not OK, and failed.
+
+The user-ui sidebar now carries an **Admin console** launcher
+(`NEXT_PUBLIC_ADMIN_URL`, default `http://localhost:3001`), so the two apps are one
+click apart in development.
 
 **Gates:** `black . --target-version py310 && flake8 && mypy src/ && pytest &&
 bash scripts/check_docs.sh`, and in each UI: `npm run lint && npm run typecheck &&
@@ -64,6 +69,55 @@ one, enters this repository.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-18 (admin-configurable artifact types and run scope — ADR-020)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** amendment to Phase 4 · **Status:**
+complete, all gates green.
+
+### What was completed
+
+- **The catalog left the code.** `ReportKind` is an open string with the built-ins
+  listed; an unknown key is read by `GenericReportParser`. `artifact_types` replaces
+  `report_templates` and covers the OSL and the config as well as each report, each
+  with a label, a description, a sample workbook, an `ai_context` field, and active and
+  required switches. `run_scopes` holds AM, AS, Archives, and a catch-all with standing
+  instructions; a run records its scope and a suppressions answer defaulting to no.
+- **Guidance is additive.** `pipeline/guidance.py` builds a preamble that labels itself
+  background rather than requirement, and returns an empty string when nothing is
+  configured, so a fresh install sends the prompts it always sent. The preamble is part
+  of the rendered prompt, so editing guidance invalidates exactly the affected cache
+  entries and nothing else.
+- **The new-run form is generated** from `GET /runs/options`: dynamic upload slots, a
+  programme dropdown, and a suppressions radio defaulting to No. admin-ui gained the
+  **Artifact types** and **Delivery programmes** screens, and `/templates` is gone.
+- **The user-ui sidebar gained an Admin console launcher**, at the user's request.
+- Migration `7055ed7523c8`, 26 new tests, ADR-020, and the design, architecture,
+  phase-4, phase-7, and README updates.
+
+### The bug worth remembering
+
+`fastapi.UploadFile` is a **subclass** of `starlette.datastructures.UploadFile`, and
+`request.form()` yields the Starlette one. Reading the report uploads dynamically meant
+an `isinstance` check against the FastAPI class, which silently matched nothing and
+dropped every report, surfacing as "at least one output report must be uploaded" on a
+form that plainly had them. Test against the base class.
+
+### Pending
+
+- The demo services were running against a database that predates `artifact_types`;
+  reseed before the next walkthrough.
+- Everything under "Outstanding, needs the user" above.
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here".
 
 ---
 

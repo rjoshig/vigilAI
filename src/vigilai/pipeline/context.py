@@ -16,6 +16,7 @@ from typing import Final, Literal, Mapping, Sequence
 
 from vigilai.checks.definitions import AdminConfig
 from vigilai.llm.client import LLMClient
+from vigilai.pipeline.guidance import RunGuidance
 from vigilai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from vigilai.rules.normalize import AliasTable
 from vigilai.rules.schema import ConfigElement, Finding, Rule, Trace
@@ -101,6 +102,9 @@ class RunContext:
         admin: What the admin-ui contributes: cross-report checks, compliance rules,
             reverse-pass categories, and named values. Phase 3 loads it from the
             database; until then the shipped defaults apply.
+        guidance: What an administrator configured about this run's context: the
+            delivery programme, its standing instructions, and per-artifact guidance
+            (ADR-020). Empty by default, in which case prompts are unchanged.
         aliases: The attribute alias table, from the admin-ui in later phases.
         masked_columns: Header patterns masked at parse time (ADR-003).
         osl: The parsed OSL, set by stage 1.
@@ -123,6 +127,7 @@ class RunContext:
     client: LLMClient
     customer: str = ""
     admin: AdminConfig = field(default_factory=AdminConfig)
+    guidance: RunGuidance = field(default_factory=RunGuidance)
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
     masked_columns: tuple[str, ...] = ()
 

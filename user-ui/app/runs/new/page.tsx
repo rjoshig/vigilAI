@@ -22,21 +22,13 @@ import {
   ErrorState,
   Input,
   Label,
+  Select,
   Textarea,
 } from "@/components/ui/primitives";
 import { PageHeader } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import { REPORT_KINDS, REPORT_LABELS, type DuplicateRun, type ReportKind } from "@/lib/types";
+import type { DuplicateRun, NewRunOptions } from "@/lib/types";
 import { fmtTime } from "@/lib/utils";
-
-/** The report slots offered on the form; the rest are rare and accepted by the API. */
-const OFFERED: ReportKind[] = [
-  "dirt",
-  "state_distribution",
-  "field_distribution",
-  "counts",
-  "billing",
-];
 
 export default function NewRunPage() {
   const router = useRouter();
@@ -47,18 +39,38 @@ export default function NewRunPage() {
   const [runDate, setRunDate] = React.useState("");
   const [notes, setNotes] = React.useState("");
 
-  const [osl, setOsl] = React.useState<File | null>(null);
-  const [config, setConfig] = React.useState<File | null>(null);
-  const [reports, setReports] = React.useState<Partial<Record<ReportKind, File | null>>>({});
+  const [scope, setScope] = React.useState("");
+  const [hasSuppressions, setHasSuppressions] = React.useState(false);
+
+  // The slots are whatever the admin catalog says they are, so switching a report type
+  // off in the admin-ui removes it here with no deploy (ADR-020).
+  const [options, setOptions] = React.useState<NewRunOptions | null>(null);
+  const [files, setFiles] = React.useState<Record<string, File | null>>({});
 
   const [duplicate, setDuplicate] = React.useState<DuplicateRun | null>(null);
   const [rerunReason, setRerunReason] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const reportCount = OFFERED.filter((kind) => reports[kind]).length;
+  React.useEffect(() => {
+    api
+      .getRunOptions()
+      .then((next) => {
+        setOptions(next);
+        setScope((current) => current || next.scopes[0]?.code || "");
+      })
+      .catch((caught: unknown) =>
+        setError(caught instanceof ApiError ? caught.detail : "Could not load the upload form.")
+      );
+  }, []);
+
+  const slots = options?.artifacts ?? [];
+  const reportSlots = slots.filter((slot) => slot.kind === "report");
+  const reportCount = reportSlots.filter((slot) => files[slot.key]).length;
+  const requiredMissing = slots.some((slot) => slot.is_required && !files[slot.key]);
   const ready =
-    Boolean(customer.trim() && order.trim() && configurationId.trim() && osl && config) &&
+    Boolean(customer.trim() && order.trim() && configurationId.trim()) &&
+    !requiredMissing &&
     reportCount > 0;
 
   function buildForm(reason: string): FormData {
@@ -67,13 +79,13 @@ export default function NewRunPage() {
     form.set("order_number", order.trim());
     form.set("configuration_id", configurationId.trim());
     form.set("notes", notes);
+    form.set("scope", scope);
+    form.set("has_suppressions", hasSuppressions ? "true" : "false");
     if (runDate) form.set("run_date", runDate);
     if (reason) form.set("rerun_reason", reason);
-    if (osl) form.set("osl", osl);
-    if (config) form.set("config", config);
-    for (const kind of REPORT_KINDS) {
-      const file = reports[kind];
-      if (file) form.set(kind, file);
+    for (const slot of slots) {
+      const file = files[slot.key];
+      if (file) form.set(slot.key, file);
     }
     return form;
   }
@@ -159,6 +171,46 @@ export default function NewRunPage() {
                   onChange={(event) => setRunDate(event.target.value)}
                 />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="scope">Delivery programme</Label>
+                <Select id="scope" value={scope} onChange={(event) => setScope(event.target.value)}>
+                  {(options?.scopes ?? []).map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <span className="text-[0.7rem] text-muted-foreground">
+                  {options?.scopes.find((option) => option.code === scope)?.description ??
+                    "Tells the checks which kind of delivery this is."}
+                </span>
+              </div>
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="text-xs font-medium">Suppressions applied</legend>
+                <div className="flex items-center gap-4 pt-1">
+                  <label className="flex items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name="has-suppressions"
+                      checked={!hasSuppressions}
+                      onChange={() => setHasSuppressions(false)}
+                    />
+                    No
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name="has-suppressions"
+                      checked={hasSuppressions}
+                      onChange={() => setHasSuppressions(true)}
+                    />
+                    Yes
+                  </label>
+                </div>
+                <span className="text-[0.7rem] text-muted-foreground">
+                  Whether records were suppressed before delivery.
+                </span>
+              </fieldset>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="notes">Additional notes</Label>
                 <Textarea
@@ -177,22 +229,19 @@ export default function NewRunPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4 pt-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FileDrop
-                  label="OSL — requirement spec"
-                  hint="Word document (.docx)"
-                  accept=".docx"
-                  required
-                  file={osl}
-                  onChange={setOsl}
-                />
-                <FileDrop
-                  label="ETL config"
-                  hint="JSON (.json)"
-                  accept=".json"
-                  required
-                  file={config}
-                  onChange={setConfig}
-                />
+                {slots
+                  .filter((slot) => slot.kind !== "report")
+                  .map((slot) => (
+                    <FileDrop
+                      key={slot.key}
+                      label={slot.label}
+                      hint={slot.description || `Expects ${slot.accept}`}
+                      accept={slot.accept}
+                      required={slot.is_required}
+                      file={files[slot.key] ?? null}
+                      onChange={(file) => setFiles((prev) => ({ ...prev, [slot.key]: file }))}
+                    />
+                  ))}
               </div>
 
               <div>
@@ -203,13 +252,15 @@ export default function NewRunPage() {
                   </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {OFFERED.map((kind) => (
+                  {reportSlots.map((slot) => (
                     <FileDrop
-                      key={kind}
-                      label={REPORT_LABELS[kind]}
-                      accept=".xlsx"
-                      file={reports[kind] ?? null}
-                      onChange={(file) => setReports((prev) => ({ ...prev, [kind]: file }))}
+                      key={slot.key}
+                      label={slot.label}
+                      hint={slot.description}
+                      accept={slot.accept}
+                      required={slot.is_required}
+                      file={files[slot.key] ?? null}
+                      onChange={(file) => setFiles((prev) => ({ ...prev, [slot.key]: file }))}
                     />
                   ))}
                 </div>

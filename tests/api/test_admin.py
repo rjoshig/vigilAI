@@ -28,8 +28,7 @@ def templates(client: TestClient, api: str, fixtures_root: Path, cases: dict[str
     for kind in ("billing", "counts", "dirt"):
         path = fixtures_root / case["reports"][kind]
         response = client.post(
-            f"{api}/admin/templates",
-            data={"report_type": kind},
+            f"{api}/admin/artifact-types/{kind}/sample",
             files={
                 "file": (
                     f"{kind}_sample.xlsx",
@@ -98,22 +97,19 @@ def named_values(client: TestClient, api: str, templates: None) -> None:
 # --- report templates -------------------------------------------------------------
 
 
-def test_a_template_is_stored_with_its_sheets(
-    client: TestClient, api: str, templates: None
-) -> None:
-    body = client.get(f"{api}/admin/templates").json()
-    counts = next(t for t in body if t["report_type"] == "counts")
+def test_a_sample_is_stored_with_its_sheets(client: TestClient, api: str, templates: None) -> None:
+    body = client.get(f"{api}/admin/artifact-types").json()
+    counts = next(t for t in body if t["key"] == "counts")
     assert "Flow" in counts["sheets"]
+    assert counts["has_sample"] is True
 
 
-def test_an_unknown_report_type_is_rejected(client: TestClient, api: str) -> None:
+def test_a_sample_for_an_unknown_type_is_a_404(client: TestClient, api: str) -> None:
     response = client.post(
-        f"{api}/admin/templates",
-        data={"report_type": "invoices"},
+        f"{api}/admin/artifact-types/invoices/sample",
         files={"file": ("x.xlsx", b"PK", "application/vnd.ms-excel")},
     )
-    assert response.status_code == 400
-    assert "dirt" in response.json()["detail"]
+    assert response.status_code == 404
 
 
 def test_uploading_twice_replaces_rather_than_duplicates(
@@ -121,13 +117,10 @@ def test_uploading_twice_replaces_rather_than_duplicates(
 ) -> None:
     path = fixtures_root / cases["baseline_match"]["reports"]["billing"]
     client.post(
-        f"{api}/admin/templates",
-        data={"report_type": "billing"},
+        f"{api}/admin/artifact-types/billing/sample",
         files={"file": ("again.xlsx", path.read_bytes(), "application/vnd.ms-excel")},
     )
-    billing = [
-        t for t in client.get(f"{api}/admin/templates").json() if t["report_type"] == "billing"
-    ]
+    billing = [t for t in client.get(f"{api}/admin/artifact-types").json() if t["key"] == "billing"]
     assert len(billing) == 1
 
 

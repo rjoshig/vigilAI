@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Report templates is the home screen: named values depend on them. */
+/** Artifact types is the home screen: every other screen refers to them. */
 export default function Home() {
-  redirect("/templates");
+  redirect("/artifacts");
 }

@@ -247,3 +247,26 @@ export interface FinalizeResult {
   html_sha256: string;
   pdf_available: boolean;
 }
+
+/** One upload slot the new-run form should draw, from the admin catalog (ADR-020). */
+export interface ArtifactSlot {
+  key: string;
+  label: string;
+  kind: "osl" | "config" | "report";
+  description: string;
+  is_required: boolean;
+  accept: string;
+}
+
+/** One delivery programme a run can belong to. */
+export interface ScopeOption {
+  code: string;
+  label: string;
+  description: string;
+}
+
+/** Everything the new-run form needs in order to draw itself. */
+export interface NewRunOptions {
+  artifacts: ArtifactSlot[];
+  scopes: ScopeOption[];
+}

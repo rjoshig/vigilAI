@@ -6,7 +6,7 @@ import datetime as dt
 import json
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Final, Optional
+from typing import Annotated, Any, Final, Optional, cast
 
 import sqlalchemy as sa
 from fastapi import (
@@ -21,11 +21,12 @@ from fastapi import (
     status,
 )
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from vigilai.api import schemas
 from vigilai.api.deps import CurrentUser, current_user, get_data_dir, get_session
 from vigilai.api.uploads import UploadError, store_upload
-from vigilai.db import models, repository
+from vigilai.db import catalog, models, repository
 from vigilai.db.queue import JobQueue
 from vigilai.db.types import utcnow
 from vigilai.pipeline.s4_trace import describe_rule
@@ -47,17 +48,6 @@ HTTP_422_UNPROCESSABLE: Final[int] = 422
 #: submits the same order repeatedly is almost always retrying, not asking for parallel
 #: work, and each run costs model tokens.
 MAX_QUEUED_PER_ORDER: Final[int] = 3
-
-#: Which uploaded parts are reports rather than the OSL or the config.
-_REPORT_FIELDS: Final[tuple[str, ...]] = (
-    "dirt",
-    "field_distribution",
-    "state_distribution",
-    "score_distribution",
-    "counts",
-    "cross_tab",
-    "billing",
-)
 
 
 def _queue(request: Request, session: Session) -> JobQueue:
@@ -141,8 +131,27 @@ def _summary(
         created_at=run.created_at,
         finished_at=run.finished_at,
         queue_position=queue.queue_position(run.id) if queue is not None else None,
+        scope=run.scope,
+        scope_label=_scope_label(session, run.scope),
         **counts,
     )
+
+
+def _scope_label(session: Session, code: str) -> str:
+    """The human name for a run's delivery programme.
+
+    Args:
+        session: An open session.
+        code: The stored scope code.
+
+    Returns:
+        The label, or the code itself when the scope has since been removed. A run
+        whose programme was deleted still shows what it was submitted as.
+    """
+    if not code:
+        return ""
+    found = catalog.scope_for(session, code)
+    return found.label if found else code
 
 
 def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDetail:
@@ -185,10 +194,49 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         top_issues=list(run.top_issues or []),
         rerun_reason=run.rerun_reason,
         input_fingerprint=run.input_fingerprint,
+        has_suppressions=run.has_suppressions,
         can_finalize=_can_finalize(session, run.id),
         finalized=finalized,
         stages=stages,
         files={f.kind: f.filename for f in run.files},
+    )
+
+
+@router.get("/options", response_model=schemas.NewRunOptions)
+def new_run_options(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> schemas.NewRunOptions:
+    """What the new-run form should offer.
+
+    Generated from the admin catalog rather than hardcoded, so switching a report type
+    off removes its upload slot without a deploy (ADR-020).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The active upload slots and delivery programmes, in display order.
+    """
+    catalog.seed_defaults(session)
+    accept = {"osl": ".docx", "config": ".json"}
+    return schemas.NewRunOptions(
+        artifacts=[
+            schemas.ArtifactSlot(
+                key=artifact.key,
+                label=artifact.label,
+                kind=artifact.kind,
+                description=artifact.description,
+                is_required=artifact.is_required,
+                accept=accept.get(artifact.kind, ".xlsx"),
+            )
+            for artifact in catalog.load_artifacts(session, active_only=True)
+        ],
+        scopes=[
+            schemas.ScopeOption(code=s.code, label=s.label, description=s.description)
+            for s in catalog.load_scopes(session, active_only=True)
+        ],
     )
 
 
@@ -203,13 +251,8 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     notes: Annotated[str, Form()] = "",
     run_date: Annotated[Optional[str], Form()] = None,
     rerun_reason: Annotated[str, Form()] = "",
-    dirt: Annotated[Optional[UploadFile], File()] = None,
-    field_distribution: Annotated[Optional[UploadFile], File()] = None,
-    state_distribution: Annotated[Optional[UploadFile], File()] = None,
-    score_distribution: Annotated[Optional[UploadFile], File()] = None,
-    counts: Annotated[Optional[UploadFile], File()] = None,
-    cross_tab: Annotated[Optional[UploadFile], File()] = None,
-    billing: Annotated[Optional[UploadFile], File()] = None,
+    scope: Annotated[str, Form()] = "",
+    has_suppressions: Annotated[bool, Form()] = False,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(current_user),
@@ -220,8 +263,11 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     a ``rerun_reason`` is supplied, which is recorded and shown in the audit log
     (``docs/design.md`` "LLM cost controls").
 
+    Report slots come from the admin catalog rather than a fixed list, so they are read
+    off the raw form (ADR-020).
+
     Args:
-        request: The incoming request.
+        request: The incoming request, which also carries the dynamic report uploads.
         customer_name: Who the delivery is for.
         order_number: The order.
         configuration_id: The config's own identifier.
@@ -230,13 +276,10 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         notes: Anything the reviewer should know.
         run_date: The run date, ISO format.
         rerun_reason: Required to re-run identical inputs.
-        dirt: The DIRT report.
-        field_distribution: The field distribution report.
-        state_distribution: The state distribution report.
-        score_distribution: The score distribution report.
-        counts: The number-flow report.
-        cross_tab: A cross-tab report.
-        billing: The billing report.
+        scope: The delivery programme, e.g. ``"AM"``. Gives the model the compliance
+            regime the delivery sits under (ADR-020).
+        has_suppressions: Whether suppressions were applied. Defaults to no, because
+            assuming they were would let a missing suppression pass unremarked.
         session: The request's session.
         data_dir: The shared volume.
         user: The caller.
@@ -248,21 +291,20 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         HTTPException: 400 when an upload is rejected or no report is supplied, 409 when
             too many runs are already queued for this order.
     """
+    # Report slots are whatever the admin catalog has active, so a type added in the
+    # console needs no code change here (ADR-020).
+    catalog.seed_defaults(session)
+    active = {a.key for a in catalog.load_artifacts(session, active_only=True)}
+    form = await request.form()
+
     uploads: list[tuple[str, UploadFile]] = [("osl", osl), ("config", config)]
-    for name, value in zip(
-        _REPORT_FIELDS,
-        (
-            dirt,
-            field_distribution,
-            state_distribution,
-            score_distribution,
-            counts,
-            cross_tab,
-            billing,
-        ),
-    ):
-        if value is not None and value.filename:
-            uploads.append((name, value))
+    for key in sorted(active - {"osl", "config"}):
+        value = form.get(key)
+        # `request.form()` yields Starlette's UploadFile; FastAPI's is a subclass, so
+        # testing against the subclass silently matched nothing and every report was
+        # dropped. Test the base.
+        if isinstance(value, StarletteUploadFile) and value.filename:
+            uploads.append((key, cast(UploadFile, value)))
 
     if len(uploads) < 3:
         raise HTTPException(
@@ -290,6 +332,8 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         run_date=_parse_date(run_date),
         status="queued",
         user_id=user.id,
+        scope=scope.strip().upper(),
+        has_suppressions=has_suppressions,
     )
     session.add(run)
     session.flush()

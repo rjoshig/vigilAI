@@ -412,3 +412,49 @@ believe today and what would break each belief — so the analysis starts from w
 code actually does rather than from a blank page. Those tables are derived from the
 code and **go stale when the parsers change**; whoever changes a parser assumption
 updates the matching row, the same rule as every other doc.
+
+## ADR-020 — Artifact types, their meaning, and run scope are admin data
+
+**Status:** accepted 2026-09-18 (user decision)
+
+**Context:** The tool shipped with a fixed set of seven report types, compiled into
+`ReportKind`, into the upload form, and into the admin screens. Two things were wrong
+with that. Customers send reports we have not met, so a new one meant a code change and
+a deploy. And nothing anywhere said what a report *means*: the model saw a workbook and
+inferred its purpose from its contents, which is exactly the kind of guessing ADR-001
+exists to avoid. The same gap applied to the OSL and the ETL config, and to the
+delivery programme — Account Monitoring, Account Solicitation, and Archives each carry
+compliance expectations that the OSL usually does not restate.
+
+**Decision:** Move the catalog out of the code and into the database, editable in the
+admin-ui.
+
+1. **`ReportKind` becomes an open string** with the built-ins listed in
+   `BUILTIN_REPORT_KINDS`. An unknown key gets `GenericReportParser`, which reads the
+   workbook as sheets and values like any other; the fixed checks still find the
+   built-ins they know by key.
+2. **`artifact_types`** holds every input the tool accepts: the OSL, the config, and
+   each report. Each carries a label, a description, an optional sample workbook, and
+   an `ai_context` field in plain language. A built-in may be switched off but never
+   deleted or re-kinded, because the fixed checks look it up by key; an admin-defined
+   type may be deleted only while no run has used it, so stored runs keep reading.
+3. **`run_scopes`** holds the programmes, with `standing_instructions`. A run records
+   its `scope` and a `has_suppressions` answer that defaults to no.
+4. **The new-run form is generated** from `GET /runs/options` rather than hardcoded, so
+   switching a type off removes its upload slot for every user at once.
+5. **Guidance is additive.** `pipeline/guidance.py` builds a short preamble and returns
+   an empty string when nothing is configured, so a fresh install sends byte-for-byte
+   the prompts it sent before. The preamble labels itself background, not requirement:
+   the OSL remains the source of truth (ADR-002), and standing instructions never
+   become requirements.
+6. **An empty table means "use the defaults", never "accept nothing".** The shipped
+   catalog seeds on first read and seeding is idempotent, so an upgrade adds what is
+   new without overwriting an administrator's edits.
+
+**Consequences:** A new report type is an admin task, not a release. The preamble is
+part of the rendered prompt and therefore part of the cache key (ADR-005), so editing
+guidance invalidates exactly the calls it affects and nothing else — no version to
+remember to bump. The cost is that a careless administrator can now weaken a prompt;
+the 1500-character clip and the "background, not requirement" wording are the guard,
+and the golden set is the detector. `report_templates` is replaced by `artifact_types`;
+the sample workbook it held is now a field on the type.

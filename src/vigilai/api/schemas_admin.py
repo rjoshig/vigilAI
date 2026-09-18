@@ -12,6 +12,10 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "ArtifactTypeIn",
+    "ArtifactTypeOut",
+    "ScopeIn",
+    "ScopeOut",
     "TemplateOut",
     "NamedValueIn",
     "NamedValueOut",
@@ -34,6 +38,57 @@ __all__ = [
 
 Severity = Literal["high", "medium", "low", "review"]
 LocatorKind = Literal["cell", "label"]
+
+
+class ArtifactTypeIn(BaseModel):
+    """An input the tool accepts, as the admin-ui submits it (ADR-020)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=2, max_length=60)
+    label: str = Field(min_length=1, max_length=120)
+    kind: Literal["osl", "config", "report"] = "report"
+    description: str = ""
+    #: What the model should pay attention to, in plain language. Empty means the
+    #: prompts are exactly what they were before this existed.
+    ai_context: str = ""
+    is_active: bool = True
+    is_required: bool = False
+    sort_order: int = 100
+
+
+class ArtifactTypeOut(ArtifactTypeIn):
+    """A stored artifact type, with what is known about its sample."""
+
+    id: int
+    is_builtin: bool = False
+    filename: str = ""
+    has_sample: bool = False
+    sheets: list[str] = Field(default_factory=list)
+    #: How many runs have uploaded this type. A type in use cannot be deleted.
+    runs_using: int = 0
+
+
+class ScopeIn(BaseModel):
+    """A delivery programme, as the admin-ui submits it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=2, max_length=20)
+    label: str = Field(min_length=1, max_length=120)
+    description: str = ""
+    #: Compliance expectations true of every run in this programme. Passed to the
+    #: model as background, never as an OSL requirement.
+    standing_instructions: str = ""
+    is_active: bool = True
+    sort_order: int = 100
+
+
+class ScopeOut(ScopeIn):
+    """A stored delivery programme."""
+
+    id: int
+    runs_using: int = 0
 
 
 class TemplateOut(BaseModel):

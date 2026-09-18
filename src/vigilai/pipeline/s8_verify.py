@@ -15,6 +15,7 @@ from vigilai.llm.client import LLMError
 from vigilai.llm.prompts import VERIFY_PROMPT
 from vigilai.llm.prompts.schemas import VerifyResponse
 from vigilai.pipeline.context import RunContext
+from vigilai.pipeline.guidance import preamble
 from vigilai.rules.schema import Evidence, Finding
 
 __all__ = ["run", "format_evidence"]
@@ -39,7 +40,8 @@ def run(context: RunContext) -> None:
         try:
             result = context.client.complete(
                 VERIFY_PROMPT.system,
-                VERIFY_PROMPT.render(
+                preamble(context.guidance)
+                + VERIFY_PROMPT.render(
                     finding=f"{finding.type} — {finding.title}. {finding.detail}",
                     evidence=format_evidence(finding.evidence),
                 ),

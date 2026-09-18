@@ -9,8 +9,9 @@ model.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
-from typing import Annotated, Any, Final, Sequence
+from typing import Annotated, Any, Final, Literal, Sequence, cast
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -27,7 +28,7 @@ from vigilai.checks.expressions import (
     validate,
 )
 from vigilai.checks.named_values import NamedValue, resolve, to_number
-from vigilai.db import models, repository
+from vigilai.db import catalog, models, repository
 from vigilai.llm.cache import LLMCache
 from vigilai.llm.client import LLMError
 from vigilai.llm.factory import build_client
@@ -45,6 +46,13 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 #: Where uploaded sample workbooks live on the shared volume.
 TEMPLATE_DIR: Final[str] = "templates"
+
+#: An artifact key is used as a multipart field name and a filename, so it is kept to
+#: characters that are safe in both.
+_KEY_RE: Final = re.compile(r"^[a-z][a-z0-9_]{1,59}$")
+
+#: A scope code is short and appears in the UI and on the run row.
+_CODE_RE: Final = re.compile(r"^[A-Z0-9_]{2,20}$")
 
 #: Starlette renamed its 422 constant; the number is stable.
 HTTP_422: Final[int] = 422
@@ -71,34 +79,73 @@ def _admin(user: CurrentUser) -> CurrentUser:
     return user
 
 
-# ---------------------------------------------------------------- report templates
+# ---------------------------------------------------------------- artifact types
 
 
-def _template_sheets(path: Path, report_type: str) -> list[str]:
+def _sheets(path: Path, key: str) -> list[str]:
     """List a sample workbook's sheets, for the admin-ui's locator pickers.
 
     Args:
         path: The stored workbook.
-        report_type: Which parser to use.
+        key: The artifact key, which selects the parser.
 
     Returns:
         The sheet names, or an empty list when the file cannot be read.
     """
-    if report_type not in PARSERS or not path.exists():
+    if not path.exists():
         return []
     try:
-        return [sheet.name for sheet in parser_for(report_type).parse(path).sheets]
+        return [sheet.name for sheet in parser_for(key).parse(path).sheets]
     except ParseError:
         return []
 
 
-@router.get("/templates", response_model=list[wire.TemplateOut])
-def list_templates(
+def _artifact_out(
+    row: models.ArtifactType, data_dir: Path, in_use: int = 0
+) -> wire.ArtifactTypeOut:
+    """Build the wire model for one artifact type.
+
+    Args:
+        row: The stored type.
+        data_dir: The shared volume.
+        in_use: How many runs have uploaded this type.
+
+    Returns:
+        The wire model, including the sample's sheets when there is one.
+    """
+    sheets = (
+        _sheets(data_dir / row.storage_path, row.key)
+        if row.storage_path and row.kind == "report"
+        else []
+    )
+    # The column is a plain string so a future kind needs no migration; the wire model
+    # narrows it, and an unrecognised value would be a bug in whatever wrote the row.
+    kind = cast(Literal["osl", "config", "report"], row.kind)
+    return wire.ArtifactTypeOut(
+        id=row.id,
+        key=row.key,
+        label=row.label,
+        kind=kind,
+        description=row.description,
+        ai_context=row.ai_context,
+        is_active=row.is_active,
+        is_required=row.is_required,
+        is_builtin=row.is_builtin,
+        sort_order=row.sort_order,
+        filename=row.filename,
+        has_sample=bool(row.storage_path),
+        sheets=sheets,
+        runs_using=in_use,
+    )
+
+
+@router.get("/artifact-types", response_model=list[wire.ArtifactTypeOut])
+def list_artifact_types(
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     _user: CurrentUser = Depends(current_user),
-) -> list[wire.TemplateOut]:
-    """List the uploaded sample workbooks.
+) -> list[wire.ArtifactTypeOut]:
+    """List every input the tool accepts, active or not.
 
     Args:
         session: The request's session.
@@ -106,84 +153,326 @@ def list_templates(
         _user: The caller.
 
     Returns:
-        One entry per report type that has a template.
+        The artifact types in display order, seeding the shipped defaults into an
+        empty database first so a fresh install is configurable rather than blank.
     """
-    rows = session.execute(
-        sa.select(models.ReportTemplate).order_by(models.ReportTemplate.report_type)
-    ).scalars()
-    return [
-        wire.TemplateOut(
-            id=row.id,
-            report_type=row.report_type,
-            filename=row.filename,
-            notes=row.notes,
-            created_at=row.created_at,
-            sheets=_template_sheets(data_dir / row.storage_path, row.report_type),
-        )
-        for row in rows
-    ]
+    catalog.seed_defaults(session)
+    rows = list(
+        session.execute(
+            sa.select(models.ArtifactType).order_by(
+                models.ArtifactType.sort_order, models.ArtifactType.key
+            )
+        ).scalars()
+    )
+    counts: dict[str, int] = {
+        str(kind): int(count)
+        for kind, count in session.execute(
+            sa.select(models.RunFile.kind, sa.func.count()).group_by(models.RunFile.kind)
+        ).all()
+    }
+    return [_artifact_out(row, data_dir, counts.get(row.key, 0)) for row in rows]
 
 
-@router.post("/templates", response_model=wire.TemplateOut, status_code=status.HTTP_201_CREATED)
-def upload_template(
-    report_type: Annotated[str, File()],
-    file: Annotated[UploadFile, File()],
+@router.post(
+    "/artifact-types", response_model=wire.ArtifactTypeOut, status_code=status.HTTP_201_CREATED
+)
+def save_artifact_type(
+    payload: wire.ArtifactTypeIn,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(current_user),
-) -> wire.TemplateOut:
-    """Upload or replace the sample workbook for one report type.
+) -> wire.ArtifactTypeOut:
+    """Create a report type, or edit any type's description, guidance, or state.
 
     Args:
-        report_type: Which report type this documents.
-        file: The workbook.
+        payload: The type.
         session: The request's session.
         data_dir: The shared volume.
         user: The caller.
 
     Returns:
-        The stored template.
+        The stored type.
 
     Raises:
-        HTTPException: 400 for an unknown report type or a rejected upload.
+        HTTPException: 422 when the key is malformed, or when a built-in's key or kind
+            is being changed — those are referenced by the fixed report checks.
     """
     _admin(user)
-    if report_type not in PARSERS:
+    catalog.seed_defaults(session)
+
+    key = payload.key.strip().lower()
+    if not _KEY_RE.match(key):
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"unknown report type {report_type!r}; valid types are {', '.join(sorted(PARSERS))}",
+            HTTP_422,
+            f"{key!r} is not a valid key: use lowercase letters, digits, and underscores",
         )
+
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+
+    if row is None:
+        row = models.ArtifactType(key=key, kind="report", is_builtin=False)
+        session.add(row)
+    elif row.is_builtin and payload.kind and payload.kind != row.kind:
+        raise HTTPException(
+            HTTP_422,
+            f"{key!r} is a built-in type; its kind cannot be changed because the fixed "
+            "report checks look for it by key",
+        )
+
+    row.label = payload.label.strip() or key
+    if not row.is_builtin and payload.kind:
+        row.kind = payload.kind
+    row.description = payload.description
+    row.ai_context = payload.ai_context
+    row.is_active = payload.is_active
+    row.is_required = payload.is_required
+    row.sort_order = payload.sort_order
+    session.flush()
+
+    repository.audit(session, "admin.artifact_type_saved", detail=key)
+    return _artifact_out(row, data_dir)
+
+
+@router.post(
+    "/artifact-types/{key}/sample",
+    response_model=wire.ArtifactTypeOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_sample(
+    key: str,
+    file: Annotated[UploadFile, File()],
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ArtifactTypeOut:
+    """Upload or replace the sample for one artifact type.
+
+    Args:
+        key: The artifact key.
+        file: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller.
+
+    Returns:
+        The updated type, with the sheets the sample holds.
+
+    Raises:
+        HTTPException: 404 when the type does not exist, 400 when the upload is
+            rejected.
+    """
+    _admin(user)
+    catalog.seed_defaults(session)
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+
     try:
         stored = store_upload(
             file.file,
-            file.filename or f"{report_type}.xlsx",
+            file.filename or f"{key}.xlsx",
             file.content_type or "",
-            report_type,
+            key,
             data_dir,
             TEMPLATE_DIR,
         )
     except UploadError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    row = session.execute(
-        sa.select(models.ReportTemplate).where(models.ReportTemplate.report_type == report_type)
-    ).scalar_one_or_none()
-    if row is None:
-        row = models.ReportTemplate(report_type=report_type)
-        session.add(row)
     row.filename = stored.filename
     row.storage_path = stored.storage_key
     session.flush()
+    repository.audit(session, "admin.sample_uploaded", detail=key)
+    return _artifact_out(row, data_dir)
 
-    repository.audit(session, "admin.template_uploaded", detail=report_type)
-    return wire.TemplateOut(
-        id=row.id,
-        report_type=row.report_type,
-        filename=row.filename,
-        notes=row.notes,
-        created_at=row.created_at,
-        sheets=_template_sheets(data_dir / row.storage_path, report_type),
+
+@router.delete("/artifact-types/{key}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_artifact_type(
+    key: str,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Delete an admin-defined report type.
+
+    Args:
+        key: The artifact key.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist; 409 when it is a built-in, or when
+            a run has already used it. Deleting either would leave stored runs
+            referring to a type nothing can describe — disabling it is the right move,
+            and it keeps the history readable.
+    """
+    _admin(user)
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+    if row.is_builtin:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{key!r} is a built-in type and cannot be deleted; switch it off instead",
+        )
+
+    used = int(
+        session.execute(
+            sa.select(sa.func.count()).select_from(models.RunFile).where(models.RunFile.kind == key)
+        ).scalar_one()
     )
+    if used:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{used} run(s) have uploaded {key!r}; switch it off instead so their history "
+            "stays readable",
+        )
+
+    session.delete(row)
+    repository.audit(session, "admin.artifact_type_deleted", detail=key)
+
+
+# ------------------------------------------------------------------------- scopes
+
+
+@router.get("/scopes", response_model=list[wire.ScopeOut])
+def list_scopes(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.ScopeOut]:
+    """List the delivery programmes and their standing instructions.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The scopes in display order.
+    """
+    catalog.seed_defaults(session)
+    counts: dict[str, int] = {
+        str(scope): int(count)
+        for scope, count in session.execute(
+            sa.select(models.Run.scope, sa.func.count()).group_by(models.Run.scope)
+        ).all()
+    }
+    rows = session.execute(
+        sa.select(models.RunScope).order_by(models.RunScope.sort_order, models.RunScope.code)
+    ).scalars()
+    return [
+        wire.ScopeOut(
+            id=row.id,
+            code=row.code,
+            label=row.label,
+            description=row.description,
+            standing_instructions=row.standing_instructions,
+            is_active=row.is_active,
+            sort_order=row.sort_order,
+            runs_using=counts.get(row.code, 0),
+        )
+        for row in rows
+    ]
+
+
+@router.post("/scopes", response_model=wire.ScopeOut, status_code=status.HTTP_201_CREATED)
+def save_scope(
+    payload: wire.ScopeIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ScopeOut:
+    """Create or edit a delivery programme.
+
+    Standing instructions are passed to the model as background, never as an OSL
+    requirement (ADR-020), so this is where a compliance regime that the OSL does not
+    restate gets written down once.
+
+    Args:
+        payload: The scope.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The stored scope.
+
+    Raises:
+        HTTPException: 422 when the code is malformed.
+    """
+    _admin(user)
+    catalog.seed_defaults(session)
+
+    code = payload.code.strip().upper()
+    if not _CODE_RE.match(code):
+        raise HTTPException(
+            HTTP_422, f"{code!r} is not a valid code: use 2 to 20 letters, digits, or underscores"
+        )
+
+    row = session.execute(
+        sa.select(models.RunScope).where(models.RunScope.code == code)
+    ).scalar_one_or_none()
+    if row is None:
+        row = models.RunScope(code=code)
+        session.add(row)
+
+    row.label = payload.label.strip() or code
+    row.description = payload.description
+    row.standing_instructions = payload.standing_instructions
+    row.is_active = payload.is_active
+    row.sort_order = payload.sort_order
+    session.flush()
+
+    repository.audit(session, "admin.scope_saved", detail=code)
+    return wire.ScopeOut(
+        id=row.id,
+        code=row.code,
+        label=row.label,
+        description=row.description,
+        standing_instructions=row.standing_instructions,
+        is_active=row.is_active,
+        sort_order=row.sort_order,
+    )
+
+
+@router.delete("/scopes/{code}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scope(
+    code: str,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Delete a delivery programme.
+
+    Args:
+        code: The scope code.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when runs already reference it.
+    """
+    _admin(user)
+    row = session.execute(
+        sa.select(models.RunScope).where(models.RunScope.code == code.upper())
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"scope {code!r} not found")
+
+    used = int(
+        session.execute(
+            sa.select(sa.func.count()).select_from(models.Run).where(models.Run.scope == row.code)
+        ).scalar_one()
+    )
+    if used:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{used} run(s) are in {row.code!r}; switch it off instead so their history "
+            "stays readable",
+        )
+    session.delete(row)
+    repository.audit(session, "admin.scope_deleted", detail=row.code)
 
 
 def _load_templates(session: Session, data_dir: Path) -> dict[ReportKind, Any]:
@@ -194,21 +483,24 @@ def _load_templates(session: Session, data_dir: Path) -> dict[ReportKind, Any]:
         data_dir: The shared volume.
 
     Returns:
-        Report kind to parsed document, skipping any that cannot be read. A check tested
-        against a missing template reports "could not resolve", which is the same answer
-        the run would give.
+        Report kind to parsed document, skipping any that cannot be read. A check
+        tested against a missing sample reports "could not resolve", which is the same
+        answer the run would give.
     """
     documents: dict[ReportKind, Any] = {}
-    for row in session.execute(sa.select(models.ReportTemplate)).scalars():
-        if row.report_type not in PARSERS:
+    rows = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.kind == "report")
+    ).scalars()
+    for row in rows:
+        if not row.storage_path:
             continue
         path = data_dir / row.storage_path
         if not path.exists():
             continue
         try:
-            documents[row.report_type] = parser_for(row.report_type).parse(path)
+            documents[row.key] = parser_for(row.key).parse(path)
         except ParseError as exc:
-            _LOG.info("template %s could not be parsed: %s", row.report_type, exc)
+            _LOG.info("sample for %s could not be parsed: %s", row.key, exc)
     return documents
 
 
@@ -227,7 +519,7 @@ def _to_named_value(row: models.NamedValueRow) -> NamedValue:
     locator = row.locator or {}
     return NamedValue(
         name=row.name,
-        report_kind=row.report_type,  # type: ignore[arg-type]
+        report_kind=row.report_type,
         sheet=row.sheet,
         kind=locator.get("kind", "label"),
         cell=locator.get("cell", ""),
@@ -586,13 +878,7 @@ def draft_check(
     """
     _admin(user)
 
-    available = (
-        payload.report_types
-        or sorted(
-            row.report_type for row in session.execute(sa.select(models.ReportTemplate)).scalars()
-        )
-        or sorted(PARSERS)
-    )
+    available = payload.report_types or catalog.active_report_keys(session) or sorted(PARSERS)
 
     settings = request.app.state.llm_settings
     client = build_client(
@@ -630,8 +916,9 @@ def draft_check(
     proposed = {value.name for value in drafted.named_values}
     for name in sorted(referenced - proposed):
         warnings.append(f"The expression uses {name!r}, which the proposal does not define.")
+    known = set(catalog.active_report_keys(session)) | set(PARSERS)
     for value in drafted.named_values:
-        if value.report_type not in PARSERS:
+        if value.report_type not in known:
             warnings.append(f"{value.name}: {value.report_type!r} is not a known report type.")
 
     # A model that invents a severity outside the set gets the safe default rather than

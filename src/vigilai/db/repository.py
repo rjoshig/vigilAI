@@ -146,7 +146,7 @@ def load_admin_config(session: Session, customer: str = "") -> AdminConfig:
     named_values = tuple(
         NamedValue(
             name=row.name,
-            report_kind=row.report_type,  # type: ignore[arg-type]
+            report_kind=row.report_type,
             sheet=row.sheet,
             kind=(row.locator or {}).get("kind", "label"),
             cell=(row.locator or {}).get("cell", ""),

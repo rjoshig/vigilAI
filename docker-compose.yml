@@ -74,6 +74,9 @@ services:
       context: ./user-ui
     environment:
       VIGILAI_API_URL: http://api:8000
+      # The sidebar's admin launcher. A browser URL, not a container one, because the
+      # link is followed by the person rather than by the container.
+      NEXT_PUBLIC_ADMIN_URL: "http://localhost:${ADMIN_UI_PORT:-3001}"
     depends_on:
       - api
     ports:

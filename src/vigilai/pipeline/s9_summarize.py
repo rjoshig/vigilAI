@@ -14,6 +14,7 @@ from vigilai.llm.client import LLMError
 from vigilai.llm.prompts import SUMMARIZE_PROMPT
 from vigilai.llm.prompts.schemas import SummarizeResponse
 from vigilai.pipeline.context import RunContext
+from vigilai.pipeline.guidance import preamble
 
 __all__ = ["run", "format_findings"]
 
@@ -38,7 +39,7 @@ def run(context: RunContext) -> None:
     try:
         result = context.client.complete(
             SUMMARIZE_PROMPT.system,
-            SUMMARIZE_PROMPT.render(findings=format_findings(context)),
+            preamble(context.guidance) + SUMMARIZE_PROMPT.render(findings=format_findings(context)),
             SUMMARIZE_PROMPT.schema,
             stage="s9_summarize",
             prompt_version=SUMMARIZE_PROMPT.version,

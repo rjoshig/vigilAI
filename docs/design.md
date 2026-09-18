@@ -58,7 +58,7 @@ The api only accepts requests and enqueues work. Workers do all parsing, LLM cal
 | Service | Repo folder | Tech | Job |
 | --- | --- | --- | --- |
 | user-ui | user-ui/ | Next.js, TypeScript, Tailwind | New run form, run history, review screen, report viewer, config history. Theme matches the compare-file ui2 mock |
-| admin-ui | admin-ui/ | Next.js, same theme | Separate app on its own URL, no login in v1. For report templates, check definitions, compliance rules, aliases, usage stats |
+| admin-ui | admin-ui/ | Next.js, same theme | Separate app on its own URL, no login in v1. For artifact types and their meaning, delivery programmes, check definitions, compliance rules, aliases, usage stats |
 | api | src/ | FastAPI, SQLAlchemy, Alembic, Pydantic | Uploads, run CRUD, enqueue, reviews, serve reports |
 | worker | src/ | Python, Procrastinate (Postgres queue), python-docx, openpyxl, pandas, Jinja2, Playwright | The pipeline and PDF rendering. Scale by adding replicas |
 | postgres | none | Postgres 16 | Metadata, requirements, findings, checks, stats, cache, job queue |
@@ -326,13 +326,14 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 
 | App | Screen | What it does |
 | --- | --- | --- |
-| user-ui | New run | Form: customer name, order number, configuration ID, date, additional notes. Drag-and-drop for OSL, config JSON, and reports. Copy from a previous run. If the same inputs were already run, shows that report and asks for a reason before re-running |
+| user-ui | New run | Form: customer name, order number, configuration ID, date, delivery programme (AM / AS / Archives / other), whether suppressions were applied (defaults to no), additional notes. Drag-and-drop for OSL, config JSON, and reports. Copy from a previous run. If the same inputs were already run, shows that report and asks for a reason before re-running |
 | user-ui | Runs | History with filters. Queue position and live stage progress |
 | user-ui | Review | Traceability matrix and findings. OK / Not OK and a comment per finding. Edit a requirement or a link, then Re-check. Generate final report |
 | user-ui | Final report | The frozen one-page HTML report. Download PDF. Clone run |
 | user-ui | Run stats | Stage timings, LLM calls, tokens, cache hits |
 | user-ui | Config history | Captured configs by configuration ID and version, with created and last-modified dates. Copy one into a new run. Same layout as the config history in the compare-file ui2 mock |
-| admin-ui | Report templates | Upload a sample Excel per report type and define named values |
+| admin-ui | Artifact types | Define which inputs the tool accepts — the OSL, the config, and each report — with a label, a meaning, an optional sample workbook, model guidance, and an on/off switch. Named values are defined here too |
+| admin-ui | Delivery programmes | AM, AS, Archives, and a catch-all, each with standing instructions that reach the model as background (ADR-020) |
 | admin-ui | Checks | Create, test, version, enable or disable cross-report checks |
 | admin-ui | Compliance and scope | Must-have compliance rules and reverse pass categories |
 | admin-ui | Reference data | Attribute aliases and masked columns |
@@ -369,7 +370,9 @@ A small REST API under `/api/v1`. FastAPI generates the OpenAPI spec and docs pa
 | POST /runs/{id}/clone | New run prefilled from this one |
 | GET /runs/{id}/stats | Stage timings, LLM calls, cache hits |
 | GET /configs, GET /configs/{id} | Browse and copy captured configs |
-| CRUD /admin/templates, /admin/named-values, /admin/checks | Configurable checks |
+| GET /runs/options | The upload slots and programmes the new-run form draws itself from |
+| CRUD /admin/artifact-types, /admin/scopes | Which inputs exist and what they mean (ADR-020) |
+| CRUD /admin/named-values, /admin/checks | Configurable checks |
 | POST /admin/checks/draft | The LLM proposes a check from a plain-English description |
 | POST /admin/checks/{id}/test | Run a check against the sample files |
 | CRUD /admin/compliance-rules, /admin/aliases; GET /admin/usage | Other admin data |

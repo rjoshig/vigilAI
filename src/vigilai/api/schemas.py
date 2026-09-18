@@ -13,6 +13,9 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "NewRunOptions",
+    "ArtifactSlot",
+    "ScopeOption",
     "RunSummary",
     "RunDetail",
     "StageInfo",
@@ -66,6 +69,9 @@ class RunSummary(BaseModel):
     low: int = 0
     review: int = 0
     queue_position: Optional[int] = None
+    #: Which delivery programme this run belongs to, e.g. "AM" (ADR-020).
+    scope: str = ""
+    scope_label: str = ""
 
 
 class RunDetail(RunSummary):
@@ -80,6 +86,8 @@ class RunDetail(RunSummary):
     top_issues: list[str] = Field(default_factory=list)
     rerun_reason: str = ""
     input_fingerprint: str = ""
+    #: Whether the submitter said suppressions were applied to this delivery.
+    has_suppressions: bool = False
     can_finalize: bool = False
     finalized: bool = False
     #: Whether this deployment can render a PDF at all. False when the optional [pdf]
@@ -243,3 +251,33 @@ class RecheckResult(BaseModel):
     rules_version: int
     queued: bool
     findings: int = 0
+
+
+class ArtifactSlot(BaseModel):
+    """One upload slot the new-run form should offer (ADR-020)."""
+
+    key: str
+    label: str
+    kind: str
+    description: str = ""
+    is_required: bool = False
+    accept: str = ".xlsx"
+
+
+class ScopeOption(BaseModel):
+    """One delivery programme the new-run form should offer."""
+
+    code: str
+    label: str
+    description: str = ""
+
+
+class NewRunOptions(BaseModel):
+    """What the new-run form needs in order to draw itself.
+
+    The form is generated from this rather than hardcoded, so switching a report type
+    off in the admin console removes its upload slot without a deploy.
+    """
+
+    artifacts: list[ArtifactSlot] = Field(default_factory=list)
+    scopes: list[ScopeOption] = Field(default_factory=list)

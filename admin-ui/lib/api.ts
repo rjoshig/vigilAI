@@ -4,6 +4,8 @@
 
 import type {
   Alias,
+  ArtifactType,
+  ArtifactTypeIn,
   Category,
   Check,
   CheckIn,
@@ -12,7 +14,8 @@ import type {
   MaskedColumn,
   NamedValue,
   NamedValueIn,
-  Template,
+  Scope,
+  ScopeIn,
   TestResult,
   Usage,
 } from "@/lib/types";
@@ -64,16 +67,33 @@ function json(method: string, body: unknown): RequestInit {
 }
 
 export const api = {
-  /** List the uploaded sample workbooks, with the sheets each one holds. */
-  listTemplates: (): Promise<Template[]> => request<Template[]>("/templates"),
+  /** List every input the tool accepts, active or not, in display order. */
+  listArtifactTypes: (): Promise<ArtifactType[]> => request<ArtifactType[]>("/artifact-types"),
 
-  /** Upload or replace the sample workbook for one report type. */
-  uploadTemplate(reportType: string, file: File): Promise<Template> {
+  /** Create a report type, or edit any type's meaning, guidance, or state. */
+  saveArtifactType: (payload: ArtifactTypeIn): Promise<ArtifactType> =>
+    request<ArtifactType>("/artifact-types", json("POST", payload)),
+
+  /** Upload or replace the sample workbook for one artifact type. */
+  uploadSample(key: string, file: File): Promise<ArtifactType> {
     const form = new FormData();
-    form.set("report_type", reportType);
     form.set("file", file);
-    return request<Template>("/templates", { method: "POST", body: form });
+    return request<ArtifactType>(`/artifact-types/${key}/sample`, { method: "POST", body: form });
   },
+
+  /** Delete an admin-defined type. Refused for a built-in or one a run has used. */
+  deleteArtifactType: (key: string): Promise<void> =>
+    request<void>(`/artifact-types/${key}`, { method: "DELETE" }),
+
+  /** List the delivery programmes and their standing instructions. */
+  listScopes: (): Promise<Scope[]> => request<Scope[]>("/scopes"),
+
+  /** Create or edit a delivery programme. */
+  saveScope: (payload: ScopeIn): Promise<Scope> => request<Scope>("/scopes", json("POST", payload)),
+
+  /** Delete a programme. Refused when a run already names it. */
+  deleteScope: (code: string): Promise<void> =>
+    request<void>(`/scopes/${code}`, { method: "DELETE" }),
 
   /** List the named values, with what each resolves to on the samples. */
   listNamedValues: (): Promise<NamedValue[]> => request<NamedValue[]>("/named-values"),

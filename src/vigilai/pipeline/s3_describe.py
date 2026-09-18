@@ -11,8 +11,10 @@ from typing import Final
 
 from vigilai.llm.prompts import DESCRIBE_PROMPT
 from vigilai.llm.prompts.schemas import DescribeResponse, DescribedElement, ExtractedRequirement
+from vigilai.parsers.base import CONFIG_KIND
 from vigilai.parsers.config_json import is_technical
 from vigilai.pipeline.context import RunContext
+from vigilai.pipeline.guidance import preamble
 from vigilai.pipeline.s2_extract import to_rule
 from vigilai.rules.schema import ConfigElement
 
@@ -51,7 +53,7 @@ def run(context: RunContext) -> None:
 
         result = context.client.complete(
             DESCRIBE_PROMPT.system,
-            DESCRIBE_PROMPT.render(block=block.as_text()),
+            preamble(context.guidance, CONFIG_KIND) + DESCRIBE_PROMPT.render(block=block.as_text()),
             DESCRIBE_PROMPT.schema,
             stage="s3_describe",
             prompt_version=DESCRIBE_PROMPT.version,

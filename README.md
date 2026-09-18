@@ -33,7 +33,7 @@ broker, no object store. No login in v1 (internal network only).
 | Service | Folder | Tech | Job |
 | --- | --- | --- | --- |
 | user-ui | `user-ui/` | Next.js, TypeScript, Tailwind | New run, run history, review screen, report viewer, config history |
-| admin-ui | `admin-ui/` | Next.js, same theme, own URL | Report templates, check definitions, compliance rules, aliases, usage |
+| admin-ui | `admin-ui/` | Next.js, same theme, own URL | Artifact types and their meaning, delivery programmes, check definitions, compliance rules, aliases, usage |
 | api | `src/vigilai/api/` | FastAPI, SQLAlchemy, Alembic, Pydantic | Uploads, run CRUD, enqueue, reviews, serve reports |
 | worker | `src/vigilai/worker/` + `pipeline/` | Python, Procrastinate, python-docx, openpyxl, pandas, Jinja2, Playwright | The nine-stage pipeline and PDF rendering |
 | postgres | — | Postgres 16 | Metadata, rules, findings, checks, stats, LLM cache, job queue |

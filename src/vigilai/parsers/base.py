@@ -13,9 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Mapping, Protocol, Sequence
+from typing import Mapping, Protocol, Sequence
 
 __all__ = [
+    "BUILTIN_REPORT_KINDS",
+    "CONFIG_KIND",
+    "OSL_KIND",
     "ParseError",
     "ReportKind",
     "OslTable",
@@ -31,9 +34,16 @@ __all__ = [
     "ReportParser",
 ]
 
-#: Report types the pipeline knows how to check. Admin-defined templates map an uploaded
-#: workbook onto one of these (``docs/design.md`` "Configurable checks").
-ReportKind = Literal[
+#: A report type's key. An open string rather than a closed set, because an
+#: administrator can define new report types without a code change (ADR-020). The
+#: built-in keys below are the ones the *fixed* report checks in
+#: :mod:`vigilai.checks.reports` know how to interpret; anything else is parsed,
+#: stored, and available to admin-defined checks, but has no built-in check of its own.
+ReportKind = str
+
+#: The report types the pipeline has built-in checks for. Keep these keys stable: the
+#: checks in :mod:`vigilai.checks.reports` look for them by name.
+BUILTIN_REPORT_KINDS: tuple[str, ...] = (
     "dirt",
     "field_distribution",
     "state_distribution",
@@ -41,7 +51,12 @@ ReportKind = Literal[
     "counts",
     "cross_tab",
     "billing",
-]
+)
+
+#: The two inputs that are not reports. Their keys are fixed because the pipeline
+#: reads them with dedicated parsers.
+OSL_KIND: str = "osl"
+CONFIG_KIND: str = "config"
 
 
 class ParseError(Exception):

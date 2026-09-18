@@ -9,11 +9,12 @@
 
 import type {
   CloneResult,
-  FinalizeResult,
   ConfigDetail,
   ConfigSummary,
   CreateRunResult,
+  FinalizeResult,
   Finding,
+  NewRunOptions,
   RecheckResult,
   Requirements,
   ReviewStatus,
@@ -98,6 +99,15 @@ export const api = {
    * Returns a result whose `duplicate` is set when the same inputs were already run;
    * the caller then asks for a reason and submits again with `rerun_reason`.
    */
+  /**
+   * What the new-run form should offer: the active upload slots and the delivery
+   * programmes. Generated from the admin catalog, so switching a report type off
+   * removes its slot without a deploy.
+   */
+  getRunOptions(): Promise<NewRunOptions> {
+    return request<NewRunOptions>("/runs/options");
+  },
+
   createRun(form: FormData): Promise<CreateRunResult> {
     return request<CreateRunResult>("/runs", { method: "POST", body: form });
   },

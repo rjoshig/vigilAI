@@ -152,7 +152,7 @@ the first group absorbs most of the change and nothing downstream moves.
 | Where | What changes | Notes |
 | --- | --- | --- |
 | `parsers/*` | Heading detection, block splitting, sheet and header names | The intended landing zone. Keep the Protocols; the pipeline must not notice |
-| Admin data | Masked columns, attribute aliases, named values, report templates | Data, not code. Seed through the admin-ui or a script |
+| Admin data | Masked columns, attribute aliases, named values, artifact types and their AI context, delivery programmes | Data, not code. Seed through the admin-ui or a script |
 | `llm/prompts/*` | Worked examples rewritten to match real wording | **Bump the prompt version** — it is part of the cache key (ADR-005) |
 | `checks/reports.py` | Sheet and column names the fixed report checks look for | Constants at the top of the module are deliberately in one place |
 | `rules/normalize.py` | Number and date formats, state spellings | Only if the real files use forms the parser does not read |

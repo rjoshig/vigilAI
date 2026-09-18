@@ -33,14 +33,22 @@ describe("the admin API client", () => {
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
   });
 
-  it("uploads a template as multipart", async () => {
+  it("uploads an artifact sample as multipart, to that type's own path", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 1 }));
     const file = new File(["x"], "billing.xlsx");
-    await api.uploadTemplate("billing", file);
+    await api.uploadSample("billing", file);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/v1/admin/templates");
+    expect(url).toBe("/api/v1/admin/artifact-types/billing/sample");
     expect(init.body).toBeInstanceOf(FormData);
-    expect((init.body as FormData).get("report_type")).toBe("billing");
+    expect((init.body as FormData).get("file")).toBe(file);
+  });
+
+  it("deletes a scope by its code", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await api.deleteScope("ARCHIVE");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/scopes/ARCHIVE");
+    expect(init.method).toBe("DELETE");
   });
 
   it("sends a check as JSON", async () => {

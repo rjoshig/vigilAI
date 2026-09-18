@@ -34,13 +34,13 @@ One installable package; api and worker are two entry points over the same code.
 
 | Subpackage | Responsibility |
 | --- | --- |
-| `parsers/` | **Protocols** `OslParser`, `ConfigParser`, `ReportParser` + one implementation each (ADR-006). OSL: python-docx by heading and table. Config: JSON split into logical blocks with their JSON paths. Reports: one fixed parser per report type (DIRT, field distribution, state distribution, counts, score distribution, cross tabs) via openpyxl/pandas. Sample-row **masking** happens here, at parse time, from the admin-maintained masked-column list. |
+| `parsers/` | **Protocols** `OslParser`, `ConfigParser`, `ReportParser` + one implementation each (ADR-006). OSL: python-docx by heading and table. Config: JSON split into logical blocks with their JSON paths. Reports: one fixed parser per built-in report type (DIRT, field distribution, state distribution, counts, score distribution, cross tabs) via openpyxl/pandas, plus a generic parser for the types an administrator defines (ADR-020). Sample-row **masking** happens here, at parse time, from the admin-maintained masked-column list. |
 | `rules/` | The **canonical rule schema** (Pydantic): `req_type` ∈ criteria · geography · value_set · attributes · waterfall · quantity · other, with conditions, operators, actions, `source_ref`/`source_text`, confidence. Normalizers (state names → codes, ranges → intervals, lists → sets). **Derived checks** per operator (`age < 21 → reject` ⇒ `accepts.age.min >= 21`) — fixed code, never LLM output. |
 | `llm/` | The **single adapter** (ADR-004): `LLMClient` Protocol, `OpenAIClient` (`/chat/completions`, covers vLLM/TGI/Ollama/gateways), `AnthropicClient` (`/v1/messages`), `MockClient` (canned JSON for tests). Plain `httpx`, no SDKs. Factory from `LLM_PROVIDER`. The **cache** (`llm_cache`, key = sha256(content) + model + prompt version) is checked before every call (ADR-005); every call writes an `llm_calls` row; a per-run token budget stops a runaway run. Prompt templates live here with a version constant each. JSON-only output validated against a Pydantic schema; on failure retry once with the validation error appended. |
 | `pipeline/` | One module per stage, an orchestrator, and resume logic. Each stage records status/duration/tokens in `run_stages` and is idempotent: a retried job resumes at the last good stage. |
 | `checks/` | Report checks per `req_type` (geography ⇒ state-distribution keys ⊆ allowed set; criteria ⇒ DIRT min/max respect the interval; attributes ⇒ fields exist; waterfall ⇒ counts reconcile per step; quantity ⇒ counts report). The **expression evaluator** for admin-defined checks over named values (safe, no `eval`), compliance-rule presence, and the reverse-pass category scoping. A value that cannot be resolved becomes a "could not evaluate" finding, never a silent skip. |
 | `db/` | SQLAlchemy 2 models for every table in `design.md` "Data model" (`users` included but unused, ADR-008), Alembic migrations (additive only, portable across both backends), session helpers, the `jobs` queue, the DB-backed LLM cache, the repository that converts between rows and pipeline objects, and the retention purge. |
-| `api/` | FastAPI app under `/api/v1`: runs (create with fingerprint check + `rerun_reason`, list, get, requirements, recheck, findings, finalize, report, report.pdf, clone, stats), configs, admin (templates, named values, checks + draft + test, compliance rules, aliases, usage). Pydantic wire models. **One auth dependency** every router uses, a no-op in v1 (ADR-008). Upload validation: `.docx`/`.json`/`.xlsx` only, size limit, content-type check, macros ignored. Audit log writes. |
+| `api/` | FastAPI app under `/api/v1`: runs (create with fingerprint check + `rerun_reason`, list, get, requirements, recheck, findings, finalize, report, report.pdf, clone, stats), configs, admin (artifact types and their AI context, delivery programmes, named values, checks + draft + test, compliance rules, aliases, usage). Pydantic wire models. **One auth dependency** every router uses, a no-op in v1 (ADR-008). Upload validation: `.docx`/`.json`/`.xlsx` only, size limit, content-type check, macros ignored. Audit log writes. |
 | `worker/` | The polling loop, the `run_pipeline` / `recheck` / `purge` tasks with backoff (3 retries, then the run is `failed` with the error shown in the UI), stale-claim recovery so a killed worker's job is picked up, and the retention purge. |
 | `report/` | `render.py` builds the **one-page self-contained HTML report** from a Jinja2 template and returns it with its sha256; `finalize` stores it and marks the run `finalized` (frozen — never regenerated, ADR-005). `pdf.py` renders the **stored file** with headless Chromium behind a Protocol, so the api depends on the capability rather than on Playwright and a test can inject a fake. Playwright is the optional `[pdf]` extra, installed in the worker image. |
 | `cli.py` | `vigilai run --osl … --config … --report kind=path …` → findings JSON. The first entry point (Phase 2) and the tool for the golden set. |
@@ -89,10 +89,15 @@ imports `pipeline`.
 2. **`LLMClient` Protocol + factory** — provider and model are `.env` only.
 3. **Prompt version constants** — part of cache keys, so prompt tuning never serves stale
    results.
-4. **Check definitions as data** — admin-defined named values + expressions, versioned;
+4. **The catalog as data** — which artifacts the tool accepts, what each means, and
+   which delivery programme a run belongs to are rows an administrator edits, not code
+   (ADR-020). `db/catalog.py` holds the shipped defaults and seeds them;
+   `pipeline/guidance.py` turns what is configured into a prompt preamble and returns
+   nothing when nothing is configured.
+5. **Check definitions as data** — admin-defined named values + expressions, versioned;
    the evaluator is generic.
-5. **The auth dependency** — one FastAPI dependency; login later touches no endpoint.
-6. **Report renderer** — templates + a renderer function; the review screen and the final
+6. **The auth dependency** — one FastAPI dependency; login later touches no endpoint.
+7. **Report renderer** — templates + a renderer function; the review screen and the final
    report draw on the same findings data.
 
 ## Privacy boundary

@@ -2,7 +2,16 @@
 
 /** The admin sidebar and page frame. Its own URL and port, separate from user-ui. */
 
-import { BookMarked, ClipboardCheck, Gauge, Moon, Settings, ShieldCheck, Sun } from "lucide-react";
+import {
+  BookMarked,
+  ClipboardCheck,
+  Gauge,
+  Layers,
+  Moon,
+  Settings,
+  ShieldCheck,
+  Sun,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -18,9 +27,10 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: "/templates", label: "Report templates", icon: BookMarked },
+  { href: "/artifacts", label: "Artifact types", icon: BookMarked },
+  { href: "/scopes", label: "Delivery programmes", icon: Layers },
   { href: "/checks", label: "Checks", icon: ClipboardCheck },
-  { href: "/compliance", label: "Compliance & scope", icon: ShieldCheck },
+  { href: "/compliance", label: "Compliance rules", icon: ShieldCheck },
   { href: "/reference", label: "Reference data", icon: Settings },
   { href: "/usage", label: "Usage", icon: Gauge },
 ];

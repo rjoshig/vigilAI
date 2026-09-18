@@ -35,7 +35,8 @@ __all__ = [
     "AttributeAlias",
     "MaskedColumn",
     "AuditLog",
-    "ReportTemplate",
+    "ArtifactType",
+    "RunScope",
     "NamedValueRow",
     "CheckDefinitionRow",
     "ComplianceRuleRow",
@@ -102,6 +103,13 @@ class Run(Base):
     rerun_reason: Mapped[str] = mapped_column(sa.Text, default="")
     cloned_from_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("runs.id"), nullable=True)
     config_last_modified: Mapped[str] = mapped_column(sa.String(64), default="")
+
+    #: Which delivery programme this run belongs to: the ``code`` of a
+    #: :class:`RunScope`, or empty when the submitter did not say (ADR-020).
+    scope: Mapped[str] = mapped_column(sa.String(20), default="", index=True)
+    #: Whether suppressions were applied to this delivery. Defaults to no, because
+    #: assuming they were applied would let a missing suppression pass unremarked.
+    has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     rules_version: Mapped[int] = mapped_column(sa.Integer, default=1)
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
@@ -339,17 +347,71 @@ class AuditLog(Base):
     at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
 
 
-class ReportTemplate(Base):
-    """A sample workbook per report type; it documents where values live."""
+class ArtifactType(Base):
+    """An input the tool accepts: the OSL, the config, or a report type (ADR-020).
 
-    __tablename__ = "report_templates"
+    Report types are **data, not code**. An administrator adds one, describes what it
+    is, writes the guidance the model should read it with, and switches it on; the
+    upload form and the pipeline follow. Switching it off hides it from new runs
+    without touching the runs that already used it.
+
+    The OSL and the config are rows here too, so their descriptions and guidance are
+    edited in the same place. Their keys are fixed because the pipeline reads them with
+    dedicated parsers.
+    """
+
+    __tablename__ = "artifact_types"
 
     id: Mapped[int] = _pk()
-    report_type: Mapped[str] = mapped_column(sa.String(40), unique=True)
+    #: Stable identifier used as the multipart field name and the storage key.
+    key: Mapped[str] = mapped_column(sa.String(60), unique=True, index=True)
+    label: Mapped[str] = mapped_column(sa.String(120))
+    #: osl · config · report. Only reports can be added or removed.
+    kind: Mapped[str] = mapped_column(sa.String(20), default="report", index=True)
+
+    #: What this artifact is, in a sentence, for whoever is uploading it.
+    description: Mapped[str] = mapped_column(sa.Text, default="")
+    #: What the model should pay attention to, in plain language. Empty means the
+    #: pipeline behaves exactly as it did before this existed.
+    ai_context: Mapped[str] = mapped_column(sa.Text, default="")
+
+    #: Whether the upload slot appears on the new-run form.
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    #: Whether a run may be submitted without it.
+    is_required: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+    #: Whether this is one of the shipped types; a built-in may be disabled but not
+    #: deleted, because its key is referenced by the fixed report checks.
+    is_builtin: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+
+    #: The uploaded sample, which named values are resolved against.
     filename: Mapped[str] = mapped_column(sa.String(500), default="")
     storage_path: Mapped[str] = mapped_column(sa.String(500), default="")
     notes: Mapped[str] = mapped_column(sa.Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class RunScope(Base):
+    """A delivery programme, with the standing instructions that apply to it (ADR-020).
+
+    Most customers fall into Account Monitoring, Account Solicitation, or Archives, and
+    each carries compliance expectations that are true of every run in it and are
+    usually *not* restated in the OSL. Holding them here means the model reads each
+    delivery in the right regime instead of inferring one.
+    """
+
+    __tablename__ = "run_scopes"
+
+    id: Mapped[int] = _pk()
+    #: Short code shown in the UI and stored on the run, e.g. ``"AM"``.
+    code: Mapped[str] = mapped_column(sa.String(20), unique=True, index=True)
+    label: Mapped[str] = mapped_column(sa.String(120))
+    description: Mapped[str] = mapped_column(sa.Text, default="")
+    #: Compliance expectations that hold for every run in this scope, in plain
+    #: language. Passed to the model as context; never treated as an OSL requirement.
+    standing_instructions: Mapped[str] = mapped_column(sa.Text, default="")
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
 
 
 class NamedValueRow(Base):

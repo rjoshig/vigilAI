@@ -28,6 +28,7 @@ __all__ = [
     "CountsParser",
     "CrossTabParser",
     "BillingParser",
+    "GenericReportParser",
     "parser_for",
     "PARSERS",
 ]
@@ -178,8 +179,9 @@ class BillingParser(XlsxReportParser):
     kind: ReportKind = "billing"
 
 
-#: Every report type the pipeline can read, by kind.
-PARSERS: Final[dict[ReportKind, type[XlsxReportParser]]] = {
+#: The report types with a dedicated class. Anything else uses
+#: :class:`GenericReportParser`, which reads the workbook the same way.
+PARSERS: Final[dict[str, type[XlsxReportParser]]] = {
     "dirt": DirtParser,
     "field_distribution": FieldDistributionParser,
     "state_distribution": StateDistributionParser,
@@ -190,17 +192,34 @@ PARSERS: Final[dict[ReportKind, type[XlsxReportParser]]] = {
 }
 
 
+class GenericReportParser(XlsxReportParser):
+    """Reads an admin-defined report type.
+
+    Every built-in parser is this one with a different ``kind``: they differ in which
+    fixed checks apply, not in how a workbook is read. So a report type an
+    administrator defines is parsed exactly like a built-in one and is available to
+    admin-defined checks; it simply has no built-in check of its own (ADR-020).
+    """
+
+    def __init__(self, kind: str) -> None:
+        """Initialise the parser.
+
+        Args:
+            kind: The report type's key.
+        """
+        self.kind = kind
+
+
 def parser_for(kind: ReportKind) -> XlsxReportParser:
     """Return the parser for a report kind.
 
     Args:
-        kind: The report type.
+        kind: The report type's key, built-in or admin-defined.
 
     Returns:
-        A ready-to-use parser instance.
-
-    Raises:
-        KeyError: When the kind has no parser, which is a programming error rather than a
-            data problem: the caller validated the kind at upload time.
+        A ready-to-use parser instance. An unknown key gets the generic parser rather
+        than raising: report types are data now, and a run must not fail because an
+        administrator added one.
     """
-    return PARSERS[kind]()
+    builtin = PARSERS.get(kind)
+    return builtin() if builtin is not None else GenericReportParser(kind)

@@ -28,13 +28,46 @@ export type Severity = "high" | "medium" | "low" | "review";
 export type LocatorKind = "cell" | "label";
 export type CheckKind = "expression" | "judgment";
 
-export interface Template {
+/**
+ * One input the tool accepts: the OSL, the ETL config, or a report type. Which types
+ * exist, what they mean, and whether users may upload them is admin data, not code
+ * (ADR-020).
+ */
+export interface ArtifactTypeIn {
+  key: string;
+  label: string;
+  kind: "osl" | "config" | "report";
+  description: string;
+  /** What the model should pay attention to. Empty leaves the prompts untouched. */
+  ai_context: string;
+  is_active: boolean;
+  is_required: boolean;
+  sort_order: number;
+}
+
+export interface ArtifactType extends ArtifactTypeIn {
   id: number;
-  report_type: string;
+  is_builtin: boolean;
   filename: string;
-  notes: string;
-  created_at: string;
+  has_sample: boolean;
   sheets: string[];
+  runs_using: number;
+}
+
+/** A delivery programme: AM, AS, Archives, or the catch-all. */
+export interface ScopeIn {
+  code: string;
+  label: string;
+  description: string;
+  /** Compliance expectations true of every run in the programme, as background. */
+  standing_instructions: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface Scope extends ScopeIn {
+  id: number;
+  runs_using: number;
 }
 
 export interface NamedValueIn {
