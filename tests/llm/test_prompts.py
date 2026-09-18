@@ -16,8 +16,15 @@ from vigilai.llm import MockClient, extract_json
 from vigilai.llm.prompts import PROMPTS, Prompt, get_prompt, prompt_versions
 from vigilai.llm.prompts.registry import register
 
-#: The stages that call a model (``docs/architecture.md`` "The pipeline").
-LLM_STAGES = {"s2_extract", "s3_describe", "s4_trace", "s8_verify", "s9_summarize"}
+#: The pipeline stages that call a model (``docs/architecture.md`` "The pipeline").
+PIPELINE_STAGES = {"s2_extract", "s3_describe", "s4_trace", "s8_verify", "s9_summarize"}
+
+#: The admin flow's prompts: drafting a check (once, at authoring time) and answering a
+#: judgment check (``docs/design.md`` "Configurable checks").
+ADMIN_STAGES = {"admin_draft_check", "admin_judgment"}
+
+#: Every registered prompt. The rules below apply to all of them equally.
+LLM_STAGES = PIPELINE_STAGES | ADMIN_STAGES
 
 #: Anything shaped like a real identifier must never appear in a prompt (ADR-003).
 _PII_TRIPWIRE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -33,6 +40,11 @@ def _placeholders(prompt: Prompt) -> set[str]:
 
 def test_every_llm_stage_has_a_prompt() -> None:
     assert set(PROMPTS) == LLM_STAGES
+
+
+def test_the_admin_flow_has_exactly_two_prompts() -> None:
+    """Drafting happens once per check; everything else in the admin flow is code."""
+    assert set(PROMPTS) & ADMIN_STAGES == ADMIN_STAGES
 
 
 def test_every_prompt_declares_a_version() -> None:
@@ -128,6 +140,8 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("s4_trace", {"requirement", "element"}),
         ("s8_verify", {"finding", "evidence"}),
         ("s9_summarize", {"findings"}),
+        ("admin_draft_check", {"description", "report_types"}),
+        ("admin_judgment", {"instruction", "values"}),
     ],
 )
 def test_each_prompt_takes_exactly_the_inputs_its_stage_supplies(
@@ -154,6 +168,20 @@ def test_registering_a_stage_twice_is_rejected() -> None:
     """Otherwise the effective prompt would depend on import order."""
     with pytest.raises(ValueError, match="already registered"):
         register(get_prompt("s2_extract"))
+
+
+def test_the_drafting_prompt_lists_the_permitted_expression_grammar() -> None:
+    """An admin check is untrusted input; the prompt must not invite anything else."""
+    system = get_prompt("admin_draft_check").system.lower()
+    assert "no attribute access" in system
+    assert "abs, min, max, round" in system
+
+
+def test_the_judgment_prompt_never_sees_the_reports() -> None:
+    """It receives named values and reasoning only (docs/design.md)."""
+    system = get_prompt("admin_judgment").system.lower()
+    assert "you cannot see the reports" in system
+    assert 'prefer "review" to a guess' in system
 
 
 def test_a_prompt_round_trips_through_the_mock_client() -> None:

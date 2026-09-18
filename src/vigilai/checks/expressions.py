@@ -25,6 +25,7 @@ __all__ = [
     "EvaluationResult",
     "evaluate",
     "referenced_names",
+    "validate",
     "ALLOWED_FUNCTIONS",
 ]
 
@@ -269,3 +270,31 @@ def _as_number(value: object) -> Number:
     if isinstance(value, (int, float)):
         return value
     raise ExpressionError(f"arithmetic needs a number, got {type(value).__name__}")
+
+
+def validate(expression: str) -> frozenset[str]:
+    """Check that an expression uses only the permitted subset, without running it.
+
+    Saving a check must reject a dangerous expression there and then, rather than
+    letting it sit in the database until a run tries to evaluate it. Parsing alone is
+    not enough: ``__import__("os")`` is valid Python, so the node types have to be
+    walked the same way :func:`evaluate` walks them.
+
+    Args:
+        expression: The admin-authored expression.
+
+    Returns:
+        The named values it references.
+
+    Raises:
+        ExpressionError: When the expression is malformed or uses a construct outside
+            the permitted subset.
+    """
+    names = referenced_names(expression)
+    # Evaluating against dummy values exercises the real walker, so validation and
+    # execution can never disagree about what is allowed.
+    try:
+        evaluate(expression, dict.fromkeys(names, 1))
+    except UnresolvedValue as exc:  # pragma: no cover - every name was just supplied
+        raise ExpressionError(f"unknown value {exc.name!r}") from exc
+    return names

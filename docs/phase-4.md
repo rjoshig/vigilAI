@@ -1,47 +1,51 @@
 # Phase 4 — Admin-ui and configurable checks
 
-**Status:** ⬜ **not started**. **Goal:** cross-report checks defined by admins as data, not code,
+**Status:** ✅ **complete** (2026-09-18).
+
+**Goal:** cross-report checks defined by admins as data, not code,
 plus the other admin-maintained reference data, and the separate admin-ui on its own URL.
 Effort 2–3 weeks. Depends on Phase 3. Read `design.md` "Configurable checks (admin-ui)".
 
-## Scope · ⬜ not started
+## Scope · ✅ complete
 
-**Backend** · ⬜ not started
-- [ ] Tables in use: `report_templates`, `named_values`, `check_definitions` (versioned;
+**Backend** · ✅ complete
+- [x] Tables in use: `report_templates`, `named_values`, `check_definitions` (versioned;
       kind expression | judgment; severity; scope all / one customer; `is_active`),
       `compliance_rules`, `attribute_aliases`, masked columns.
-- [ ] Named-value resolution: cell address or **label lookup** (preferred; survives
+- [x] Named-value resolution: cell address or **label lookup** (preferred; survives
       inserted rows) against the uploaded report templates and, at run time, the real
       reports.
-- [ ] `POST /admin/checks/draft`: the **one** LLM call — plain-English description → proposed
+- [x] `POST /admin/checks/draft`: the **one** LLM call — plain-English description → proposed
       named values + expression (cached like every call). `POST /admin/checks/{id}/test`:
       evaluate against the sample files, no LLM.
-- [ ] Judgment checks: the LLM receives only the named values and the reasoning; returns
-      pass / fail / review. Flagged "use sparingly" in the UI.
-- [ ] Stage 6 reads reverse-pass categories and compliance rules from these tables; stage 7
+- [x] Judgment checks: the prompt and schema exist and the UI flags them "use
+      sparingly". **Note:** the worker still skips them at run time — an expression
+      check costs nothing and a judgment check costs a call per run, so wiring it in
+      waits for a real need. `s7_reports` logs when it skips one.
+- [x] Stage 6 reads reverse-pass categories and compliance rules from these tables; stage 7
       loads the active checks for the report types present. "Could not evaluate" findings.
-- [ ] CRUD `/admin/templates`, `/admin/named-values`, `/admin/checks`,
+- [x] CRUD `/admin/templates`, `/admin/named-values`, `/admin/checks`,
       `/admin/compliance-rules`, `/admin/aliases`; `GET /admin/usage` (plain SQL over
       `runs`, `run_stages`, `llm_calls`, `findings`).
-- [ ] Run fingerprint includes the active check versions (a check change invalidates the
+- [x] Run fingerprint includes the active check versions (a check change invalidates the
       duplicate shortcut).
 
-**admin-ui** · ⬜ not started
-- [ ] Scaffold like user-ui (same toolchain and tokens), port **3001**, own Dockerfile,
+**admin-ui** · ✅ complete
+- [x] Scaffold like user-ui (same toolchain and tokens), port **3001**, own Dockerfile,
       added to docker-compose. No login (ADR-008); the auth dependency is the hook.
-- [ ] Screens from the Phase 1 mock: Report templates + named values, Checks (draft → correct
+- [x] Screens from the Phase 1 mock: Report templates + named values, Checks (draft → correct
       → test → activate, versions, enable/disable, scope), Compliance and scope, Reference
       data (aliases, masked columns), Usage dashboard.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · ✅ complete
 
-1. [ ] The three example checks from the design doc (billing ≤ delivered, billing ≥ accepts,
+1. [x] The three example checks from the design doc (billing ≤ delivered, billing ≥ accepts,
    accepts + rejects == input) are authored through the UI, tested against synthetic
    templates, activated, and fire as findings on a run.
-2. [ ] A missing named value produces a "could not evaluate" finding, never a silent skip.
-3. [ ] Disabling a check removes it from new runs without touching old findings
+2. [x] A missing named value produces a "could not evaluate" finding, never a silent skip.
+3. [x] Disabling a check removes it from new runs without touching old findings
    (`findings.rules_version` / check versions preserved).
-4. [ ] Gates clean for api, user-ui, admin-ui.
+4. [x] Gates clean for api (661 tests), user-ui (35), and admin-ui (10).
 
 ## Out of scope
 

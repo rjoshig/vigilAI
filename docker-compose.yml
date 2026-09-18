@@ -87,7 +87,7 @@ services:
     depends_on:
       - api
     ports:
-      - "${ADMIN_UI_PORT:-3001}:3001" # its own URL, separate from user-ui
+      - "${ADMIN_UI_PORT:-3001}:3001" # its own URL, separate from user-ui (ADR-008)
 
 volumes:
   pgdata:

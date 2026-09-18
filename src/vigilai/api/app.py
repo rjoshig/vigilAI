@@ -14,10 +14,12 @@ from typing import AsyncIterator, Final
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from vigilai.api.deps import get_db_settings
-from vigilai.api.routers import configs, findings, runs
+from vigilai.api.deps import get_db_settings, get_llm_settings
+from vigilai.api.routers import admin, configs, findings, runs
+from vigilai.db.cache import DbCache
 from vigilai.db.session import create_all, create_engine, healthcheck, session_factory
 from vigilai.db.settings import DbSettings
+from vigilai.llm.settings import LLMSettings
 
 __all__ = ["create_app", "API_PREFIX"]
 
@@ -26,17 +28,22 @@ _LOG: Final = logging.getLogger(__name__)
 API_PREFIX: Final[str] = "/api/v1"
 
 
-def create_app(settings: DbSettings | None = None) -> FastAPI:
+def create_app(
+    settings: DbSettings | None = None, llm_settings: LLMSettings | None = None
+) -> FastAPI:
     """Build the application.
 
     Args:
         settings: Database settings; read from the environment when omitted. Injectable
             so tests get their own SQLite file without touching the environment.
+        llm_settings: Adapter settings, used only by the admin check-drafting endpoint.
+            The api makes no other model call.
 
     Returns:
         The configured app.
     """
     resolved = settings or get_db_settings()
+    resolved_llm = llm_settings or get_llm_settings()
     engine = create_engine(resolved)
     factory = session_factory(engine)
 
@@ -68,6 +75,8 @@ def create_app(settings: DbSettings | None = None) -> FastAPI:
     app.state.session_factory = factory
     app.state.is_sqlite = resolved.is_sqlite
     app.state.data_dir = resolved.data_dir
+    app.state.llm_settings = resolved_llm
+    app.state.llm_cache_backend = DbCache(factory)
 
     origins = [
         origin.strip()
@@ -82,7 +91,7 @@ def create_app(settings: DbSettings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    for router in (runs.router, findings.router, configs.router):
+    for router in (runs.router, findings.router, configs.router, admin.router):
         app.include_router(router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["meta"])

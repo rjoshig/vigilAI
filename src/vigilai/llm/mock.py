@@ -45,6 +45,9 @@ def canned_for_stage(stage: str) -> str:
         "s4_trace": '{"verdict": "not_related", "reason": "mock client", "confidence": 0.0}',
         "s8_verify": '{"agreed": true, "reason": "mock client", "confidence": 0.0}',
         "s9_summarize": '{"summary": "Mock summary; no model was called.", "top_issues": []}',
+        "admin_draft_check": '{"named_values": [], "expression": "", "reasoning": "", '
+        '"severity": "medium"}',
+        "admin_judgment": '{"verdict": "review", "reason": "mock client", ' '"confidence": 0.0}',
     }
     return shapes.get(stage, "{}")
 

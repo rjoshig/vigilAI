@@ -8,11 +8,16 @@ what it needs and the pipeline builds the canonical object from the answer.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from vigilai.rules.schema import Confidence, Mode, Operator, ReqType, TraceVerdict
 
 __all__ = [
+    "DraftedNamedValue",
+    "DraftCheckResponse",
+    "JudgmentResponse",
     "ExtractedCondition",
     "ExtractedRequirement",
     "ExtractResponse",
@@ -111,3 +116,40 @@ class SummarizeResponse(BaseModel):
 
     summary: str = ""
     top_issues: list[str] = Field(default_factory=list)
+
+
+class DraftedNamedValue(BaseModel):
+    """One pointer the model proposes for a check (admin drafting)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    report_type: str = Field(min_length=1)
+    sheet: str = ""
+    kind: str = "label"
+    label: str = ""
+    label_column: int = 0
+    value_column: int = 1
+    cell: str = ""
+    description: str = ""
+
+
+class DraftCheckResponse(BaseModel):
+    """The proposal an administrator corrects before testing and activating."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    named_values: list[DraftedNamedValue] = Field(default_factory=list)
+    expression: str = ""
+    reasoning: str = ""
+    severity: str = "medium"
+
+
+class JudgmentResponse(BaseModel):
+    """A judgment check's answer: the model sees named values and reasoning only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    verdict: Literal["pass", "fail", "review"]
+    reason: str = ""
+    confidence: Confidence = 0.5

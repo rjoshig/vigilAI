@@ -15,6 +15,8 @@ The prompt versions here are provisional: they have not been validated against a
 model yet, and ADR-014 expects a bump after the first Gemma run.
 """
 
+from vigilai.llm.prompts.admin_draft import DRAFT_CHECK_PROMPT
+from vigilai.llm.prompts.judgment import JUDGMENT_PROMPT
 from vigilai.llm.prompts.registry import PROMPTS, Prompt, get_prompt, prompt_versions
 from vigilai.llm.prompts.s2_extract import EXTRACT_PROMPT
 from vigilai.llm.prompts.s3_describe import DESCRIBE_PROMPT
@@ -24,6 +26,8 @@ from vigilai.llm.prompts.s9_summarize import SUMMARIZE_PROMPT
 
 __all__ = [
     "DESCRIBE_PROMPT",
+    "DRAFT_CHECK_PROMPT",
+    "JUDGMENT_PROMPT",
     "EXTRACT_PROMPT",
     "PROMPTS",
     "Prompt",
