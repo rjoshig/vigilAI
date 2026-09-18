@@ -26,6 +26,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from vigilai.api import schemas
 from vigilai.api.deps import CurrentUser, current_user, get_data_dir, get_session
 from vigilai.api.uploads import UploadError, store_upload
+from vigilai.config.store import resolve
 from vigilai.db import catalog, models, repository
 from vigilai.db.queue import JobQueue
 from vigilai.db.types import utcnow
@@ -47,6 +48,8 @@ HTTP_422_UNPROCESSABLE: Final[int] = 422
 #: At most this many runs may be queued for one order number at a time. A user who
 #: submits the same order repeatedly is almost always retrying, not asking for parallel
 #: work, and each run costs model tokens.
+#: The default cap on runs queued for one order number. An administrator can change
+#: it in the console; this is the value used when they have not (ADR-023).
 MAX_QUEUED_PER_ORDER: Final[int] = 3
 
 
@@ -131,10 +134,28 @@ def _summary(
         created_at=run.created_at,
         finished_at=run.finished_at,
         queue_position=queue.queue_position(run.id) if queue is not None else None,
+        submitted_by=_submitter(session, run.user_id),
         scope=run.scope,
         scope_label=_scope_label(session, run.scope),
         **counts,
     )
+
+
+def _submitter(session: Session, user_id: int | None) -> str:
+    """The name to show beside a run.
+
+    Args:
+        session: An open session.
+        user_id: The submitter's account id.
+
+    Returns:
+        Their display name. There is always a current user (ADR-022), so this is
+        empty only for a run stored before accounts existed.
+    """
+    if user_id is None:
+        return ""
+    row = session.get(models.User, user_id)
+    return row.name or row.username if row is not None else ""
 
 
 def _scope_label(session: Session, code: str) -> str:
@@ -317,11 +338,32 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         .select_from(models.Run)
         .where(models.Run.order_number == order_number, models.Run.status == "queued")
     ).scalar_one()
-    if int(already_queued) >= MAX_QUEUED_PER_ORDER:
+    per_order = int(resolve(session, "queue.per_order_limit").value)
+    if int(already_queued) >= per_order:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             f"{already_queued} runs are already queued for order {order_number}; "
             "wait for one to finish",
+        )
+
+    # A rate limit on starting work, so a bulk submission cannot empty the token
+    # budget in a minute. The run is refused rather than queued, because the person
+    # is standing there and a queue they cannot see the end of is worse than a clear
+    # "try again shortly" (ADR-023).
+    window_s = int(resolve(session, "queue.window_s").value)
+    started_recently = int(
+        session.execute(
+            sa.select(sa.func.count())
+            .select_from(models.Run)
+            .where(models.Run.created_at >= utcnow() - dt.timedelta(seconds=window_s))
+        ).scalar_one()
+    )
+    starts_allowed = int(resolve(session, "queue.starts_per_window").value)
+    if started_recently >= starts_allowed:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"{started_recently} runs have started in the last {window_s // 60} minutes, "
+            f"which is the configured limit of {starts_allowed}. Try again shortly.",
         )
 
     run = models.Run(

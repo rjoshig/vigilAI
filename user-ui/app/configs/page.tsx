@@ -96,6 +96,7 @@ export default function ConfigsPage() {
                   <TH>Version</TH>
                   <TH>Customer</TH>
                   <TH>Captured</TH>
+                  <TH>Run by</TH>
                   <TH>Last modified (in file)</TH>
                   <TH>SHA-256</TH>
                   <TH className="text-right">Runs</TH>
@@ -111,6 +112,7 @@ export default function ConfigsPage() {
                     </TD>
                     <TD>{config.customer_name || "—"}</TD>
                     <TD className="text-xs text-muted-foreground">{fmtTime(config.created_at)}</TD>
+                    <TD className="whitespace-nowrap text-xs">{config.created_by || "—"}</TD>
                     <TD className="text-xs text-muted-foreground">{config.last_modified || "—"}</TD>
                     <TD className="mono text-xs">{config.sha256.slice(0, 8)}…</TD>
                     <TD className="text-right tabular-nums">{config.run_count}</TD>

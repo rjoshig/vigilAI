@@ -172,3 +172,106 @@ export interface Usage {
   findings_by_type: Record<string, number>;
   decisions: Record<string, number>;
 }
+
+/* ------------------------------------------------------------ Accounts and login */
+
+export type UserRole = "admin" | "user";
+
+/** Which of the two independent switches are on (ADR-022). Both default to off. */
+export interface AuthConfig {
+  admin_auth: boolean;
+  user_auth: boolean;
+}
+
+/**
+ * Whoever the API is acting as. There is always one: the seeded placeholder while
+ * login is off, the signed-in account otherwise (ADR-022).
+ */
+export interface CurrentUser {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_admin: boolean;
+  is_placeholder: boolean;
+  must_change_password: boolean;
+}
+
+/** An account as the Users screen sees it. Accounts are deactivated, never deleted. */
+export interface AdminUser {
+  id: number;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_active: boolean;
+  is_placeholder: boolean;
+  must_change_password: boolean;
+  last_login_at: string | null;
+  locked: boolean;
+  created_at: string;
+}
+
+/** The fields an administrator fills in to create someone an account. */
+export interface NewUser {
+  username: string;
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
+/* ---------------------------------------------------- Runtime settings (ADR-023) */
+
+export type SettingKind = "bool" | "int" | "str" | "secret" | "enum";
+
+/** Which layer supplied the effective value. Precedence: admin > env > default. */
+export type SettingSource = "admin" | "env" | "default";
+
+/** One runtime setting, its effective value, and where that value came from. */
+export interface Setting {
+  key: string;
+  label: string;
+  group: string;
+  kind: SettingKind;
+  help: string;
+  source: SettingSource;
+  value: unknown;
+  /** False for a setting the console cannot change; it is shown read-only. */
+  editable: boolean;
+  restart: boolean;
+  choices: string[];
+  minimum: number | null;
+  maximum: number | null;
+  /** Secrets only: whether one is configured, and its last four characters. */
+  is_set: boolean;
+  last4: string;
+  /** What the value would be if the admin override were removed. */
+  fallback: unknown;
+  fallback_source: "env" | "default";
+}
+
+/** A section of the settings screen, in the order the API returns it. */
+export interface SettingGroup {
+  name: string;
+  settings: Setting[];
+}
+
+/** One entry in the settings change history. A secret's values read "(secret)". */
+export interface ConfigChange {
+  id: number;
+  key: string;
+  old_value: unknown;
+  new_value: unknown;
+  changed_by: string;
+  changed_at: string;
+}
+
+/** What one connection test against the saved model settings found. */
+export interface ProviderTestResult {
+  ok: boolean;
+  provider: string;
+  model: string;
+  detail: string;
+  latency_ms: number;
+}

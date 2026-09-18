@@ -86,6 +86,7 @@ def whoami(user: CurrentUser = Depends(current_user)) -> WhoAmIOut:
     """
     return WhoAmIOut(
         id=user.id,
+        username=user.username,
         name=user.name,
         email=user.email,
         role=user.role,
@@ -141,6 +142,7 @@ def login(
     _LOG.info("account %s signed in", user.id)
     return WhoAmIOut(
         id=user.id,
+        username=user.username,
         name=user.name or user.username,
         email=user.email,
         role=user.role,
@@ -215,6 +217,7 @@ def change_password(
     )
     return WhoAmIOut(
         id=user.id,
+        username=user.username,
         name=user.name or user.username,
         email=user.email,
         role=user.role,

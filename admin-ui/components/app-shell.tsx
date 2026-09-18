@@ -8,15 +8,18 @@ import {
   Gauge,
   Layers,
   Moon,
+  LogOut,
   Settings,
   ShieldCheck,
   Sun,
+  UserCog,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
+import { useAuth } from "@/components/auth-gate";
 import { Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +36,7 @@ const NAV: NavItem[] = [
   { href: "/compliance", label: "Compliance rules", icon: ShieldCheck },
   { href: "/reference", label: "Reference data", icon: Settings },
   { href: "/usage", label: "Usage", icon: Gauge },
+  { href: "/users", label: "Users", icon: UserCog },
 ];
 
 function ThemeToggle() {
@@ -58,6 +62,34 @@ function ThemeToggle() {
         <span className="h-4 w-4" />
       )}
     </Button>
+  );
+}
+
+/** The signed-in person and sign-out appear only when login is actually on. */
+function SidebarFooter() {
+  const { user, authEnabled, signOut } = useAuth();
+
+  return (
+    <div className="flex items-center justify-between gap-2 border-t p-3 text-xs text-muted-foreground">
+      {authEnabled && user ? (
+        <>
+          <span className="min-w-0 truncate" title={user.email}>
+            {user.name}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="xs" onClick={signOut}>
+              <LogOut className="h-3.5 w-3.5" /> Sign out
+            </Button>
+            <ThemeToggle />
+          </div>
+        </>
+      ) : (
+        <>
+          <span>Admin · login is off</span>
+          <ThemeToggle />
+        </>
+      )}
+    </div>
   );
 }
 
@@ -107,10 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="flex items-center justify-between border-t p-3 text-xs text-muted-foreground">
-          <span>Admin · no login in v1</span>
-          <ThemeToggle />
-        </div>
+        <SidebarFooter />
       </aside>
 
       <main className="h-screen min-w-0 flex-1 overflow-y-auto">

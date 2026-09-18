@@ -169,6 +169,8 @@ export default function ReviewPage() {
         }
         title={`${run.customer_name} · ${run.order_number}`}
         description={`Configuration ${run.configuration_id}${
+          run.submitted_by ? ` · submitted by ${run.submitted_by}` : ""
+        }${
           run.model_used ? ` · model ${run.model_used} · prompts v${run.prompt_version}` : ""
         }${run.rules_version > 1 ? ` · rules v${run.rules_version}` : ""}`}
         action={

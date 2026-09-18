@@ -18,6 +18,7 @@ risk.
 | 6 | Hardening and in-house fit — PII masking, audit, retention, load test, adapt parsers to real samples | 2 weeks | 🟡 **in progress** — the rest needs real files and in-house infra | [phase-6.md](phase-6.md) |
 | 6.1 | Richer inputs and a trainable rule loop — several samples per type, several files per report, type detection, and Train AI mode: reviewer observations synthesized into rules an administrator approves | 3–4 weeks | ⬜ **not started** — specified and decided (ADR-021); scheduled after 6.2 | [phase-6.1.md](phase-6.1.md) |
 | 6.2 | Optional login and attribution — two `.env` switches, admin-created accounts, sessions, and who-did-what on runs, reviews, and suggestions | 1–1.5 weeks | ⬜ **not started** — specified and decided (ADR-022); **next to build** | [phase-6.2.md](phase-6.2.md) |
+| 6.3 | Runtime settings in the admin console — the console overrides `.env`, which overrides the defaults; model, login, throughput, uploads, retention | 1 week | 🟡 **in progress** — API and resolution built, console screen remaining | [phase-6.3.md](phase-6.3.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of

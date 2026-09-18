@@ -8,11 +8,11 @@ Configuration fails loudly on bad input, naming the offending key
 from __future__ import annotations
 
 import os
-from typing import Final, Literal, Mapping
+from typing import Any, Final, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-__all__ = ["Provider", "LLMSettings", "ConfigError"]
+__all__ = ["Provider", "LLMSettings", "ConfigError", "resolved_llm_settings"]
 
 Provider = Literal["openai", "anthropic", "mock"]
 
@@ -169,3 +169,39 @@ class LLMSettings(BaseModel):
             )
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
+
+
+def resolved_llm_settings(session: Any, environ: Mapping[str, str] | None = None) -> LLMSettings:
+    """Build adapter settings with the admin console's overrides applied (ADR-023).
+
+    Precedence is the console, then the environment, then the built-in default. This
+    is a function rather than a module constant on purpose: a value read once at
+    import time is fixed for the life of the process, which is the usual reason a
+    runtime setting turns out not to be one.
+
+    Args:
+        session: An open database session.
+        environ: The environment to read, defaulting to the real one.
+
+    Returns:
+        The validated settings.
+    """
+    from vigilai.config.store import read_secret, resolve
+
+    def value(key: str) -> Any:
+        return resolve(session, key, environ).value
+
+    return LLMSettings(
+        provider=value("llm.provider"),
+        base_url=str(value("llm.base_url")),
+        api_key=read_secret(session, "llm.api_key", environ),
+        model=str(value("llm.model")),
+        max_tokens=int(value("llm.max_tokens")),
+        temperature=float(value("llm.temperature_pct")) / 100.0,
+        timeout_s=float(value("llm.timeout_s")),
+        max_concurrency=int(value("llm.max_concurrency")),
+        max_tokens_per_run=int(value("llm.max_tokens_per_run")),
+        log_prompts=bool(value("llm.log_prompts")),
+        pii_tripwire=bool(value("llm.pii_tripwire")),
+        prompt_version=LLMSettings.from_env(environ).prompt_version,
+    )

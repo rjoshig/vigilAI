@@ -15,7 +15,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from vigilai.api.deps import get_db_settings, get_llm_settings
-from vigilai.api.routers import admin, auth, configs, findings, reports, runs, users
+from vigilai.api.routers import (
+    admin,
+    auth,
+    configs,
+    findings,
+    reports,
+    runs,
+    settings as settings_router,
+    users,
+)
 from vigilai.auth.accounts import (
     DefaultPasswordInUse,
     bootstrap_admin_uses_default_password,
@@ -116,6 +125,9 @@ def create_app(
     app.state.data_dir = resolved.data_dir
     app.state.llm_settings = resolved_llm
     app.state.auth_settings = resolved_auth
+    # Whether the admin console's stored overrides apply on top of the environment
+    # (ADR-023). A test that wants a fixed environment turns it off.
+    app.state.runtime_settings = True
     app.state.llm_cache_backend = DbCache(factory)
     # Injectable so a test can render a PDF without launching a browser; None means
     # the default Playwright renderer (vigilai/report/pdf.py).
@@ -142,6 +154,7 @@ def create_app(
         reports.router,
         admin.router,
         users.router,
+        settings_router.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

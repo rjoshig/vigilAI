@@ -8,6 +8,7 @@ import {
   FolderGit2,
   LayoutList,
   Moon,
+  LogOut,
   Plus,
   ShieldCheck,
   Sun,
@@ -18,6 +19,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
+import { useAuth } from "@/components/auth-gate";
 import { Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +30,8 @@ interface NavItem {
 }
 
 /**
- * Where the admin console lives. A separate app on its own port (ADR-008 keeps both
- * loginless in v1), so this is a plain external link rather than a route. Overridable
+ * Where the admin console lives. A separate app on its own port with its own sign-in
+ * switch (ADR-022), so this is a plain external link rather than a route. Overridable
  * because the port is the developer default, not the deployed URL.
  */
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3001";
@@ -70,6 +72,8 @@ function ThemeToggle() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // Null while login is off, which is the shipped default, so the footer stays as it was.
+  const { user, signOut } = useAuth();
 
   return (
     <div className="flex min-h-screen">
@@ -120,6 +124,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ExternalLink className="ml-auto h-3.5 w-3.5" />
           </a>
         </nav>
+
+        {user ? (
+          <div className="flex items-center justify-between gap-2 border-t p-3 text-xs">
+            <span className="min-w-0">
+              <span className="block truncate font-medium text-foreground">{user.name}</span>
+              <span className="block truncate text-muted-foreground">{user.email}</span>
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Sign out"
+              title="Sign out"
+              onClick={() => void signOut()}
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : null}
 
         <div className="flex items-center justify-between border-t p-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">

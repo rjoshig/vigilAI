@@ -31,6 +31,10 @@ dependencies = [
     "alembic>=1.13",          # additive migrations
     "psycopg[binary]>=3.1",   # Postgres driver; SQLite needs none (ADR-017)
     "jinja2>=3.1",            # the frozen one-page report (Phase 5)
+    # Envelope encryption for the one secret an administrator can set through the
+    # console, the LLM API key (ADR-023). Fernet only; nothing here rolls its own
+    # cryptography, and without a master key the secret is not stored at all.
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

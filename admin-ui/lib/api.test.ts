@@ -103,6 +103,87 @@ describe("the admin API client", () => {
     await expect(api.deleteNamedValue(1)).rejects.toMatchObject({ status: 409 });
   });
 
+  it("reads the auth switches from the auth prefix, not the admin one", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ admin_auth: false, user_auth: false }));
+    await api.getAuthConfig();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/config");
+  });
+
+  it("posts a sign-in as JSON", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, name: "Ada" }));
+    await api.login("ada", "a-long-enough-password");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/auth/login");
+    expect(JSON.parse(init.body)).toEqual({
+      username: "ada",
+      password: "a-long-enough-password",
+    });
+  });
+
+  it("surfaces a lockout as a 423 rather than a wrong-password 401", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "account is locked" }, 423));
+    await expect(api.login("ada", "wrong")).rejects.toMatchObject({ status: 423 });
+  });
+
+  it("returns nothing for a 204 sign-out", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(api.logout()).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+  });
+
+  it("sends the username and both passwords when changing one", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, must_change_password: false }));
+    await api.changePassword("ada", "old-password", "new-password");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/auth/change-password");
+    expect(JSON.parse(init.body)).toEqual({
+      username: "ada",
+      current_password: "old-password",
+      new_password: "new-password",
+    });
+  });
+
+  it("lists accounts under the admin prefix", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listUsers();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/users");
+  });
+
+  it("creates an account with its role", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 2 }, 201));
+    await api.createUser({
+      username: "ada",
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+      password: "a-long-enough-password",
+      role: "admin",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/users");
+    expect(JSON.parse(init.body).role).toBe("admin");
+  });
+
+  it("resets a password on that account's own path", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 2, must_change_password: true }));
+    await api.resetUserPassword(2, "a-long-enough-password");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/users/2/password");
+    expect(JSON.parse(init.body)).toEqual({ password: "a-long-enough-password" });
+  });
+
+  it("toggles an account with a query parameter", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 2, is_active: false }));
+    await api.setUserActive(2, false);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/users/2/active?is_active=false");
+    expect(init.method).toBe("POST");
+  });
+
+  it("raises the last-administrator refusal as a 409", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "last active administrator" }, 409));
+    await expect(api.setUserActive(2, false)).rejects.toMatchObject({ status: 409 });
+  });
+
   it("reads the first message out of a validation error body", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: [{ msg: "field required" }] }, 422));
     await expect(api.testExpression("")).rejects.toMatchObject({ detail: "field required" });

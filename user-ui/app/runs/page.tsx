@@ -191,6 +191,7 @@ export default function RunsPage() {
                   <TH>Order</TH>
                   <TH>Configuration</TH>
                   <TH>Submitted</TH>
+                  <TH>Submitted by</TH>
                   <TH>Status</TH>
                   <TH className="min-w-[13rem]">Progress</TH>
                   <TH className="text-center">H / M / L</TH>
@@ -205,6 +206,7 @@ export default function RunsPage() {
                     <TD className="mono">{run.order_number}</TD>
                     <TD className="mono text-xs">{run.configuration_id}</TD>
                     <TD className="text-xs text-muted-foreground">{fmtRelative(run.created_at)}</TD>
+                    <TD className="whitespace-nowrap text-xs">{run.submitted_by || "—"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[run.status]}>{STATUS_LABEL[run.status]}</Badge>
                     </TD>

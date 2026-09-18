@@ -18,13 +18,15 @@ from typing import Callable, Final, Mapping, Sequence
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from vigilai.auth.sessions import purge_expired_sessions
 from vigilai.db import models, repository
 from vigilai.db.queue import ClaimedJob, JobQueue
 from vigilai.db.session import create_all, create_engine, session_factory, session_scope
 from vigilai.db.settings import DbSettings
 from vigilai.db.types import utcnow
-from vigilai.llm.settings import LLMSettings
+from vigilai.llm.settings import LLMSettings, resolved_llm_settings
 from vigilai.worker.runner import execute_run, recheck_run
 
 __all__ = ["Worker", "TASK_RUN_PIPELINE", "TASK_RECHECK", "TASK_PURGE", "main"]
@@ -203,7 +205,7 @@ class Worker:
         """
         if job.run_id is None:
             raise ValueError(f"job {job.id} has no run_id")
-        execute_run(self._factory, job.run_id, self._data_dir, self._llm_settings)
+        execute_run(self._factory, job.run_id, self._data_dir, self._settings_now())
 
     def _recheck(self, job: ClaimedJob) -> None:
         """Re-check a run after an edit.
@@ -216,7 +218,26 @@ class Worker:
         """
         if job.run_id is None:
             raise ValueError(f"job {job.id} has no run_id")
-        recheck_run(self._factory, job.run_id, self._data_dir, self._llm_settings)
+        recheck_run(self._factory, job.run_id, self._data_dir, self._settings_now())
+
+    def _settings_now(self) -> LLMSettings:
+        """Adapter settings as they resolve at this moment.
+
+        Read per job rather than once at startup, so a provider or model an
+        administrator changed in the console applies to the next run without
+        restarting the worker (ADR-023). A database the worker cannot read falls back
+        to what it started with, because a settings lookup must not be the thing that
+        fails a run.
+
+        Returns:
+            The effective settings.
+        """
+        try:
+            with session_scope(self._factory) as session:
+                return resolved_llm_settings(session)
+        except SQLAlchemyError:
+            _LOG.warning("could not read settings; using the ones this worker started with")
+            return self._llm_settings
 
     def _purge(self, _job: ClaimedJob) -> None:
         """Delete runs past their retention window.

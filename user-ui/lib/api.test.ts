@@ -161,3 +161,73 @@ describe("downloading the PDF", () => {
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
   });
 });
+
+describe("the auth endpoints", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads the switches without sending anything", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ admin_auth: false, user_auth: false }));
+    const config = await api.getAuthConfig();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/config");
+    expect(config.user_auth).toBe(false);
+  });
+
+  it("asks who is signed in", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, name: "John Doe" }));
+    await api.getCurrentUser();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/me");
+  });
+
+  it("posts the credentials as JSON", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, name: "John Doe" }));
+    await api.login("jdoe", "a-long-enough-password");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/auth/login");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      username: "jdoe",
+      password: "a-long-enough-password",
+    });
+  });
+
+  it("keeps a locked account distinguishable from wrong credentials", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "account temporarily locked" }, 423));
+    await expect(api.login("jdoe", "wrong")).rejects.toMatchObject({ status: 423 });
+  });
+
+  it("tolerates the empty body a sign-out returns", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(api.logout()).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/logout");
+  });
+
+  it("sends the current and new passwords under the wire names", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, must_change_password: false }));
+    await api.changePassword("jdoe", "bootstrap-password", "a-new-long-password");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/auth/change-password");
+    expect(JSON.parse(init.body)).toEqual({
+      username: "jdoe",
+      current_password: "bootstrap-password",
+      new_password: "a-new-long-password",
+    });
+  });
+
+  it("carries the server's wording when the new password is refused", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ detail: [{ msg: "password must be at least 12 characters" }] }, 422)
+    );
+    await expect(api.changePassword("jdoe", "old", "short")).rejects.toMatchObject({
+      detail: "password must be at least 12 characters",
+    });
+  });
+});

@@ -548,6 +548,52 @@ class FinalReport(Base):
     generated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
+class AppSetting(Base):
+    """One setting an administrator has overridden (ADR-023).
+
+    The table holds **overrides only**. A key that is absent falls through to the
+    environment and then to the built-in default, so a fresh install behaves exactly
+    as it did when the environment was the only source.
+    """
+
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = _pk()
+    key: Mapped[str] = mapped_column(sa.String(100), unique=True, index=True)
+    #: The value, typed by the registry entry rather than by the column. A secret is
+    #: stored here already encrypted and is never returned to a client.
+    value: Mapped[Any] = mapped_column(Json, default=dict)
+    is_secret: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+    updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
+    updated_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    updated_by: Mapped[str] = mapped_column(sa.String(200), default="")
+
+
+class ConfigChange(Base):
+    """An append-only record of every settings change.
+
+    Kept separately from ``audit_log`` because it carries the old value as well as the
+    new one, which is what makes "revert to what it was" a button rather than an
+    archaeology exercise.
+    """
+
+    __tablename__ = "config_changes"
+
+    id: Mapped[int] = _pk()
+    key: Mapped[str] = mapped_column(sa.String(100), index=True)
+    #: Redacted for a secret: the point is that something changed and who changed it,
+    #: never what the value was (ADR-023).
+    old_value: Mapped[Any] = mapped_column(Json, default=dict)
+    new_value: Mapped[Any] = mapped_column(Json, default=dict)
+    changed_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    changed_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    changed_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
+
+
 class Job(Base):
     """The job queue, as an ordinary table (ADR-017).
 

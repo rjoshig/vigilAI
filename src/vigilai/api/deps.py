@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from vigilai.auth.accounts import ensure_placeholder
 from vigilai.auth.sessions import COOKIE_NAME, resolve_session
-from vigilai.auth.settings import AuthSettings
+from vigilai.auth.settings import AuthSettings, resolved_auth_settings
 from vigilai.db.settings import DbSettings
 from vigilai.llm.settings import LLMSettings
 
@@ -47,6 +47,7 @@ class CurrentUser:
 
     Attributes:
         id: The user row id. Always set, because the placeholder is a real row.
+        username: What is typed at the sign-in prompt.
         name: A display name for the audit log and the screens that show who did what.
         email: The account's address.
         role: ``admin`` or ``user``.
@@ -58,6 +59,7 @@ class CurrentUser:
 
     __slots__ = (
         "id",
+        "username",
         "name",
         "email",
         "role",
@@ -69,6 +71,7 @@ class CurrentUser:
     def __init__(
         self,
         id: int | None = None,
+        username: str = "",
         name: str = "anonymous",
         email: str = "",
         role: str = "admin",
@@ -80,6 +83,7 @@ class CurrentUser:
 
         Args:
             id: The user row id.
+            username: What is typed at the prompt.
             name: A display name.
             email: The account's address.
             role: ``admin`` or ``user``.
@@ -88,6 +92,7 @@ class CurrentUser:
             must_change_password: Whether a password change is outstanding.
         """
         self.id = id
+        self.username = username
         self.name = name
         self.email = email
         self.role = role
@@ -158,20 +163,49 @@ def get_session(request: Request) -> Iterator[Session]:
         session.close()
 
 
-def get_auth_settings(request: Request) -> AuthSettings:
-    """The authentication switches for this app.
+def get_auth_settings(request: Request, session: Session = Depends(get_session)) -> AuthSettings:
+    """The authentication switches for this request.
 
-    Read from application state so a test can inject them, the same reason
-    :func:`get_data_dir` does.
+    Resolved per request rather than once at startup, so a change made in the admin
+    console takes effect on the next request instead of the next deployment
+    (ADR-023). The app's own settings are the environment layer beneath, which is
+    also how a test injects them.
 
     Args:
         request: The incoming request.
+        session: The request's database session.
 
     Returns:
-        The settings.
+        The effective settings.
     """
-    settings: AuthSettings = request.app.state.auth_settings
-    return settings
+    base: AuthSettings = request.app.state.auth_settings
+    if not request.app.state.runtime_settings:
+        return base
+    return resolved_auth_settings(session, _env_for(base), bind_host=base.bind_host)
+
+
+def _env_for(base: AuthSettings) -> dict[str, str]:
+    """The environment layer, expressed as the variables the registry reads.
+
+    Taking it from the settings object rather than from ``os.environ`` is what lets a
+    test inject an environment without touching the process's own.
+
+    Args:
+        base: The settings the app was built with.
+
+    Returns:
+        A mapping the settings registry can read.
+    """
+    return {
+        "VIGILAI_ADMIN_AUTH": str(base.admin_auth).lower(),
+        "VIGILAI_USER_AUTH": str(base.user_auth).lower(),
+        "VIGILAI_SESSION_TTL_S": str(base.session_ttl_s),
+        "VIGILAI_SESSION_IDLE_S": str(base.idle_ttl_s),
+        "VIGILAI_MIN_PASSWORD_LENGTH": str(base.min_password_length),
+        "VIGILAI_LOCKOUT_THRESHOLD": str(base.lockout_threshold),
+        "VIGILAI_LOCKOUT_S": str(base.lockout_s),
+        "VIGILAI_BIND_HOST": base.bind_host,
+    }
 
 
 #: Paths that must work before a caller has done anything, including signing in and
@@ -216,6 +250,7 @@ def current_user(
         row = ensure_placeholder(session)
         return CurrentUser(
             id=row.id,
+            username=row.username,
             name=row.name,
             email=row.email,
             role="user",
@@ -230,6 +265,7 @@ def current_user(
 
     return CurrentUser(
         id=user.id,
+        username=user.username,
         name=user.name or user.username,
         email=user.email,
         role=user.role,

@@ -85,6 +85,7 @@ def list_configs(
             last_modified=row.last_modified,
             created_at=row.created_at,
             run_count=counts.get(row.configuration_id, 0),
+            created_by=row.created_by,
         )
         for row in rows
     ]

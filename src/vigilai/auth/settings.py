@@ -20,6 +20,7 @@ __all__ = [
     "PLACEHOLDER_EMAIL",
     "PLACEHOLDER_NAME",
     "LOOPBACK_HOSTS",
+    "resolved_auth_settings",
 ]
 
 _LOG: Final = logging.getLogger(__name__)
@@ -130,3 +131,38 @@ class AuthSettings(BaseModel):
             )
         _LOG.info("authentication: admin=%s user=%s", settings.admin_auth, settings.user_auth)
         return settings
+
+
+def resolved_auth_settings(
+    session: object, environ: Mapping[str, str] | None = None, bind_host: str = ""
+) -> AuthSettings:
+    """Build authentication settings with the admin console's overrides (ADR-023).
+
+    Precedence is the console, then the environment, then the built-in default. The
+    bind address is the exception: it is never runtime-editable, because it decides
+    whether the bootstrap-password refusal applies and that is not something a
+    console may soften.
+
+    Args:
+        session: An open database session.
+        environ: The environment to read.
+        bind_host: The bind address already resolved from the environment.
+
+    Returns:
+        The validated settings.
+    """
+    from vigilai.config.store import resolve
+
+    def value(key: str) -> object:
+        return resolve(session, key, environ).value  # type: ignore[arg-type]
+
+    return AuthSettings(
+        admin_auth=bool(value("auth.admin")),
+        user_auth=bool(value("auth.user")),
+        session_ttl_s=int(value("auth.session_ttl_s")),  # type: ignore[call-overload]
+        idle_ttl_s=int(value("auth.idle_ttl_s")),  # type: ignore[call-overload]
+        min_password_length=int(value("auth.min_password_length")),  # type: ignore[call-overload]
+        lockout_threshold=int(value("auth.lockout_threshold")),  # type: ignore[call-overload]
+        lockout_s=int(value("auth.lockout_s")),  # type: ignore[call-overload]
+        bind_host=bind_host or AuthSettings.from_env(environ).bind_host,
+    )

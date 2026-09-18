@@ -604,3 +604,65 @@ the default is unchanged is left open deliberately, because it is a policy call 
 than an engineering one. Single sign-on is expected eventually and attaches at the session
 table, which records how a session was established rather than assuming a local
 password.
+
+## ADR-023 — The admin console overrides the environment, and there is always a layer beneath
+
+**Status:** accepted 2026-09-18 (user decision)
+
+**Context:** Everything about how the tool runs came from `.env`: the model provider
+and its key, upload limits, retention, concurrency, and after ADR-022 the login
+switches too. Changing any of them meant editing a file on the server and restarting,
+which puts every operational decision behind whoever has shell access. The request was
+to move those controls into the admin console, keep `.env` working, and have console
+values win.
+
+The risk is a configuration system that can break the thing used to configure it. A
+console that can change its own database URL, or switch off the login that proves who
+is allowed to change settings, is a console that can lock everyone out of the only
+tool that could fix it.
+
+**Decision:** A three-layer resolution with a registry, and a short list of things the
+console may not touch.
+
+1. **Admin console, then `.env`, then the built-in default.** The table holds
+   **overrides only**, so a key nobody has touched behaves exactly as it did when the
+   environment was the only source. This is what makes the feature safe to add to a
+   running system.
+2. **One registry declares every setting**: its type, bounds, default, the environment
+   variable it falls back to, its help text, and whether it may be changed at runtime.
+   The console renders itself from the registry, so the code and the console cannot
+   disagree about what a setting is.
+3. **Nothing is read at import time.** A module-level constant is fixed for the life of
+   the process, which is the usual reason a runtime setting turns out not to be one.
+   Values are resolved where they are used: per request in the API, per job in the
+   worker.
+4. **Effective immediately, within five seconds.** Each process caches the overrides
+   briefly and invalidates its own cache on write, so the administrator sees the
+   change at once and the worker picks it up on its next job. Postgres `LISTEN/NOTIFY`
+   would make it instant and is not worth an infrastructure dependency for one API and
+   a couple of workers; it is the obvious upgrade if that changes.
+5. **Some settings are never runtime-editable**: the database URL, the data directory,
+   and the bind address. Each is needed to reach or to protect the store itself, and a
+   value that gates access to the thing it is stored in cannot live there. They appear
+   in the console read-only, with the reason.
+6. **The console shows which layer every value came from.** This one detail prevents
+   the recurring hour spent wondering why a value differs from `.env`, and it makes an
+   accidental override visible and revertable.
+7. **Every change is recorded with its previous value** in an append-only log, so
+   "put it back" is a button rather than an excavation.
+8. **The one secret is encrypted with a master key from the environment**, using
+   `MultiFernet` so rotation is adding a key to the front of a list rather than a
+   migration written under pressure. **Without a master key the secret is refused
+   rather than stored**, and the environment stays the only place it can come from:
+   refusing is honest, and storing it in the clear while implying otherwise is not.
+   A secret never travels outward — the console learns that one is set and its last
+   four characters, which is enough to recognise the right key and useless to anyone
+   who intercepts the response.
+
+**Consequences:** Day-to-day operation stops needing shell access. The cost is a second
+place a value can come from, which is exactly why the source badge and the change log
+are part of the feature rather than a later addition. `.env` remains a complete and
+supported way to run the tool, and a deployment that never opens the settings screen
+behaves as it always did. The master key becomes something that must be backed up
+outside the database from the first day: losing it loses every secret it protects, and
+there is no recovery path by design.

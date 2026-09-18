@@ -8,10 +8,12 @@
  */
 
 import type {
+  AuthConfig,
   CloneResult,
   ConfigDetail,
   ConfigSummary,
   CreateRunResult,
+  CurrentUser,
   FinalizeResult,
   Finding,
   NewRunOptions,
@@ -77,6 +79,50 @@ export interface ListRunsParams {
 }
 
 export const api = {
+  /**
+   * Which login switches are on. Safe to call unauthenticated, and the answer decides
+   * whether any login prompt is drawn at all (ADR-022).
+   */
+  getAuthConfig(): Promise<AuthConfig> {
+    return request<AuthConfig>("/auth/config");
+  },
+
+  /** Who is signed in. 401 when login is on and the session cookie is missing. */
+  getCurrentUser(): Promise<CurrentUser> {
+    return request<CurrentUser>("/auth/me");
+  },
+
+  /** Sign in. 401 is wrong credentials, 423 is an account locked after repeated failures. */
+  login(username: string, password: string): Promise<CurrentUser> {
+    return request<CurrentUser>("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+  },
+
+  /** Sign out, which ends the server-side session rather than only dropping the cookie. */
+  logout(): Promise<void> {
+    return request<void>("/auth/logout", { method: "POST" });
+  },
+
+  /** Replace the password an administrator set. 422 carries the rule that was broken. */
+  changePassword(
+    username: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<CurrentUser> {
+    return request<CurrentUser>("/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username,
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  },
+
   /** List runs, newest first. */
   listRuns(params: ListRunsParams = {}): Promise<RunSummary[]> {
     const query = new URLSearchParams();

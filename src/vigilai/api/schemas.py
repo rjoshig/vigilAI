@@ -69,6 +69,8 @@ class RunSummary(BaseModel):
     low: int = 0
     review: int = 0
     queue_position: Optional[int] = None
+    #: Who submitted it. The placeholder's name while login is off (ADR-022).
+    submitted_by: str = ""
     #: Which delivery programme this run belongs to, e.g. "AM" (ADR-020).
     scope: str = ""
     scope_label: str = ""
@@ -210,6 +212,8 @@ class ConfigSummary(BaseModel):
     last_modified: str = ""
     created_at: dt.datetime
     run_count: int = 0
+    #: Who ran the submission that captured this version (ADR-022).
+    created_by: str = ""
 
 
 class ConfigDetail(ConfigSummary):

@@ -87,6 +87,8 @@ export interface RunSummary {
   error: string;
   created_at: string;
   finished_at: string | null;
+  /** Who submitted the run. The seeded placeholder's name while login is off (ADR-022). */
+  submitted_by: string;
   high: number;
   medium: number;
   low: number;
@@ -195,6 +197,8 @@ export interface ConfigSummary {
   sha256: string;
   last_modified: string;
   created_at: string;
+  /** Who ran the submission that captured this config version (ADR-022). */
+  created_by: string;
   run_count: number;
 }
 
@@ -269,4 +273,21 @@ export interface ScopeOption {
 export interface NewRunOptions {
   artifacts: ArtifactSlot[];
   scopes: ScopeOption[];
+}
+
+/** Which of the two independent login switches are on (ADR-022). Both ship false. */
+export interface AuthConfig {
+  admin_auth: boolean;
+  user_auth: boolean;
+}
+
+/** The current user. There is always one: the placeholder while login is off. */
+export interface CurrentUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  is_admin: boolean;
+  is_placeholder: boolean;
+  must_change_password: boolean;
 }

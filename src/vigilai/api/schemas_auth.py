@@ -30,6 +30,10 @@ class WhoAmIOut(BaseModel):
     """The current account."""
 
     id: int | None = None
+    #: What was typed at the prompt. Returned so a screen that must re-authenticate,
+    #: such as the forced password change after a page reload, does not have to ask
+    #: the person who they are again.
+    username: str = ""
     name: str = ""
     email: str = ""
     role: str = "user"
