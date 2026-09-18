@@ -1,6 +1,6 @@
 # Phase 2 — Pipeline core (CLI)
 
-**Status:** in progress (2a done, 2b next). **Goal:** the whole nine-stage pipeline runnable from the command
+**Status:** in progress (2a, 2b done; 2c next). **Goal:** the whole nine-stage pipeline runnable from the command
 line on synthetic fixtures: files in, findings JSON out. Parsers, the canonical rule
 schema, the LLM adapter with cache, and a golden set that measures extraction accuracy.
 Effort 4–5 weeks. This is the riskiest phase (LLM extraction quality), which is why it
@@ -29,12 +29,13 @@ adapter", "LLM cost controls", and `llm-privacy.md` end to end before starting.
       identifier.
 
 ### 2b — Canonical rule schema and normalizers
-- [ ] `rules/schema.py`: Pydantic models for the rule envelope (`req_type`, conditions,
+- [x] `rules/schema.py`: Pydantic models for the rule envelope (`req_type`, conditions,
       operators, actions, `source_ref`/`source_text`, confidence), findings, traces.
-- [ ] `rules/normalize.py`: state names → codes, ranges → intervals, lists → sets,
+- [x] `rules/normalize.py`: state names → codes, ranges → intervals, lists → sets,
       attribute names → canonical via aliases.
-- [ ] `rules/derive.py`: derived report checks per operator.
-- Tests: every operator; every `req_type` example from the design doc.
+- [x] `rules/derive.py`: derived report checks per operator.
+- [x] Tests: every operator; every `req_type` example from the design doc. 165 tests
+      total, 98% branch coverage.
 
 ### 2c — LLM adapter, cache, prompts
 - [ ] `llm/client.py`: `LLMClient` Protocol, `LLMResult`, `LLMError`.

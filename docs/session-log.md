@@ -12,21 +12,23 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Current phase | **2 — Pipeline core (CLI)** |
-| Current milestone | 2a done (fixtures + parsers); **2b next** (rule schema) |
+| Current milestone | 2a + 2b done (fixtures, parsers, rule schema); **2c next** (LLM adapter) |
 | Branch | `claude/funny-cerf-jsyvpe` (Phase 0 PR still open against `main`) |
 | Last updated | 2026-09-18 |
 
-**Next action:** milestone 2b — `rules/schema.py` (Pydantic canonical rule envelope,
-findings, traces), `rules/normalize.py` (state names → codes, ranges → intervals, lists →
-sets, aliases), `rules/derive.py` (derived report checks per operator), with one test file
-per module. Read `docs/design.md` "Canonical rule schema" and "Findings" first.
+**Next action:** milestone 2c — `llm/client.py` (Protocol, `LLMResult`, `LLMError`),
+`llm/openai_compat.py`, `llm/anthropic.py`, `llm/mock.py`, `llm/factory.py`,
+`llm/cache.py` (sha256(content) + model + prompt version, checked before every call),
+`llm/calls.py`, and `llm/prompts/` for stages 2, 3, 4, 8, 9. Read `docs/design.md`
+"LLM adapter" and "LLM cost controls" plus `docs/llm-privacy.md` first. Tests use
+`httpx` mock transport; no network.
 
 **Environment:** `.venv` on Python 3.10.14; `source .venv/bin/activate` then
-`black . && flake8 && mypy src/ && pytest`. Fixtures regenerate with
-`python scripts/generate_fixtures.py --out tests/fixtures` (the suite generates its own
-into a temp directory, so committed fixtures are not required).
+`black . --target-version py310 && flake8 && mypy src/ && pytest`. Fixtures regenerate
+with `python scripts/generate_fixtures.py --out tests/fixtures` (the suite generates its
+own into a temp directory, so committed fixtures are not required).
 
-**Blocked on the user (does not block 2b–2f):** a sanitized shape reference for the real
+**Blocked on the user (does not block 2c–2f):** a sanitized shape reference for the real
 OSL / config / report layouts, and a local model for the 2f benchmark (deferred by
 ADR-014). Remaining open questions are in `docs/phase-plan.md`.
 
@@ -147,3 +149,44 @@ None. The real-file shape reference and a local model are still wanted but do no
 ### Next concrete action
 
 Milestone 2b: `rules/schema.py`, `rules/normalize.py`, `rules/derive.py` with tests.
+
+## Session: 2026-09-18 (Phase 2 — milestone 2b)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 2 · **Status:** 2b complete.
+
+### What was completed
+
+- `rules/schema.py`: Pydantic models for the canonical rule envelope (`Condition`,
+  `Rule`), plus `ConfigElement`, `Trace`, `Evidence`, and `Finding`. Validators reject
+  payloads that do not match their `req_type` and verdicts that claim an implementation
+  without naming an element, so stage 5 needs no defensive checks. `extra="forbid"`
+  stops a hallucinated key from passing validation.
+- `rules/normalize.py`: state names to codes (all 50 plus DC and territories),
+  `AliasTable`, `Interval` carrying boundary inclusivity explicitly, and `parse_number`
+  for the forms specs actually use (`1,000,000`, `$40,000`, `60%`).
+- `rules/derive.py`: derived report checks per operator, including the inversion that
+  turns `age < 21 -> reject` into `accepts.age.min >= 21`.
+- 165 tests, 98% branch coverage. All four gates clean.
+
+### Notable decisions
+
+- `Interval` keeps inclusivity separate from the bound because operator mismatch is its
+  own finding type; `same_bounds_as` distinguishes a value mismatch from an operator one.
+- An OR of conditions derives no report check: either branch may be satisfied, so neither
+  bounds the delivered population. A wrong check would be worse than none.
+- An unparseable condition value derives nothing rather than a guess; the rule is already
+  visible as low-confidence.
+- `AliasTable.resolve` returns the normalised input for an unknown name instead of
+  raising, so an unknown attribute fails to match and becomes a finding.
+
+### Pending
+
+2c (LLM adapter, cache, prompts), then 2d–2f.
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here".
