@@ -1,0 +1,178 @@
+"""Stage 7: check the reports. Pure code, no LLM call.
+
+Two things run here: the fixed per-``req_type`` report checks derived from each rule,
+and the admin-defined expression checks over named values. A value that cannot be
+resolved produces a "could not evaluate" finding; the run never skips a check silently
+(``docs/design.md`` "Configurable checks").
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Final
+
+from vigilai.checks.definitions import AdminConfig
+from vigilai.checks.expressions import ExpressionError, UnresolvedValue, evaluate
+from vigilai.checks.named_values import NamedValue, resolve_all
+from vigilai.checks.reports import REPORT_CHECKED_KINDS, CheckOutcome, run_derived_check
+from vigilai.pipeline.context import RunContext
+from vigilai.rules.derive import derive_checks
+from vigilai.rules.schema import Evidence, Finding, Severity
+
+__all__ = ["run"]
+
+_LOG: Final = logging.getLogger(__name__)
+
+#: A report that contradicts a requirement is as serious as a config that does: the
+#: delivery is already wrong.
+_VIOLATION_SEVERITY: Final[Severity] = "high"
+
+
+def run(context: RunContext) -> None:
+    """Run the derived report checks and the admin checks.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to. Its ``admin``
+            field supplies the checks and named values, and ``customer`` scopes them.
+    """
+    settings = context.admin
+    customer = context.customer
+    before = len(context.findings)
+
+    for rule in context.rules:
+        for check in derive_checks(rule):
+            if check.kind not in REPORT_CHECKED_KINDS:
+                # Settled elsewhere: waterfall order is an OSL-against-config question
+                # and stage 5 answers it.
+                continue
+            outcome = run_derived_check(check, context.reports, context.aliases)
+            if outcome.passed is True:
+                continue
+            if outcome.passed is None:
+                context.add_finding(
+                    Finding(
+                        finding_id=context.next_finding_id(),
+                        type="could_not_evaluate",
+                        severity="review",
+                        title=f"Could not check {check.description}",
+                        detail=outcome.detail,
+                        leg="osl_reports",
+                        rule_id=rule.rule_id,
+                        evidence=_evidence(rule, outcome),
+                    )
+                )
+                continue
+            context.add_finding(
+                Finding(
+                    finding_id=context.next_finding_id(),
+                    type=(
+                        "count_does_not_reconcile"
+                        if check.kind == "counts_reconcile"
+                        else "report_violates_rule"
+                    ),
+                    severity=_VIOLATION_SEVERITY,
+                    title=f"The delivery does not satisfy: {check.description}",
+                    detail=outcome.detail,
+                    leg="osl_reports",
+                    rule_id=rule.rule_id,
+                    evidence=_evidence(rule, outcome),
+                )
+            )
+
+    _run_admin_checks(context, settings, customer)
+
+    _LOG.info(
+        "run %s stage 7: %d findings from report checks",
+        context.run_id,
+        len(context.findings) - before,
+    )
+
+
+def _evidence(rule: object, outcome: CheckOutcome) -> Evidence:
+    """Build evidence pointing at the report cell the check read.
+
+    Args:
+        rule: The originating rule.
+        outcome: The check outcome.
+
+    Returns:
+        Evidence carrying the OSL reference and the report location. Aggregates only,
+        never a row (ADR-003).
+    """
+    return Evidence(
+        osl_ref=getattr(rule, "source_ref", ""),
+        osl_text=getattr(rule, "source_text", ""),
+        report_name=outcome.report_kind or "",
+        report_sheet=outcome.sheet,
+        report_cell=outcome.cell,
+        report_value=outcome.observed,
+    )
+
+
+def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) -> None:
+    """Evaluate every in-scope admin expression check.
+
+    Args:
+        context: The run context.
+        admin: The admin configuration.
+        customer: The run's customer.
+    """
+    named = tuple(v for v in admin.named_values if isinstance(v, NamedValue))
+    if not admin.checks:
+        return
+    values = resolve_all(named, context.reports)
+
+    for check in admin.checks:
+        if not check.applies_to(customer):
+            continue
+        if check.kind == "judgment":
+            # Judgment checks are answered by the model in stage 8's style, and are out
+            # of scope for Phase 2 (``docs/design.md``: "use sparingly").
+            _LOG.info("skipping judgment check %r: not implemented in Phase 2", check.name)
+            continue
+
+        try:
+            result = evaluate(check.expression, values)
+        except UnresolvedValue as exc:
+            context.add_finding(
+                Finding(
+                    finding_id=context.next_finding_id(),
+                    type="could_not_evaluate",
+                    severity="review",
+                    title=f"Check {check.name!r} could not be evaluated",
+                    detail=(
+                        f"The named value {exc.name!r} could not be resolved in the "
+                        f"reports supplied. {check.reasoning}"
+                    ),
+                    leg="config_reports",
+                    evidence=Evidence(report_value=exc.name),
+                )
+            )
+            continue
+        except ExpressionError as exc:
+            context.add_finding(
+                Finding(
+                    finding_id=context.next_finding_id(),
+                    type="could_not_evaluate",
+                    severity="review",
+                    title=f"Check {check.name!r} is not a valid expression",
+                    detail=f"{exc} Expression: {check.expression}",
+                    leg="config_reports",
+                )
+            )
+            continue
+
+        if result.passed:
+            continue
+        inputs = ", ".join(f"{name} = {value}" for name, value in sorted(result.resolved.items()))
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="cross_report_disagreement",
+                severity=check.severity,
+                title=f"Check {check.name!r} failed",
+                detail=f"{check.reasoning} Expression {check.expression} was false with {inputs}.",
+                leg="config_reports",
+                evidence=Evidence(report_value=inputs),
+            )
+        )

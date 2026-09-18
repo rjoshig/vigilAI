@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, Literal, Mapping, Sequence
 
+from vigilai.checks.definitions import AdminConfig
 from vigilai.llm.client import LLMClient
 from vigilai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from vigilai.rules.normalize import AliasTable
@@ -95,6 +96,11 @@ class RunContext:
         config_path: The ETL config.
         report_paths: Report kind to file.
         client: The LLM adapter. The only route to a model (ADR-004).
+        customer: The customer this run is for, used to scope admin checks and
+            compliance rules.
+        admin: What the admin-ui contributes: cross-report checks, compliance rules,
+            reverse-pass categories, and named values. Phase 3 loads it from the
+            database; until then the shipped defaults apply.
         aliases: The attribute alias table, from the admin-ui in later phases.
         masked_columns: Header patterns masked at parse time (ADR-003).
         osl: The parsed OSL, set by stage 1.
@@ -115,6 +121,8 @@ class RunContext:
     config_path: Path
     report_paths: Mapping[ReportKind, Path]
     client: LLMClient
+    customer: str = ""
+    admin: AdminConfig = field(default_factory=AdminConfig)
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
     masked_columns: tuple[str, ...] = ()
 

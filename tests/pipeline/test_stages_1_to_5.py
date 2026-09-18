@@ -346,11 +346,9 @@ def test_llm_stages_record_their_calls_and_tokens(make_context: MakeContext) -> 
     assert context.stages["s1_parse"].llm_calls == 0
 
 
-def test_unimplemented_stages_are_recorded_as_skipped(make_context: MakeContext) -> None:
-    """The gap is visible in the stats rather than silent."""
+def test_all_nine_stages_run(make_context: MakeContext) -> None:
     context = run_pipeline(make_context("baseline_match"), stages=STAGE_ORDER)
-    assert context.stages["s6_reverse"].status == "skipped"
-    assert context.stages["s9_summarize"].status == "skipped"
+    assert [context.stages[s].status for s in STAGE_ORDER] == ["done"] * 9
 
 
 def test_resume_skips_stages_already_done(make_context: MakeContext) -> None:

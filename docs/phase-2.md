@@ -1,6 +1,6 @@
 # Phase 2 — Pipeline core (CLI)
 
-**Status:** in progress (2a–2d done; 2e next). **Goal:** the whole nine-stage pipeline runnable from the command
+**Status:** in progress (2a–2e done; 2f next). **Goal:** the whole nine-stage pipeline runnable from the command
 line on synthetic fixtures: files in, findings JSON out. Parsers, the canonical rule
 schema, the LLM adapter with cache, and a golden set that measures extraction accuracy.
 Effort 4–5 weeks. This is the riskiest phase (LLM extraction quality), which is why it
@@ -64,11 +64,13 @@ adapter", "LLM cost controls", and `llm-privacy.md` end to end before starting.
       branch coverage.
 
 ### 2e — Stages 6–9
-- [ ] `pipeline/s6_reverse.py` (scoped categories), `s7_reports.py` (per-`req_type`
+- [x] `pipeline/s6_reverse.py` (scoped categories), `s7_reports.py` (per-`req_type`
       checks + the expression evaluator in `checks/`), `s8_verify.py`, `s9_summarize.py`.
-- [ ] `checks/expressions.py`: safe evaluator over named values (no `eval`), "could not
+- [x] `checks/expressions.py`: safe evaluator over named values (no `eval`), "could not
       evaluate" findings.
-- Tests: every finding type in the design doc table is produced by at least one fixture.
+- [x] Tests: every finding type in the design doc table is produced by at least one
+      fixture. 475 tests total, 94% branch coverage. The evaluator has an escape-attempt
+      suite (imports, dunder access, comprehensions, exponentiation).
 
 ### 2f — CLI and golden set
 - [ ] `cli.py`: `vigilai run --osl … --config … --report dirt=… --report counts=… --out

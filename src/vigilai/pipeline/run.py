@@ -12,7 +12,17 @@ import time
 from typing import Callable, Final, Mapping, Sequence
 
 from vigilai.llm.client import LLMBudgetExceeded
-from vigilai.pipeline import s1_parse, s2_extract, s3_describe, s4_trace, s5_compare
+from vigilai.pipeline import (
+    s1_parse,
+    s2_extract,
+    s3_describe,
+    s4_trace,
+    s5_compare,
+    s6_reverse,
+    s7_reports,
+    s8_verify,
+    s9_summarize,
+)
 from vigilai.pipeline.context import (
     RECHECK_STAGES,
     STAGE_ORDER,
@@ -57,36 +67,17 @@ class PipelineError(Exception):
         return (type(self), (self.stage, self.reason))
 
 
-def _not_implemented(name: str) -> Stage:
-    """Build a placeholder for a stage that lands in a later milestone.
-
-    Recording the stage as skipped, rather than omitting it, keeps the run's stage list
-    complete and makes the gap visible in the stats rather than silent.
-
-    Args:
-        name: The stage name.
-
-    Returns:
-        A stage function that raises.
-    """
-
-    def stage(_context: RunContext) -> None:
-        raise NotImplementedError(f"{name} lands in a later Phase 2 milestone")
-
-    return stage
-
-
-#: Every stage, by name. Stages 6 to 9 arrive in milestone 2e.
+#: Every stage, by name.
 STAGES: Final[Mapping[StageName, Stage]] = {
     "s1_parse": s1_parse.run,
     "s2_extract": s2_extract.run,
     "s3_describe": s3_describe.run,
     "s4_trace": s4_trace.run,
     "s5_compare": s5_compare.run,
-    "s6_reverse": _not_implemented("s6_reverse"),
-    "s7_reports": _not_implemented("s7_reports"),
-    "s8_verify": _not_implemented("s8_verify"),
-    "s9_summarize": _not_implemented("s9_summarize"),
+    "s6_reverse": s6_reverse.run,
+    "s7_reports": s7_reports.run,
+    "s8_verify": s8_verify.run,
+    "s9_summarize": s9_summarize.run,
 }
 
 

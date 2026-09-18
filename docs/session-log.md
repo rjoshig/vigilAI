@@ -12,24 +12,21 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Current phase | **2 — Pipeline core (CLI)** |
-| Current milestone | 2a–2d done (fixtures, parsers, rules, LLM adapter, stages 1–5); **2e next** |
+| Current milestone | 2a–2e done (all nine stages run); **2f next** (CLI and golden set) |
 | Branch | `claude/funny-cerf-jsyvpe` (Phase 0 PR still open against `main`) |
 | Last updated | 2026-09-18 |
 
-**Next action:** milestone 2e — `pipeline/s6_reverse.py` (scoped categories),
-`s7_reports.py` (per-`req_type` report checks plus the expression evaluator in
-`checks/`), `s8_verify.py`, `s9_summarize.py`, and `checks/expressions.py` (safe
-evaluator over named values, no `eval`; an unresolvable value becomes a
-"could_not_evaluate" finding, never a silent skip). Replace the four `_not_implemented`
-placeholders in `pipeline/run.py` as each lands. Target: every finding type in the
-design doc's table is produced by at least one fixture case.
+**Next action:** milestone 2f — `src/vigilai/cli.py`
+(`vigilai run --osl … --config … --report dirt=… --out findings.json`, with
+`--provider`, `--cache`, and `--log-level`), `tests/fixtures/golden/` (10–20 synthetic
+OSLs with known rules), and `scripts/golden_set.py` printing precision and recall per
+`req_type`. The six generator cases already carry their oracles in `manifest.json`;
+extend that set rather than inventing a second format.
 
 **Environment:** `.venv` on Python 3.10.14; `source .venv/bin/activate` then
-`black . --target-version py310 && flake8 && mypy src/ && pytest`. Fixtures regenerate
-with `python scripts/generate_fixtures.py --out tests/fixtures` (the suite generates its
-own into a temp directory, so committed fixtures are not required).
+`black . --target-version py310 && flake8 && mypy src/ && pytest`.
 
-**Blocked on the user (does not block 2e–2f):** a sanitized shape reference for the real
+**Blocked on the user (does not block 2f):** a sanitized shape reference for the real
 OSL / config / report layouts, and a local model for the 2f benchmark (deferred by
 ADR-014). Remaining open questions are in `docs/phase-plan.md`.
 
@@ -276,6 +273,53 @@ See "Resume here".
 ### Pending
 
 2e (stages 6–9 and the expression evaluator), 2f (CLI and golden set).
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (Phase 2 — milestone 2e)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 2 · **Status:** 2e complete; all
+nine stages now run end to end.
+
+### What was completed
+
+- `checks/expressions.py`: a safe evaluator for admin-authored check expressions. Walks
+  a parsed AST and permits only comparison, arithmetic, and four pure functions. No
+  `eval`, no attribute access, no comprehensions, no `**`.
+- `checks/named_values.py`: cell and label-lookup resolution, with number coercion for
+  the forms report cells actually hold.
+- `checks/definitions.py`: `CheckDefinition`, `ComplianceRule`, `ReversePassCategory`,
+  and the shipped default categories.
+- `checks/reports.py`: the fixed per-`req_type` report checks.
+- Stages 6 to 9: scoped reverse pass plus compliance presence; report checks and admin
+  expression checks; second-opinion verification; the summary.
+- 475 tests, 94% branch coverage. All four gates clean.
+
+### Notable decisions and fixes
+
+- The report checks were resolving attribute names with plain normalisation, so a DIRT
+  column named `SCORE_V3` never matched an OSL requirement about "score" and every
+  bound check reported "could not evaluate". They now resolve through the alias table
+  on both sides. This is the bug the alias table exists to prevent.
+- `step_order` is not a report check. The counts report shows totals per step, not the
+  order they ran in, and order is settled between the OSL and the config in stage 5.
+  Treating it as a report check produced a spurious finding on every run.
+- A disputed finding is downgraded to Review and kept, never dropped: the model may
+  reduce false positives but must not be able to hide a real problem.
+- A failed verification or summary leaves the run intact. Both are improvements on the
+  findings, not gates over them.
+- Admin configuration moved onto `RunContext` so the orchestrator can call every stage
+  with one uniform signature; Phase 3 fills it from the database.
+
+### Pending
+
+2f (CLI and golden set).
 
 ### Blockers
 
