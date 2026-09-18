@@ -184,6 +184,52 @@ describe("the admin API client", () => {
     await expect(api.setUserActive(2, false)).rejects.toMatchObject({ status: 409 });
   });
 
+  it("lists the settings under the admin prefix", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listSettings();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/settings");
+  });
+
+  it("posts one setting as a key and a value", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ key: "llm.max_tokens", source: "admin" }));
+    await api.saveSetting("llm.max_tokens", 4096);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/settings");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ key: "llm.max_tokens", value: 4096 });
+  });
+
+  it("reverts a setting by deleting its key", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ key: "llm.model", source: "env" }));
+    await api.revertSetting("llm.model");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/settings/llm.model");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("raises the missing-master-key refusal as a 409", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ detail: "VIGILAI_SECRET_KEY is not set on the server" }, 409)
+    );
+    await expect(api.saveSetting("llm.api_key", "sk-x")).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("asks for the last hundred changes by default", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.settingsHistory();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/settings/history?limit=100");
+  });
+
+  it("tests the model with a POST and no body", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true, provider: "mock", latency_ms: 3 }));
+    const result = await api.testModel();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/settings/test-model");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(result.ok).toBe(true);
+  });
+
   it("reads the first message out of a validation error body", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: [{ msg: "field required" }] }, 422));
     await expect(api.testExpression("")).rejects.toMatchObject({ detail: "field required" });

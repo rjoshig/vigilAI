@@ -11,6 +11,7 @@ import {
   LogOut,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sun,
   UserCog,
 } from "lucide-react";
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { href: "/reference", label: "Reference data", icon: Settings },
   { href: "/usage", label: "Usage", icon: Gauge },
   { href: "/users", label: "Users", icon: UserCog },
+  { href: "/settings", label: "Settings", icon: SlidersHorizontal },
 ];
 
 function ThemeToggle() {

@@ -100,11 +100,27 @@ def _artifact_out(
     Returns:
         The wire model, including the sample's sheets when there is one.
     """
-    sheets = (
-        _sheets(data_dir / row.storage_path, row.key)
-        if row.storage_path and row.kind == "report"
-        else []
-    )
+    samples = [
+        wire.SampleOut(
+            id=sample.id,
+            label=sample.label,
+            filename=sample.filename,
+            sheets=list(sample.sheets or []),
+            size_bytes=sample.size_bytes,
+            notes=sample.notes,
+            uploaded_by=sample.uploaded_by,
+            created_at=sample.created_at,
+        )
+        for sample in row.samples
+    ]
+    # Every sheet across every sample, de-duplicated but in first-seen order: a named
+    # value's sheet may exist in one customer's layout and not another's, and the
+    # picker has to offer both.
+    sheets: list[str] = []
+    for sample in samples:
+        for name in sample.sheets:
+            if name not in sheets:
+                sheets.append(name)
     # The column is a plain string so a future kind needs no migration; the wire model
     # narrows it, and an unrecognised value would be a bug in whatever wrote the row.
     kind = cast(Literal["osl", "config", "report"], row.kind)
@@ -119,8 +135,7 @@ def _artifact_out(
         is_required=row.is_required,
         is_builtin=row.is_builtin,
         sort_order=row.sort_order,
-        filename=row.filename,
-        has_sample=bool(row.storage_path),
+        samples=samples,
         sheets=sheets,
         runs_using=in_use,
     )
@@ -479,15 +494,18 @@ def _load_templates(session: Session, data_dir: Path) -> dict[ReportKind, Any]:
         sa.select(models.ArtifactType).where(models.ArtifactType.kind == "report")
     ).scalars()
     for row in rows:
-        if not row.storage_path:
-            continue
-        path = data_dir / row.storage_path
-        if not path.exists():
-            continue
-        try:
-            documents[row.key] = parser_for(row.key).parse(path)
-        except ParseError as exc:
-            _LOG.info("sample for %s could not be parsed: %s", row.key, exc)
+        for sample in row.samples:
+            path = data_dir / sample.storage_path
+            if not path.exists():
+                continue
+            try:
+                # The first readable sample is the one a check is tested against. The
+                # others exist so a named value's resolution can be shown against each
+                # layout, which is where a pointer that only works on one shows up.
+                documents[row.key] = parser_for(row.key).parse(path)
+                break
+            except ParseError as exc:
+                _LOG.info("sample for %s could not be parsed: %s", row.key, exc)
     return documents
 
 

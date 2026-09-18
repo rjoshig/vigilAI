@@ -57,13 +57,62 @@ class ArtifactTypeIn(BaseModel):
     sort_order: int = 100
 
 
+class SampleOut(BaseModel):
+    """One uploaded example of an artifact type (ADR-021)."""
+
+    id: int
+    label: str = ""
+    filename: str = ""
+    sheets: list[str] = Field(default_factory=list)
+    size_bytes: int = 0
+    notes: str = ""
+    uploaded_by: str = ""
+    created_at: dt.datetime
+
+
+class SamplePreviewOut(BaseModel):
+    """What a sample workbook actually contains, for someone deciding what it means.
+
+    Values pass through the same masking as a real upload, because a sample is a file
+    that may hold customer data (ADR-003).
+    """
+
+    sample_id: int
+    filename: str = ""
+    sheets: list["SheetPreview"] = Field(default_factory=list)
+
+
+class SheetPreview(BaseModel):
+    """One sheet of a sample: its labels, its cells, and its values."""
+
+    name: str
+    rows: int = 0
+    columns: int = 0
+    #: Up to a few hundred populated cells: the address, the label to its left when
+    #: there is one, and the value as shown.
+    cells: list["CellPreview"] = Field(default_factory=list)
+
+
+class CellPreview(BaseModel):
+    """One populated cell, addressable the way a named value addresses it."""
+
+    cell: str
+    value: str = ""
+    label: str = ""
+    row: int = 0
+    column: int = 0
+
+
 class ArtifactTypeOut(ArtifactTypeIn):
     """A stored artifact type, with what is known about its sample."""
 
     id: int
     is_builtin: bool = False
-    filename: str = ""
-    has_sample: bool = False
+    #: Up to three, so variation between customers is visible rather than averaged
+    #: into whichever workbook was uploaded first (ADR-021).
+    samples: list[SampleOut] = Field(default_factory=list)
+    #: Every sheet name across all samples, which is what a named value's sheet
+    #: dropdown offers.
     sheets: list[str] = Field(default_factory=list)
     #: How many runs have uploaded this type. A type in use cannot be deleted.
     runs_using: int = 0

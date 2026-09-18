@@ -28,7 +28,13 @@ import {
   Table,
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import type { ConfigChange, ProviderTestResult, Setting, SettingSource } from "@/lib/types";
+import type {
+  ConfigChange,
+  ProviderTestResult,
+  Setting,
+  SettingGroup,
+  SettingSource,
+} from "@/lib/types";
 
 const SOURCE_LABELS: Record<SettingSource, string> = {
   admin: "set here",
@@ -125,7 +131,9 @@ function SettingRow({ setting, onChanged }: SettingRowProps) {
     setError(null);
     try {
       const updated =
-        what === "save" ? await api.saveSetting(setting.key, wire) : await api.revertSetting(setting.key);
+        what === "save"
+          ? await api.saveSetting(setting.key, wire)
+          : await api.revertSetting(setting.key);
       setConfirming(null);
       onChanged(updated);
     } catch (caught) {
@@ -260,8 +268,8 @@ function SettingRow({ setting, onChanged }: SettingRowProps) {
 
         {setting.kind === "secret" ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            The key itself is never shown. Saving a value replaces it; leaving the box empty
-            changes nothing.
+            The key itself is never shown. Saving a value replaces it; leaving the box empty changes
+            nothing.
           </p>
         ) : null}
         {warning ? <p className="mt-1 text-xs text-warn">{warning}</p> : null}
@@ -355,7 +363,7 @@ function History({ changes }: { changes: ConfigChange[] }) {
 }
 
 export default function SettingsPage() {
-  const [groups, setGroups] = React.useState<import("@/lib/types").SettingGroup[] | null>(null);
+  const [groups, setGroups] = React.useState<SettingGroup[] | null>(null);
   const [changes, setChanges] = React.useState<ConfigChange[]>([]);
   const [error, setError] = React.useState<string | null>(null);
 

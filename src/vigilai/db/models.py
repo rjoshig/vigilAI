@@ -442,11 +442,47 @@ class ArtifactType(Base):
     is_builtin: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
 
-    #: The uploaded sample, which named values are resolved against.
-    filename: Mapped[str] = mapped_column(sa.String(500), default="")
-    storage_path: Mapped[str] = mapped_column(sa.String(500), default="")
     notes: Mapped[str] = mapped_column(sa.Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+    samples: Mapped[list["ArtifactSample"]] = relationship(
+        back_populates="artifact_type", cascade="all, delete-orphan", order_by="ArtifactSample.id"
+    )
+
+
+class ArtifactSample(Base):
+    """One example of what an artifact type looks like (ADR-021).
+
+    Up to three per type. Real report layouts vary between customers and one sample
+    hides that, which is how a named value comes to work on the workbook it was
+    written against and nothing else.
+    """
+
+    __tablename__ = "artifact_samples"
+
+    id: Mapped[int] = _pk()
+    artifact_type_id: Mapped[int] = mapped_column(
+        sa.ForeignKey("artifact_types.id", ondelete="CASCADE"), index=True
+    )
+    #: What distinguishes this sample from the others, e.g. the customer or the year.
+    label: Mapped[str] = mapped_column(sa.String(200), default="")
+    filename: Mapped[str] = mapped_column(sa.String(500), default="")
+    storage_path: Mapped[str] = mapped_column(sa.String(500), default="")
+    sha256: Mapped[str] = mapped_column(sa.String(64), default="", index=True)
+    size_bytes: Mapped[int] = mapped_column(sa.BigInteger, default=0)
+    #: The sheet names the workbook holds, read once at upload so the console and the
+    #: type detector do not have to open the file again.
+    sheets: Mapped[Any] = mapped_column(Json, default=list)
+    notes: Mapped[str] = mapped_column(sa.Text, default="")
+    uploaded_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    #: The uploader's name, kept beside the id so the list still reads after an
+    #: account is renamed, the same as ``configs.created_by``.
+    uploaded_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+    artifact_type: Mapped[ArtifactType] = relationship(back_populates="samples")
 
 
 class RunScope(Base):
