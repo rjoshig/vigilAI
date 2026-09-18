@@ -237,3 +237,37 @@ screen. Still static, still `file://`, still no build. Commit scope `mock` repla
 
 **Consequences:** Phase 1 docs, README, standards, and CLAUDE.md reference `mock/`.
 `docs/design.md` keeps the phrase "ui-mock" because it is the design doc verbatim.
+
+## ADR-014 — Phase 2 is built and validated against `LLM_PROVIDER=mock`; the Gemma benchmark is deferred
+
+**Status:** accepted 2026-09-18 (user decision)
+
+**Context:** Phase 2 milestone 2f calls for running the golden set against a local Gemma
+via Ollama and recording accuracy in `docs/benchmarks/phase-2.md`. No local model is set
+up on the development machine yet, and the user asked to proceed with the mock provider.
+
+**Decision:** All of Phase 2 is written and tested against `LLM_PROVIDER=mock`, including
+the golden-set harness, which must run end to end on the mock. The real-model benchmark
+(phase-2 acceptance criterion 2) is deferred: `scripts/golden_set.py` is provider-agnostic
+so the numbers can be produced later with one command and no code change.
+
+**Consequences:** Phase 2 can complete every criterion except the recorded Gemma numbers.
+That criterion stays open in `docs/phase-2.md` and must be closed before Phase 6
+("in-house fit"). Prompt wording is therefore unvalidated against a real model until then;
+treat the prompt versions as provisional and expect a bump after the first Gemma run.
+
+## ADR-015 — The finalize gate is: every high-severity finding needs a decision
+
+**Status:** accepted 2026-09-18 (user decision)
+
+**Context:** `design.md` "Review and final report" proposes the gate but leaves it open;
+it was one of the open questions in `docs/phase-plan.md`.
+
+**Decision:** "Generate final report" is enabled only when every finding with severity
+High has a review decision (OK or Not OK). Medium and Low findings may be left undecided,
+and Low findings can be decided in bulk. The gate is enforced in the API at finalize time,
+not only in the UI.
+
+**Consequences:** The mock already shows this behaviour. The gate is a named constant, not
+a magic value, so it can be tightened later (the admin-ui Compliance screen mocks a
+selector for it) without a schema change.

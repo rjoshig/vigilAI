@@ -1,0 +1,82 @@
+{
+  "configuration_id": "CFG-SYNTH-BASELINE-01",
+  "customer": "Acme Card Services",
+  "last_modified": "2026-09-01T12:00:00Z",
+  "source": {
+    "table": "prescreen_universe",
+    "driver": "synthetic"
+  },
+  "input": {
+    "count": 1000000
+  },
+  "filters": [
+    {
+      "field": "ST",
+      "op": "in",
+      "value": [
+        "IL",
+        "AZ"
+      ]
+    }
+  ],
+  "rules": {
+    "score_v3": {
+      "field": "SCORE_V3",
+      "op": ">=",
+      "min": 755.0
+    },
+    "age": {
+      "field": "AGE",
+      "op": ">=",
+      "min": 21.0
+    },
+    "rev_util": {
+      "field": "REV_UTIL",
+      "op": "<",
+      "max": 0.6
+    },
+    "open_trades": {
+      "field": "OPEN_TRADES",
+      "op": ">=",
+      "min": 2.0
+    }
+  },
+  "suppressions": {
+    "ofac": true,
+    "deceased": true
+  },
+  "dedupe": {
+    "key": [
+      "SSN",
+      "ZIP"
+    ]
+  },
+  "output": {
+    "fields": [
+      "SCORE_V3",
+      "AGE",
+      "ST",
+      "REV_UTIL",
+      "OPEN_TRADES",
+      "INQ_6M",
+      "TOT_BAL",
+      "DELQ_30",
+      "MORT_BAL",
+      "BK_24M"
+    ]
+  },
+  "pipeline": {
+    "steps": [
+      "input",
+      "geography",
+      "score",
+      "age",
+      "exclusions",
+      "dedupe"
+    ]
+  },
+  "logging": {
+    "level": "INFO",
+    "destination": "stdout"
+  }
+}

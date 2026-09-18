@@ -1,6 +1,6 @@
 # Phase 1 — UI mock
 
-**Status:** built, awaiting stakeholder walkthrough. **Goal:** a static, clickable `mock/` showing every screen of
+**Status:** complete (walkthrough signed off 2026-09-18). **Goal:** a static, clickable `mock/` showing every screen of
 user-ui, admin-ui, and the final report, so engineers and stakeholders see the target
 before anything is built. Same approach as `compare-file/ui-mock/`: plain HTML + one shared
 `styles.css` + one shared `app.js`, opens from `file://`, no build, no backend. Effort ~1 week.
@@ -56,7 +56,7 @@ own `nav.js`, so they can be reviewed independently.
    dark mode.
 2. [x] Nav between pages works; every button shows a toast or navigates.
 3. [x] No real customer data anywhere in the mock (reviewed in the PR).
-4. [ ] Stakeholder walkthrough done; feedback captured in `docs/session-log.md` and, where it
+4. [x] Stakeholder walkthrough done; feedback captured in `docs/session-log.md` and, where it
    changes the design, in `design.md` + an ADR.
 
 ## Out of scope

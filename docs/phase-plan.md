@@ -10,8 +10,8 @@ risk.
 | Phase | Title | Rough effort | Status | Doc |
 | --- | --- | --- | --- | --- |
 | 0 | Repo setup — structure, CLAUDE.md, docs, phase docs, standards, git rules, tooling | days | **in progress** | [phase-0.md](phase-0.md) |
-| 1 | UI mock — static `mock/` (user-ui, admin-ui, final report) | 1 week | built, walkthrough pending | [phase-1.md](phase-1.md) |
-| 2 | Pipeline core — CLI: files in, findings JSON out; parsers, rule schema, LLM adapter, cache, golden set on synthetic fixtures | 4–5 weeks | planned | [phase-2.md](phase-2.md) |
+| 1 | UI mock — static `mock/` (user-ui, admin-ui, final report) | 1 week | **done** | [phase-1.md](phase-1.md) |
+| 2 | Pipeline core — CLI: files in, findings JSON out; parsers, rule schema, LLM adapter, cache, golden set on synthetic fixtures | 4–5 weeks | **in progress (2a)** | [phase-2.md](phase-2.md) |
 | 3 | Web app — docker-compose, new run, queue, history, review screen, stats, user-ui | 3 weeks | planned | [phase-3.md](phase-3.md) |
 | 4 | Admin-ui and checks — templates, named values, checks, compliance rules, LLM-assisted authoring | 2–3 weeks | planned | [phase-4.md](phase-4.md) |
 | 5 | Final report — one-page HTML in the compare-file format, freeze, PDF export | 1–2 weeks | planned | [phase-5.md](phase-5.md) |
@@ -36,5 +36,5 @@ answer as an ADR when it lands.
 - [ ] Is 90-day storage of DIRT files containing PII approved?
 - [ ] Comparison against the same customer's previous run (drift)? Cheap once history exists.
 - [ ] Are the fixed compliance rules maintained in the admin-ui or sourced elsewhere?
-- [ ] Must every high-severity finding have a decision before the final report can be generated? (Proposed gate: yes.)
+- [x] Must every high-severity finding have a decision before the final report can be generated? **Yes** (ADR-015).
 - [ ] Confirm "last modified" means a timestamp inside the config JSON, not the upload time.

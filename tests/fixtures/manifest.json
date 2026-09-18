@@ -1,0 +1,229 @@
+{
+  "cases": [
+    {
+      "name": "baseline_match",
+      "description": "Config implements every OSL requirement; reports agree. No findings.",
+      "customer": "Acme Card Services",
+      "order_number": "ORD-10001",
+      "configuration_id": "CFG-SYNTH-BASELINE-01",
+      "osl": "cases/baseline_match/osl.docx",
+      "config": "cases/baseline_match/config.json",
+      "reports": {
+        "dirt": "cases/baseline_match/reports/dirt.xlsx",
+        "state_distribution": "cases/baseline_match/reports/state_distribution.xlsx",
+        "field_distribution": "cases/baseline_match/reports/field_distribution.xlsx",
+        "counts": "cases/baseline_match/reports/counts.xlsx",
+        "billing": "cases/baseline_match/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": []
+      }
+    },
+    {
+      "name": "geography_extra_state",
+      "description": "Config adds TX to the state filter and the report shows TX and NV. The design doc's worked example.",
+      "customer": "Acme Card Services",
+      "order_number": "ORD-10002",
+      "configuration_id": "CFG-SYNTH-GEO-02",
+      "osl": "cases/geography_extra_state/osl.docx",
+      "config": "cases/geography_extra_state/config.json",
+      "reports": {
+        "dirt": "cases/geography_extra_state/reports/dirt.xlsx",
+        "state_distribution": "cases/geography_extra_state/reports/state_distribution.xlsx",
+        "field_distribution": "cases/geography_extra_state/reports/field_distribution.xlsx",
+        "counts": "cases/geography_extra_state/reports/counts.xlsx",
+        "billing": "cases/geography_extra_state/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ",
+          "TX"
+        ],
+        "report_states": [
+          "IL",
+          "AZ",
+          "TX",
+          "NV"
+        ],
+        "accepts": 291664,
+        "rejects": 708336,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "extra_rule_in_config",
+          "report_violates_rule"
+        ]
+      }
+    },
+    {
+      "name": "score_value_mismatch",
+      "description": "Config threshold is 750 where the OSL says 755; DIRT confirms 750 delivered.",
+      "customer": "Northwind Lending",
+      "order_number": "ORD-10003",
+      "configuration_id": "CFG-SYNTH-SCORE-03",
+      "osl": "cases/score_value_mismatch/osl.docx",
+      "config": "cases/score_value_mismatch/config.json",
+      "reports": {
+        "dirt": "cases/score_value_mismatch/reports/dirt.xlsx",
+        "state_distribution": "cases/score_value_mismatch/reports/state_distribution.xlsx",
+        "field_distribution": "cases/score_value_mismatch/reports/field_distribution.xlsx",
+        "counts": "cases/score_value_mismatch/reports/counts.xlsx",
+        "billing": "cases/score_value_mismatch/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 190338,
+        "rejects": 809662,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "value_mismatch",
+          "report_violates_rule"
+        ]
+      }
+    },
+    {
+      "name": "rule_missing_in_config",
+      "description": "The OSL states a score rule the config does not implement at all.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10004",
+      "configuration_id": "CFG-SYNTH-MISSING-04",
+      "osl": "cases/rule_missing_in_config/osl.docx",
+      "config": "cases/rule_missing_in_config/config.json",
+      "reports": {
+        "dirt": "cases/rule_missing_in_config/reports/dirt.xlsx",
+        "state_distribution": "cases/rule_missing_in_config/reports/state_distribution.xlsx",
+        "field_distribution": "cases/rule_missing_in_config/reports/field_distribution.xlsx",
+        "counts": "cases/rule_missing_in_config/reports/counts.xlsx",
+        "billing": "cases/rule_missing_in_config/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "rule_missing_in_config"
+        ]
+      }
+    },
+    {
+      "name": "attributes_missing_in_report",
+      "description": "OSL and config ask for 11 attributes; the reports carry 10.",
+      "customer": "Pinecrest Auto Finance",
+      "order_number": "ORD-10005",
+      "configuration_id": "CFG-SYNTH-ATTR-05",
+      "osl": "cases/attributes_missing_in_report/osl.docx",
+      "config": "cases/attributes_missing_in_report/config.json",
+      "reports": {
+        "dirt": "cases/attributes_missing_in_report/reports/dirt.xlsx",
+        "state_distribution": "cases/attributes_missing_in_report/reports/state_distribution.xlsx",
+        "field_distribution": "cases/attributes_missing_in_report/reports/field_distribution.xlsx",
+        "counts": "cases/attributes_missing_in_report/reports/counts.xlsx",
+        "billing": "cases/attributes_missing_in_report/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "report_violates_rule"
+        ]
+      }
+    },
+    {
+      "name": "counts_do_not_reconcile",
+      "description": "588 records vanish between exclusions and dedupe; accepts + rejects < input.",
+      "customer": "Acme Card Services",
+      "order_number": "ORD-10006",
+      "configuration_id": "CFG-SYNTH-COUNTS-06",
+      "osl": "cases/counts_do_not_reconcile/osl.docx",
+      "config": "cases/counts_do_not_reconcile/config.json",
+      "reports": {
+        "dirt": "cases/counts_do_not_reconcile/reports/dirt.xlsx",
+        "state_distribution": "cases/counts_do_not_reconcile/reports/state_distribution.xlsx",
+        "field_distribution": "cases/counts_do_not_reconcile/reports/field_distribution.xlsx",
+        "counts": "cases/counts_do_not_reconcile/reports/counts.xlsx",
+        "billing": "cases/counts_do_not_reconcile/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 178636,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": false,
+        "findings": [
+          "count_does_not_reconcile"
+        ]
+      }
+    }
+  ]
+}

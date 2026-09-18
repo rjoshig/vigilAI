@@ -11,19 +11,24 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Current phase | **1 — UI mock** |
-| Current milestone | Mock built (`mock/`); stakeholder walkthrough pending |
+| Current phase | **2 — Pipeline core (CLI)** |
+| Current milestone | 2a done (fixtures + parsers); **2b next** (rule schema) |
 | Branch | `claude/funny-cerf-jsyvpe` (Phase 0 PR still open against `main`) |
 | Last updated | 2026-09-18 |
 
-**Next action:** the user opens `mock/index.html` and walks through user-ui and admin-ui
-(walkthrough script is on the launcher page). Capture feedback here; where it changes the
-design, update `design.md` + add an ADR; then tick Phase 1 acceptance criterion 4 in
-`docs/phase-1.md`. Do not start Phase 2 before the walkthrough is done. After the Phase 0
-PR merges, the human creates `dev` from `main`.
+**Next action:** milestone 2b — `rules/schema.py` (Pydantic canonical rule envelope,
+findings, traces), `rules/normalize.py` (state names → codes, ranges → intervals, lists →
+sets, aliases), `rules/derive.py` (derived report checks per operator), with one test file
+per module. Read `docs/design.md` "Canonical rule schema" and "Findings" first.
 
-**Blocked on the user:** the open questions in `docs/phase-plan.md` (real sample set,
-in-house model / serving stack, data dictionary, retention window, finalize gate).
+**Environment:** `.venv` on Python 3.10.14; `source .venv/bin/activate` then
+`black . && flake8 && mypy src/ && pytest`. Fixtures regenerate with
+`python scripts/generate_fixtures.py --out tests/fixtures` (the suite generates its own
+into a temp directory, so committed fixtures are not required).
+
+**Blocked on the user (does not block 2b–2f):** a sanitized shape reference for the real
+OSL / config / report layouts, and a local model for the 2f benchmark (deferred by
+ADR-014). Remaining open questions are in `docs/phase-plan.md`.
 
 ---
 
@@ -98,3 +103,47 @@ None for Phase 1. The design-doc open questions block parts of Phases 2, 4, 6 (l
 ### Next concrete action
 
 See "Resume here".
+
+## Session: 2026-09-18 (Phase 2 — milestone 2a)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 2 · **Status:** 2a complete.
+
+### What was completed
+
+- Phase 1 signed off by the user; ADR-014 (build against `LLM_PROVIDER=mock`, defer the
+  Gemma benchmark) and ADR-015 (finalize gate = every High finding decided) recorded.
+- Python 3.10.14 installed via pyenv; `.venv` created; Phase 2 runtime dependencies
+  (pydantic, httpx, python-docx, openpyxl) added to `pyproject.toml`.
+- `parsers/base.py`: `OslParser` / `ConfigParser` / `ReportParser` Protocols and frozen
+  value objects (`OslSection`, `OslTable`, `ConfigBlock` with JSON path, `ReportSheet`
+  with cell addresses and label lookup).
+- `parsers/masking.py`: masked-column matching and value masking applied **at parse
+  time**, so an unmasked value never exists downstream (ADR-003).
+- `parsers/osl_docx.py` (document-order walk of headings, paragraphs, tables),
+  `parsers/config_json.py` (logical blocks with JSON paths, technical-key classification),
+  `parsers/reports/xlsx.py` (one class per report kind over one read-only reader).
+- `scripts/generate_fixtures.py`: six seeded synthetic cases, each carrying its own
+  oracle in `manifest.json` — baseline match, extra state, value mismatch, missing rule,
+  missing attribute, counts not reconciling.
+- 73 tests, 97% branch coverage. `black`, `flake8`, `mypy --strict`, `pytest` all clean.
+
+### Notable decisions and fixes
+
+- `check_docs.sh` was failing on `main` before this work (grep exit 1 under `pipefail`
+  for any link-free markdown file); fixed.
+- flake8-bugbear B042 on `ParseError` turned out to be a real defect: forwarding extra
+  args to `super().__init__` broke unpickling. Fixed with `__reduce__` and a test, since
+  the worker carries exceptions across a process boundary.
+
+### Pending
+
+2b (canonical rule schema and normalizers), then 2c–2f.
+
+### Blockers
+
+None. The real-file shape reference and a local model are still wanted but do not block
+2b–2f (ADR-014).
+
+### Next concrete action
+
+Milestone 2b: `rules/schema.py`, `rules/normalize.py`, `rules/derive.py` with tests.

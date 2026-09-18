@@ -1,6 +1,6 @@
 # Phase 2 — Pipeline core (CLI)
 
-**Status:** planned. **Goal:** the whole nine-stage pipeline runnable from the command
+**Status:** in progress (2a done, 2b next). **Goal:** the whole nine-stage pipeline runnable from the command
 line on synthetic fixtures: files in, findings JSON out. Parsers, the canonical rule
 schema, the LLM adapter with cache, and a golden set that measures extraction accuracy.
 Effort 4–5 weeks. This is the riskiest phase (LLM extraction quality), which is why it
@@ -12,19 +12,21 @@ adapter", "LLM cost controls", and `llm-privacy.md` end to end before starting.
 ## Milestones (sequential; each ends with tests green and a session-log entry)
 
 ### 2a — Fixtures and parsers behind Protocols
-- [ ] `scripts/generate_fixtures.py`: from a small spec, emit a **synthetic** OSL `.docx`
+- [x] `scripts/generate_fixtures.py`: from a small spec, emit a **synthetic** OSL `.docx`
       (headings + criteria tables), a config `.json` (blocks with filters, attributes,
       waterfall steps), and report `.xlsx` files (DIRT with a masked-able sample tab,
       field / state / score distributions, counts, cross tabs). Seeded RNG.
-- [ ] `parsers/base.py`: `OslParser`, `ConfigParser`, `ReportParser` Protocols and the
+- [x] `parsers/base.py`: `OslParser`, `ConfigParser`, `ReportParser` Protocols and the
       parsed-document dataclasses (`OslSection`, `OslTable`, `ConfigBlock` with JSON path,
       `ReportSheet` with cell addresses).
-- [ ] `parsers/osl_docx.py` (python-docx by heading and table), `parsers/config_json.py`
+- [x] `parsers/osl_docx.py` (python-docx by heading and table), `parsers/config_json.py`
       (split into logical blocks), `parsers/reports/*.py` (one per report type; openpyxl
       read-only).
-- [ ] Masking of the DIRT sample tab from a masked-column list (default: obvious PII
+- [x] Masking of the DIRT sample tab from a masked-column list (default: obvious PII
       names) at parse time.
-- Tests: one file per parser; round-trip against the generated fixtures.
+- [x] Tests: one file per parser; round-trip against the generated fixtures. 73 tests,
+      97% branch coverage. A PII regex tripwire asserts no parsed value looks like a real
+      identifier.
 
 ### 2b — Canonical rule schema and normalizers
 - [ ] `rules/schema.py`: Pydantic models for the rule envelope (`req_type`, conditions,
