@@ -9,16 +9,16 @@ before anything is built. Same approach as `compare-file/ui-mock/`: plain HTML +
 `mock/user-ui/` · `mock/admin-ui/` — the two apps are separate directories, each with its
 own `nav.js`, so they can be reviewed independently.
 
-## Scope
+## Scope · ✅ complete
 
-**Shared**
+**Shared** · ✅ complete
 - [x] `mock/shared/styles.css` — tokens copied from `compare-file/ui2` (`--primary`, `--card`,
       `--success`, … light + dark) so the mock and the apps match.
 - [x] `mock/shared/app.js` — sidebar renderer, inline SVG icons, light/dark toggle, toast, and
       **synthetic** demo data only (invented customer names, states, thresholds).
 - [x] `mock/README.md` — page list and re-skinning notes.
 
-**user-ui pages** (`mock/user-ui/`, `design.md` "UI and report")
+**user-ui pages** (`mock/user-ui/`, `design.md` "UI and report") · ✅ complete
 - [x] `index.html` — Runs: history with filters, status badge (queued / running /
       needs review / finalized / failed), queue position, live stage progress.
 - [x] `new-run.html` — form: customer name, order number, configuration ID, date, notes;
@@ -39,7 +39,7 @@ own `nav.js`, so they can be reviewed independently.
       created / last-modified dates; copy into a new run. Same layout as the compare-file
       ui2 config screen.
 
-**admin-ui pages** (`mock/admin-ui/`, own nav; entry `admin-ui/index.html`)
+**admin-ui pages** (`mock/admin-ui/`, own nav; entry `admin-ui/index.html`) · ✅ complete
 - [x] Report templates — upload a sample Excel per report type; define named values
       (cell or label lookup) with descriptions.
 - [x] Checks — create (plain-English description → proposed named values + expression),
@@ -50,7 +50,7 @@ own `nav.js`, so they can be reviewed independently.
 - [x] Usage — runs per day, p50/p95 duration, failure rate, tokens per day, cache hit
       rate, JSON-validation failure rate, false-positive rate.
 
-## Acceptance criteria
+## Acceptance criteria · ✅ complete
 
 1. [x] Every page above opens from `file://` with no console errors and works in light and
    dark mode.

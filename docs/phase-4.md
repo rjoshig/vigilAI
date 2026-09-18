@@ -4,9 +4,9 @@
 plus the other admin-maintained reference data, and the separate admin-ui on its own URL.
 Effort 2–3 weeks. Depends on Phase 3. Read `design.md` "Configurable checks (admin-ui)".
 
-## Scope
+## Scope · ⬜ not started
 
-**Backend**
+**Backend** · ⬜ not started
 - [ ] Tables in use: `report_templates`, `named_values`, `check_definitions` (versioned;
       kind expression | judgment; severity; scope all / one customer; `is_active`),
       `compliance_rules`, `attribute_aliases`, masked columns.
@@ -26,22 +26,22 @@ Effort 2–3 weeks. Depends on Phase 3. Read `design.md` "Configurable checks (a
 - [ ] Run fingerprint includes the active check versions (a check change invalidates the
       duplicate shortcut).
 
-**admin-ui**
+**admin-ui** · ⬜ not started
 - [ ] Scaffold like user-ui (same toolchain and tokens), port **3001**, own Dockerfile,
       added to docker-compose. No login (ADR-008); the auth dependency is the hook.
 - [ ] Screens from the Phase 1 mock: Report templates + named values, Checks (draft → correct
       → test → activate, versions, enable/disable, scope), Compliance and scope, Reference
       data (aliases, masked columns), Usage dashboard.
 
-## Acceptance criteria
+## Acceptance criteria · ⬜ not started
 
-1. The three example checks from the design doc (billing ≤ delivered, billing ≥ accepts,
+1. [ ] The three example checks from the design doc (billing ≤ delivered, billing ≥ accepts,
    accepts + rejects == input) are authored through the UI, tested against synthetic
    templates, activated, and fire as findings on a run.
-2. A missing named value produces a "could not evaluate" finding, never a silent skip.
-3. Disabling a check removes it from new runs without touching old findings
+2. [ ] A missing named value produces a "could not evaluate" finding, never a silent skip.
+3. [ ] Disabling a check removes it from new runs without touching old findings
    (`findings.rules_version` / check versions preserved).
-4. Gates clean for api, user-ui, admin-ui.
+4. [ ] Gates clean for api, user-ui, admin-ui.
 
 ## Out of scope
 

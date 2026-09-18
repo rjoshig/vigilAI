@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Docs integrity check.
 #  1. Every relative markdown link in *.md resolves to a file or directory.
-#  2. Every file under docs/ is mentioned in README.md (the human index).
+#  2. Every phase-doc status marker matches the checkboxes beneath it.
+#  3. Every file under docs/ is mentioned in README.md (the human index).
 # Run from the repo root: bash scripts/check_docs.sh
 set -euo pipefail
 
@@ -26,7 +27,12 @@ while IFS= read -r file; do
       done || fail=1
 done < <(git ls-files '*.md' 2>/dev/null || find . -name '*.md' -not -path './node_modules/*')
 
-# 2. docs/ index in README.md.
+# 2. Phase-doc status markers match their checkboxes.
+if ! python3 scripts/update_phase_status.py --check; then
+  fail=1
+fi
+
+# 3. docs/ index in README.md.
 for f in docs/*.md; do
   name=$(basename "$f")
   if ! grep -q "$name" README.md; then

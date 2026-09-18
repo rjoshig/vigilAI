@@ -5,7 +5,7 @@ compare-file report format, generated after review, with PDF download. Effort 1�
 Depends on Phase 3 (Phase 4 for admin-check findings to appear). Read `design.md` "Review
 and final report" and "UI and report".
 
-## Scope
+## Scope · ⬜ not started
 
 - [ ] `report/templates/`: Jinja2 one-page self-contained HTML (inline CSS/JS, opens
       offline) with the compare-file report look: brand topbar, header (customer, order,
@@ -23,11 +23,11 @@ and final report" and "UI and report".
 - [ ] user-ui Final report screen: view, Download PDF, Clone run.
 - [ ] Masked values everywhere (app, HTML, PDF); no unmask control in v1.
 
-## Acceptance criteria
+## Acceptance criteria · ⬜ not started
 
-1. Finalizing a reviewed synthetic run produces an HTML file that opens from `file://`
+1. [ ] Finalizing a reviewed synthetic run produces an HTML file that opens from `file://`
    with no network and matches the mock's layout.
-2. The stored HTML never changes after finalize (hash asserted across a re-review attempt,
+2. [ ] The stored HTML never changes after finalize (hash asserted across a re-review attempt,
    which is rejected).
-3. PDF is produced from the stored HTML, all findings expanded, masked values only.
-4. Review, view, and download make zero LLM calls (asserted).
+3. [ ] PDF is produced from the stored HTML, all findings expanded, masked values only.
+4. [ ] Review, view, and download make zero LLM calls (asserted).

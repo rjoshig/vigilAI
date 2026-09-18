@@ -4,7 +4,7 @@
 starts from the same conventions: CLAUDE.md, docs, phase docs, coding standards, git
 rules, tooling and Docker/CI stubs. **No application code.**
 
-## Scope
+## Scope · ✅ complete
 
 - [x] Directory tree (see `README.md` "Repository layout").
 - [x] `CLAUDE.md` — router with the seven hard rules and links.
@@ -28,7 +28,7 @@ rules, tooling and Docker/CI stubs. **No application code.**
 Any `.py` beyond the version string and the package smoke test, any Next.js scaffold, any fixture file, any real
 Dockerfile logic beyond `pip install -e .`.
 
-## Exit criteria
+## Exit criteria · 🟡 in progress
 
 1. [x] All files above present; `docs/design.md` is byte-identical to the design doc
    export.

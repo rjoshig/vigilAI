@@ -37,7 +37,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 0 | Repo setup: structure, CLAUDE.md, docs, standards, git rules, tooling (no app code) | `docs/phase-0.md` | ✅ complete |
 | 1 | Static `mock/` (user-ui, admin-ui, final report) | `docs/phase-1.md` | ✅ complete |
 | 2 | Pipeline core as a CLI: parsers, rule schema, LLM adapter + cache, stages 1–9, golden set | `docs/phase-2.md` | ✅ complete (ADR-014 defers the real-model benchmark) |
-| 3 | Web app: docker-compose, Postgres + queue, API, user-ui | `docs/phase-3.md` | ⬜ not started |
+| 3 | Web app: docker-compose, database + queue, API, user-ui | `docs/phase-3.md` | 🟡 in progress (backend done) |
 | 4 | admin-ui and configurable checks | `docs/phase-4.md` | ⬜ not started |
 | 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ⬜ not started |
 | 6 | Hardening and in-house fit | `docs/phase-6.md` | ⬜ not started |
@@ -50,6 +50,11 @@ commit that changes a phase's status; `docs/phase-plan.md` must agree with it.
 The moment a phase's last task lands, in the same commit:
 
 1. **Tick every box** in `docs/phase-N.md` — scope items and acceptance criteria alike.
+   Then run `python scripts/update_phase_status.py`, which derives the
+   `· ✅ / 🟡 / ⬜` marker on every section, milestone, and scope group from the boxes
+   beneath it. `scripts/check_docs.sh` fails if they have drifted, so this is enforced
+   rather than remembered. Use `- [~]` for a criterion that is partly met; it reads as
+   🟡, never ✅.
    A criterion that is deliberately left open stays unticked and is labelled
    **outstanding** or **deferred**, naming the ADR that allows it. Never tick a box for
    work that was not done.
@@ -100,7 +105,8 @@ the code they describe, never in a follow-up.
   merits.
 - Something the design doc doesn't cover: flag `# SPEC GAP:` and ask; don't guess.
 - Terms: `docs/glossary.md`.
-- `bash scripts/check_docs.sh` must pass before every commit.
+- `bash scripts/check_docs.sh` must pass before every commit. It checks markdown
+  links, phase-doc status markers, and the `docs/` index in `README.md`.
 
 ## Local environment
 
