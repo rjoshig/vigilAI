@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New run · vigilAI mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="new-run">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container">
+          <div class="page-header">
+            <div>
+              <h1>New run</h1>
+              <p>Upload the OSL, the ETL config, and the output reports. The pipeline traces every OSL requirement into the config and then into the reports.</p>
+            </div>
+            <div class="page-actions">
+              <button class="btn btn-outline" onclick="openModal('copyModal')"><span data-icon="copy"></span> Copy from previous run</button>
+            </div>
+          </div>
+
+          <div class="grid grid-side">
+            <div>
+              <div class="card mb">
+                <div class="card-header bordered"><div><div class="card-title"><span data-icon="doc"></span> Run details</div><p class="card-desc">Shown on the review screen and in the header of the final report.</p></div></div>
+                <div class="card-pad">
+                  <div class="form-grid">
+                    <div class="field"><label class="label">Customer name <span class="req">*</span></label><input class="input" value="Acme Card Services" list="customers" /><datalist id="customers"><option>Acme Card Services</option><option>Northwind Lending</option><option>Harbor Credit Union</option><option>Pinecrest Auto Finance</option></datalist></div>
+                    <div class="field"><label class="label">Order number <span class="req">*</span></label><input class="input mono" value="ORD-24193" /></div>
+                    <div class="field"><label class="label">Configuration ID <span class="req">*</span></label><input class="input mono" value="CFG-ACME-PRESCREEN-07" /><span class="hint">Matches the config's <span class="mono">configuration_id</span>; used to version captured configs.</span></div>
+                    <div class="field"><label class="label">Run date</label><input class="input" type="date" value="2026-09-18" /></div>
+                    <div class="field span2"><label class="label">Additional notes</label><textarea class="textarea" placeholder="Anything the reviewer should know: special instructions, known deviations, who requested the run…">Prescreen refresh for Q4 campaign. OSL v2.3 received 2026-09-16.</textarea></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card mb">
+                <div class="card-header bordered"><div><div class="card-title"><span data-icon="upload"></span> Input files</div><p class="card-desc">Drag and drop, or click a zone. Files stay on the shared volume; only ids, hashes, and counts are logged.</p></div></div>
+                <div class="card-pad">
+                  <div class="grid grid-2 mb">
+                    <div class="field">
+                      <label class="label"><span data-icon="doc"></span> OSL — requirement spec (.docx) <span class="req">*</span></label>
+                      <div class="drop"><span data-icon="upload"></span><strong>Drop the OSL here</strong><span>Word document · max 25 MB</span></div>
+                      <div class="chips"><span class="file-chip"><span data-icon="doc"></span> ACME_Prescreen_OSL_v2.3.docx <span class="muted">· 412 KB</span><span class="rm" data-icon="x" onclick="event.stopPropagation(); mock('Remove file')"></span></span></div>
+                    </div>
+                    <div class="field">
+                      <label class="label"><span data-icon="json"></span> ETL config (.json) <span class="req">*</span></label>
+                      <div class="drop"><span data-icon="upload"></span><strong>Drop the config here</strong><span>JSON · parsed into blocks with JSON paths</span></div>
+                      <div class="chips"><span class="file-chip"><span data-icon="json"></span> acme_prescreen_cfg.json <span class="muted">· 38 KB</span><span class="rm" data-icon="x" onclick="event.stopPropagation(); mock('Remove file')"></span></span></div>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label class="label"><span data-icon="sheet"></span> Output reports (.xlsx) <span class="req">*</span> <span class="muted" style="font-weight: 400">· one or more; the type is detected from the template</span></label>
+                    <div class="drop"><span data-icon="upload"></span><strong>Drop DIRT, distribution, and count reports here</strong><span>Excel · each file is matched to an admin-defined report template</span></div>
+                    <table class="table compact mt-s">
+                      <thead><tr><th>File</th><th>Detected type</th><th>Sheets</th><th class="right">Size</th><th></th></tr></thead>
+                      <tbody>
+                        <tr><td class="mono">DIRT_ORD-24193.xlsx</td><td><span class="badge badge-info">DIRT</span></td><td class="muted small">Summary, Attributes, Sample</td><td class="right tabular small">2.1 MB</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="mock('Remove file')"><span data-icon="x"></span></button></td></tr>
+                        <tr><td class="mono">field_dist_ORD-24193.xlsx</td><td><span class="badge badge-info">Field distribution</span></td><td class="muted small">Fields</td><td class="right tabular small">640 KB</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="mock('Remove file')"><span data-icon="x"></span></button></td></tr>
+                        <tr><td class="mono">state_dist_ORD-24193.xlsx</td><td><span class="badge badge-info">State distribution</span></td><td class="muted small">States</td><td class="right tabular small">22 KB</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="mock('Remove file')"><span data-icon="x"></span></button></td></tr>
+                        <tr><td class="mono">number_flow_ORD-24193.xlsx</td><td><span class="badge badge-warn">Unrecognized</span> <select class="select sm" style="width: auto; display: inline-block"><option>Choose type…</option><option selected>Counts / number flow</option><option>Billing</option></select></td><td class="muted small">Flow</td><td class="right tabular small">18 KB</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="mock('Remove file')"><span data-icon="x"></span></button></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex between">
+                <span class="small muted">Submitting computes an input fingerprint (sha256 of all files). Identical inputs already run will be shown before anything is queued.</span>
+                <div class="flex">
+                  <a class="btn btn-ghost" href="index.html">Cancel</a>
+                  <button class="btn" onclick="openModal('dupModal')"><span data-icon="play"></span> Submit run</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="card mb">
+                <div class="card-header"><div class="card-title"><span data-icon="info"></span> What happens next</div></div>
+                <div class="card-content small">
+                  <ol style="margin: 0; padding-left: 1.1rem; line-height: 1.7">
+                    <li>Files are hashed and stored; the run is queued.</li>
+                    <li>Worker runs stages 1–9 (parse → extract → describe → trace → compare → reverse pass → report checks → verify → summarize).</li>
+                    <li>Run moves to <span class="badge badge-warn">Needs review</span>.</li>
+                    <li>You mark each finding OK / Not OK, then generate the frozen report.</li>
+                  </ol>
+                  <p class="muted" style="margin: 0.7rem 0 0">Typical duration: 3–6 min. LLM calls: ~2–3 per requirement plus one per config block; cached content is never re-sent.</p>
+                </div>
+              </div>
+              <div class="card mb">
+                <div class="card-header"><div class="card-title"><span data-icon="shield"></span> Privacy</div></div>
+                <div class="card-content small muted">
+                  Sample rows and PII never go into a prompt or a log. The model sees requirement text, config blocks, and report cell values only. Masked columns are configured in the admin-ui.
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-header"><div class="card-title"><span data-icon="config"></span> Config will be captured</div></div>
+                <div class="card-content small">
+                  <dl class="kv">
+                    <dt>Configuration ID</dt><dd class="mono">CFG-ACME-PRESCREEN-07</dd>
+                    <dt>Existing versions</dt><dd>v1 · v2 · v3</dd>
+                    <dt>If content differs</dt><dd>saved as <b>v4</b></dd>
+                    <dt>If identical to v3</dt><dd>reused; no new version</dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Duplicate-inputs dialog -->
+    <div class="modal" id="dupModal">
+      <div class="modal-box">
+        <div class="modal-head"><h3>These inputs were already run</h3><button class="icon-btn" onclick="closeModal('dupModal')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <div class="banner banner-warn" style="margin: 0"><span data-icon="alert"></span><div class="body"><b>Identical input fingerprint found</b>The OSL, config, and all four reports match run <span class="mono">VR-0428</span> byte for byte. Re-running would send nothing new to the LLM (cache) but creates a second run and a second report.</div></div>
+          <div class="card card-pad">
+            <div class="flex between">
+              <div>
+                <div><b>VR-0428</b> · Acme Card Services · ORD-24177</div>
+                <div class="small muted">Submitted today 09:12 · status <span class="badge badge-warn">Needs review</span> · 4 high / 3 medium / 5 low</div>
+              </div>
+              <a class="btn btn-outline btn-sm" href="review.html"><span data-icon="eye"></span> Open existing run</a>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label">Reason for re-running <span class="req">*</span></label>
+            <textarea class="textarea" id="rerunReason" placeholder="Required. Stored on the run as rerun_reason and shown in the audit log."></textarea>
+            <span class="hint">Examples: "prompt version changed", "admin check billing_not_above_delivered was added", "reviewer asked for a clean run".</span>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" onclick="closeModal('dupModal')">Cancel</button>
+          <button class="btn" onclick="submitRerun()"><span data-icon="play"></span> Re-run anyway</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Copy from previous run -->
+    <div class="modal" id="copyModal">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Copy from a previous run</h3><button class="icon-btn" onclick="closeModal('copyModal')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <p class="small muted" style="margin: 0">Pre-fills customer, order, configuration ID, and notes, and attaches the captured config version. Reports and OSL must be uploaded fresh.</p>
+          <input class="input" placeholder="Search runs…" />
+          <table class="table compact">
+            <thead><tr><th>Run</th><th>Customer</th><th>Config</th><th>When</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="mono">VR-0428</td><td>Acme Card Services</td><td class="mono">CFG-ACME-PRESCREEN-07 v3</td><td class="muted small">Today</td><td class="right"><button class="btn btn-xs" onclick="closeModal('copyModal'); toast('Copied details from VR-0428 (mock)')">Use</button></td></tr>
+              <tr><td class="mono">VR-0421</td><td>Acme Card Services</td><td class="mono">CFG-ACME-PRESCREEN-07 v2</td><td class="muted small">Sep 12</td><td class="right"><button class="btn btn-xs btn-outline" onclick="closeModal('copyModal'); toast('Copied details from VR-0421 (mock)')">Use</button></td></tr>
+              <tr><td class="mono">VR-0425</td><td>Northwind Lending</td><td class="mono">CFG-NW-INVITE-12 v6</td><td class="muted small">Yesterday</td><td class="right"><button class="btn btn-xs btn-outline" onclick="closeModal('copyModal'); toast('Copied details from VR-0425 (mock)')">Use</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+    <script>
+      function submitRerun() {
+        const r = document.getElementById("rerunReason").value.trim();
+        if (!r) { toast("A rerun reason is required"); document.getElementById("rerunReason").focus(); return; }
+        closeModal("dupModal");
+        toast("Run VR-0432 queued at position #3 (mock)");
+        setTimeout(() => (window.location.href = "index.html"), 1100);
+      }
+    </script>
+  </body>
+</html>

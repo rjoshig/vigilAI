@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reference data · vigilAI admin mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="reference">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container">
+          <div class="page-header">
+            <div><h1>Reference data</h1><p>Attribute aliases map field names across the OSL, the config, and the reports. Masked columns are hidden in the app, the HTML report, and the PDF.</p></div>
+          </div>
+          <div class="grid grid-side">
+            <div class="card card-flush">
+              <div class="card-header bordered"><div class="card-title"><span data-icon="book"></span> Attribute aliases</div><div class="flex"><input class="input sm" style="width: 12rem" placeholder="Filter…" /><button class="btn btn-sm" onclick="openModal('aliasModal')"><span data-icon="plus"></span> Add alias</button></div></div>
+              <table class="table">
+                <thead><tr><th>Canonical name</th><th>Aliases</th><th>Customer</th><th>Seen in</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">score</td><td><span class="set-pill">SCORE_V3</span><span class="set-pill">V3 score</span><span class="set-pill">credit score</span><span class="set-pill">FICO-like score</span></td><td class="small">All</td><td class="small muted">OSL · config · DIRT</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                  <tr><td class="mono">age</td><td><span class="set-pill">AGE</span><span class="set-pill">consumer age</span><span class="set-pill">age at pull</span></td><td class="small">All</td><td class="small muted">OSL · config · DIRT</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                  <tr><td class="mono">state</td><td><span class="set-pill">ST</span><span class="set-pill">state</span><span class="set-pill">current address state</span><span class="set-pill">geography</span></td><td class="small">All</td><td class="small muted">OSL · config · state_dist</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                  <tr><td class="mono">revolving_utilization</td><td><span class="set-pill">REV_UTIL</span><span class="set-pill">utilization</span><span class="set-pill">revolving utilization</span></td><td class="small">All</td><td class="small muted">OSL · config · DIRT</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                  <tr><td class="mono">bankruptcy_24m</td><td><span class="set-pill">BK_24M</span><span class="set-pill">bankruptcy</span><span class="set-pill">BK flag</span></td><td class="small">All</td><td class="small muted">OSL · DIRT</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                  <tr><td class="mono">birth_year</td><td><span class="set-pill">DOB_YEAR</span><span class="set-pill">birth year</span><span class="set-pill">YOB</span></td><td class="small">All</td><td class="small muted">OSL · config</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                  <tr><td class="mono">income_estimate</td><td><span class="set-pill">INCOME_EST</span><span class="set-pill">est. income</span><span class="set-pill">household income</span></td><td class="small">Acme Card Services</td><td class="small muted">config · DIRT</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                  <tr><td class="mono">open_trades</td><td><span class="set-pill">OPEN_TRADES</span><span class="set-pill">open tradelines</span></td><td class="small">All</td><td class="small muted">OSL · config · DIRT</td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('aliasModal')"><span data-icon="edit"></span></button></td></tr>
+                </tbody>
+              </table>
+              <div class="card-pad small muted">Aliases feed the stage-4 candidate shortlist (code). A missing alias shows up as a low-confidence trace, not as a silent miss.</div>
+            </div>
+            <div>
+              <div class="card mb">
+                <div class="card-header bordered"><div><div class="card-title"><span data-icon="eyeoff"></span> Masked columns</div><p class="card-desc">Matched case-insensitively against report column names. No unmask in v1.</p></div></div>
+                <div class="card-pad">
+                  <div class="chips mb-s">
+                    <span class="file-chip">SSN <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                    <span class="file-chip">SSN_LAST4 <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                    <span class="file-chip">FIRST_NAME <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                    <span class="file-chip">LAST_NAME <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                    <span class="file-chip">ADDRESS* <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                    <span class="file-chip">PHONE <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                    <span class="file-chip">EMAIL <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                    <span class="file-chip">DOB <span class="rm" data-icon="x" onclick="mock('Unmask column')"></span></span>
+                  </div>
+                  <div class="row"><input class="input sm" placeholder="Add column pattern, e.g. ACCT_*" /><button class="btn btn-sm" onclick="toast('Masked column added (mock)')">Add</button></div>
+                  <p class="hint mt-s">Preview: <span class="mono">***-**-1***</span> · <span class="mono">J***</span> · partial masks keep the last 4 of SSN only.</p>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-header bordered"><div class="card-title"><span data-icon="tag"></span> State codes</div></div>
+                <div class="card-pad small">
+                  <p style="margin: 0 0 0.4rem">State names in the OSL are normalized to codes at extraction. Built-in list of 50 + DC + territories.</p>
+                  <div class="row"><input class="input sm" value="Puerto Rico" /><input class="input sm mono" value="PR" style="width: 5rem" /><button class="btn btn-sm btn-outline" onclick="toast('Override saved (mock)')">Add override</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="modal" id="aliasModal">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Attribute alias</h3><button class="icon-btn" onclick="closeModal('aliasModal')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="field"><label class="label">Canonical name</label><input class="input mono" value="score" /></div>
+            <div class="field"><label class="label">Customer (blank = all)</label><input class="input" placeholder="All customers" /></div>
+            <div class="field span2"><label class="label">Aliases (one per line)</label><textarea class="textarea">SCORE_V3
+V3 score
+credit score
+FICO-like score</textarea></div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('aliasModal')">Cancel</button><button class="btn" onclick="closeModal('aliasModal'); toast('Alias saved (mock)')">Save</button></div>
+      </div>
+    </div>
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+  </body>
+</html>

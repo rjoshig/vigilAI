@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compliance &amp; scope · vigilAI admin mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="compliance">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container">
+          <div class="page-header">
+            <div><h1>Compliance &amp; scope</h1><p>Compliance rules must be present in every config in scope even if the OSL never mentions them. Reverse-pass categories decide which config elements are checked back against the OSL.</p></div>
+            <div class="page-actions"><button class="btn" onclick="openModal('crModal')"><span data-icon="plus"></span> New compliance rule</button></div>
+          </div>
+
+          <div class="card mb card-flush">
+            <div class="card-header bordered"><div class="card-title"><span data-icon="shield"></span> Must-have compliance rules</div><span class="small muted">Missing rule → High finding "Rule missing in config"</span></div>
+            <table class="table">
+              <thead><tr><th>Name</th><th>Requirement (canonical)</th><th>Config match</th><th>Scope</th><th>Present in last 30 runs</th><th>Active</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><b>OFAC suppression</b></td><td class="mono small">suppression · field ofac · == true</td><td class="mono small">suppressions.ofac</td><td class="small">All customers</td><td><span class="badge st-match">30 / 30</span></td><td><button class="switch on" data-label="OFAC suppression"></button></td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('crModal')"><span data-icon="edit"></span></button></td></tr>
+                <tr><td><b>Deceased suppression</b></td><td class="mono small">suppression · field deceased · == true</td><td class="mono small">suppressions.deceased</td><td class="small">All customers</td><td><span class="badge st-match">30 / 30</span></td><td><button class="switch on" data-label="Deceased suppression"></button></td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('crModal')"><span data-icon="edit"></span></button></td></tr>
+                <tr><td><b>Minimum age 18</b></td><td class="mono small">criteria · field age · >= 18</td><td class="mono small">rules.age (min ≥ 18 satisfies)</td><td class="small">All customers</td><td><span class="badge st-match">30 / 30</span></td><td><button class="switch on" data-label="Minimum age 18"></button></td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('crModal')"><span data-icon="edit"></span></button></td></tr>
+                <tr><td><b>Opt-out list applied</b></td><td class="mono small">suppression · field optout · == true</td><td class="mono small">suppressions.optout</td><td class="small">Prescreen only</td><td><span class="badge st-partial">27 / 30</span></td><td><button class="switch on" data-label="Opt-out list applied"></button></td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('crModal')"><span data-icon="edit"></span></button></td></tr>
+                <tr style="opacity: 0.7"><td><b>State-specific frozen file rule</b></td><td class="mono small">suppression · field frozen · == true</td><td class="mono small">suppressions.frozen</td><td class="small">Harbor Credit Union</td><td class="small muted">—</td><td><button class="switch" data-label="Frozen file rule"></button></td><td class="right"><button class="btn btn-ghost btn-xs" onclick="openModal('crModal')"><span data-icon="edit"></span></button></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="card">
+              <div class="card-header bordered"><div><div class="card-title"><span data-icon="filter"></span> Reverse-pass categories</div><p class="card-desc">Only checked categories are traced back to the OSL. Scoping runs in code; no LLM call.</p></div></div>
+              <div class="card-pad">
+                <table class="table compact">
+                  <thead><tr><th>Category</th><th>Config paths (glob)</th><th>Checked</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>Filters and select criteria</b></td><td class="mono small">filters[*], rules.*</td><td><button class="switch on" data-label="Filters"></button></td></tr>
+                    <tr><td><b>Model data / attributes</b></td><td class="mono small">output.fields[*], models.*</td><td><button class="switch on" data-label="Attributes"></button></td></tr>
+                    <tr><td><b>Fixed compliance rules</b></td><td class="mono small">suppressions.*</td><td><button class="switch on" data-label="Compliance"></button></td></tr>
+                    <tr class="muted"><td>Technical: connections, paths, logging</td><td class="mono small">source.*, sink.*, logging.*</td><td><button class="switch" data-label="Technical"></button></td></tr>
+                    <tr class="muted"><td>Scheduling and retries</td><td class="mono small">schedule.*, retry.*</td><td><button class="switch" data-label="Scheduling"></button></td></tr>
+                  </tbody>
+                </table>
+                <p class="hint mt-s">Extra elements found in a checked category become "Extra rule in config" findings (Medium). Everything else is ignored.</p>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header bordered"><div><div class="card-title"><span data-icon="lock"></span> Review gate &amp; retention</div><p class="card-desc">Proposed gate from the design doc; final values are an open question.</p></div></div>
+              <div class="card-pad">
+                <div class="form-grid">
+                  <div class="field"><label class="label">Finalize gate</label><select class="select"><option>Every High finding decided</option><option>Every High and Medium decided</option><option>Every finding decided</option></select></div>
+                  <div class="field"><label class="label">Verify threshold</label><select class="select"><option>High only (default)</option><option>High + Medium</option></select></div>
+                  <div class="field"><label class="label">Low-confidence threshold</label><input class="input" value="0.70" /></div>
+                  <div class="field"><label class="label">Run retention (days)</label><input class="input" value="90" /></div>
+                </div>
+                <div class="flex mt"><button class="btn btn-sm" onclick="toast('Settings saved (mock)')">Save</button><span class="hint">Changes apply to new runs only.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="modal" id="crModal">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Compliance rule</h3><button class="icon-btn" onclick="closeModal('crModal')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="field"><label class="label">Name</label><input class="input" value="OFAC suppression" /></div>
+            <div class="field"><label class="label">Scope</label><select class="select"><option>All customers</option><option>Prescreen only</option><option>Harbor Credit Union</option></select></div>
+            <div class="field"><label class="label">Type</label><select class="select"><option>suppression</option><option>criteria</option><option>geography</option></select></div>
+            <div class="field"><label class="label">Field (canonical)</label><input class="input mono" value="ofac" /></div>
+            <div class="field"><label class="label">Operator</label><select class="select"><option>==</option><option>>=</option><option>in</option></select></div>
+            <div class="field"><label class="label">Value</label><input class="input mono" value="true" /></div>
+            <div class="field span2"><label class="label">Reasoning shown to users</label><input class="input" value="OFAC-listed consumers must be suppressed on every prescreen delivery." /></div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('crModal')">Cancel</button><button class="btn" onclick="closeModal('crModal'); toast('Compliance rule saved (mock)')">Save</button></div>
+      </div>
+    </div>
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+  </body>
+</html>

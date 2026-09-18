@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Report templates · vigilAI admin mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="templates">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container">
+          <div class="page-header">
+            <div><h1>Report templates &amp; named values</h1><p>One sample Excel per report type documents where values live. Named values are pointers into a report (cell or label lookup) that checks refer to by name.</p></div>
+            <div class="page-actions"><button class="btn btn-outline" onclick="mock('Upload template')"><span data-icon="upload"></span> Upload sample report</button><button class="btn" onclick="openModal('nvModal')"><span data-icon="plus"></span> Add named value</button></div>
+          </div>
+
+          <div class="grid grid-side-l">
+            <div>
+              <div class="card mb">
+                <div class="card-header bordered"><div class="card-title"><span data-icon="template"></span> Report types</div></div>
+                <div class="card-content" style="padding-top: 0.6rem">
+                  <table class="table compact">
+                    <thead><tr><th>Type</th><th>Sample file</th><th class="right">Named values</th></tr></thead>
+                    <tbody>
+                      <tr class="selected"><td><b>DIRT</b><div class="small muted">data integrity report</div></td><td class="small"><span class="file-chip"><span data-icon="sheet"></span> dirt_sample.xlsx</span></td><td class="right tabular">6</td></tr>
+                      <tr><td><b>Field distribution</b></td><td class="small"><span class="file-chip"><span data-icon="sheet"></span> field_dist_sample.xlsx</span></td><td class="right tabular">3</td></tr>
+                      <tr><td><b>State distribution</b></td><td class="small"><span class="file-chip"><span data-icon="sheet"></span> state_dist_sample.xlsx</span></td><td class="right tabular">2</td></tr>
+                      <tr><td><b>Counts / number flow</b></td><td class="small"><span class="file-chip"><span data-icon="sheet"></span> number_flow_sample.xlsx</span></td><td class="right tabular">5</td></tr>
+                      <tr><td><b>Billing</b></td><td class="small"><span class="file-chip"><span data-icon="sheet"></span> billing_sample.xlsx</span></td><td class="right tabular">2</td></tr>
+                      <tr><td class="muted"><i>New type…</i></td><td colspan="2"><div class="drop" style="min-height: 4rem; padding: 0.5rem"><span data-icon="upload"></span><span>Drop a sample Excel to add a report type</span></div></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="card"><div class="card-header"><div class="card-title"><span data-icon="info"></span> Locator kinds</div></div><div class="card-content small">
+                <p style="margin: 0 0 0.4rem"><b>Cell</b> · fixed address, e.g. <span class="mono">Flow!H9</span>. Breaks if rows are inserted.</p>
+                <p style="margin: 0"><b>Label lookup</b> (preferred) · the row where column A says "Billing count", value from column B. Survives inserted rows.</p>
+              </div></div>
+            </div>
+
+            <div class="card card-flush">
+              <div class="card-header bordered"><div><div class="card-title"><span data-icon="tag"></span> Named values · DIRT</div><p class="card-desc">Sample files are synthetic. Resolution is tested against the sample on save.</p></div><input class="input sm" style="width: 14rem" placeholder="Filter…" /></div>
+              <table class="table">
+                <thead><tr><th>Name</th><th>Sheet</th><th>Locator</th><th>Description</th><th>Resolves on sample</th><th class="right">Used by</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">dirt_row_count</td><td>Summary</td><td><span class="badge badge-muted">label</span> <span class="small">col A = "Total rows" → col B</span></td><td class="small">Number of delivered records in the DIRT</td><td><span class="badge st-match">178,640</span></td><td class="right tabular">2</td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="openModal('nvModal')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Delete')"><span data-icon="trash"></span></button></td></tr>
+                  <tr><td class="mono">dirt_score_min</td><td>Attributes</td><td><span class="badge badge-muted">label</span> <span class="small">col A = "SCORE_V3" → col D</span></td><td class="small">Minimum delivered score</td><td><span class="badge st-match">750</span></td><td class="right tabular">1</td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="openModal('nvModal')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Delete')"><span data-icon="trash"></span></button></td></tr>
+                  <tr><td class="mono">dirt_age_min</td><td>Attributes</td><td><span class="badge badge-muted">label</span> <span class="small">col A = "AGE" → col D</span></td><td class="small">Minimum delivered age</td><td><span class="badge st-match">21</span></td><td class="right tabular">1</td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="openModal('nvModal')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Delete')"><span data-icon="trash"></span></button></td></tr>
+                  <tr><td class="mono">dirt_field_count</td><td>Attributes</td><td><span class="badge badge-outline">cell</span> <span class="small mono">B2</span></td><td class="small">Number of attribute rows</td><td><span class="badge st-match">14</span></td><td class="right tabular">1</td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="openModal('nvModal')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Delete')"><span data-icon="trash"></span></button></td></tr>
+                  <tr><td class="mono">dirt_null_pct_max</td><td>Attributes</td><td><span class="badge badge-muted">label</span> <span class="small">max of col F</span></td><td class="small">Highest null percentage across fields</td><td><span class="badge st-match">18.2%</span></td><td class="right tabular">0</td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="openModal('nvModal')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Delete')"><span data-icon="trash"></span></button></td></tr>
+                  <tr><td class="mono">dirt_pull_date</td><td>Summary</td><td><span class="badge badge-muted">label</span> <span class="small">col A = "Pull date" → col B</span></td><td class="small">Bureau pull date</td><td><span class="badge st-missing">not found</span></td><td class="right tabular">0</td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="openModal('nvModal')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Delete')"><span data-icon="trash"></span></button></td></tr>
+                </tbody>
+              </table>
+              <div class="card-pad small muted">If a named value cannot be resolved at run time, the run reports "could not evaluate" as a finding; it never skips silently.</div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="modal" id="nvModal">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Named value</h3><button class="icon-btn" onclick="closeModal('nvModal')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="field"><label class="label">Name <span class="req">*</span></label><input class="input mono" value="billing_count" /></div>
+            <div class="field"><label class="label">Report type</label><select class="select"><option>Billing</option><option>DIRT</option><option>Counts / number flow</option></select></div>
+            <div class="field"><label class="label">Sheet</label><input class="input" value="Summary" /></div>
+            <div class="field"><label class="label">Locator kind</label><select class="select"><option>Label lookup (preferred)</option><option>Cell</option></select></div>
+            <div class="field"><label class="label">Label column / text</label><input class="input" value='A = "Billing count"' /></div>
+            <div class="field"><label class="label">Value column</label><input class="input" value="B" /></div>
+            <div class="field span2"><label class="label">Description <span class="req">*</span></label><input class="input" value="Records billed to the customer for this order" /></div>
+          </div>
+          <div class="banner banner-success" style="margin: 0"><span data-icon="checkcircle"></span><div class="body"><b>Resolves on billing_sample.xlsx</b>Summary!B9 = 178,636</div></div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('nvModal')">Cancel</button><button class="btn btn-outline" onclick="toast('Tested against sample (mock)')"><span data-icon="flask"></span> Test</button><button class="btn" onclick="closeModal('nvModal'); toast('Named value saved (mock)')">Save</button></div>
+      </div>
+    </div>
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+  </body>
+</html>

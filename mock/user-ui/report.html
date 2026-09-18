@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Final report VR-0421 · vigilAI mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="report">
+    <header class="topbar">
+      <div class="rb">
+        <div class="rb-mark"><span data-icon="logo"></span></div>
+        <div>
+          <div class="rb-name">vigilAI · QC Validation report</div>
+          <div class="rb-sub">Run <span class="mono">VR-0421</span> · Acme Card Services · ORD-24151 · <span class="frozen"><span data-icon="lock"></span> frozen 2026-09-12 14:07 · stored once, never regenerated</span></div>
+        </div>
+      </div>
+      <div class="row">
+        <a class="btn btn-outline btn-sm" href="index.html"><span data-icon="back"></span> Back to runs</a>
+        <button class="btn btn-outline btn-sm" onclick="toast('PDF rendered by the worker from this stored HTML (mock)')"><span data-icon="download"></span> Download PDF</button>
+        <button class="btn btn-sm" onclick="toast('Cloning run inputs into a new run (mock)'); setTimeout(()=>location.href='new-run.html',900)"><span data-icon="copy"></span> Clone run</button>
+        <button class="icon-btn" data-theme-btn onclick="toggleTheme()" title="Toggle theme"></button>
+      </div>
+    </header>
+
+    <div class="report-wrap">
+      <h1>QC validation · Acme Card Services · ORD-24151</h1>
+      <p class="muted small">Configuration <span class="mono">CFG-ACME-PRESCREEN-07 v2</span> · OSL <span class="mono">ACME_Prescreen_OSL_v2.2.docx</span> · run 2026-09-12 10:31 · model <span class="mono">local-gemma-27b</span> · prompts v3 · reviewed by QC analyst · generated 2026-09-12 14:07</p>
+
+      <div class="verdict verdict-notok"><span data-icon="xcircle"></span><div><b>Verdict: Not OK</b><span class="small">2 findings marked Not OK by the reviewer. Config and reports do not fully implement the OSL. See items below.</span></div></div>
+
+      <div class="kpi-band">
+        <div class="kpi-card k-ok"><div class="kpi-value">18</div><div class="kpi-label">Requirements traced</div></div>
+        <div class="kpi-card k-high"><div class="kpi-value tone-destructive">3</div><div class="kpi-label">High · 2 Not OK, 1 OK</div></div>
+        <div class="kpi-card k-med"><div class="kpi-value tone-warn">2</div><div class="kpi-label">Medium · all OK</div></div>
+        <div class="kpi-card k-low"><div class="kpi-value tone-info">4</div><div class="kpi-label">Low · all OK</div></div>
+        <div class="kpi-card"><div class="kpi-value">15 / 18</div><div class="kpi-label">Requirements matching</div></div>
+      </div>
+
+      <h2>AI summary</h2>
+      <div class="rcard small" style="line-height: 1.6">
+        The config implements 15 of 18 OSL requirements exactly. Two issues were confirmed by the reviewer: the score threshold in the config (750) is below the OSL requirement (755), and the DIRT confirms records with score 750–754 were delivered; and the geography filter includes TX, which the OSL excludes. The bankruptcy-exclusion gap was reviewed and accepted as a known upstream suppression. Waterfall counts reconcile; all 14 requested attributes are present.
+      </div>
+
+      <h2>Not OK items</h2>
+      <div class="rcard" style="padding: 0">
+        <table class="table">
+          <thead><tr><th>Finding</th><th>Severity</th><th>Type</th><th>Leg</th><th>Issue</th><th>Reviewer comment</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">F-02</td><td><span class="badge sev-high">High</span></td><td>Value mismatch</td><td class="small">OSL ↔ config</td><td>Score threshold 750 in config; OSL says 755. Delivered min = 750.</td><td class="small">Config must be corrected and the file re-pulled before delivery. Raised with ETL team, ticket QC-2231.</td></tr>
+            <tr><td class="mono">F-01</td><td><span class="badge sev-high">High</span></td><td>Report violates rule</td><td class="small">OSL ↔ reports</td><td>State distribution includes TX (18,402 rows); OSL allows IL, AZ only.</td><td class="small">TX was added to the filter by mistake. Remove and re-run.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Detail</h2>
+      <details class="acc"><summary>Traceability matrix · 18 requirements <span class="badge st-mismatch">2 mismatch</span> <span class="badge st-missing">1 missing</span> <span class="badge st-match">15 match</span></summary><div class="acc-body">
+        <table class="table compact">
+          <thead><tr><th>Req</th><th>Type</th><th>OSL</th><th>Config</th><th>Reports</th><th>Status</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">R-03</td><td>geography</td><td>{IL, AZ}</td><td>{IL, AZ, <b>TX</b>}</td><td>{IL, AZ, <b>TX</b>}</td><td><span class="badge st-mismatch">mismatch</span></td><td><span class="badge badge-solid-destructive">Not OK</span></td></tr>
+            <tr><td class="mono">R-05</td><td>criteria</td><td>score ≥ 755</td><td>score ≥ <b>750</b></td><td>min <b>750</b></td><td><span class="badge st-mismatch">mismatch</span></td><td><span class="badge badge-solid-destructive">Not OK</span></td></tr>
+            <tr><td class="mono">R-08</td><td>exclusion</td><td>bankruptcy 24 mo</td><td>—</td><td>—</td><td><span class="badge st-missing">missing</span></td><td><span class="badge badge-solid-success">OK</span> <span class="small muted">accepted risk</span></td></tr>
+            <tr><td class="mono">R-06</td><td>criteria</td><td>age ≥ 21</td><td>age ≥ 21</td><td>min 21</td><td><span class="badge st-match">match</span></td><td class="muted small">—</td></tr>
+            <tr><td class="mono">R-11</td><td>attributes</td><td>14 fields</td><td>14 fields</td><td>14 fields</td><td><span class="badge st-match">match</span></td><td class="muted small">—</td></tr>
+            <tr><td class="mono">R-13</td><td>waterfall</td><td>6 steps</td><td>6 steps</td><td>reconciles</td><td><span class="badge st-match">match</span></td><td class="muted small">—</td></tr>
+            <tr><td colspan="7" class="muted small center">… 12 more matching rows</td></tr>
+          </tbody>
+        </table>
+      </div></details>
+      <details class="acc"><summary>All findings with decisions · 9</summary><div class="acc-body">
+        <table class="table compact">
+          <thead><tr><th>Finding</th><th>Severity</th><th>Title</th><th>Decision</th><th>Comment</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">F-01</td><td><span class="badge sev-high">High</span></td><td>State distribution contains TX</td><td><span class="badge badge-solid-destructive">Not OK</span></td><td class="small">Remove TX and re-run.</td></tr>
+            <tr><td class="mono">F-02</td><td><span class="badge sev-high">High</span></td><td>Score threshold 750 vs 755</td><td><span class="badge badge-solid-destructive">Not OK</span></td><td class="small">Ticket QC-2231.</td></tr>
+            <tr><td class="mono">F-04</td><td><span class="badge sev-high">High</span></td><td>No bankruptcy exclusion in config</td><td><span class="badge badge-solid-success">OK</span></td><td class="small">Handled upstream by bureau suppression; accepted risk.</td></tr>
+            <tr><td class="mono">F-07</td><td><span class="badge sev-medium">Medium</span></td><td>Extra income filter in config</td><td><span class="badge badge-solid-success">OK</span></td><td class="small">Standard for this customer.</td></tr>
+            <tr><td class="mono">F-08</td><td><span class="badge sev-medium">Medium</span></td><td>DIRT vs flow count off by 4</td><td><span class="badge badge-solid-success">OK</span></td><td class="small">Header rows.</td></tr>
+            <tr><td class="mono">F-09</td><td><span class="badge sev-low">Low</span></td><td>Utilization rule low confidence</td><td><span class="badge badge-solid-success">OK</span></td><td class="small">—</td></tr>
+            <tr><td class="mono">F-10</td><td><span class="badge sev-low">Low</span></td><td>MORT_BAL null rate</td><td><span class="badge badge-solid-success">OK</span></td><td class="small">—</td></tr>
+            <tr><td class="mono">F-11</td><td><span class="badge sev-low">Low</span></td><td>INQ_6M mean drift</td><td><span class="badge badge-solid-success">OK</span></td><td class="small">—</td></tr>
+            <tr><td class="mono">F-12</td><td><span class="badge sev-low">Low</span></td><td>Dedupe key low confidence</td><td><span class="badge badge-solid-success">OK</span></td><td class="small">—</td></tr>
+          </tbody>
+        </table>
+      </div></details>
+      <details class="acc"><summary>Evidence for Not OK items</summary><div class="acc-body">
+        <div class="evidence mb"><h4>F-02 · OSL §3.2 row 1</h4><div class="quote">"Applicants must have a <mark class="hl">score of at least 755</mark> on the V3 model as of the pull date."</div><pre class="code mt-s">"score": { "model": "V3", "op": ">=", "min": <span class="hl">750</span> }</pre><div class="small muted mt-s">DIRT · Attributes!D14 · SCORE_V3 min = 750</div></div>
+        <div class="evidence"><h4>F-01 · OSL §3.1 para 2</h4><div class="quote">"Include only consumers whose current address is in <mark class="hl">Illinois or Arizona</mark>."</div><pre class="code mt-s">{ "field": "ST", "op": "in", "value": ["IL", "AZ", <span class="hl">"TX"</span>] }</pre><div class="small muted mt-s">state_dist · States!A4 · TX = 18,402 rows · sample rows masked</div></div>
+      </div></details>
+      <details class="acc"><summary>Waterfall · reconciles</summary><div class="acc-body">
+        <table class="table compact"><thead><tr><th>Step</th><th class="right">In</th><th class="right">Out</th><th class="right">Report</th><th>Δ</th></tr></thead><tbody>
+          <tr><td>Input</td><td class="right tabular">—</td><td class="right tabular">1,000,000</td><td class="right tabular">1,000,000</td><td class="cell-ok">0</td></tr>
+          <tr><td>Geography</td><td class="right tabular">1,000,000</td><td class="right tabular">402,110</td><td class="right tabular">402,110</td><td class="cell-ok">0</td></tr>
+          <tr><td>Score</td><td class="right tabular">402,110</td><td class="right tabular">196,004</td><td class="right tabular">196,004</td><td class="cell-ok">0</td></tr>
+          <tr><td>Age · Exclusions · Dedupe</td><td class="right tabular">196,004</td><td class="right tabular">181,220</td><td class="right tabular">181,220</td><td class="cell-ok">0</td></tr>
+        </tbody></table>
+      </div></details>
+      <details class="acc"><summary>Run metadata</summary><div class="acc-body"><dl class="kv"><dt>Run</dt><dd class="mono">VR-0421</dd><dt>Rules version</dt><dd>1 (no edits)</dd><dt>Pipeline duration</dt><dd>3m 58s</dd><dt>LLM calls / tokens</dt><dd>41 calls · 62,300 tokens · cache hits 18</dd><dt>Input fingerprint</dt><dd class="mono">sha256:9f3c…a71e</dd><dt>Generated by</dt><dd>QC analyst · 2026-09-12 14:07</dd></dl></div></details>
+      <p class="small muted mt">This report is self-contained HTML and opens offline. Sample values are masked. Downloads and views are recorded in the audit log.</p>
+    </div>
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+  </body>
+</html>
