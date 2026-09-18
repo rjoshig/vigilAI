@@ -231,3 +231,175 @@ describe("the auth endpoints", () => {
     });
   });
 });
+
+describe("several files per report slot", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("carries repeated file entries and their labels in the same order", async () => {
+    // The server pairs the nth label with the nth file, so order is the contract:
+    // a swap here mislabels every finding that names a file.
+    fetchMock.mockResolvedValue(jsonResponse({ run_id: 1 }));
+    const form = new FormData();
+    form.append("field_distribution", new File(["a"], "north.xlsx"));
+    form.append("field_distribution", new File(["b"], "south.xlsx"));
+    form.append("field_distribution__label", "north");
+    form.append("field_distribution__label", "south");
+    await api.createRun(form);
+
+    const [, init] = fetchMock.mock.calls[0];
+    const sent = init.body as FormData;
+    expect(sent.getAll("field_distribution").map((f) => (f as File).name)).toEqual([
+      "north.xlsx",
+      "south.xlsx",
+    ]);
+    expect(sent.getAll("field_distribution__label")).toEqual(["north", "south"]);
+  });
+
+  it("still posts a single file per slot with no labels", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ run_id: 1 }));
+    const form = new FormData();
+    form.append("dirt", new File(["a"], "dirt.xlsx"));
+    await api.createRun(form);
+    const sent = fetchMock.mock.calls[0][1].body as FormData;
+    expect(sent.getAll("dirt")).toHaveLength(1);
+    expect(sent.getAll("dirt__label")).toEqual([]);
+  });
+});
+
+describe("workbook type detection", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts the workbook as multipart under the field the endpoint reads", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ verdict: "confident", key: "dirt", label: "DIRT", score: 0.9 })
+    );
+    const detection = await api.detectType(new File(["x"], "mystery.xlsx"));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/runs/detect-type");
+    expect(init.method).toBe("POST");
+    expect(((init.body as FormData).get("file") as File).name).toBe("mystery.xlsx");
+    expect(detection.verdict).toBe("confident");
+  });
+
+  it("raises so the caller can fall back to the slot the user picked", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "could not read that file" }, 400));
+    await expect(api.detectType(new File(["x"], "notes.txt"))).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+});
+
+describe("the training endpoints", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads the switch", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ enabled: false }));
+    const config = await api.getTrainingConfig();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/training/config");
+    expect(config.enabled).toBe(false);
+  });
+
+  it("posts an observation as JSON with its anchors", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 7 }, 201));
+    await api.createObservation({
+      kind: "field_constraint",
+      anchors: [
+        {
+          kind: "finding",
+          artifact: "",
+          sheet: "",
+          cell: "",
+          field: "",
+          reference: "F-003",
+          value: "count mismatch",
+        },
+      ],
+      statement: "this column is never blank for account review",
+      expectation: "never blank",
+      severity_hint: "medium",
+      scope_hint: "customer",
+      run_id: 4,
+      finding_id: 12,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/observations");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body);
+    expect(body.scope_hint).toBe("customer");
+    expect(body.anchors[0].reference).toBe("F-003");
+  });
+
+  it("carries the server's wording when the text looks like personal data", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { detail: "this looks like it contains personal data, so it was not saved" },
+        422
+      )
+    );
+    await expect(
+      api.createObservation({
+        kind: "note",
+        anchors: [],
+        statement: "account 1234 is wrong",
+        expectation: "",
+        severity_hint: "low",
+        scope_hint: "customer",
+      })
+    ).rejects.toMatchObject({
+      status: 422,
+      detail: "this looks like it contains personal data, so it was not saved",
+    });
+  });
+
+  it("asks only for the caller's own observations", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listMyObservations();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/observations?mine=true");
+  });
+
+  it("edits an observation with a PATCH and surfaces the 409 once it is locked", async () => {
+    const body = {
+      kind: "note" as const,
+      anchors: [],
+      statement: "a corrected sentence",
+      expectation: "",
+      severity_hint: "low" as const,
+      scope_hint: "customer" as const,
+    };
+    fetchMock.mockResolvedValue(jsonResponse({ id: 7, version: 2 }));
+    await api.updateObservation(7, body);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/observations/7");
+    expect(init.method).toBe("PATCH");
+
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "already queued" }, 409));
+    await expect(api.updateObservation(7, body)).rejects.toMatchObject({ status: 409 });
+  });
+});

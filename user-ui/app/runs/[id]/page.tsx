@@ -22,11 +22,7 @@ import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 
 import { EvidencePanel } from "@/components/evidence-panel";
-import {
-  ObservationDialog,
-  anchorOf,
-  useTrainingEnabled,
-} from "@/components/observation-dialog";
+import { ObservationDialog, anchorOf, useTrainingEnabled } from "@/components/observation-dialog";
 import { StageProgress } from "@/components/stage-progress";
 import {
   Badge,
@@ -532,14 +528,7 @@ interface FindingsTabProps {
   onObserve: ((target: ObservationTarget) => void) | null;
 }
 
-function FindingsTab({
-  findings,
-  busy,
-  onDecide,
-  onBulkOk,
-  onOpen,
-  onObserve,
-}: FindingsTabProps) {
+function FindingsTab({ findings, busy, onDecide, onBulkOk, onOpen, onObserve }: FindingsTabProps) {
   const [severity, setSeverity] = React.useState<Severity | "all">("all");
   const [search, setSearch] = React.useState("");
 

@@ -1,7 +1,6 @@
 # Phase 6.3 — Runtime settings in the admin console
 
-**Status:** 🟡 **in progress** — the API, the resolution layer, and the tests are
-built; the console screen is the remainder. Specified and started 2026-09-18 at the
+**Status:** ✅ **complete** (2026-09-18). Specified and built the same day, at the
 user's request, during Phase 6.2.
 
 **Goal:** move day-to-day operational control out of `.env` and into the admin
@@ -40,7 +39,7 @@ Two consequences worth stating plainly, because both have bitten other projects:
 They appear in the console read-only, with the reason, because "you cannot change this
 here" is more useful than not showing it at all.
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.3a — Resolution and the registry · ✅ complete
 
@@ -90,28 +89,28 @@ here" is more useful than not showing it at all.
       resolve. Answering "did I type the key correctly" beats a run failing at stage
       two.
 
-### 6.3e — The console screen · ⬜ not started
+### 6.3e — The console screen · ✅ complete
 
-- [ ] One card per group, each setting with its help text, an input suited to its
+- [x] One card per group, each setting with its help text, an input suited to its
       type, and a badge saying which layer supplied the value.
-- [ ] Revert, shown only on a setting the console has overridden, labelled with what
+- [x] Revert, shown only on a setting the console has overridden, labelled with what
       it will revert to.
-- [ ] The secret field: never a value, only "not set" or the last four characters, a
+- [x] The secret field: never a value, only "not set" or the last four characters, a
       blank input that keeps the current key, and an explicit clear.
-- [ ] A connection test in the model section, reporting provider, model, and latency
+- [x] A connection test in the model section, reporting provider, model, and latency
       or the failure.
-- [ ] Confirmation on the changes that can hurt: switching admin login off, switching
+- [x] Confirmation on the changes that can hurt: switching admin login off, switching
       it on, and shortening retention.
-- [ ] The change history at the foot of the page.
+- [x] The change history at the foot of the page.
 
-### 6.3f — Documentation · 🟡 in progress
+### 6.3f — Documentation · ✅ complete
 
 - [x] ADR-023.
-- [ ] `.env.example` gains a note that these are now defaults the console can
+- [x] `.env.example` gains a note that these are now defaults the console can
       override, and `deployment.md` gains the master key and its backup.
-- [ ] `architecture.md` and `design.md` updated.
+- [x] `architecture.md` and `design.md` updated.
 
-## Acceptance criteria · 🟡 in progress
+## Acceptance criteria · ✅ complete
 
 1. [x] A setting nobody has touched resolves from `.env`, and from the built-in
    default when `.env` is silent.
@@ -126,4 +125,4 @@ here" is more useful than not showing it at all.
 6. [x] Every change is in the log with its previous value and who made it.
 7. [x] Changing the per-order cap or the start-rate limit changes what the next
    submission does, with no restart.
-8. [ ] An administrator can do all of the above from the console screen.
+8. [x] An administrator can do all of the above from the console screen.

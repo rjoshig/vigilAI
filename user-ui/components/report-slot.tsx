@@ -151,7 +151,9 @@ function DetectionNote({ detection, slotKey, targets, onMove, onDismiss }: Detec
       ) : detection.verdict === "confident" ? (
         <>
           <p>
-            <b>This looks like the {detection.label}, not the {slot(targets, slotKey)}.</b>{" "}
+            <b>
+              This looks like the {detection.label}, not the {slot(targets, slotKey)}.
+            </b>{" "}
             {detection.reason}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">

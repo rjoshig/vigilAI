@@ -118,7 +118,9 @@ export default function ObservationsPage() {
                 {STATUS_TEXT[observation.status]} · {observation.kind} · severity{" "}
                 {observation.severity_hint} · scope {observation.scope_hint} ·{" "}
                 {fmtTime(observation.created_at)}
-                {observation.run_id ? ` · run VR-${String(observation.run_id).padStart(4, "0")}` : ""}
+                {observation.run_id
+                  ? ` · run VR-${String(observation.run_id).padStart(4, "0")}`
+                  : ""}
               </p>
 
               {observation.status === "rejected" && observation.status_note ? (

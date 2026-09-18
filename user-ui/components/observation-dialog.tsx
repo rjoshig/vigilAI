@@ -175,8 +175,8 @@ export function ObservationDialog({
 
         <CardContent className="flex flex-col gap-3 pt-4">
           <p className="text-xs text-muted-foreground">
-            This never runs on its own. An administrator reviews what you write and the model
-            drafts a rule they approve.
+            This never runs on its own. An administrator reviews what you write and the model drafts
+            a rule they approve.
           </p>
 
           {context ? (

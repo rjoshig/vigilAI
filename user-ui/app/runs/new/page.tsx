@@ -123,9 +123,7 @@ export default function NewRunPage() {
   function patchPart(key: string, partId: string, patch: Partial<ReportPart>) {
     setParts((prev) => ({
       ...prev,
-      [key]: (prev[key] ?? []).map((part) =>
-        part.id === partId ? { ...part, ...patch } : part
-      ),
+      [key]: (prev[key] ?? []).map((part) => (part.id === partId ? { ...part, ...patch } : part)),
     }));
   }
 
@@ -411,13 +409,13 @@ export default function NewRunPage() {
             <CardContent className="flex flex-col gap-4 pt-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 {inputSlots.map((slot) => (
-                    <FileDrop
-                      key={slot.key}
-                      label={slot.label}
-                      hint={slot.description || `Expects ${slot.accept}`}
-                      accept={slot.accept}
-                      required={slot.is_required}
-                      file={files[slot.key] ?? null}
+                  <FileDrop
+                    key={slot.key}
+                    label={slot.label}
+                    hint={slot.description || `Expects ${slot.accept}`}
+                    accept={slot.accept}
+                    required={slot.is_required}
+                    file={files[slot.key] ?? null}
                     onChange={(file) => setFiles((prev) => ({ ...prev, [slot.key]: file }))}
                   />
                 ))}
