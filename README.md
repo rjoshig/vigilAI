@@ -92,6 +92,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.1.md`](docs/phase-6.1.md) — **richer inputs and a trainable rule loop**:
   several samples per artifact type, several files per report, workbook type detection,
   and Train AI mode (ADR-021)
+- [`docs/phase-6.2.md`](docs/phase-6.2.md) — **optional login and attribution**: two
+  `.env` switches, accounts an administrator creates, and who-did-what on every run,
+  review, and suggestion (ADR-022)
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)

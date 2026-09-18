@@ -42,6 +42,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ✅ complete |
 | 6 | Hardening and in-house fit | `docs/phase-6.md` | 🟡 in progress (rest is in-house) |
 | 6.1 | Richer inputs (several samples per type, several files per report, type detection) and Train AI mode: observations synthesized into rules an admin approves | `docs/phase-6.1.md` | ⬜ not started — specified, open questions pending |
+| 6.2 | Optional login and attribution: two `.env` switches (default off), admin-created accounts, sessions, who-did-what everywhere | `docs/phase-6.2.md` | ⬜ not started — specified, open questions pending |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
@@ -89,8 +90,10 @@ The moment a phase's last task lands, in the same commit:
 7. **One relational database holds the data and the job queue; a shared volume holds
    files.** `DATABASE_URL` in `.env` selects it: **SQLite by default**, Postgres for
    scale (ADR-017). No MinIO, no Redis, no broker. Migrations stay portable across both.
-   **No login in v1** for either UI, but keep the provision: an unused `users` table and
-   one auth dependency in the API.
+   **No login by default** for either UI. Login is built but ships off behind
+   `VIGILAI_ADMIN_AUTH` and `VIGILAI_USER_AUTH` (ADR-022, amending ADR-008); with both
+   off the behaviour is exactly as it was. **There is always a current user** — a
+   seeded placeholder when login is off — so nothing stores a nullable author.
 
 A PR that breaks one of these is rejected regardless of tests. Details:
 `docs/llm-privacy.md`, `docs/decisions.md`.

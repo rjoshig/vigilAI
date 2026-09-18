@@ -80,3 +80,15 @@ uses them yet.
 | **Dismissal rate** | The share of a rule's findings that reviewers marked OK. The measure of whether a rule is earning its place. |
 | **Part** | One of several files uploaded for the same report type in one run, with a label. A check declares whether it evaluates `each` part or the `total`. |
 | **Field constraint** | A rule about one attribute — never blank, allowed values, a range, a format — stored as structured data and evaluated by code, though it was written in plain words. |
+
+## Identity vocabulary (Phase 6.2, specified but not built)
+
+From [`phase-6.2.md`](phase-6.2.md) and ADR-022. Login ships off; nothing in the code
+uses these yet.
+
+| Term | Meaning |
+| --- | --- |
+| **Placeholder user** | The seeded account every action is attributed to while login is off (John Doe, jdoe@jdoe.com). It cannot be signed in as or deleted, so "placeholder" always reads as "no login was enabled". |
+| **Auth switch** | `VIGILAI_ADMIN_AUTH` and `VIGILAI_USER_AUTH`, independent and both false by default. Off means no prompt, no cookie, today's behaviour. |
+| **Bootstrap admin** | The `admin` account created on first startup with admin auth on. Must change its password before it can do anything else. |
+| **Attribution** | The actor recorded on a run, a finding decision, a config capture, an observation, and an approval. Always present, because there is always a current user. |

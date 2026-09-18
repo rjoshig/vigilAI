@@ -17,6 +17,7 @@ risk.
 | 5 | Final report — one-page HTML in the compare-file format, freeze, PDF export | 1–2 weeks | ✅ **complete** | [phase-5.md](phase-5.md) |
 | 6 | Hardening and in-house fit — PII masking, audit, retention, load test, adapt parsers to real samples | 2 weeks | 🟡 **in progress** — the rest needs real files and in-house infra | [phase-6.md](phase-6.md) |
 | 6.1 | Richer inputs and a trainable rule loop — several samples per type, several files per report, type detection, and Train AI mode: reviewer observations synthesized into rules an administrator approves | 3–4 weeks | ⬜ **not started** — specified, awaiting the open questions in [phase-6.1.md](phase-6.1.md) | [phase-6.1.md](phase-6.1.md) |
+| 6.2 | Optional login and attribution — two `.env` switches, admin-created accounts, sessions, and who-did-what on runs, reviews, and suggestions | 1–1.5 weeks | ⬜ **not started** — specified, awaiting the open questions in [phase-6.2.md](phase-6.2.md) | [phase-6.2.md](phase-6.2.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of
@@ -67,6 +68,10 @@ answer as an ADR when it lands.
       rule, the shadow period and precision floor, whether a learned rule expires, one
       finding per report part or a grouped one, and how much history replay may read.
       All six are listed in [phase-6.1.md](phase-6.1.md) and each becomes an ADR.
+- [ ] Phase 6.2's open questions: whether production refuses to start on the default
+      password, session lifetime, password policy, whether observations outlive the
+      90-day purge, and whether single sign-on is coming.
+      Listed in [phase-6.2.md](phase-6.2.md).
 - [ ] Are the fixed compliance rules maintained in the admin-ui or sourced elsewhere?
 - [x] Must every high-severity finding have a decision before the final report can be generated? **Yes** (ADR-015).
 - [ ] Do in-house configs name waterfall steps differently from the OSL (for example

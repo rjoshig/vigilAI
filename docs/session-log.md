@@ -11,7 +11,7 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**; **6 in progress**; **6.1 specified, not started**; **7 dormant** (runs only on request) |
+| Phases complete | **0–5**; **6 in progress**; **6.1 and 6.2 specified, not started**; **7 dormant** (runs only on request) |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
@@ -63,6 +63,17 @@ runs in shadow before it counts. ADR-021 holds the shape and is **proposed**, no
 accepted, because six open questions at the foot of the phase doc change the design.
 Answer those first.
 
+### Phase 6.2 is specified and waiting on five answers
+
+[`phase-6.2.md`](phase-6.2.md) adds login that **ships off**. Two `.env` switches, one
+per app. An administrator creates every account; there is no self-registration. The
+design turns on one idea: **there is always a current user**, a seeded placeholder
+while login is off, so nothing stores a nullable author and no handler branches on
+whether authentication is enabled. ADR-022 amends ADR-008 and is **proposed**, not
+accepted. The bootstrap credential is `admin` / `admin123` as requested, with a forced
+change at first sign-in; whether production should refuse to serve until it is changed
+is one of the open questions.
+
 ### Outstanding, needs the user
 
 - **Merge the Phase 0 PR and create `dev` from `main`.** Eighteen commits are stacked
@@ -79,6 +90,42 @@ Answer those first.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-18 (Phase 6.2 specified — optional login and attribution)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 6.2 (specification only) ·
+**Status:** documented, nothing built.
+
+### What was completed
+
+- `docs/phase-6.2.md`: six milestones. One identity whether or not login is on;
+  accounts an administrator creates with a forced first-sign-in password change;
+  server-side sessions with revocation; attribution on runs, reviews, config history,
+  and the frozen report; the append-only training record; docs and tests.
+- ADR-022 (**proposed**), amending ADR-008: login exists, ships off behind two
+  independent switches, and there is always a current user.
+- The seam ADR-008 left turns out to be sufficient. `api/deps.py` already defines
+  `CurrentUser` and `current_user()`, and every router already depends on it, so the
+  API change is one function body plus a session table and actor columns.
+- The user's record-keeping rule is written down explicitly: synthesis **marks** an
+  observation as synthesized with its date and target and never consumes or deletes
+  it, and re-synthesis produces a new candidate rather than editing the old one.
+
+### Pending
+
+- The five open questions at the foot of the phase doc, chiefly whether production
+  should refuse to start while the bootstrap password stands.
+- Phase 6.1's six open questions, still unanswered.
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here".
 
 ---
 

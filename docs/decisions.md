@@ -522,3 +522,53 @@ dismissal rate, because alert fatigue is invisible without them and obvious with
 The audit log and the human-decision record are required artifacts rather than
 nice-to-haves, which the NIST AI Risk Management Framework and the EU AI Act's
 human-oversight provisions both expect of a system where a model shapes a decision.
+
+## ADR-022 — Login exists, ships off, and there is always a current user
+
+**Status:** proposed 2026-09-18 — pending the open questions in
+[`phase-6.2.md`](phase-6.2.md). **Amends ADR-008**, which stands as the record of why
+v1 shipped without login and why the seam was left in place.
+
+**Context:** ADR-008 chose no login for v1: the tool runs on an internal network, and
+the cost of an account system was not worth paying before the product existed. It kept
+two provisions — an unused `users` table and one auth dependency every router calls.
+
+Two things changed. In production the organisation needs to know who submitted a run
+and who decided a finding, and the config history is the natural place to show it.
+More sharply, Phase 6.1 lets a person's sentence become a rule applied to every run,
+and a suggestion whose author is unknown cannot be weighed, questioned, or followed up.
+Attribution stops being a nicety the moment the tool learns from people.
+
+**Decision:** Add authentication, ship it disabled, and give it one property that keeps
+it small.
+
+1. **There is always a current user.** With login off it is a seeded placeholder
+   account; with login on it is whoever signed in. No nullable authors, no branch in
+   any handler, no code path that exists in only one mode. This is the decision that
+   makes the rest of the phase a week rather than a month.
+2. **Two independent switches**, `VIGILAI_ADMIN_AUTH` and `VIGILAI_USER_AUTH`, both
+   false by default. Off means no prompt, no cookie, and today's behaviour exactly.
+3. **No self-registration.** An administrator creates every account, for both roles,
+   capturing a name and an email. Every account sets its own password at first
+   sign-in, including the bootstrap administrator.
+4. **Accounts are deactivated, never deleted**, so what a person did stays attributed
+   to them.
+5. **Server-side sessions** in a table, not self-contained tokens, because revoking a
+   session and knowing who is signed in both matter more here than saving a read.
+   Passwords are `scrypt` hashes with per-user salts from the standard library, which
+   adds no dependency.
+6. **The training record is append-only.** An observation that has been synthesized is
+   marked as synthesized, with the date and the candidate it fed; it is never consumed
+   or removed. Rejected candidates keep their sources. Re-synthesis produces a new
+   candidate rather than editing an old one.
+7. **Sign-in, sign-out, failure, password change, and every account change are audit
+   events**, because "who signed in" is the question the phase exists to answer.
+
+**Consequences:** ADR-008's "no login in v1" becomes "no login by default", and the
+provision it kept turns out to have been sufficient: one function body, a session
+table, and columns on the tables that record actions. The bootstrap credential is a
+real exposure for as long as it stands, which is why the first sign-in forces a change
+and the deployment checklist names it; whether the process should refuse to serve while
+the default is unchanged is left open deliberately, because it is a policy call rather
+than an engineering one. Single sign-on is not ruled out and would attach at the
+session table.
