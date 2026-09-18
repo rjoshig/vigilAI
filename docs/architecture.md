@@ -17,11 +17,12 @@ to deliver it. Keep the two in sync: a change here that alters behaviour needs a
 
 - **api** only accepts requests, validates uploads, writes rows, and enqueues a job. It
   never parses a file or calls the LLM.
-- **worker** claims jobs from the Postgres queue (Procrastinate, `LISTEN/NOTIFY` + row
-  locks) and runs the pipeline. Scale with `docker compose up --scale worker=N`.
-- **postgres** holds every table in `design.md` "Data model", plus the Procrastinate job
-  tables and the LLM cache. The filesystem holds only files; the DB holds their paths and
-  hashes.
+- **worker** claims jobs from the `jobs` table and runs the pipeline. Scale with
+  `docker compose up --scale worker=N`.
+- **the database** holds every table in `design.md` "Data model", plus the `jobs` queue
+  and the LLM cache. `DATABASE_URL` selects **SQLite** (the default, and all a laptop
+  needs) or **Postgres** (what compose configures, because SQLite takes one writer at a
+  time) — ADR-017. The filesystem holds only files; the DB holds their paths and hashes.
 - **shared volume** is mounted into api and worker. Single host by design; NFS or an
   object store only if workers ever move hosts (ADR-007).
 - Both UIs proxy `/api/*` to the api so the browser never meets CORS. Progress is polled
@@ -38,9 +39,9 @@ One installable package; api and worker are two entry points over the same code.
 | `llm/` | The **single adapter** (ADR-004): `LLMClient` Protocol, `OpenAIClient` (`/chat/completions`, covers vLLM/TGI/Ollama/gateways), `AnthropicClient` (`/v1/messages`), `MockClient` (canned JSON for tests). Plain `httpx`, no SDKs. Factory from `LLM_PROVIDER`. The **cache** (`llm_cache`, key = sha256(content) + model + prompt version) is checked before every call (ADR-005); every call writes an `llm_calls` row; a per-run token budget stops a runaway run. Prompt templates live here with a version constant each. JSON-only output validated against a Pydantic schema; on failure retry once with the validation error appended. |
 | `pipeline/` | One module per stage, an orchestrator, and resume logic. Each stage records status/duration/tokens in `run_stages` and is idempotent: a retried job resumes at the last good stage. |
 | `checks/` | Report checks per `req_type` (geography ⇒ state-distribution keys ⊆ allowed set; criteria ⇒ DIRT min/max respect the interval; attributes ⇒ fields exist; waterfall ⇒ counts reconcile per step; quantity ⇒ counts report). The **expression evaluator** for admin-defined checks over named values (safe, no `eval`), compliance-rule presence, and the reverse-pass category scoping. A value that cannot be resolved becomes a "could not evaluate" finding, never a silent skip. |
-| `db/` | SQLAlchemy 2 models for every table in `design.md` "Data model" (`users` included but unused, ADR-008), Alembic migrations (additive only), session helpers, the retention purge query. |
+| `db/` | SQLAlchemy 2 models for every table in `design.md` "Data model" (`users` included but unused, ADR-008), Alembic migrations (additive only, portable across both backends), session helpers, the `jobs` queue, the DB-backed LLM cache, the repository that converts between rows and pipeline objects, and the retention purge. |
 | `api/` | FastAPI app under `/api/v1`: runs (create with fingerprint check + `rerun_reason`, list, get, requirements, recheck, findings, finalize, report, report.pdf, clone, stats), configs, admin (templates, named values, checks + draft + test, compliance rules, aliases, usage). Pydantic wire models. **One auth dependency** every router uses, a no-op in v1 (ADR-008). Upload validation: `.docx`/`.json`/`.xlsx` only, size limit, content-type check, macros ignored. Audit log writes. |
-| `worker/` | Procrastinate app and the `run_pipeline(run_id)` task with backoff (3 retries, then the run is `failed` with the error shown in the UI); per-order-number queue cap; the nightly retention purge task. |
+| `worker/` | The polling loop, the `run_pipeline` / `recheck` / `purge` tasks with backoff (3 retries, then the run is `failed` with the error shown in the UI), stale-claim recovery so a killed worker's job is picked up, and the retention purge. |
 | `report/` | Jinja2 templates for the **one-page interactive HTML report** in the compare-file report format; `finalize` renders once, stores the HTML, and marks the run `finalized` (frozen — never regenerated, ADR-005). PDF via headless Chromium (Playwright) with a print stylesheet that expands all findings. |
 | `cli.py` | `vigilai run --osl … --config … --report kind=path …` → findings JSON. The first entry point (Phase 2) and the tool for the golden set. |
 
@@ -67,9 +68,11 @@ imports `pipeline`.
 
 ## Data flow per run
 
-1. `POST /api/v1/runs` stores the files on the volume, computes the **input fingerprint**
-   (hash of all inputs + active check versions), and either returns the existing run or,
-   with a `rerun_reason`, creates a new `runs` row (`queued`) and enqueues the job.
+1. `POST /api/v1/runs` validates each upload (extension, content type, size), stores the
+   files on the volume, computes the **input fingerprint** (hash of all inputs + active
+   check versions), and either returns the existing run or, with a `rerun_reason`,
+   creates a new `runs` row (`queued`) and enqueues the job. A per-order-number cap
+   refuses a fourth queued run for the same order.
 2. The worker claims the job, sets `running`, and runs stages 1–9, writing `rules`,
    `config_elements`, `traces`, `findings`, `run_stages`, `llm_calls`, `llm_cache`.
 3. Status becomes `needs_review`. The user reviews findings and may edit rules/traces

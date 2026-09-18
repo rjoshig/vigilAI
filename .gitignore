@@ -53,3 +53,9 @@ tests/fixtures/real/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Local database and data volume (ADR-017: SQLite is the default backend)
+/data/
+*.db
+*.db-wal
+*.db-shm

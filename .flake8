@@ -5,6 +5,18 @@ extend-ignore =
     E203,
     # Line break before binary operator — black handles this
     W503
+# FastAPI's dependency injection is expressed as a call in an argument default, which
+# is exactly what B008 warns about. These four are declarations, not work done at
+# import time, so bugbear is told to treat them as immutable.
+extend-immutable-calls =
+    fastapi.Depends,
+    fastapi.Query,
+    fastapi.File,
+    fastapi.Form,
+    Depends,
+    Query,
+    File,
+    Form
 exclude =
     .git,
     __pycache__,

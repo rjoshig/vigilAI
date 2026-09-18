@@ -116,9 +116,10 @@ is a new parser + a new `req_type` check, nothing else.
 
 ---
 
-## ADR-007 — Postgres for data and the job queue; shared Docker volume for files; no MinIO, no Redis
+## ADR-007 — One relational database for data and the job queue; shared volume for files; no MinIO, no Redis
 
-**Status:** accepted (design doc)
+**Status:** accepted (design doc) · **amended by ADR-017** (the database is selectable:
+SQLite by default, Postgres by configuration)
 
 **Context:** Single host, ~80 concurrent users, LLM-bound throughput. Every extra service
 is operational load on an internal team.
@@ -293,3 +294,46 @@ category list, so an admin can scope it. If in-house configs turn out to name th
 step differently from the OSL (for example `suppress` against `exclusions`), the step
 names need the alias table too; that is a `# SPEC GAP:` to confirm against real files in
 Phase 6.
+
+
+## ADR-017 — The database is selectable from `.env`: SQLite by default, Postgres for scale
+
+**Status:** accepted 2026-09-18 (user decision) · amends ADR-007
+
+**Context:** ADR-007 fixed the store as Postgres 16 with a Procrastinate queue. In
+practice most work on this project happens on a laptop, and requiring Docker and a
+running Postgres to execute a test, a migration, or a single run is friction on every
+task. The user asked for SQLite by default with Postgres available by flipping one
+switch in `.env`.
+
+**Decision:** One setting, `DATABASE_URL`, chooses the backend, and nothing else in the
+code or the compose file changes:
+
+```bash
+DATABASE_URL=sqlite+pysqlite:///./data/vigilai.db            # default
+DATABASE_URL=postgresql+psycopg://vigilai:vigilai@postgres:5432/vigilai
+```
+
+Three consequences follow, and each is handled rather than papered over:
+
+1. **Column types.** JSON columns are declared `JSON().with_variant(JSONB, "postgresql")`
+   so Postgres still gets indexable `jsonb` and SQLite gets portable `json`. Timestamps
+   are timezone-aware on both.
+2. **The queue.** Procrastinate is Postgres-only, so it is dropped. The queue is an
+   ordinary `jobs` table in whichever database is configured, claimed with
+   `FOR UPDATE SKIP LOCKED` on Postgres and with a guarded single-statement `UPDATE` on
+   SQLite, which is safe because SQLite serialises writers. Retries, backoff, and
+   resume-from-last-good-stage are our own code either way, and they were going to be
+   ours regardless. This removes a dependency rather than adding one, and there is still
+   no Redis and no broker.
+3. **Concurrency.** SQLite takes one writer at a time. It is right for a laptop, a demo,
+   and a single-worker in-house pilot; it is not right for several workers under load.
+   `docker compose up` therefore still runs Postgres, and the compose file sets
+   `DATABASE_URL` to it. SQLite is the default for everything outside Docker.
+
+**Consequences:** Tests, migrations, the CLI, and a single-worker run need no Docker.
+The choice is one line in `.env` and is logged at startup, so a deployment cannot be
+confused about which store it is using. Alembic migrations must stay portable: additive
+changes only, no Postgres-only DDL, and both backends are exercised in the test suite.
+Anything that genuinely needs Postgres (a partial index, `LISTEN/NOTIFY`) needs a new
+ADR and a documented fallback for SQLite.

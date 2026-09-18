@@ -74,9 +74,11 @@ The moment a phase's last task lands, in the same commit:
    regenerate a finalized report. Re-running identical inputs requires a logged reason.
 6. **Parsers for the OSL, the config, and each report type sit behind interfaces**
    (Protocols), because real file layouts arrive last and only in-house.
-7. **Postgres for data and the job queue; a shared Docker volume for files.** No MinIO,
-   no Redis. **No login in v1** for either UI, but keep the provision: an unused `users`
-   table and one auth dependency in the API.
+7. **One relational database holds the data and the job queue; a shared volume holds
+   files.** `DATABASE_URL` in `.env` selects it: **SQLite by default**, Postgres for
+   scale (ADR-017). No MinIO, no Redis, no broker. Migrations stay portable across both.
+   **No login in v1** for either UI, but keep the provision: an unused `users` table and
+   one auth dependency in the API.
 
 A PR that breaks one of these is rejected regardless of tests. Details:
 `docs/llm-privacy.md`, `docs/decisions.md`.

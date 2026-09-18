@@ -1,0 +1,241 @@
+"""Running one run: build the context from the database, execute, write back.
+
+This is where the Phase 2 pipeline meets the service. The stage code is unchanged; this
+module supplies its inputs from the database and persists what it produced, including
+per-stage status so a retry resumes at the last good stage rather than repeating work
+(``docs/design.md`` "Processing pipeline").
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Final
+
+import sqlalchemy as sa
+from sqlalchemy.orm import Session, sessionmaker
+
+from vigilai.db import models, repository
+from vigilai.db.cache import DbCache, record_calls
+from vigilai.db.session import session_scope
+from vigilai.db.types import utcnow
+from vigilai.llm.cache import LLMCache
+from vigilai.llm.client import CallLog
+from vigilai.llm.factory import build_client
+from vigilai.llm.settings import LLMSettings
+from vigilai.pipeline.context import RECHECK_STAGES, STAGE_ORDER, RunContext, StageRecord
+from vigilai.pipeline.run import PipelineError, run_pipeline
+
+__all__ = ["execute_run", "recheck_run", "build_context"]
+
+_LOG: Final = logging.getLogger(__name__)
+
+#: Which uploaded file kinds are reports rather than the OSL or the config.
+_REPORT_KINDS: Final[frozenset[str]] = frozenset(
+    {
+        "dirt",
+        "field_distribution",
+        "state_distribution",
+        "score_distribution",
+        "counts",
+        "cross_tab",
+        "billing",
+    }
+)
+
+
+def build_context(
+    session: Session,
+    run: models.Run,
+    data_dir: Path,
+    llm_settings: LLMSettings,
+    factory: sessionmaker[Session],
+    call_log: CallLog | None = None,
+) -> RunContext:
+    """Assemble a pipeline context for a stored run.
+
+    Args:
+        session: An open session.
+        run: The run row.
+        data_dir: The shared volume.
+        llm_settings: Adapter settings.
+        factory: The session factory, for the database-backed cache.
+        call_log: Where call statistics accumulate.
+
+    Returns:
+        The context, with previously completed stages marked done so a resumed run skips
+        them.
+
+    Raises:
+        ValueError: When the run is missing its OSL or config, which means the upload
+            was accepted without them and is a programming error rather than bad input.
+    """
+    paths = {file.kind: data_dir / file.storage_key for file in run.files}
+    if "osl" not in paths or "config" not in paths:
+        raise ValueError(f"run {run.id} is missing its OSL or config file")
+
+    cache = LLMCache(
+        backend=DbCache(factory),
+        model=llm_settings.model,
+        prompt_version=llm_settings.prompt_version,
+    )
+    log = call_log or CallLog()
+    client = build_client(llm_settings, cache=cache, call_log=log)
+
+    context = RunContext(
+        run_id=str(run.id),
+        osl_path=paths["osl"],
+        config_path=paths["config"],
+        report_paths={k: v for k, v in paths.items() if k in _REPORT_KINDS},  # type: ignore[misc]
+        client=client,
+        customer=run.customer_name,
+        admin=repository.load_admin_config(session, run.customer_name),
+        aliases=repository.load_aliases(session, run.customer_name),
+        masked_columns=repository.load_masked_columns(session),
+        rules_version=run.rules_version,
+    )
+
+    for row in session.execute(
+        sa.select(models.RunStage).where(models.RunStage.run_id == run.id)
+    ).scalars():
+        context.stages[row.stage] = StageRecord(  # type: ignore[index]
+            stage=row.stage,  # type: ignore[arg-type]
+            status=row.status,  # type: ignore[arg-type]
+            duration_ms=row.duration_ms,
+            llm_calls=row.llm_calls,
+            cache_hits=row.cache_hits,
+            tokens=row.tokens,
+            error=row.error,
+        )
+    return context
+
+
+def execute_run(
+    factory: sessionmaker[Session],
+    run_id: int,
+    data_dir: Path,
+    llm_settings: LLMSettings | None = None,
+) -> str:
+    """Run the pipeline for one stored run.
+
+    Args:
+        factory: The session factory.
+        run_id: Which run.
+        data_dir: The shared volume.
+        llm_settings: Adapter settings; read from the environment when omitted.
+
+    Returns:
+        The run's status afterwards: ``"needs_review"`` or ``"failed"``.
+
+    Raises:
+        PipelineError: When a stage fails. The run is marked failed and the error stored
+            before this propagates, so the queue can decide about a retry while the UI
+            already shows what happened.
+    """
+    settings = llm_settings or LLMSettings.from_env()
+    call_log = CallLog()
+
+    with session_scope(factory) as session:
+        run = session.get(models.Run, run_id)
+        if run is None:
+            raise ValueError(f"run {run_id} does not exist")
+        run.status = "running"
+        run.started_at = run.started_at or utcnow()
+        run.error = ""
+        run.model_used = settings.model
+        run.prompt_version = settings.prompt_version
+        context = build_context(session, run, data_dir, settings, factory, call_log)
+        resume_from = context.resume_from()
+
+    _LOG.info("run %d: executing from stage %s", run_id, resume_from)
+
+    failure: PipelineError | None = None
+    try:
+        run_pipeline(context, stages=STAGE_ORDER, resume=True)
+    except PipelineError as exc:
+        failure = exc
+
+    with session_scope(factory) as session:
+        run = session.get(models.Run, run_id)
+        if run is None:  # pragma: no cover - the run cannot vanish mid-flight
+            raise ValueError(f"run {run_id} disappeared while running")
+        repository.save_context(session, run, context)
+        record_calls(session, call_log, run.id)
+
+        if failure is None:
+            run.status = "needs_review"
+            run.current_stage = STAGE_ORDER[-1]
+            run.finished_at = utcnow()
+            repository.audit(session, "run.completed", run.id, f"{len(context.findings)} findings")
+        else:
+            run.status = "failed"
+            run.current_stage = failure.stage
+            run.error = failure.reason[:2000]
+            repository.audit(session, "run.failed", run.id, failure.stage)
+        status = run.status
+
+    if failure is not None:
+        raise failure
+    return status
+
+
+def recheck_run(
+    factory: sessionmaker[Session],
+    run_id: int,
+    data_dir: Path,
+    llm_settings: LLMSettings | None = None,
+) -> int:
+    """Rebuild findings after a user edited a rule or a trace.
+
+    Only stages 5 to 7 run and none of them calls a model, so this takes seconds and
+    costs nothing (``docs/design.md`` "Re-check path").
+
+    Args:
+        factory: The session factory.
+        run_id: Which run.
+        data_dir: The shared volume.
+        llm_settings: Adapter settings; read from the environment when omitted.
+
+    Returns:
+        How many findings the run has afterwards.
+
+    Raises:
+        PipelineError: When a re-check stage fails.
+    """
+    settings = llm_settings or LLMSettings.from_env()
+    call_log = CallLog()
+
+    with session_scope(factory) as session:
+        run = session.get(models.Run, run_id)
+        if run is None:
+            raise ValueError(f"run {run_id} does not exist")
+
+        context = build_context(session, run, data_dir, settings, factory, call_log)
+        # Stages 1 to 4 are not re-run, so their outputs come from the database.
+        context.rules = repository.load_rules(session, run_id)
+        context.elements = repository.load_elements(session, run_id)
+        context.traces = repository.load_traces(session, run_id)
+        context.findings = [
+            f for f in repository.load_findings(session, run_id) if f.review_status != "undecided"
+        ]
+        context.rules_version = run.rules_version + 1
+        for name in RECHECK_STAGES:
+            context.record(name).status = "pending"
+        parsed_needed = True
+
+    if parsed_needed:
+        run_pipeline(context, stages=("s1_parse",), resume=False)
+    run_pipeline(context, stages=RECHECK_STAGES, resume=False)
+
+    if call_log.records:  # pragma: no cover - a guard against a future stage adding a call
+        _LOG.warning("re-check made %d LLM call(s); it must make none", len(call_log.records))
+
+    with session_scope(factory) as session:
+        run = session.get(models.Run, run_id)
+        if run is None:  # pragma: no cover
+            raise ValueError(f"run {run_id} disappeared during re-check")
+        run.rules_version = context.rules_version
+        repository.save_context(session, run, context)
+        repository.audit(session, "run.rechecked", run.id, f"v{context.rules_version}")
+        count = len(context.findings)
+    return count

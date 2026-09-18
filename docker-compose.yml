@@ -2,12 +2,12 @@
 # Postgres is both the data store and the job queue; files live on one shared volume.
 # No Redis, no broker, no object store.
 #
-# Phase 0: this file documents the target and parses (`docker compose config`).
-# The api/worker images are built from `docker/`, the UIs from their own Dockerfiles.
-# Nothing here runs until Phase 3 lands the code (docs/phase-3.md).
+# Compose runs Postgres, because SQLite takes one writer at a time and this file starts
+# several workers (ADR-017). Outside Docker the default is SQLite and nothing else is
+# needed: `pip install -e .` then `vigilai run` or `uvicorn`.
 #
-# Usage (from Phase 3):  cp .env.example .env && docker compose up --build
-# Scale workers:         docker compose up --scale worker=4
+# Usage:         cp .env.example .env && docker compose up --build
+# Scale workers: docker compose up --scale worker=4
 
 name: vigilai
 
@@ -63,6 +63,11 @@ services:
         condition: service_healthy
     deploy:
       replicas: 2 # start with 2-4; tune to what the in-house LLM can serve
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import vigilai.worker' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   user-ui:
     build:

@@ -19,20 +19,27 @@ classifiers = [
     "Operating System :: MacOS",
 ]
 # Dependencies arrive with the phase that needs them (docs/phase-plan.md).
-# Still to come, per docs/design.md "Architecture":
-#   Phase 3 (web app):      fastapi, uvicorn[standard], sqlalchemy, alembic, psycopg,
-#                           procrastinate, python-multipart
-#   Phase 5 (final report): jinja2, playwright
 dependencies = [
-    "pydantic>=2.6",     # boundary models only: LLM output schemas, config (standards/python.md)
-    "httpx>=0.27",       # the only HTTP client; no vendor SDKs (ADR-004)
-    "python-docx>=1.1",  # OSL parser
-    "openpyxl>=3.1",     # report parsers, read-only mode
+    "pydantic>=2.6",          # boundary models only: LLM output schemas, API wire, config
+    "httpx>=0.27",            # the only HTTP client; no vendor SDKs (ADR-004)
+    "python-docx>=1.1",       # OSL parser
+    "openpyxl>=3.1",          # report parsers, read-only mode
+    "fastapi>=0.110",         # the API (Phase 3)
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",  # multipart uploads on POST /runs
+    "sqlalchemy>=2.0",        # data model (ADR-007)
+    "alembic>=1.13",          # additive migrations
+    "psycopg[binary]>=3.1",   # Postgres driver; SQLite needs none (ADR-017)
+    "jinja2>=3.1",            # the frozen one-page report (Phase 5)
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    # Starlette's TestClient requires httpx2; the runtime adapter stays on httpx
+    # (ADR-004), and the two coexist as separate packages.
+    "httpx2>=2.13",
     "pytest-cov>=4.1",
     "black>=24.0",
     "flake8>=7.0",
@@ -85,7 +92,14 @@ minversion = "7.4"
 addopts = "-ra --strict-markers --strict-config"
 testpaths = ["tests"]
 pythonpath = ["src"]
-filterwarnings = ["error"]
+# A new warning from our own code fails the suite. The exceptions below are raised
+# inside Starlette's TestClient and its anyio dependency, not by anything we control;
+# each is pinned to its message so a different warning from the same module still fails.
+filterwarnings = [
+    "error",
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:",
+]
 
 [tool.coverage.run]
 source = ["vigilai"]

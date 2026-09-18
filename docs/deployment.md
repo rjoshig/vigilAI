@@ -83,3 +83,30 @@ confirmed with a real OSL.
 - [ ] retention window agreed with security / compliance (DIRT files with PII)
 - [ ] load test at ~80 concurrent users
 - [ ] parsers adapted to the real in-house layouts
+
+
+## Choosing the database (ADR-017)
+
+One setting decides, and nothing else in the code or the compose file changes:
+
+```bash
+DATABASE_URL=sqlite+pysqlite:///./data/vigilai.db            # default; needs nothing
+DATABASE_URL=postgresql+psycopg://vigilai:vigilai@postgres:5432/vigilai
+```
+
+**SQLite** is right for a laptop, a demo, and a single-worker in-house pilot. It needs no
+container and no server, so tests, migrations, the CLI, and one worker all run from a
+checkout. It takes one writer at a time.
+
+**Postgres** is right once several workers run at once, which is what
+`docker compose up` starts. The compose file sets `DATABASE_URL` to the `postgres`
+service for you.
+
+Migrations are portable and run the same way against either:
+
+```bash
+alembic upgrade head        # the api container does this on start
+```
+
+The backend in use is logged once at startup by both the api and the worker, so a
+deployment can always be checked rather than assumed.
