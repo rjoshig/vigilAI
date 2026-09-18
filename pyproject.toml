@@ -34,6 +34,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# PDF rendering lives in the worker image only (docs/design.md "Review and final
+# report"). The api never renders one, and a deployment that does not want PDFs can
+# skip both the package and its ~150 MB browser download; the HTML report is always
+# available and `renderer_available()` reports which is the case.
+pdf = ["playwright>=1.44"]
 dev = [
     "pytest>=7.4",
     "pytest-asyncio>=0.23",
@@ -54,7 +59,7 @@ vigilai = "vigilai.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vigilai = ["py.typed"]
+vigilai = ["py.typed", "report/templates/*.j2"]
 
 # ---------------------------------------------------------------------------
 # Tooling (standards/python.md explains intent; this file is authoritative)
@@ -85,6 +90,12 @@ disallow_untyped_defs = false
 # the untyped surface stops at the parser boundary.
 [[tool.mypy.overrides]]
 module = ["docx.*", "openpyxl.*"]
+ignore_missing_imports = true
+
+# Playwright is an optional extra installed in the worker image, so it is absent from a
+# plain dev install (pyproject "[project.optional-dependencies] pdf").
+[[tool.mypy.overrides]]
+module = ["playwright.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -9,6 +9,7 @@
 
 import type {
   CloneResult,
+  FinalizeResult,
   ConfigDetail,
   ConfigSummary,
   CreateRunResult,
@@ -151,6 +152,26 @@ export const api = {
   /** Create a draft run prefilled from an existing one. */
   cloneRun(runId: number): Promise<CloneResult> {
     return request<CloneResult>(`/runs/${runId}/clone`, { method: "POST" });
+  },
+
+  /**
+   * Render and freeze the final report.
+   *
+   * Refused with 409 when the run is already finalized or when a high-severity finding
+   * still has no decision (ADR-005, ADR-015).
+   */
+  finalize(runId: number): Promise<FinalizeResult> {
+    return request<FinalizeResult>(`/runs/${runId}/finalize`, { method: "POST" });
+  },
+
+  /** Where the stored report is served. Used as an iframe source and a link. */
+  reportUrl(runId: number): string {
+    return `${BASE}/runs/${runId}/report`;
+  },
+
+  /** Where the PDF is served. Rendered from the stored HTML on first request. */
+  reportPdfUrl(runId: number): string {
+    return `${BASE}/runs/${runId}/report.pdf`;
   },
 
   /** Read stage timings, calls, tokens, and cache hits. */

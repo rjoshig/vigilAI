@@ -11,14 +11,14 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0, 1, 2, 3** (see [`phase-plan.md`](phase-plan.md)) |
-| Current phase | **4 — admin-ui and configurable checks** |
+| Phases complete | **0, 1, 2, 3, 4, 5** (see [`phase-plan.md`](phase-plan.md)) |
+| Current phase | **6 — Hardening and in-house fit**, not started |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
-**Next action:** Phase 4. Read `docs/phase-4.md` end to end, then build the admin
-backend (report templates, named values, versioned checks, compliance rules, aliases,
-masked columns, usage) and the admin-ui on :3001.
+**The product works end to end.** Submit an OSL, a config, and the reports; the worker
+runs the nine stages; a reviewer decides each finding; the frozen one-page report is
+generated once and downloadable as a PDF.
 
 **Run it locally** — no Docker needed, SQLite is the default (ADR-017):
 
@@ -27,20 +27,29 @@ source .venv/bin/activate
 uvicorn vigilai.api.app:get_app --factory --reload      # :8000
 python -m vigilai.worker.app                             # another terminal
 cd user-ui && npm run dev                                # :3000
+cd admin-ui && npm run dev                               # :3001
 ```
 
 **Gates:** `black . --target-version py310 && flake8 && mypy src/ && pytest &&
-bash scripts/check_docs.sh`, and in `user-ui/`: `npm run lint && npm run typecheck &&
+bash scripts/check_docs.sh`, and in each UI: `npm run lint && npm run typecheck &&
 npm run format:check && npm test && npm run build`.
+
+**Next action:** Phase 6 (hardening and in-house fit) is the last phase. Read
+`docs/phase-6.md`. Much of it depends on the user's outstanding items below, so confirm
+priorities before starting.
 
 **Outstanding, needs the user:**
 
-- **Merge the Phase 0 PR and create `dev` from `main`.** Fourteen commits are now
-  stacked on one session branch.
-- **Run `docker compose up --build` once** on a machine with Docker, to close Phase 3
-  acceptance criterion 1. Everything else in that criterion is proven against SQLite.
-- **A local model** or an Anthropic key, to close Phase 2 criterion 2 (ADR-014).
-- **A sanitized shape reference** for the real OSL, config, and report layouts.
+- **Merge the Phase 0 PR and create `dev` from `main`.** Seventeen commits are stacked
+  on one session branch.
+- **Run `docker compose up --build` once** on a machine with Docker (Phase 3 criterion
+  1), and **produce one PDF** with `pip install -e ".[pdf]" && playwright install
+  chromium` (Phase 5 criterion 3).
+- **A local model** or an Anthropic key, to close Phase 2 criterion 2 (ADR-014) and
+  validate the prompt wording. Expect a prompt-version bump afterwards.
+- **A sanitized shape reference** for the real OSL, config, and report layouts. Every
+  layout assumption in the code came from synthetic fixtures; Phase 6 is where that is
+  reconciled.
 - The remaining open questions in [`phase-plan.md`](phase-plan.md).
 
 ---
@@ -470,6 +479,60 @@ Phase 4, then Phase 5.
 ### Blockers
 
 None. The compose run needs a machine with Docker.
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (Phases 4 and 5 — admin-ui and the final report)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phases:** 4 and 5 · **Status:** both
+complete, with two criteria unverifiable on this machine.
+
+### Phase 4 — admin-ui and configurable checks
+
+- The admin backend: report templates, named values with live resolution against the
+  uploaded samples, versioned checks, compliance rules, reverse-pass categories,
+  aliases, masked columns, and a usage dashboard that is plain SQL over the run tables.
+- `POST /admin/checks/draft` is the only model call in the admin flow and happens once
+  per check; testing a check never calls it.
+- `admin-ui` on :3001, same toolchain and theme as user-ui, with all five screens.
+- Added `validate()` to the expression evaluator. `referenced_names` only parsed, so
+  `__import__('os')` could be *saved* and would have failed only at evaluation time.
+  Saving now walks the same node rules the evaluator uses.
+
+### Phase 5 — the frozen report
+
+- A self-contained one-page HTML report: inline CSS, no network, opens from `file://`.
+  Rendered once, hashed, stored, and never regenerated; a second finalize is a 409 and
+  re-reviewing a finalized run is refused, so the file always matches the decisions it
+  came from.
+- The PDF is rendered from the **stored file**, behind a Protocol so the api depends on
+  the capability rather than on Playwright. Playwright is the optional `[pdf]` extra,
+  installed in the worker image; without it the endpoint returns 503 naming the HTML
+  report rather than failing the download silently.
+- The user-ui final report screen shows the stored page in an iframe rather than
+  re-implementing it, so there is only ever one version of the document.
+
+### Notable decisions
+
+- Guards worth keeping: a named value a check still uses cannot be deleted; saving one
+  reverse-pass category seeds the rest, so switching one off cannot silently enable the
+  others; adding a masked column keeps the shipped defaults (ADR-003).
+- Judgment checks have a prompt and a schema, and the UI flags them "use sparingly",
+  but the worker still skips them: an expression check costs nothing and a judgment
+  check costs a call per run, so wiring it in waits for a real need. Noted in
+  `phase-4.md`.
+- The report template uses `StrictUndefined`. A silently blank field in a frozen report
+  is a defect nobody can fix afterwards, so a missing value fails at render time.
+
+### Pending
+
+Phase 6, and the user items under "Resume here".
+
+### Blockers
+
+None for Phase 6, though most of it wants the real file samples.
 
 ### Next concrete action
 

@@ -10,7 +10,10 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
-RUN pip install --no-cache-dir -e .
+# The [pdf] extra and its browser: the worker renders the final report's PDF, the api
+# never does (docs/design.md "Review and final report").
+RUN pip install --no-cache-dir -e ".[pdf]" \
+    && playwright install --with-deps chromium
 
 COPY scripts/ ./scripts/
 

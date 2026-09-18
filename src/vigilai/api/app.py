@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from vigilai.api.deps import get_db_settings, get_llm_settings
-from vigilai.api.routers import admin, configs, findings, runs
+from vigilai.api.routers import admin, configs, findings, reports, runs
 from vigilai.db.cache import DbCache
 from vigilai.db.session import create_all, create_engine, healthcheck, session_factory
 from vigilai.db.settings import DbSettings
@@ -77,6 +77,9 @@ def create_app(
     app.state.data_dir = resolved.data_dir
     app.state.llm_settings = resolved_llm
     app.state.llm_cache_backend = DbCache(factory)
+    # Injectable so a test can render a PDF without launching a browser; None means
+    # the default Playwright renderer (vigilai/report/pdf.py).
+    app.state.pdf_renderer = None
 
     origins = [
         origin.strip()
@@ -91,7 +94,13 @@ def create_app(
         allow_headers=["*"],
     )
 
-    for router in (runs.router, findings.router, configs.router, admin.router):
+    for router in (
+        runs.router,
+        findings.router,
+        configs.router,
+        reports.router,
+        admin.router,
+    ):
         app.include_router(router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["meta"])

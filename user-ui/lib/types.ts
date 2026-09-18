@@ -238,3 +238,10 @@ export interface MatrixRow {
   status: "match" | "mismatch" | "partial" | "missing" | "extra";
   findings: Finding[];
 }
+
+export interface FinalizeResult {
+  run_id: number;
+  verdict: "ok" | "not_ok";
+  html_sha256: string;
+  pdf_available: boolean;
+}

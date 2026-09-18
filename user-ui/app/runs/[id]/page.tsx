@@ -7,7 +7,7 @@
  * polls every three seconds until the pipeline finishes.
  */
 
-import { BarChart3, CheckCircle2, Copy, RefreshCw, XCircle } from "lucide-react";
+import { BarChart3, CheckCircle2, Copy, FileText, Lock, RefreshCw, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
@@ -190,6 +190,29 @@ export default function ReviewPage() {
             <Button variant="outline" size="sm" onClick={() => void clone()}>
               <Copy className="h-4 w-4" /> Clone
             </Button>
+            <Link href={`/runs/${run.id}/report`}>
+              <Button
+                size="sm"
+                disabled={!run.finalized && !run.can_finalize}
+                title={
+                  run.finalized
+                    ? "Open the frozen report"
+                    : run.can_finalize
+                      ? "Every high-severity finding has a decision"
+                      : "Decide every high-severity finding first"
+                }
+              >
+                {run.finalized ? (
+                  <>
+                    <FileText className="h-4 w-4" /> Final report
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-4 w-4" /> Generate final report
+                  </>
+                )}
+              </Button>
+            </Link>
           </>
         }
       />
