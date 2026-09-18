@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vigilai"
+version = "0.0.1"
+description = "QC validation of a credit-data fulfillment process: OSL spec vs ETL config vs output reports."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "vigilAI Maintainers" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+# Phase 0 has no runtime code. Dependencies arrive with the phase that needs them
+# (docs/phase-plan.md). Planned, per docs/design.md "Architecture":
+#   Phase 2 (pipeline core): pydantic, httpx, python-docx, openpyxl, pandas
+#   Phase 3 (web app):       fastapi, uvicorn[standard], sqlalchemy, alembic, psycopg,
+#                            procrastinate, python-multipart
+#   Phase 5 (final report):  jinja2, playwright
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "black>=24.0",
+    "flake8>=7.0",
+    "flake8-bugbear>=24.0",
+    "mypy>=1.8",
+]
+
+[project.scripts]
+vigilai = "vigilai.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+vigilai = ["py.typed"]
+
+# ---------------------------------------------------------------------------
+# Tooling (standards/python.md explains intent; this file is authoritative)
+# ---------------------------------------------------------------------------
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+extend-exclude = "/(user-ui|admin-ui|ui-mock|node_modules)/"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+minversion = "7.4"
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["vigilai"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
