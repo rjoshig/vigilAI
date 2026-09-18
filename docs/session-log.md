@@ -11,42 +11,36 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0, 1, 2** (see [`phase-plan.md`](phase-plan.md)) |
-| Current phase | **3 — Web app**, not started |
+| Phases complete | **0, 1, 2, 3** (see [`phase-plan.md`](phase-plan.md)) |
+| Current phase | **4 — admin-ui and configurable checks** |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
-**Next action:** Phase 3. Read `docs/phase-3.md` end to end first, then build in this
-order: docker-compose with Postgres, the SQLAlchemy models and Alembic migration for the
-tables in `design.md` "Data model", the Procrastinate queue and worker task wrapping the
-existing pipeline, the API under `/api/v1`, and user-ui against the mock's screens.
+**Next action:** Phase 4. Read `docs/phase-4.md` end to end, then build the admin
+backend (report templates, named values, versioned checks, compliance rules, aliases,
+masked columns, usage) and the admin-ui on :3001.
 
-**Try the CLI now:**
+**Run it locally** — no Docker needed, SQLite is the default (ADR-017):
 
 ```bash
 source .venv/bin/activate
-python scripts/generate_fixtures.py --out /tmp/fx
-vigilai run --osl /tmp/fx/cases/geography_extra_state/osl.docx \
-  --config /tmp/fx/cases/geography_extra_state/config.json \
-  --report dirt=/tmp/fx/cases/geography_extra_state/reports/dirt.xlsx \
-  --report state_distribution=/tmp/fx/cases/geography_extra_state/reports/state_distribution.xlsx \
-  --report counts=/tmp/fx/cases/geography_extra_state/reports/counts.xlsx \
-  --out /tmp/findings.json --provider mock
-python scripts/golden_set.py          # 12 / 12 against the scripted stand-in
+uvicorn vigilai.api.app:get_app --factory --reload      # :8000
+python -m vigilai.worker.app                             # another terminal
+cd user-ui && npm run dev                                # :3000
 ```
 
-**Environment:** `.venv` on Python 3.10.14; `black . --target-version py310 && flake8 &&
-mypy src/ && pytest && bash scripts/check_docs.sh`.
+**Gates:** `black . --target-version py310 && flake8 && mypy src/ && pytest &&
+bash scripts/check_docs.sh`, and in `user-ui/`: `npm run lint && npm run typecheck &&
+npm run format:check && npm test && npm run build`.
 
 **Outstanding, needs the user:**
 
-- **Merge the Phase 0 PR and create `dev` from `main`** (phase-0 exit criterion 6, the
-  one box still open there). Everything since has stacked on the same session branch.
-- **A local model** (Ollama plus a Gemma) or an Anthropic key, to close Phase 2
-  acceptance criterion 2 (ADR-014). Expect a prompt-version bump afterwards.
-- **A sanitized shape reference** for the real OSL, config, and report layouts. The
-  parsers sit behind Protocols (ADR-006) so this can arrive late, but every layout
-  assumption in the code today came from synthetic fixtures.
+- **Merge the Phase 0 PR and create `dev` from `main`.** Fourteen commits are now
+  stacked on one session branch.
+- **Run `docker compose up --build` once** on a machine with Docker, to close Phase 3
+  acceptance criterion 1. Everything else in that criterion is proven against SQLite.
+- **A local model** or an Anthropic key, to close Phase 2 criterion 2 (ADR-014).
+- **A sanitized shape reference** for the real OSL, config, and report layouts.
 - The remaining open questions in [`phase-plan.md`](phase-plan.md).
 
 ---
@@ -426,6 +420,56 @@ Phase 3.
 ### Blockers
 
 None for Phase 3. The items under "Resume here" need the user but do not block it.
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (Phase 3 — web app)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 3 · **Status:** complete, with the
+compose run unverified.
+
+### What was completed
+
+- **ADR-017**: `DATABASE_URL` selects the backend. SQLite is the default, so a test, a
+  migration, or a single run needs no Docker; Postgres is what compose configures.
+  Procrastinate is dropped — it is Postgres-only — and the queue is now an ordinary
+  `jobs` table. That removed a dependency rather than adding one, and there is still no
+  Redis.
+- `db/`: all 21 tables, portable column types, session helpers with the SQLite pragmas
+  that make foreign keys and concurrent reads behave, the job queue, the DB-backed LLM
+  cache, the repository, and an Alembic migration that round-trips on SQLite.
+- `worker/`: the polling loop, `run_pipeline` / `recheck` / `purge`, retries with
+  backoff, and stale-claim recovery so a killed worker's job is picked up by another.
+- `api/`: the full `/api/v1` surface, upload validation, the single auth seam, and audit
+  writes.
+- `user-ui/`: Next.js 15 with all five Phase 3 screens, the ui2 theme, the `/api/*`
+  rewrite proxy, a standalone Dockerfile, and 35 Vitest tests.
+- 602 Python tests and 35 frontend tests; every gate clean.
+
+### Notable decisions and fixes
+
+- `get_data_dir` read the environment instead of application state, so an injected data
+  directory was silently ignored. Found by a test that asserted the files actually
+  landed on the volume.
+- A live run against an empty database exposed a real defect: with no alias configured,
+  stage 5 reported "Config has no condition on score" because the config calls it
+  `SCORE_V3`. Stage 4 had already decided the element implements the requirement, so
+  stage 5 now pairs a single condition on each side when the alias table has never heard
+  of the attribute. The guard is narrow: a *known* attribute with no counterpart is
+  still a real gap.
+- A run awaiting a retry stays `queued` rather than flashing `failed` in the UI; only a
+  dead job marks the run failed.
+- The Runs list stops polling when nothing is queued or running.
+
+### Pending
+
+Phase 4, then Phase 5.
+
+### Blockers
+
+None. The compose run needs a machine with Docker.
 
 ### Next concrete action
 

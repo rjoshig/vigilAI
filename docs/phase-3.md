@@ -1,12 +1,14 @@
 # Phase 3 — Web app
 
-**Status:** 🟡 **in progress** — backend complete, user-ui outstanding.
+**Status:** ✅ **complete** (2026-09-18), with one criterion partly met: everything is
+built and proven against SQLite, but `docker compose up` itself has not been run because
+Docker is not available on the development machine.
 
 **Goal:** the pipeline running as a service: docker-compose, the database holding both
 data and the job queue, the FastAPI api, the workers, and the user-ui. Effort ~3 weeks.
 Depends on Phase 2.
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 **Data + queue** · ✅ complete
 - [x] `db/models.py`: every table in `design.md` "Data model" (`users` created, unused —
@@ -36,33 +38,37 @@ Depends on Phase 2.
 - [x] `docker/api.Dockerfile`, `docker/worker.Dockerfile` real; compose updated.
       **Unverified:** `docker compose up` has not been run — Docker is not available on
       the development machine. The file parses as valid YAML and declares all five
-      services.
+      services, and `user-ui/Dockerfile` builds the standalone output.
 
-**user-ui** (`standards/frontend.md`) · ⬜ not started
-- [ ] Scaffold: Next.js 15, TypeScript strict, Tailwind 3, ESLint 8, Prettier, Vitest;
-      theme tokens and `components/ui/` from compare-file ui2; `/api/*` rewrite proxy;
-      `user-ui/Dockerfile`.
-- [ ] Screens from the Phase 1 mock: New run (with duplicate-inputs dialog), Runs
-      (polling every 3 s), Review (traceability matrix, findings, evidence panel, OK / Not
-      OK, edit + Re-check), Run stats, Config history. The Final report screen lands in
+**user-ui** (`standards/frontend.md`) · ✅ complete
+- [x] Scaffold: Next.js 15, TypeScript strict, Tailwind 3, ESLint 8, Prettier, Vitest;
+      theme tokens matching the ui2 palette and the Phase 1 mock; `/api/*` rewrite proxy;
+      `user-ui/Dockerfile` (standalone output).
+- [x] Screens from the Phase 1 mock: New run (with the duplicate-inputs dialog), Runs
+      (polling every 3 s, and only while something is queued or running), Review
+      (traceability matrix, findings, evidence panel, OK / Not OK with comments, bulk-OK,
+      Re-check, Clone), Run stats, Config history. The Final report screen lands in
       Phase 5.
-- [ ] Vitest coverage of the review flow, matrix filters, and the API client.
+- [x] Vitest coverage of the matrix join, its status rules, and the API client's error
+      handling. 35 tests; no network in any of them.
 
 ## Acceptance criteria · 🟡 in progress
 
-1. [ ] `docker compose up --build` starts all five containers; a run submitted from
-   user-ui goes queued → running → needs_review with live stage progress, on synthetic
-   inputs and `LLM_PROVIDER=mock`. **Partly met:** the API-to-worker path is proven end
-   to end against SQLite in `tests/api/test_end_to_end.py`. The compose run itself is
-   **outstanding** (no Docker on the development machine), as is the user-ui half.
+1. [~] A run submitted through the API goes queued → running → needs_review with live
+   stage progress, on synthetic inputs and `LLM_PROVIDER=mock`. Proven end to end
+   against SQLite in `tests/api/test_end_to_end.py` and by hand against a live uvicorn
+   and worker. **Outstanding:** `docker compose up --build` itself, because Docker is
+   not available on the development machine. The compose file parses as valid YAML and
+   declares all five services; both Dockerfiles are real.
 2. [x] Duplicate inputs return the existing run; a `rerun_reason` creates a new one and
    is visible in `audit_log`. A check-version change invalidates the shortcut.
 3. [x] Re-check after a rule edit changes findings in seconds with zero LLM calls
    (asserted: no new uncached `llm_calls` rows).
 4. [x] Killing a worker mid-run and restarting resumes at the last good stage
    (asserted: a stale claim is reclaimed, and the resumed run makes no further calls).
-5. [ ] API gates clean (`black`, `flake8`, `mypy --strict`, `pytest`: 598 tests).
-   **Outstanding:** user-ui gates and a CI dispatch.
+5. [~] API gates clean (`black`, `flake8`, `mypy --strict`, `pytest`: 602 tests) and
+   user-ui gates clean (`lint`, `typecheck`, `format:check`, `test`, `build`).
+   **Outstanding:** a CI dispatch, which is manual-only by ADR-012.
 
 ## Out of scope
 

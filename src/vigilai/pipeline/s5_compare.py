@@ -197,9 +197,28 @@ def _compare_criteria(context: RunContext, rule: Rule, element: ConfigElement, o
     aliases = context.aliases
     by_field: dict[str, Condition] = {aliases.resolve(c.field_name): c for c in other.conditions}
 
+    # Stage 4 already decided this element implements this requirement. When each side
+    # states exactly one condition and the alias table has never heard of the OSL's
+    # attribute, the two are about the same thing: the config calls it something the
+    # table does not map yet. Pairing them beats reporting a phantom "no condition on
+    # score", which is what an unseeded alias table produced on every run.
+    #
+    # The guard is deliberately narrow. If the table *does* know the attribute, a
+    # missing counterpart is a real gap: "score" against a config that only constrains
+    # "age" is a missing rule, not a naming difference.
+    single = len(rule.conditions) == 1 and len(other.conditions) == 1
+
     for condition in rule.conditions:
         field_name = aliases.resolve(condition.field_name)
         counterpart = by_field.get(field_name)
+        if counterpart is None and single and not aliases.knows(condition.field_name):
+            counterpart = other.conditions[0]
+            _LOG.info(
+                "run %s: pairing %r with %r by position; no alias links them",
+                context.run_id,
+                condition.field_name,
+                counterpart.field_name,
+            )
         if counterpart is None:
             context.add_finding(
                 Finding(

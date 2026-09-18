@@ -342,3 +342,67 @@ def test_a_not_related_verdict_is_treated_as_missing(verdict: str) -> None:
     context.traces = [Trace(rule_id="R-1", verdict="not_related")]
     compare(context)
     assert _types(context) == ["rule_missing_in_config"]
+
+
+# --- attribute names the alias table does not know yet ---------------------------------
+
+
+def test_a_single_condition_pair_is_compared_even_without_an_alias() -> None:
+    """Stage 4 already said these are the same subject; a phantom finding is worse."""
+    empty = AliasTable.from_mapping({})
+    context = _context(
+        _criteria("R-1", "score", ">=", 755),
+        _criteria("C-1", "SCORE_V3", ">=", 750, source="config"),
+    )
+    context.aliases = empty
+    compare(context)
+    assert _types(context) == ["value_mismatch"]
+
+
+def test_matching_values_under_different_names_produce_no_finding() -> None:
+    context = _context(
+        _criteria("R-1", "score", ">=", 755),
+        _criteria("C-1", "SCORE_V3", ">=", 755, source="config"),
+    )
+    context.aliases = AliasTable.from_mapping({})
+    compare(context)
+    assert context.findings == []
+
+
+def test_a_known_attribute_with_no_counterpart_is_still_a_real_gap() -> None:
+    """The fallback must not turn "score against age" into a value mismatch."""
+    context = _context(
+        _criteria("R-1", "score", ">=", 755),
+        _criteria("C-1", "AGE", ">=", 21, source="config"),
+    )
+    compare(context)
+    assert _types(context) == ["rule_missing_in_config"]
+
+
+def test_several_conditions_still_need_the_alias_table() -> None:
+    """With two on each side, pairing by position would be a guess, so it is not done."""
+    rule = Rule(
+        rule_id="R-1",
+        source="osl",
+        req_type="criteria",
+        conditions=[
+            Condition(field_name="score", operator=">=", value=755),
+            Condition(field_name="age", operator=">=", value=21),
+        ],
+    )
+    other = Rule(
+        rule_id="C-1",
+        source="config",
+        req_type="criteria",
+        conditions=[
+            Condition(field_name="SCORE_V3", operator=">=", value=755),
+            Condition(field_name="AGE", operator=">=", value=21),
+        ],
+    )
+    context = _context(rule, other)
+    context.aliases = AliasTable.from_mapping({})
+    compare(context)
+    # "age" and "AGE" normalise alike so they pair; "score" and "SCORE_V3" do not, and
+    # with two conditions a side there is no safe way to guess, so it is reported.
+    assert _types(context) == ["rule_missing_in_config"]
+    assert "score" in context.findings[0].title
