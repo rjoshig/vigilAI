@@ -11,7 +11,7 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**; **6 in progress** (the rest needs real files and in-house infra) |
+| Phases complete | **0–5**; **6 in progress**; **7 dormant** (runs only on request) |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
@@ -38,6 +38,15 @@ finalized OK, finalized Not OK, and failed.
 **Gates:** `black . --target-version py310 && flake8 && mypy src/ && pytest &&
 bash scripts/check_docs.sh`, and in each UI: `npm run lint && npm run typecheck &&
 npm run format:check && npm test && npm run build`.
+
+### Phase 7 is written but dormant
+
+[`phase-7.md`](phase-7.md) is the phase for the machine that holds the real files
+(ADR-019). It runs **only when you ask**, one artifact at a time: *"look at this OSL and
+tell me what needs to change"*. It carries the per-artifact tables of what the parsers
+assume today and what would break each assumption, so the analysis starts from the code
+rather than a blank page. Its first rule is that no real file, and nothing derived from
+one, enters this repository.
 
 ### Outstanding, needs the user
 
@@ -602,3 +611,50 @@ None that are mine. Everything left is on the user's list.
 ### Next concrete action
 
 See "Resume here".
+
+## Session: 2026-09-18 (Phase 7 — documented, dormant)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 7 · **Status:** documented only, as
+asked. No code was written and nothing was started.
+
+### What was completed
+
+- `docs/phase-7.md`, "Real-world fit": the phase that runs on the machine holding the
+  real OSL, config, and reports, and only when the user asks for it.
+- ADR-019 recording why it is a separate phase rather than part of Phase 6: it happens
+  on a different machine, at an unknown time, driven by files that cannot come here,
+  and it is conversational rather than planned. Folding it into Phase 6 left a phase
+  that could never be completed.
+- Both phase tables, `CLAUDE.md`, and the README index updated. `CLAUDE.md` says
+  plainly that a session must not act on Phase 7 because it noticed it exists.
+
+### What is in the doc
+
+- **The one rule** first, before anything else: a real customer file, or anything
+  derived from one, never enters the repository. A table of what may come back out
+  (shapes, counts, patterns, synthetic fixtures modelled on a shape) against what may
+  not (any value, any row, any identifier), and an instruction to keep the real files
+  outside the working tree.
+- **How to invoke it** and the loop Claude runs each time: read the file with the
+  existing parser, name the gaps specifically, say what changes and where and why,
+  say what does *not* change, propose the fixture, then stop and wait.
+- **Per-artifact assumption tables** — for the OSL, the config, and the reports — each
+  row naming what the parser believes today and what would break it. These are derived
+  from the code, which is what makes the analysis start from what the tool actually
+  does. They go stale when a parser changes, and the ADR says who updates them.
+- **Where changes will land**, with a note that a change reaching `pipeline/` or
+  `rules/schema.py` is a signal that a design assumption was wrong, not a parsing detail.
+- Bootstrap steps for the new machine, including taking a golden-set baseline *before*
+  touching prompts, so a later accuracy drop is visible.
+
+### Pending
+
+Nothing. The phase is dormant until the user asks for it.
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here". Phase 7 is not it.

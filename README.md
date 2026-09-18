@@ -89,6 +89,8 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-0.md`](docs/phase-0.md) … [`docs/phase-6.md`](docs/phase-6.md) — detailed per-phase plans
   ([phase-1](docs/phase-1.md), [phase-2](docs/phase-2.md), [phase-3](docs/phase-3.md),
   [phase-4](docs/phase-4.md), [phase-5](docs/phase-5.md))
+- [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
+  on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
 - [`docs/llm-privacy.md`](docs/llm-privacy.md) — what may and may not reach the LLM, the cache, fixture policy
 - [`docs/deployment.md`](docs/deployment.md) — running it: docker-compose, `.env`, volumes, retention

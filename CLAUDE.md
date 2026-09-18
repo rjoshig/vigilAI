@@ -41,9 +41,15 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 4 | admin-ui and configurable checks | `docs/phase-4.md` | ✅ complete |
 | 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ✅ complete (PDF unverified) |
 | 6 | Hardening and in-house fit | `docs/phase-6.md` | 🟡 in progress (rest is in-house) |
+| 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
 commit that changes a phase's status; `docs/phase-plan.md` must agree with it.
+
+**Phase 7 is dormant.** It runs only when the user explicitly asks, on the machine that
+holds the real customer files, and it is not a prerequisite for anything. Do not start
+it, plan around it, or act on it because you noticed it exists. Its one hard rule: a
+real customer file never enters this repository (ADR-003, ADR-019).
 
 ### Finishing a phase
 

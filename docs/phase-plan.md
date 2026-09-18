@@ -16,8 +16,12 @@ risk.
 | 4 | Admin-ui and checks — templates, named values, checks, compliance rules, LLM-assisted authoring | 2–3 weeks | ✅ **complete** | [phase-4.md](phase-4.md) |
 | 5 | Final report — one-page HTML in the compare-file format, freeze, PDF export | 1–2 weeks | ✅ **complete** — real-browser PDF unverified | [phase-5.md](phase-5.md) |
 | 6 | Hardening and in-house fit — PII masking, audit, retention, load test, adapt parsers to real samples | 2 weeks | 🟡 **in progress** — the rest needs real files and in-house infra | [phase-6.md](phase-6.md) |
+| 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
 
-Effort assumes 1–2 developers and is a starting estimate.
+Effort assumes 1–2 developers and is a starting estimate. Phase 7 is **not** part of
+the original six from `design.md`; it was added when it became clear the real files
+would arrive on a different machine, and it is dormant until the user asks for it
+(ADR-019).
 
 ## Status vocabulary
 

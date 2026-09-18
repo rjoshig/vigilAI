@@ -372,3 +372,43 @@ pattern can be disabled individually, which is the right response to a false pos
 model call. A deployment whose own data legitimately matches a pattern narrows that
 pattern rather than disabling the tripwire. The masked-column list remains the primary
 control; this is the backstop that says when it has failed.
+
+## ADR-019 — A dormant Phase 7 for fitting the tool to the real files
+
+**Status:** accepted 2026-09-18 (user decision)
+
+**Context:** `design.md` plans six phases, and Phase 6 folds "adapt parsers to real
+samples in-house" into a general hardening phase. In practice that work is different in
+kind from the rest of Phase 6: it happens on a **different machine**, at an unknown
+time, driven by files that cannot come here, and it is conversational rather than
+planned — the user shows Claude a real artifact and asks what needs to change. Leaving
+it inside Phase 6 meant a phase that could never be completed and a checklist that
+could never be written honestly.
+
+**Decision:** Add `docs/phase-7.md`, "Real-world fit", with three properties that make
+it different from every other phase:
+
+1. **Dormant.** It runs only on an explicit request. No phase depends on it, nothing
+   schedules it, and a session that notices it must not act on it. Both phase tables
+   and `CLAUDE.md` say so.
+2. **Conversational.** Its unit of work is one artifact and one question: "look at this
+   file and tell me what needs to change". The doc specifies the loop — read it with
+   the existing parser, name the gaps, say what changes and where, say what does *not*
+   change, propose the fixture, then **stop** — rather than a task list, because the
+   findings cannot be known in advance.
+3. **Bounded by ADR-003.** Its first section is the rule that a real customer file, or
+   anything derived from one, never enters the repository. It defines what may come
+   back out (shapes, counts, patterns, synthetic fixtures modelled on a shape) against
+   what may not (any value, any row, any identifier), and requires the real files to
+   live outside the working tree.
+
+Phase 6 keeps the items its own teams own — TLS, encrypted volumes, retention sign-off,
+the load test at real concurrency — and hands the file-shaped work to Phase 7.
+
+**Consequences:** Phase 6 can be finished by the platform and compliance teams without
+waiting for files. Phase 7 can sit dormant indefinitely without making the plan look
+stalled. The phase doc carries the per-artifact assumption tables — what the parsers
+believe today and what would break each belief — so the analysis starts from what the
+code actually does rather than from a blank page. Those tables are derived from the
+code and **go stale when the parsers change**; whoever changes a parser assumption
+updates the matching row, the same rule as every other doc.
