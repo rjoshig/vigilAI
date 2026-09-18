@@ -1,0 +1,86 @@
+# Phase 2 — Pipeline core (CLI)
+
+**Status:** planned. **Goal:** the whole nine-stage pipeline runnable from the command
+line on synthetic fixtures: files in, findings JSON out. Parsers, the canonical rule
+schema, the LLM adapter with cache, and a golden set that measures extraction accuracy.
+Effort 4–5 weeks. This is the riskiest phase (LLM extraction quality), which is why it
+comes before the web app.
+
+Read `design.md` "Processing pipeline", "Canonical rule schema", "Findings", "LLM
+adapter", "LLM cost controls", and `llm-privacy.md` end to end before starting.
+
+## Milestones (sequential; each ends with tests green and a session-log entry)
+
+### 2a — Fixtures and parsers behind Protocols
+- [ ] `scripts/generate_fixtures.py`: from a small spec, emit a **synthetic** OSL `.docx`
+      (headings + criteria tables), a config `.json` (blocks with filters, attributes,
+      waterfall steps), and report `.xlsx` files (DIRT with a masked-able sample tab,
+      field / state / score distributions, counts, cross tabs). Seeded RNG.
+- [ ] `parsers/base.py`: `OslParser`, `ConfigParser`, `ReportParser` Protocols and the
+      parsed-document dataclasses (`OslSection`, `OslTable`, `ConfigBlock` with JSON path,
+      `ReportSheet` with cell addresses).
+- [ ] `parsers/osl_docx.py` (python-docx by heading and table), `parsers/config_json.py`
+      (split into logical blocks), `parsers/reports/*.py` (one per report type; openpyxl
+      read-only).
+- [ ] Masking of the DIRT sample tab from a masked-column list (default: obvious PII
+      names) at parse time.
+- Tests: one file per parser; round-trip against the generated fixtures.
+
+### 2b — Canonical rule schema and normalizers
+- [ ] `rules/schema.py`: Pydantic models for the rule envelope (`req_type`, conditions,
+      operators, actions, `source_ref`/`source_text`, confidence), findings, traces.
+- [ ] `rules/normalize.py`: state names → codes, ranges → intervals, lists → sets,
+      attribute names → canonical via aliases.
+- [ ] `rules/derive.py`: derived report checks per operator.
+- Tests: every operator; every `req_type` example from the design doc.
+
+### 2c — LLM adapter, cache, prompts
+- [ ] `llm/client.py`: `LLMClient` Protocol, `LLMResult`, `LLMError`.
+- [ ] `llm/openai_compat.py` (`/chat/completions`), `llm/anthropic.py` (`/v1/messages`),
+      `llm/mock.py` (canned JSON by prompt version), `llm/factory.py` from `.env`.
+- [ ] `llm/cache.py`: key = sha256(content) + model + prompt version; **checked before
+      every call**. Phase 2 backend: SQLite file or JSON on disk behind a small interface;
+      Postgres in Phase 3 (same interface).
+- [ ] `llm/calls.py`: one record per call (tokens, latency, retries, ok); per-run token
+      budget with a hard stop.
+- [ ] `llm/prompts/`: stage 2, 3, 4, 8, 9 templates, each with a `VERSION` and 2–3 worked
+      examples; JSON-only output validated by schema; one retry with the error appended.
+- Tests: cache hit/miss, budget stop, provider request shapes via `httpx` mock transport,
+  no network.
+
+### 2d — Stages 1–5
+- [ ] `pipeline/s1_parse.py` … `s5_compare.py`, `pipeline/run.py` orchestrator with
+      per-stage status, resume from the last good stage.
+- [ ] Stage 4 shortlists by `req_type` + alias in code, links exact matches without the
+      LLM, and asks the judge one narrow question per unclear pair.
+- Tests: the worked example from the design doc (IL/AZ vs IL/AZ/TX) end to end with the
+  mock client.
+
+### 2e — Stages 6–9
+- [ ] `pipeline/s6_reverse.py` (scoped categories), `s7_reports.py` (per-`req_type`
+      checks + the expression evaluator in `checks/`), `s8_verify.py`, `s9_summarize.py`.
+- [ ] `checks/expressions.py`: safe evaluator over named values (no `eval`), "could not
+      evaluate" findings.
+- Tests: every finding type in the design doc table is produced by at least one fixture.
+
+### 2f — CLI and golden set
+- [ ] `cli.py`: `vigilai run --osl … --config … --report dirt=… --report counts=… --out
+      findings.json`, `--provider mock|openai|anthropic`, `--log-level`.
+- [ ] `tests/fixtures/golden/`: 10–20 synthetic OSLs with known-correct rules;
+      `scripts/golden_set.py` prints precision/recall per `req_type`.
+- [ ] Run the golden set against a local Gemma via Ollama and record the numbers in
+      `docs/benchmarks/phase-2.md`.
+
+## Acceptance criteria
+
+1. `vigilai run …` on the fixtures produces a findings JSON matching an oracle file.
+2. The golden set runs with `LLM_PROVIDER=mock` in CI; a Gemma run is recorded with
+   accuracy numbers.
+3. No prompt contains a sample row (a test asserts the payload against the masked-column
+   list and a PII regex tripwire).
+4. Cache: a second identical run makes zero network calls (asserted).
+5. `black`, `flake8`, `mypy --strict`, `pytest` clean; coverage reported.
+
+## Out of scope
+
+Postgres, the queue, the API, any UI, PDF.
