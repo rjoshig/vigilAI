@@ -1,7 +1,7 @@
 # Frontend Standards
 
 Applies to the two Next.js apps, **`user-ui/`** (associates) and **`admin-ui/`** (operators,
-its own URL and port), and to the static **`ui-mock/`**. Stack, per ADR-011: the
+its own URL and port), and to the static **`mock/`**. Stack, per ADR-011: the
 `compare-file/ui2` toolchain (npm, Next.js 15 App Router, React 18, TypeScript strict,
 Tailwind CSS 3, ESLint 8 `next/core-web-vitals`, Prettier with the Tailwind plugin) **plus
 Vitest + Testing Library** for unit tests. Adapted from `compare-file/standards/frontend.md`.
@@ -89,9 +89,10 @@ npm run build         # production build
   error handling at minimum.
 - No network in tests: mock `lib/api.ts`.
 
-## ui-mock/
+## mock/
 
-Same approach as `compare-file/ui-mock/`: **static HTML + one `styles.css` + one `app.js`**,
+Same approach as `compare-file/ui-mock/`: **static HTML + one shared `styles.css` + one shared
+`app.js`** under `mock/shared/`, with `mock/user-ui/` and `mock/admin-ui/` as separate apps (ADR-013),
 opens from `file://`, no build, no backend. It mirrors the ui2 tokens so the mock and the
 apps look the same. It is a throwaway artifact for stakeholder review (Phase 1) and is not
 linted by the app toolchains.

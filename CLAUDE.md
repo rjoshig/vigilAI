@@ -33,7 +33,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | Phase | Theme | Doc |
 | --- | --- | --- |
 | 0 | Repo setup: structure, CLAUDE.md, docs, standards, git rules, tooling (no app code) | `docs/phase-0.md` |
-| 1 | Static `ui-mock/` of user-ui, admin-ui, and the final report | `docs/phase-1.md` |
+| 1 | Static `mock/` (user-ui, admin-ui, final report) | `docs/phase-1.md` |
 | 2 | Pipeline core as a CLI: parsers, rule schema, LLM adapter + cache, stages 1–9, golden set | `docs/phase-2.md` |
 | 3 | Web app: docker-compose, Postgres + queue, API, user-ui | `docs/phase-3.md` |
 | 4 | admin-ui and configurable checks | `docs/phase-4.md` |

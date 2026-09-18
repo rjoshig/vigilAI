@@ -56,7 +56,7 @@ vigilAI/
 ├── scripts/               # developer tooling (docs check; fixture generator from Phase 2)
 ├── src/vigilai/           # the Python package: api + worker + pipeline
 ├── tests/                 # pytest suite; synthetic fixtures only
-├── ui-mock/               # static clickable mock (Phase 1)
+├── mock/                  # static clickable mock: shared/, user-ui/, admin-ui/ (Phase 1)
 ├── user-ui/               # associate-facing Next.js app (Phase 3)
 └── admin-ui/              # operator Next.js app, own URL (Phase 4)
 ```
@@ -95,7 +95,7 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/glossary.md`](docs/glossary.md) — OSL, DIRT, waterfall, req_type, named value, trace, finding…
 - [`docs/session-log.md`](docs/session-log.md) — working journal (read first / write last)
 - [`standards/`](standards/README.md) — coding standards and git rules
-- [`ui-mock/README.md`](ui-mock/README.md), [`user-ui/README.md`](user-ui/README.md),
+- [`mock/README.md`](mock/README.md), [`user-ui/README.md`](user-ui/README.md),
   [`admin-ui/README.md`](admin-ui/README.md), [`src/vigilai/README.md`](src/vigilai/README.md),
   [`tests/README.md`](tests/README.md), [`scripts/README.md`](scripts/README.md)
 

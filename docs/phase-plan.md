@@ -10,7 +10,7 @@ risk.
 | Phase | Title | Rough effort | Status | Doc |
 | --- | --- | --- | --- | --- |
 | 0 | Repo setup — structure, CLAUDE.md, docs, phase docs, standards, git rules, tooling | days | **in progress** | [phase-0.md](phase-0.md) |
-| 1 | UI mock — static `ui-mock/` of user-ui, admin-ui, and the final report | 1 week | planned | [phase-1.md](phase-1.md) |
+| 1 | UI mock — static `mock/` (user-ui, admin-ui, final report) | 1 week | built, walkthrough pending | [phase-1.md](phase-1.md) |
 | 2 | Pipeline core — CLI: files in, findings JSON out; parsers, rule schema, LLM adapter, cache, golden set on synthetic fixtures | 4–5 weeks | planned | [phase-2.md](phase-2.md) |
 | 3 | Web app — docker-compose, new run, queue, history, review screen, stats, user-ui | 3 weeks | planned | [phase-3.md](phase-3.md) |
 | 4 | Admin-ui and checks — templates, named values, checks, compliance rules, LLM-assisted authoring | 2–3 weeks | planned | [phase-4.md](phase-4.md) |

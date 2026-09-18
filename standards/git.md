@@ -57,7 +57,7 @@ body explains **why** and what behaviour changed.
 **Types:** `feat` · `fix` · `chore` · `test` · `refactor` · `docs` · `perf`.
 
 **Scopes:** `parsers`, `rules`, `pipeline`, `checks`, `llm`, `db`, `api`, `worker`,
-`report`, `cli`, `user-ui`, `admin-ui`, `ui-mock`, `docs`, `tests`, `tooling`, `docker`,
+`report`, `cli`, `user-ui`, `admin-ui`, `mock`, `docs`, `tests`, `tooling`, `docker`,
 `ci`, `deps`, `repo`.
 
 **Examples:**

@@ -13,7 +13,7 @@ fail=0
 while IFS= read -r file; do
   dir=$(dirname "$file")
   # Match [text](target) but not images with sizes; strip anchors and titles.
-  grep -oE '\]\(([^)#]+)(#[^)]*)?\)' "$file" | sed -E 's/^\]\(//; s/\)$//; s/#.*$//; s/ ".*$//' \
+  { grep -oE '\]\(([^)#]+)(#[^)]*)?\)' "$file" || true; } | sed -E 's/^\]\(//; s/\)$//; s/#.*$//; s/ ".*$//' \
     | while IFS= read -r target; do
         [ -z "$target" ] && continue
         case "$target" in

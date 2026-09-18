@@ -219,3 +219,21 @@ docs) but triggers only on `workflow_dispatch`. The local pre-push checklist in
 
 **Consequences:** Never open a PR just to run CI. Restore `pull_request` / `push` triggers
 only when the user says so.
+
+## ADR-013 — UI mock lives in `mock/` with `user-ui/` and `admin-ui/` as separate directories
+
+**Status:** accepted 2026-09-18 (user decision)
+
+**Context:** Phase 0 planned a single flat `ui-mock/` with admin pages under `admin/`. The
+user wants the two apps reviewable as separate mocks, mirroring the two real apps
+(`user-ui/` on :3000, `admin-ui/` on :3001, each with its own nav), and asked for the
+directory to be renamed to `mock/`.
+
+**Decision:** `mock/index.html` (launcher) · `mock/shared/` (`styles.css` with the ui2
+tokens, `app.js` with sidebar / icons / theme / toast / tabs / modal / drawer) ·
+`mock/user-ui/` and `mock/admin-ui/`, each with its own `nav.js` and one HTML file per
+screen. Still static, still `file://`, still no build. Commit scope `mock` replaces
+`ui-mock`.
+
+**Consequences:** Phase 1 docs, README, standards, and CLAUDE.md reference `mock/`.
+`docs/design.md` keeps the phrase "ui-mock" because it is the design doc verbatim.

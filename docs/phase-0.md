@@ -21,7 +21,7 @@ docs, coding standards, git rules, tooling and Docker/CI stubs. **No application
 - [x] `scripts/check_docs.sh`, `scripts/README.md`.
 - [x] `src/vigilai/` package skeleton (`__init__.py` with version, `py.typed`, subpackage READMEs — no code).
 - [x] `tests/README.md`, `tests/fixtures/README.md`.
-- [x] `ui-mock/`, `user-ui/`, `admin-ui/` READMEs describing what lands there and when.
+- [x] `mock/` (was `ui-mock/`, ADR-013), `user-ui/`, `admin-ui/` READMEs describing what lands there and when.
 
 ## Out of scope
 

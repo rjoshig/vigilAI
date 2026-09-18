@@ -7,7 +7,7 @@ this directory wins. Format and most rules come from `compare-file/standards/`.
 | Doc | Scope |
 | --- | --- |
 | [`python.md`](./python.md) | The pipeline, worker, CLI, and FastAPI backend (`src/vigilai/`) and `tests/` |
-| [`frontend.md`](./frontend.md) | The two Next.js apps (`user-ui/`, `admin-ui/`) and the static `ui-mock/` |
+| [`frontend.md`](./frontend.md) | The two Next.js apps (`user-ui/`, `admin-ui/`) and the static `mock/` |
 | [`git.md`](./git.md) | Branching, commits, PRs, pre-push checklist, and the session workflow |
 
 ## Source of truth
