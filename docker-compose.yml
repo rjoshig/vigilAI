@@ -1,0 +1,89 @@
+# vigilAI — five containers on one host (docs/design.md "Architecture", ADR-007).
+# Postgres is both the data store and the job queue; files live on one shared volume.
+# No Redis, no broker, no object store.
+#
+# Phase 0: this file documents the target and parses (`docker compose config`).
+# The api/worker images are built from `docker/`, the UIs from their own Dockerfiles.
+# Nothing here runs until Phase 3 lands the code (docs/phase-3.md).
+#
+# Usage (from Phase 3):  cp .env.example .env && docker compose up --build
+# Scale workers:         docker compose up --scale worker=4
+
+name: vigilai
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vigilai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vigilai}
+      POSTGRES_DB: ${POSTGRES_DB:-vigilai}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vigilai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432" # dev convenience; drop in production
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-vigilai}:${POSTGRES_PASSWORD:-vigilai}@postgres:5432/${POSTGRES_DB:-vigilai}
+      VIGILAI_DATA_DIR: /data
+    volumes:
+      - files:/data # the shared volume (uploads, reports, PDFs)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-vigilai}:${POSTGRES_PASSWORD:-vigilai}@postgres:5432/${POSTGRES_DB:-vigilai}
+      VIGILAI_DATA_DIR: /data
+    volumes:
+      - files:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      replicas: 2 # start with 2-4; tune to what the in-house LLM can serve
+
+  user-ui:
+    build:
+      context: ./user-ui
+    environment:
+      VIGILAI_API_URL: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "${USER_UI_PORT:-3000}:3000"
+
+  admin-ui:
+    build:
+      context: ./admin-ui
+    environment:
+      VIGILAI_API_URL: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "${ADMIN_UI_PORT:-3001}:3001" # its own URL, separate from user-ui
+
+volumes:
+  pgdata:
+  files:

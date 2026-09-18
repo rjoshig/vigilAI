@@ -1,0 +1,88 @@
+# CI for vigilAI. Manual-only (workflow_dispatch) by owner decision (ADR-012): GitHub
+# Actions credit is limited, so the gates run locally per standards/git.md §3 and this
+# workflow is dispatched by hand before a merge to main. Restore
+# `pull_request` + `push: branches: [main]` when the owner says so.
+#
+# Actions are pinned by commit SHA where a verified SHA was available (setup-python still uses a tag; see the TODO). No secrets are used here; tests run with
+# LLM_PROVIDER=mock (docs/design.md "LLM adapter") and never reach a real model.
+name: ci
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.10"
+  NODE_VERSION: "20"
+
+jobs:
+  python:
+    name: python (black, flake8, mypy, pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vigilai
+          POSTGRES_PASSWORD: vigilai
+          POSTGRES_DB: vigilai_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vigilai" --health-interval 5s --health-timeout 5s
+          --health-retries 10
+    env:
+      LLM_PROVIDER: mock
+      DATABASE_URL: postgresql+psycopg://vigilai:vigilai@127.0.0.1:5432/vigilai_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@v5 # TODO(human): pin by commit SHA (the other actions are pinned)
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: black --check .
+      - run: flake8
+      - run: mypy src/
+      - run: pytest
+
+  ui:
+    name: ${{ matrix.app }} (lint, typecheck, format, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [user-ui, admin-ui]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # The apps are scaffolded in Phases 3 and 4. Until package.json exists the job
+      # reports "not scaffolded yet" and passes, so the workflow stays dispatchable.
+      - name: gates
+        working-directory: ${{ matrix.app }}
+        run: |
+          if [ ! -f package.json ]; then
+            echo "${{ matrix.app }} not scaffolded yet (see docs/phase-plan.md)"; exit 0
+          fi
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm run format:check
+          npm test
+          npm run build
+
+  docs:
+    name: docs integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash scripts/check_docs.sh
