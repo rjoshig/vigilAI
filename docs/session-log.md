@@ -12,23 +12,23 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Current phase | **2 — Pipeline core (CLI)** |
-| Current milestone | 2a + 2b done (fixtures, parsers, rule schema); **2c next** (LLM adapter) |
+| Current milestone | 2a–2c done (fixtures, parsers, rules, LLM adapter); **2d next** (stages 1–5) |
 | Branch | `claude/funny-cerf-jsyvpe` (Phase 0 PR still open against `main`) |
 | Last updated | 2026-09-18 |
 
-**Next action:** milestone 2c — `llm/client.py` (Protocol, `LLMResult`, `LLMError`),
-`llm/openai_compat.py`, `llm/anthropic.py`, `llm/mock.py`, `llm/factory.py`,
-`llm/cache.py` (sha256(content) + model + prompt version, checked before every call),
-`llm/calls.py`, and `llm/prompts/` for stages 2, 3, 4, 8, 9. Read `docs/design.md`
-"LLM adapter" and "LLM cost controls" plus `docs/llm-privacy.md` first. Tests use
-`httpx` mock transport; no network.
+**Next action:** milestone 2d — `pipeline/s1_parse.py` … `s5_compare.py` and
+`pipeline/run.py` (orchestrator with per-stage status and resume from the last good
+stage). Stage 4 shortlists by `req_type` + alias in code, links exact matches without a
+call, and asks the judge only about unclear pairs. The acceptance test is the design
+doc's worked example (IL/AZ vs IL/AZ/TX) end to end on the mock client; the
+`geography_extra_state` fixture case already encodes it.
 
 **Environment:** `.venv` on Python 3.10.14; `source .venv/bin/activate` then
 `black . --target-version py310 && flake8 && mypy src/ && pytest`. Fixtures regenerate
 with `python scripts/generate_fixtures.py --out tests/fixtures` (the suite generates its
 own into a temp directory, so committed fixtures are not required).
 
-**Blocked on the user (does not block 2c–2f):** a sanitized shape reference for the real
+**Blocked on the user (does not block 2d–2f):** a sanitized shape reference for the real
 OSL / config / report layouts, and a local model for the 2f benchmark (deferred by
 ADR-014). Remaining open questions are in `docs/phase-plan.md`.
 
@@ -182,6 +182,51 @@ Milestone 2b: `rules/schema.py`, `rules/normalize.py`, `rules/derive.py` with te
 ### Pending
 
 2c (LLM adapter, cache, prompts), then 2d–2f.
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (Phase 2 — milestone 2c)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 2 · **Status:** 2c complete.
+
+### What was completed
+
+- `llm/settings.py`: every knob from `.env`, validated at load time, failing with the
+  offending key named.
+- `llm/client.py`: the `LLMClient` Protocol, `LLMResult`, the typed error hierarchy, and
+  `CallRecord` / `CallLog` (ids and counts only, no prompt text).
+- `llm/cache.py`: key = sha256(content) + model + prompt version, with in-memory and
+  SQLite backends behind one Protocol so Phase 3 can swap in Postgres.
+- `llm/base.py`: the shared path every provider inherits — check the cache, enforce the
+  run budget, send, recover JSON from fenced or prose-wrapped answers, validate against
+  the schema, retry exactly once with the validation error appended, record the call.
+- `llm/openai_compat.py`, `llm/anthropic.py`, `llm/mock.py`, `llm/factory.py`.
+- `llm/prompts/`: registry plus five versioned templates (stages 2, 3, 4, 8, 9), each
+  with two or three worked examples and a Pydantic output schema.
+- 282 tests, 97% branch coverage. All four gates clean.
+
+### Notable decisions
+
+- Prompt templates use `$name` placeholders rather than `{}`: every prompt embeds worked
+  examples of JSON output, and brace formatting treated those braces as placeholders.
+- The cache key includes the output schema name. The same prompt asked for a different
+  shape is a different call, and serving the old answer would return the wrong shape.
+- Error messages never echo a response body. A provider's 4xx body can quote the prompt.
+- The mock returns empty-but-valid payloads rather than invented requirements: a mock
+  that fabricates findings would make a passing pipeline test meaningless.
+- An autouse fixture blocks the socket layer for the whole suite. The injected transports
+  prove the happy path; blocking sockets proves there is no other path.
+- Prompt versions are provisional until the first real-model run (ADR-014); expect a bump.
+
+### Pending
+
+2d (stages 1–5), 2e (stages 6–9), 2f (CLI and golden set).
 
 ### Blockers
 

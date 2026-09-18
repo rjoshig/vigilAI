@@ -1,6 +1,6 @@
 # Phase 2 — Pipeline core (CLI)
 
-**Status:** in progress (2a, 2b done; 2c next). **Goal:** the whole nine-stage pipeline runnable from the command
+**Status:** in progress (2a–2c done; 2d next). **Goal:** the whole nine-stage pipeline runnable from the command
 line on synthetic fixtures: files in, findings JSON out. Parsers, the canonical rule
 schema, the LLM adapter with cache, and a golden set that measures extraction accuracy.
 Effort 4–5 weeks. This is the riskiest phase (LLM extraction quality), which is why it
@@ -38,18 +38,21 @@ adapter", "LLM cost controls", and `llm-privacy.md` end to end before starting.
       total, 98% branch coverage.
 
 ### 2c — LLM adapter, cache, prompts
-- [ ] `llm/client.py`: `LLMClient` Protocol, `LLMResult`, `LLMError`.
-- [ ] `llm/openai_compat.py` (`/chat/completions`), `llm/anthropic.py` (`/v1/messages`),
+- [x] `llm/client.py`: `LLMClient` Protocol, `LLMResult`, `LLMError`.
+- [x] `llm/openai_compat.py` (`/chat/completions`), `llm/anthropic.py` (`/v1/messages`),
       `llm/mock.py` (canned JSON by prompt version), `llm/factory.py` from `.env`.
-- [ ] `llm/cache.py`: key = sha256(content) + model + prompt version; **checked before
+- [x] `llm/cache.py`: key = sha256(content) + model + prompt version; **checked before
       every call**. Phase 2 backend: SQLite file or JSON on disk behind a small interface;
       Postgres in Phase 3 (same interface).
-- [ ] `llm/calls.py`: one record per call (tokens, latency, retries, ok); per-run token
-      budget with a hard stop.
-- [ ] `llm/prompts/`: stage 2, 3, 4, 8, 9 templates, each with a `VERSION` and 2–3 worked
+- [x] `llm/calls.py`: one record per call (tokens, latency, retries, ok); per-run token
+      budget with a hard stop. Landed as `CallRecord` / `CallLog` in `llm/client.py` and
+      the budget check in `llm/base.py`, so every provider inherits both.
+- [x] `llm/prompts/`: stage 2, 3, 4, 8, 9 templates, each with a `VERSION` and 2–3 worked
       examples; JSON-only output validated by schema; one retry with the error appended.
-- Tests: cache hit/miss, budget stop, provider request shapes via `httpx` mock transport,
-  no network.
+- [x] Tests: cache hit/miss, budget stop, provider request shapes via `httpx` mock
+      transport, no network. 282 tests total, 97% branch coverage. An autouse fixture
+      blocks the socket layer for the whole suite, so no path to the network can be
+      added by mistake in a later phase.
 
 ### 2d — Stages 1–5
 - [ ] `pipeline/s1_parse.py` … `s5_compare.py`, `pipeline/run.py` orchestrator with
