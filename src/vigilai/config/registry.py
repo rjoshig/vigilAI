@@ -185,6 +185,41 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         help="Writes full prompts to the log. For debugging on synthetic data only; "
         "logs hold ids and counts otherwise.",
     ),
+    # --- training -------------------------------------------------------------------
+    SettingSpec(
+        key="training.enabled",
+        env="VIGILAI_TRAIN_AI_MODE",
+        label="Train AI mode",
+        group="Training",
+        kind="bool",
+        default=False,
+        help="Lets reviewers record what they know, anchored to the cell or clause "
+        "they mean. Observations never run; an administrator synthesizes and approves "
+        "them first.",
+    ),
+    SettingSpec(
+        key="training.shadow_default",
+        env="VIGILAI_TRAINING_SHADOW_DEFAULT",
+        label="Approve into shadow",
+        group="Training",
+        kind="bool",
+        default=True,
+        help="An approved rule runs silently until an administrator activates it. "
+        "Switching this off sends approvals straight to active, which spends reviewer "
+        "trust on a rule whose precision nobody has seen yet.",
+    ),
+    SettingSpec(
+        key="training.replay_runs",
+        env="VIGILAI_TRAINING_REPLAY_RUNS",
+        label="Recent runs used in a replay",
+        group="Training",
+        kind="int",
+        default=25,
+        minimum=0,
+        maximum=500,
+        help="How many finalized runs a candidate rule is tested against before "
+        "approval. Zero replays the golden set alone and never reads a real run.",
+    ),
     # --- login ----------------------------------------------------------------------
     SettingSpec(
         key="auth.admin",

@@ -23,6 +23,7 @@ from vigilai.llm.prompts.s3_describe import DESCRIBE_PROMPT
 from vigilai.llm.prompts.s4_trace import TRACE_PROMPT
 from vigilai.llm.prompts.s8_verify import VERIFY_PROMPT
 from vigilai.llm.prompts.s9_summarize import SUMMARIZE_PROMPT
+from vigilai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
 
 __all__ = [
     "DESCRIBE_PROMPT",
@@ -32,6 +33,7 @@ __all__ = [
     "PROMPTS",
     "Prompt",
     "SUMMARIZE_PROMPT",
+    "SYNTHESIZE_PROMPT",
     "TRACE_PROMPT",
     "VERIFY_PROMPT",
     "get_prompt",

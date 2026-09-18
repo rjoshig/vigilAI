@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from vigilai.rules.schema import Confidence, Mode, Operator, ReqType, TraceVerdict
+from vigilai.rules.schema import Confidence, Mode, Operator, ReqType, Severity, TraceVerdict
 
 __all__ = [
     "DraftedNamedValue",
@@ -153,3 +153,46 @@ class JudgmentResponse(BaseModel):
     verdict: Literal["pass", "fail", "review"]
     reason: str = ""
     confidence: Confidence = 0.5
+
+
+class SynthesizedRule(BaseModel):
+    """One rule the model proposes from what people wrote (ADR-021).
+
+    The model fills this and nothing else. A schema-constrained object rather than
+    prose is the point: loose parsing of free-form model output is where downstream
+    code starts trusting something nobody checked, and that is the actual injection
+    exposure, not the text the person typed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = ""
+    #: Which rule surface this becomes on approval. ``unsupported`` is a real answer:
+    #: a statement that cannot be expressed as a rule comes back saying so, and an
+    #: administrator reads why rather than receiving something invented.
+    target_kind: Literal["check", "compliance_rule", "field_constraint", "unsupported"] = (
+        "unsupported"
+    )
+    #: For a field constraint: the attribute, the constraint, and its parameter.
+    field: str = ""
+    constraint: str = ""
+    values: list[str] = Field(default_factory=list)
+    minimum: float | None = None
+    maximum: float | None = None
+    pattern: str = ""
+    report_kinds: list[str] = Field(default_factory=list)
+    #: For a check: an expression over named values, evaluated by code.
+    expression: str = ""
+    reasoning: str = ""
+    severity: Severity = "medium"
+    #: Why it cannot be expressed, when ``target_kind`` is ``unsupported``.
+    cannot_express: str = ""
+
+
+class SynthesisResponse(BaseModel):
+    """What one synthesis call returns."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rules: list[SynthesizedRule] = Field(default_factory=list)
+    notes: str = ""

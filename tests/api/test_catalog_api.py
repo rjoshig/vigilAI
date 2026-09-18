@@ -405,3 +405,97 @@ def test_a_sample_of_another_type_is_not_reachable_through_this_one(
         client.get(f"{api}/admin/artifact-types/counts/samples/{sample_id}/preview").status_code
         == 404
     )
+
+
+# --- working out what a workbook is (phase 6.1d) -------------------------------------
+
+
+def _upload_sample(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any], key: str
+) -> None:
+    """Store a fixture workbook as a sample of one artifact type."""
+    response = client.post(
+        f"{api}/admin/artifact-types/{key}/samples",
+        files={"file": _sample(fixtures_root, cases, key)},
+    )
+    assert response.status_code == 201, response.text
+
+
+def _detect(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any], kind: str
+) -> Any:
+    """Post a fixture workbook to the detector."""
+    return client.post(
+        f"{api}/runs/detect-type", files={"file": _sample(fixtures_root, cases, kind)}
+    )
+
+
+def test_detection_recognises_a_workbook_of_a_stored_layout(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """A user should not have to know that their file is a "field distribution"."""
+    _upload_sample(client, api, fixtures_root, cases, "counts")
+    _upload_sample(client, api, fixtures_root, cases, "dirt")
+
+    response = _detect(client, api, fixtures_root, cases, "counts")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["verdict"] == "confident"
+    assert body["key"] == "counts"
+    assert body["reason"]
+    assert [c["key"] for c in body["candidates"]][0] == "counts"
+    assert [s["key"] for s in body["sheets"]] == ["counts"]
+
+
+def test_detection_says_it_does_not_know(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """An uncertain guess has to be representable, not rounded up to a best guess."""
+    _upload_sample(client, api, fixtures_root, cases, "dirt")
+
+    body = _detect(client, api, fixtures_root, cases, "state_distribution").json()
+    assert body["verdict"] == "unknown"
+    assert body["key"] is None
+    assert body["candidates"] == []
+
+
+def test_detection_of_a_multi_tab_workbook_maps_each_sheet(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """A field distribution can have multiple tabs, so detection runs per sheet."""
+    _upload_sample(client, api, fixtures_root, cases, "dirt")
+    _upload_sample(client, api, fixtures_root, cases, "counts")
+
+    body = _detect(client, api, fixtures_root, cases, "dirt").json()
+    sheets = body["sheets"]
+    assert len(sheets) > 1
+    assert {s["sheet"] for s in sheets} == {"Summary", "Attributes", "Sample"}
+    assert all(s["key"] == "dirt" for s in sheets)
+
+
+def test_detection_rejects_something_that_is_not_a_workbook(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """The file is read and thrown away; a bad one is a 400, not a stored artefact."""
+    _upload_sample(client, api, fixtures_root, cases, "dirt")
+    response = client.post(
+        f"{api}/runs/detect-type",
+        files={"file": ("notes.xlsx", b"this is not a workbook", "application/octet-stream")},
+    )
+    assert response.status_code == 400
+    assert "workbook" in response.json()["detail"]
+
+
+def test_detection_does_not_store_the_uploaded_file(
+    client: TestClient,
+    api: str,
+    db_settings: Any,
+    fixtures_root: Any,
+    cases: dict[str, Any],
+) -> None:
+    """An unassigned upload belongs to no run, so no retention rule would remove it."""
+    _upload_sample(client, api, fixtures_root, cases, "counts")
+    before = {p.name for p in db_settings.data_dir.rglob("*") if p.is_file()}
+    assert _detect(client, api, fixtures_root, cases, "counts").status_code == 200
+    after = {p.name for p in db_settings.data_dir.rglob("*") if p.is_file()}
+    assert after == before

@@ -23,6 +23,7 @@ from vigilai.api.routers import (
     reports,
     runs,
     settings as settings_router,
+    training,
     users,
 )
 from vigilai.auth.accounts import (
@@ -155,6 +156,7 @@ def create_app(
         admin.router,
         users.router,
         settings_router.router,
+        training.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

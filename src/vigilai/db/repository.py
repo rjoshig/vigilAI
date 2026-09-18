@@ -16,6 +16,8 @@ from typing import Any, Final, Iterable, Mapping, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from vigilai.checks.field_constraints import FieldConstraintSpec
+from vigilai.training.lifecycle import RUNNING_STATES
 from vigilai.checks.definitions import (
     DEFAULT_CATEGORIES,
     AdminConfig,
@@ -115,7 +117,17 @@ def load_admin_config(session: Session, customer: str = "") -> AdminConfig:
             is_active=row.is_active,
         )
         for row in session.execute(
-            sa.select(models.CheckDefinitionRow).where(models.CheckDefinitionRow.is_active)
+            # A rule runs when it is switched on, or when it is shadowed: shadow
+            # findings are recorded and counted and shown to nobody (ADR-021). Both
+            # columns are consulted because a row can be written directly, and
+            # ``is_active`` is the one every older query already reads.
+            sa.select(models.CheckDefinitionRow).where(
+                models.CheckDefinitionRow.state != "deleted",
+                sa.or_(
+                    models.CheckDefinitionRow.is_active,
+                    models.CheckDefinitionRow.state == "shadow",
+                ),
+            )
         ).scalars()
     )
 
@@ -129,7 +141,13 @@ def load_admin_config(session: Session, customer: str = "") -> AdminConfig:
             is_active=row.is_active,
         )
         for row in session.execute(
-            sa.select(models.ComplianceRuleRow).where(models.ComplianceRuleRow.is_active)
+            sa.select(models.ComplianceRuleRow).where(
+                models.ComplianceRuleRow.state != "deleted",
+                sa.or_(
+                    models.ComplianceRuleRow.is_active,
+                    models.ComplianceRuleRow.state == "shadow",
+                ),
+            )
         ).scalars()
     )
 
@@ -158,11 +176,47 @@ def load_admin_config(session: Session, customer: str = "") -> AdminConfig:
         for row in session.execute(sa.select(models.NamedValueRow)).scalars()
     )
 
+    # A rule in scope for this customer, whatever its origin. Scope is "all", the
+    # customer's name, or "programme:CODE"; the narrowest that fits is what a learned
+    # rule gets by default (ADR-021).
+    constraint_rows = list(
+        session.execute(
+            sa.select(models.FieldConstraint).where(
+                models.FieldConstraint.state.in_(RUNNING_STATES)
+            )
+        ).scalars()
+    )
+    field_constraints = tuple(
+        FieldConstraintSpec(
+            id=row.id,
+            field=row.field,
+            constraint=row.constraint,
+            value=row.value,
+            report_kinds=tuple(row.report_kinds or ()),
+            severity=row.severity,
+            reasoning=row.reasoning,
+        )
+        for row in constraint_rows
+        if row.scope in ("all", customer)
+    )
+
+    # Shadow rules run and are counted; their findings are shown to nobody, so the
+    # pipeline has to know which they are (ADR-021).
+    shadow_refs = {f"field_constraint:{row.id}" for row in constraint_rows if row.state == "shadow"}
+    shadow_refs |= {
+        f"check:{row.id}"
+        for row in session.execute(
+            sa.select(models.CheckDefinitionRow).where(models.CheckDefinitionRow.state == "shadow")
+        ).scalars()
+    }
+
     return AdminConfig(
         checks=checks,
         compliance_rules=compliance,
         categories=categories,
         named_values=named_values,
+        field_constraints=field_constraints,
+        shadow_rule_refs=frozenset(shadow_refs),
     )
 
 
@@ -349,13 +403,17 @@ def _replace_findings(session: Session, run: models.Run, findings: Sequence[Find
                 title=finding.title,
                 detail=finding.detail,
                 leg=finding.leg,
-                rule_ref=finding.rule_id or "",
+                # A learned rule sets ``rule_ref`` directly so its findings can be
+                # counted against it; everything else refers to the OSL rule it came
+                # from, which is what the review screen has always shown.
+                rule_ref=finding.rule_ref or finding.rule_id or "",
                 element_ref=finding.element_id or "",
                 evidence=finding.evidence.model_dump(mode="json"),
                 rules_version=finding.rules_version,
                 review_status=status,
                 review_note=note,
                 reviewed_at=reviewed_at,
+                shadow=finding.shadow,
                 verified=finding.verified,
                 verify_agreed=finding.verify_agreed,
             )

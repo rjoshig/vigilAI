@@ -285,3 +285,41 @@ class NewRunOptions(BaseModel):
 
     artifacts: list[ArtifactSlot] = Field(default_factory=list)
     scopes: list[ScopeOption] = Field(default_factory=list)
+
+
+class DetectedCandidate(BaseModel):
+    """One artifact type an uploaded workbook might be."""
+
+    key: str
+    label: str
+    score: float
+
+
+class DetectedSheet(BaseModel):
+    """What one tab of the workbook looks like, scored on its own.
+
+    A multi-tab file can hold several report types, so each sheet gets its own verdict.
+    """
+
+    sheet: str
+    verdict: str
+    reason: str = ""
+    key: Optional[str] = None
+    label: Optional[str] = None
+    score: float = 0.0
+
+
+class TypeDetection(BaseModel):
+    """What `POST /runs/detect-type` returns.
+
+    ``verdict`` is part of the answer rather than a detail: a wrong silent assignment
+    is worse than a question, so "I am not sure" has to be representable.
+    """
+
+    verdict: str
+    reason: str = ""
+    key: Optional[str] = None
+    label: Optional[str] = None
+    score: float = 0.0
+    candidates: list[DetectedCandidate] = Field(default_factory=list)
+    sheets: list[DetectedSheet] = Field(default_factory=list)

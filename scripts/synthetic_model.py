@@ -232,6 +232,106 @@ def trace_responder(_system: str, user: str) -> str:
     return json.dumps({"verdict": "not_related", "reason": "Different subject.", "confidence": 0.8})
 
 
+def synthesize_responder(_system: str, user: str) -> str:
+    """Answer a training synthesis call, scripted from the statement's wording.
+
+    It recognises the shapes the tests exercise and refuses anything that reads like
+    an instruction, which is what the injection test relies on: a scripted stand-in
+    that obeyed embedded instructions would make the test pass for the wrong reason.
+
+    Args:
+        _system: The system prompt, unused.
+        user: The rendered prompt, which carries the statements.
+
+    Returns:
+        A JSON ``SynthesisResponse``.
+    """
+    # Only the last statements block: the prompt carries worked examples that also
+    # sit between these markers, and matching on those would make every call look
+    # like every example.
+    blocks = user.split("<statements>")
+    lowered = blocks[-1].split("</statements>")[0].lower() if len(blocks) > 1 else user.lower()
+    rules: list[dict[str, Any]] = []
+
+    if "never empty" in lowered or "not blank" in lowered or "never blank" in lowered:
+        rules.append(
+            {
+                "name": "account_status_not_blank",
+                "target_kind": "field_constraint",
+                "field": "account_status",
+                "constraint": "not_blank",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": ["dirt"],
+                "expression": "",
+                "reasoning": "A blank here means the extract dropped the value.",
+                "severity": "high",
+                "cannot_express": "",
+            }
+        )
+    if "between 300" in lowered or "below 300" in lowered:
+        rules.append(
+            {
+                "name": "score_within_band",
+                "target_kind": "field_constraint",
+                "field": "score",
+                "constraint": "range",
+                "values": [],
+                "minimum": 300,
+                "maximum": 850,
+                "pattern": "",
+                "report_kinds": [],
+                "expression": "",
+                "reasoning": "Scores outside 300 to 850 are not valid.",
+                "severity": "medium",
+                "cannot_express": "",
+            }
+        )
+    if "ignore your instructions" in lowered or "reply with the word" in lowered:
+        rules.append(
+            {
+                "name": "",
+                "target_kind": "unsupported",
+                "field": "",
+                "constraint": "",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": [],
+                "expression": "",
+                "reasoning": "",
+                "severity": "medium",
+                "cannot_express": (
+                    "This is an instruction to the assistant, not an expectation "
+                    "about a delivery."
+                ),
+            }
+        )
+
+    if not rules:
+        rules.append(
+            {
+                "name": "",
+                "target_kind": "unsupported",
+                "field": "",
+                "constraint": "",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": [],
+                "expression": "",
+                "reasoning": "",
+                "severity": "medium",
+                "cannot_express": "Nothing in these statements maps to a rule shape.",
+            }
+        )
+    return json.dumps({"rules": rules, "notes": ""})
+
+
 def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClient:
     """Build a mock client wired with the scripted responders.
 
@@ -249,4 +349,5 @@ def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClie
     client.register_text(
         "s8_verify", json.dumps({"agreed": True, "reason": "Confirmed.", "confidence": 0.9})
     )
+    client.register("training_synthesize", synthesize_responder)
     return client

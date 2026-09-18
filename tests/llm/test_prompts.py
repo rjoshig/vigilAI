@@ -23,8 +23,12 @@ PIPELINE_STAGES = {"s2_extract", "s3_describe", "s4_trace", "s8_verify", "s9_sum
 #: judgment check (``docs/design.md`` "Configurable checks").
 ADMIN_STAGES = {"admin_draft_check", "admin_judgment"}
 
+#: Turning what reviewers wrote into a candidate rule, once, when an administrator
+#: asks for it (ADR-021). Like drafting, it is authoring-time rather than per-run.
+TRAINING_STAGES = {"training_synthesize"}
+
 #: Every registered prompt. The rules below apply to all of them equally.
-LLM_STAGES = PIPELINE_STAGES | ADMIN_STAGES
+LLM_STAGES = PIPELINE_STAGES | ADMIN_STAGES | TRAINING_STAGES
 
 #: Anything shaped like a real identifier must never appear in a prompt (ADR-003).
 _PII_TRIPWIRE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -142,6 +146,7 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("s9_summarize", {"findings"}),
         ("admin_draft_check", {"description", "report_types"}),
         ("admin_judgment", {"instruction", "values"}),
+        ("training_synthesize", {"attributes", "report_types", "statements"}),
     ],
 )
 def test_each_prompt_takes_exactly_the_inputs_its_stage_supplies(

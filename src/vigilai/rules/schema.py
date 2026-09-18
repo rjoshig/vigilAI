@@ -367,6 +367,12 @@ class Finding(BaseModel):
         element_id: The config element involved, when there is one.
         evidence: Where to see it.
         rules_version: Which rules version produced this, so old reports stay reproducible.
+        shadow: Whether the rule behind it is still in shadow. A shadow finding is
+            stored and counted and shown to nobody, which is where a new rule's
+            precision becomes knowable before it starts interrupting a reviewer
+            (ADR-021).
+        rule_ref: Which stored rule produced it, as ``kind:id``, so a finding can
+            explain itself and a rule's precision can be measured from its findings.
         review_status: The reviewer's decision.
         review_note: The reviewer's comment, shown in the final report for Not OK items.
         verified: Whether stage 8 re-checked this finding.
@@ -386,6 +392,8 @@ class Finding(BaseModel):
     element_id: str | None = None
     evidence: Evidence = Evidence()
     rules_version: int = 1
+    shadow: bool = False
+    rule_ref: str = ""
     review_status: ReviewStatus = "undecided"
     review_note: str = ""
     verified: bool = False

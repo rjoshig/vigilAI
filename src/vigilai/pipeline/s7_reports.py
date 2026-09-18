@@ -9,11 +9,13 @@ resolved produces a "could not evaluate" finding; the run never skips a check si
 from __future__ import annotations
 
 import logging
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from vigilai.checks.definitions import AdminConfig
 from vigilai.checks.expressions import ExpressionError, UnresolvedValue, evaluate
 from vigilai.checks.named_values import NamedValue, resolve_all
+from vigilai.checks.field_constraints import FieldConstraintSpec
+from vigilai.checks.field_constraints import evaluate as evaluate_constraints
 from vigilai.checks.reports import REPORT_CHECKED_KINDS, CheckOutcome, run_derived_check
 from vigilai.pipeline.context import RunContext
 from vigilai.rules.derive import derive_checks
@@ -86,6 +88,7 @@ def run(context: RunContext) -> None:
                 )
 
     _check_deliverable_count(context)
+    _run_field_constraints(context)
     _run_admin_checks(context, settings, customer)
 
     _LOG.info(
@@ -93,6 +96,65 @@ def run(context: RunContext) -> None:
         context.run_id,
         len(context.findings) - before,
     )
+
+
+def _run_field_constraints(context: RunContext) -> None:
+    """Check the per-attribute rules a reviewer wrote in plain words (ADR-021).
+
+    The sentence was the input to synthesis; what runs here is structured data
+    compared by code, which is ADR-001 applied to a rule that came from a person.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to.
+    """
+    specs = [
+        spec for spec in context.admin.field_constraints if isinstance(spec, FieldConstraintSpec)
+    ]
+    if not specs:
+        return
+
+    for outcome in evaluate_constraints(specs, context.reports, context.aliases):
+        if outcome.passed is True:
+            continue
+        ref = f"field_constraint:{outcome.spec.id}"
+        shadow = ref in context.admin.shadow_rule_refs
+        where = f" in {outcome.report_kind}" if outcome.report_kind else ""
+        if outcome.passed is None:
+            context.add_finding(
+                Finding(
+                    finding_id=context.next_finding_id(),
+                    type="could_not_evaluate",
+                    severity="review",
+                    title=f"Could not check the rule for {outcome.spec.field}",
+                    detail=outcome.detail,
+                    leg="osl_reports",
+                    rule_ref=ref,
+                    shadow=shadow,
+                    evidence=Evidence(report_name=outcome.report_kind, report_sheet=outcome.sheet),
+                )
+            )
+            continue
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="report_violates_rule",
+                # Narrowed here rather than in the store: the column is a plain
+                # string so a new severity needs no migration, and an unrecognised
+                # one is a bug in whatever wrote the row.
+                severity=cast(Severity, outcome.spec.severity),
+                title=f"{outcome.spec.field}{where}: {outcome.detail}",
+                detail=outcome.spec.reasoning or outcome.detail,
+                leg="osl_reports",
+                rule_ref=ref,
+                shadow=shadow,
+                evidence=Evidence(
+                    report_name=outcome.report_kind,
+                    report_sheet=outcome.sheet,
+                    # Offending values only, capped, never a row (ADR-003).
+                    report_value=", ".join(outcome.offending),
+                ),
+            )
+        )
 
 
 def _check_deliverable_count(context: RunContext) -> None:

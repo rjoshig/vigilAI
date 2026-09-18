@@ -1,0 +1,887 @@
+"""Train AI mode: observations, candidates, and the rules screen (ADR-021).
+
+Three audiences, one loop. A reviewer records what they know. An administrator reads
+the queue, has the model draft a rule, and approves it. The rules screen is where
+anyone answers "what made this finding appear".
+
+Nothing here evaluates a rule. Approval writes into the tables the pipeline already
+reads, so there is one rule surface and one place to look when a finding is wrong.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import logging
+from typing import Any, Final
+
+import sqlalchemy as sa
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from vigilai.api.deps import CurrentUser, current_user, get_session, require_admin
+from vigilai.api.schemas_training import (
+    CandidateDecision,
+    CandidateOut,
+    ObservationDecision,
+    ObservationIn,
+    ObservationOut,
+    RuleAction,
+    RuleOut,
+    RuleStateChangeOut,
+    SynthesizeIn,
+    TrainingConfigOut,
+)
+from vigilai.config.store import resolve
+from vigilai.db import models, repository
+from vigilai.llm.factory import build_client
+from vigilai.llm.settings import resolved_llm_settings
+from vigilai.llm.tripwire import PiiDetected, assert_clean
+from vigilai.training import lifecycle, synthesis
+
+__all__ = ["router"]
+
+_LOG: Final = logging.getLogger(__name__)
+
+#: Starlette deprecated its 422 constant; the number is stable and the import is not.
+HTTP_422: Final[int] = 422
+
+router = APIRouter(tags=["training"])
+
+
+def _enabled(session: Session) -> bool:
+    """Whether Train AI mode is on.
+
+    Args:
+        session: The request's session.
+
+    Returns:
+        Whether reviewers may record observations. Off by default, so the user app is
+        exactly what it is today until an administrator turns it on.
+    """
+    return bool(resolve(session, "training.enabled").value)
+
+
+def _require_enabled(session: Session) -> None:
+    """Refuse when the mode is off.
+
+    Args:
+        session: The request's session.
+
+    Raises:
+        HTTPException: 404 when the mode is off. Not 403: with the mode off these
+            endpoints are not part of the product, and saying so is more honest than
+            implying the caller lacks a permission.
+    """
+    if not _enabled(session):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Train AI mode is not enabled")
+
+
+def _observation_out(row: models.TrainingObservation) -> ObservationOut:
+    """Render a stored observation.
+
+    Args:
+        row: The observation.
+
+    Returns:
+        The wire model. ``editable`` is what the form uses to decide whether the
+        author may still change it; once an administrator queues it, it freezes.
+    """
+    return ObservationOut(
+        id=row.id,
+        kind=row.kind,  # type: ignore[arg-type]
+        anchors=list(row.anchors or []),
+        statement=row.statement,
+        expectation=row.expectation,
+        severity_hint=row.severity_hint,  # type: ignore[arg-type]
+        scope_hint=row.scope_hint,  # type: ignore[arg-type]
+        run_id=row.run_id,
+        finding_id=row.finding_id,
+        author=row.author,
+        status=row.status,
+        status_note=row.status_note,
+        candidate_id=row.candidate_id,
+        customer_name=row.customer_name,
+        scope_code=row.scope_code,
+        version=row.version,
+        editable=row.status == "new",
+        created_at=row.created_at,
+        synthesized_at=row.synthesized_at,
+    )
+
+
+def _candidate_out(row: models.RuleCandidate) -> CandidateOut:
+    """Render a candidate rule.
+
+    Args:
+        row: The candidate.
+
+    Returns:
+        The wire model, including its conflicts and what a replay found.
+    """
+    return CandidateOut(
+        id=row.id,
+        name=row.name,
+        target_kind=row.target_kind,
+        body=dict(row.body or {}),
+        reasoning=row.reasoning,
+        severity=row.severity,
+        scope=row.scope,
+        status=row.status,
+        admin_note=row.admin_note,
+        source_observation_ids=list(row.source_observation_ids or []),
+        model_used=row.model_used,
+        prompt_version=row.prompt_version,
+        conflicts=list(row.conflicts or []),
+        replay=dict(row.replay or {}),
+        created_by=row.created_by,
+        decided_by=row.decided_by,
+        created_at=row.created_at,
+    )
+
+
+# ------------------------------------------------------------------ observations
+
+
+@router.get("/training/config", response_model=TrainingConfigOut)
+def training_config(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> TrainingConfigOut:
+    """Whether the user app should offer to record observations.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The switch.
+    """
+    return TrainingConfigOut(enabled=_enabled(session))
+
+
+@router.post("/observations", response_model=ObservationOut, status_code=201)
+def create_observation(
+    payload: ObservationIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> ObservationOut:
+    """Record something a reviewer knows.
+
+    Args:
+        payload: What they wrote and what they pointed at.
+        session: The request's session.
+        user: The author.
+
+    Returns:
+        The stored observation. It never runs.
+
+    Raises:
+        HTTPException: 404 when Train AI mode is off, 422 when the text contains
+            something that looks like personal data. The tripwire runs **here**, not
+            only when a prompt is assembled: a reviewer typing while looking at real
+            data is exactly where an account number gets pasted, and the only place
+            the person can still fix it is the moment they press save (ADR-018).
+    """
+    _require_enabled(session)
+    try:
+        assert_clean(f"{payload.statement}\n{payload.expectation}")
+    except PiiDetected as exc:
+        raise HTTPException(
+            HTTP_422,
+            f"this looks like it contains personal data, so it was not saved: {exc}",
+        ) from exc
+
+    run = session.get(models.Run, payload.run_id) if payload.run_id else None
+    row = models.TrainingObservation(
+        run_id=payload.run_id,
+        finding_id=payload.finding_id,
+        author_user_id=user.id,
+        author=user.name,
+        kind=payload.kind,
+        anchors=[anchor.model_dump(mode="json") for anchor in payload.anchors],
+        statement=payload.statement.strip(),
+        expectation=payload.expectation.strip(),
+        severity_hint=payload.severity_hint,
+        scope_hint=payload.scope_hint,
+        customer_name=run.customer_name if run else "",
+        scope_code=run.scope if run else "",
+    )
+    session.add(row)
+    session.flush()
+    repository.audit(
+        session,
+        "training.observation_created",
+        payload.run_id,
+        detail=str(row.id),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _observation_out(row)
+
+
+@router.get("/observations", response_model=list[ObservationOut])
+def list_observations(
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+    mine: bool = Query(default=False),
+    obs_status: str | None = Query(default=None, alias="status"),
+) -> list[ObservationOut]:
+    """List observations, newest first.
+
+    Args:
+        session: The request's session.
+        user: The caller.
+        mine: Only the caller's own, which is how an author follows what became of
+            what they wrote. Participation stops without that.
+        obs_status: Filter by status.
+
+    Returns:
+        The observations.
+    """
+    _require_enabled(session)
+    statement = sa.select(models.TrainingObservation).order_by(
+        models.TrainingObservation.created_at.desc()
+    )
+    if mine and user.id is not None:
+        statement = statement.where(models.TrainingObservation.author_user_id == user.id)
+    if obs_status:
+        statement = statement.where(models.TrainingObservation.status == obs_status)
+    return [_observation_out(row) for row in session.execute(statement).scalars()]
+
+
+@router.patch("/observations/{observation_id}", response_model=ObservationOut)
+def edit_observation(
+    observation_id: int,
+    payload: ObservationIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> ObservationOut:
+    """Let the author fix what they wrote, until an administrator picks it up.
+
+    Args:
+        observation_id: The observation.
+        payload: The corrected text and anchors.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The updated observation, with its version bumped so the trail survives the
+        convenience.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 once it has been queued, and
+            403 when someone else wrote it.
+    """
+    _require_enabled(session)
+    row = session.get(models.TrainingObservation, observation_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such observation")
+    if row.status != "new":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"this observation is {row.status} and can no longer be edited",
+        )
+    if row.author_user_id is not None and user.id != row.author_user_id and not user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "only the author can edit this")
+
+    try:
+        assert_clean(f"{payload.statement}\n{payload.expectation}")
+    except PiiDetected as exc:
+        raise HTTPException(HTTP_422, f"this looks like it contains personal data: {exc}") from exc
+
+    row.statement = payload.statement.strip()
+    row.expectation = payload.expectation.strip()
+    row.anchors = [anchor.model_dump(mode="json") for anchor in payload.anchors]
+    row.severity_hint = payload.severity_hint
+    row.scope_hint = payload.scope_hint
+    row.kind = payload.kind
+    row.version += 1
+    session.flush()
+    return _observation_out(row)
+
+
+@router.post("/admin/observations/{observation_id}/reject", response_model=ObservationOut)
+def reject_observation(
+    observation_id: int,
+    payload: ObservationDecision,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> ObservationOut:
+    """Turn an observation down, with a reason the author will read.
+
+    The row stays. A rejection with no explanation reads as the tool ignoring the
+    person, and the loop only works while people keep contributing.
+
+    Args:
+        observation_id: The observation.
+        payload: The reason.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The observation, now rejected.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.TrainingObservation, observation_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such observation")
+    row.status = "rejected"
+    row.status_note = payload.reason.strip()
+    session.flush()
+    repository.audit(
+        session,
+        "training.observation_rejected",
+        detail=str(row.id),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _observation_out(row)
+
+
+# -------------------------------------------------------------------- candidates
+
+
+@router.post("/admin/candidates", response_model=list[CandidateOut], status_code=201)
+def synthesize_candidates(
+    payload: SynthesizeIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> list[CandidateOut]:
+    """Have the model draft rules from a group of observations.
+
+    Args:
+        payload: Which observations.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The candidates, each validated by code before anyone sees it.
+
+    Raises:
+        HTTPException: 404 for an unknown observation, 409 when one has already been
+            synthesized, and 422 when the model returns nothing usable.
+    """
+    rows = list(
+        session.execute(
+            sa.select(models.TrainingObservation).where(
+                models.TrainingObservation.id.in_(payload.observation_ids)
+            )
+        ).scalars()
+    )
+    missing = set(payload.observation_ids) - {row.id for row in rows}
+    if missing:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no observation {sorted(missing)}")
+
+    already = [row.id for row in rows if row.status == "synthesized"]
+    if already:
+        # Marked, not consumed: the row is still there and still readable, and saying
+        # so beats doing the work twice (ADR-021).
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"observation(s) {already} have already been synthesized; their candidate "
+            "is in the queue",
+        )
+
+    client = build_client(resolved_llm_settings(session))
+    known_fields = sorted(
+        {row.canonical_name for row in session.execute(sa.select(models.AttributeAlias)).scalars()}
+    )
+    report_kinds = sorted(
+        {
+            row.key
+            for row in session.execute(
+                sa.select(models.ArtifactType).where(models.ArtifactType.kind == "report")
+            ).scalars()
+        }
+    )
+    try:
+        created = synthesis.synthesize(
+            session,
+            client,
+            rows,
+            known_fields=known_fields,
+            report_kinds=report_kinds,
+            actor=user.name,
+            user_id=user.id,
+        )
+    except synthesis.SynthesisError as exc:
+        raise HTTPException(HTTP_422, str(exc)) from exc
+
+    repository.audit(
+        session,
+        "training.synthesized",
+        detail=f"{len(created)} candidate(s)",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return [_candidate_out(row) for row in created]
+
+
+@router.get("/admin/candidates", response_model=list[CandidateOut])
+def list_candidates(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+    candidate_status: str | None = Query(default=None, alias="status"),
+) -> list[CandidateOut]:
+    """The candidate rules, newest first.
+
+    Args:
+        session: The request's session.
+        _user: The calling administrator.
+        candidate_status: Filter by status.
+
+    Returns:
+        The candidates. A rejected one keeps its sources, so a later attempt can
+        start from them.
+    """
+    statement = sa.select(models.RuleCandidate).order_by(models.RuleCandidate.created_at.desc())
+    if candidate_status:
+        statement = statement.where(models.RuleCandidate.status == candidate_status)
+    return [_candidate_out(row) for row in session.execute(statement).scalars()]
+
+
+@router.post("/admin/candidates/{candidate_id}/replay", response_model=CandidateOut)
+def replay_candidate(
+    candidate_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> CandidateOut:
+    """Show what this rule would have changed, before anyone approves it.
+
+    A rule that would have fired on thirty historical runs that were all fine is a
+    bad rule, and this is where that becomes visible rather than next month.
+
+    Args:
+        candidate_id: The candidate.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The candidate with its replay filled in.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.RuleCandidate, candidate_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such candidate")
+    row.replay = _replay(session, row)
+    session.flush()
+    repository.audit(
+        session, "training.replayed", detail=str(candidate_id), user_id=user.id, actor=user.name
+    )
+    return _candidate_out(row)
+
+
+def _replay(session: Session, candidate: models.RuleCandidate) -> dict[str, Any]:
+    """Estimate what a candidate would have done to work already reviewed.
+
+    Args:
+        session: The request's session.
+        candidate: The candidate.
+
+    Returns:
+        A summary the console shows before approval: how many finalized runs were
+        examined and how many carry the field or expression the rule touches. This
+        counts rather than re-runs the pipeline, because re-running it would re-read
+        every stored file and re-ask the model; the count is what answers "is this
+        rule about something that actually occurs".
+    """
+    limit = int(resolve(session, "training.replay_runs").value)
+    runs = list(
+        session.execute(
+            sa.select(models.Run)
+            .where(models.Run.status == "finalized")
+            .order_by(models.Run.created_at.desc())
+            .limit(limit)
+        ).scalars()
+    )
+    body = dict(candidate.body or {})
+    field = str(body.get("field", ""))
+
+    touched = 0
+    already_ok = 0
+    for run in runs:
+        findings = session.execute(
+            sa.select(models.Finding).where(models.Finding.run_id == run.id)
+        ).scalars()
+        for finding in findings:
+            if field and field.lower() in (finding.title or "").lower():
+                touched += 1
+                if finding.review_status == "false_positive":
+                    already_ok += 1
+
+    return {
+        "runs_examined": len(runs),
+        "runs_available": len(runs),
+        "related_findings": touched,
+        "previously_dismissed": already_ok,
+        "note": (
+            "Counts related findings on recent finalized runs. A rule that touches "
+            "many findings reviewers already dismissed is one to narrow before it is "
+            "approved."
+        ),
+    }
+
+
+@router.post("/admin/candidates/{candidate_id}/approve", response_model=CandidateOut)
+def approve_candidate(
+    candidate_id: int,
+    payload: CandidateDecision,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> CandidateOut:
+    """Approve a candidate, which creates the rule in shadow.
+
+    Args:
+        candidate_id: The candidate.
+        payload: The decision, optionally narrowing the scope.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The candidate, now approved.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 422 when it cannot become a rule.
+    """
+    row = session.get(models.RuleCandidate, candidate_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such candidate")
+
+    into_shadow = not payload.activate_now and bool(
+        resolve(session, "training.shadow_default").value
+    )
+    try:
+        synthesis.approve(
+            session,
+            row,
+            scope=payload.scope,
+            into_shadow=into_shadow,
+            actor=user.name,
+            user_id=user.id,
+            note=payload.note,
+        )
+    except synthesis.SynthesisError as exc:
+        raise HTTPException(HTTP_422, str(exc)) from exc
+
+    repository.audit(
+        session,
+        "training.candidate_approved",
+        detail=str(candidate_id),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _candidate_out(row)
+
+
+@router.post("/admin/candidates/{candidate_id}/reject", response_model=CandidateOut)
+def reject_candidate(
+    candidate_id: int,
+    payload: ObservationDecision,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> CandidateOut:
+    """Turn a candidate down, keeping it and its sources.
+
+    Args:
+        candidate_id: The candidate.
+        payload: The reason.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The candidate, now rejected.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.RuleCandidate, candidate_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such candidate")
+    row.status = "rejected"
+    row.admin_note = payload.reason.strip()
+    row.decided_by = user.name
+    row.decided_by_user_id = user.id
+    row.decided_at = dt.datetime.now(dt.timezone.utc)
+    session.flush()
+    repository.audit(
+        session,
+        "training.candidate_rejected",
+        detail=str(candidate_id),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _candidate_out(row)
+
+
+# ------------------------------------------------------------------ the rules screen
+
+
+def _rule_rows(session: Session) -> list[tuple[str, Any]]:
+    """Every rule the tool holds, whatever its origin.
+
+    Args:
+        session: The request's session.
+
+    Returns:
+        Pairs of rule kind and row, across the three rule surfaces. One screen for
+        all of them, because a learned rule nobody can find is worse than no learned
+        rule: nobody knows why a finding appeared.
+    """
+    rows: list[tuple[str, Any]] = []
+    for kind, table in (
+        ("check", models.CheckDefinitionRow),
+        ("compliance_rule", models.ComplianceRuleRow),
+        ("field_constraint", models.FieldConstraint),
+    ):
+        rows.extend((kind, row) for row in session.execute(sa.select(table)).scalars())
+    return rows
+
+
+def _statistics(session: Session) -> dict[str, tuple[int, int, dt.datetime | None]]:
+    """Per-rule fired count, dismissal count, and when it last fired.
+
+    Args:
+        session: The request's session.
+
+    Returns:
+        Rule reference to (fired, dismissed, last fired). Without these two counters
+        alert fatigue is invisible until reviewers have already stopped reading the
+        queue.
+    """
+    stats: dict[str, tuple[int, int, dt.datetime | None]] = {}
+    rows = session.execute(
+        sa.select(
+            models.Finding.rule_ref,
+            sa.func.count(),
+            sa.func.sum(sa.case((models.Finding.review_status == "false_positive", 1), else_=0)),
+            sa.func.max(models.Finding.reviewed_at),
+        )
+        .where(models.Finding.rule_ref != "")
+        .group_by(models.Finding.rule_ref)
+    ).all()
+    for ref, fired, dismissed, last in rows:
+        stats[str(ref)] = (int(fired or 0), int(dismissed or 0), last)
+    return stats
+
+
+def _summary(rule_kind: str, row: Any) -> str:
+    """One line saying what a rule actually checks.
+
+    Args:
+        rule_kind: Which rule surface.
+        row: The rule.
+
+    Returns:
+        The summary the rules screen searches and shows.
+    """
+    if rule_kind == "field_constraint":
+        return f"{row.field} {row.constraint} {row.value}"
+    if rule_kind == "check":
+        return str(row.expression or row.instruction)
+    return str((row.requirement or {}).get("json_path_contains", ""))
+
+
+@router.get("/admin/rules", response_model=list[RuleOut])
+def list_rules(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+    state: str = Query(default="active"),
+    search: str = Query(default=""),
+) -> list[RuleOut]:
+    """Every rule, searchable, filtered to active by default.
+
+    This is the screen someone opens when a finding surprises them, so it has to
+    answer "what made this fire" quickly.
+
+    Args:
+        session: The request's session.
+        _user: The calling administrator.
+        state: Which state to show, or ``all``. Active by default: the others are one
+            click away, so nothing is hidden and nothing is in the way.
+        search: Matches the name, the reasoning, and what the rule checks.
+
+    Returns:
+        The rules, worst dismissal rate first so the noisy ones surface.
+    """
+    return collect_rules(session, state=state, search=search)
+
+
+def collect_rules(session: Session, state: str = "active", search: str = "") -> list[RuleOut]:
+    """Gather the rules for the screen.
+
+    Separate from the endpoint so other handlers can reuse it: calling a FastAPI
+    route function directly passes its ``Query`` defaults as objects rather than
+    values, which fails in a way that only shows up at runtime.
+
+    Args:
+        session: An open session.
+        state: Which state to show, or ``all``.
+        search: Matches the name, the reasoning, and what the rule checks.
+
+    Returns:
+        The rules, worst dismissal rate first.
+    """
+    stats = _statistics(session)
+    needle = search.strip().lower()
+    out: list[RuleOut] = []
+
+    for rule_kind, row in _rule_rows(session):
+        if state != "all" and row.state != state:
+            continue
+        summary = _summary(rule_kind, row)
+        name = getattr(row, "name", "") or getattr(row, "field", "")
+        if needle and needle not in f"{name} {summary} {row.reasoning}".lower():
+            continue
+
+        fired, dismissed, last = stats.get(f"{rule_kind}:{row.id}", (0, 0, None))
+        deleted_at = getattr(row, "deleted_at", None)
+        out.append(
+            RuleOut(
+                id=row.id,
+                rule_kind=rule_kind,
+                name=name,
+                summary=summary,
+                reasoning=row.reasoning,
+                severity=getattr(row, "severity", "medium"),
+                scope=row.scope,
+                state=row.state,
+                origin=getattr(row, "origin", "admin"),
+                fired=fired,
+                dismissed=dismissed,
+                dismissal_rate=round(dismissed / fired, 3) if fired else 0.0,
+                last_fired_at=last,
+                source_observation_ids=_sources(session, getattr(row, "candidate_id", None)),
+                deleted_at=deleted_at,
+                restorable_until=(
+                    deleted_at + dt.timedelta(days=lifecycle.RESTORE_WINDOW_DAYS)
+                    if deleted_at
+                    else None
+                ),
+            )
+        )
+
+    out.sort(key=lambda rule: (-rule.dismissal_rate, -rule.fired, rule.name))
+    return out
+
+
+def _sources(session: Session, candidate_id: int | None) -> list[int]:
+    """Which observations a learned rule came from.
+
+    Args:
+        session: The request's session.
+        candidate_id: The candidate it was approved from, when it was learned.
+
+    Returns:
+        The observation ids, so a rule can always be traced back to what someone
+        said. Empty for a rule an administrator wrote directly.
+    """
+    if not candidate_id:
+        return []
+    candidate = session.get(models.RuleCandidate, candidate_id)
+    return list(candidate.source_observation_ids or []) if candidate else []
+
+
+@router.post("/admin/rules/{rule_kind}/{rule_id}/action", response_model=RuleOut)
+def act_on_rule(
+    rule_kind: str,
+    rule_id: int,
+    payload: RuleAction,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> RuleOut:
+    """Enable, disable, delete, restore, or activate a rule.
+
+    Each asks the administrator to type the word, because a rule change reaches every
+    future run and a typed word is the cheapest way to be sure the click was meant.
+
+    Args:
+        rule_kind: Which rule surface.
+        rule_id: The rule.
+        payload: The action and the typed confirmation.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The rule in its new state.
+
+    Raises:
+        HTTPException: 400 when the confirmation does not match, 404 when the rule
+            does not exist, and 409 when the restore window has passed.
+    """
+    if payload.confirm.strip().lower() != payload.action:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"type {payload.action!r} to confirm; this applies to every future run",
+        )
+
+    actions = {
+        "enable": lambda: lifecycle.enable_rule(session, rule_kind, rule_id, **who),
+        "activate": lambda: lifecycle.enable_rule(session, rule_kind, rule_id, **who),
+        "disable": lambda: lifecycle.disable_rule(session, rule_kind, rule_id, **who),
+        "delete": lambda: lifecycle.delete_rule(session, rule_kind, rule_id, **who),
+        "restore": lambda: lifecycle.restore_rule(session, rule_kind, rule_id, **who),
+    }
+    who: dict[str, Any] = {"actor": user.name, "user_id": user.id, "note": payload.note}
+
+    try:
+        actions[payload.action]()
+    except lifecycle.LifecycleError as exc:
+        message = str(exc)
+        code = status.HTTP_404_NOT_FOUND if "no " in message else status.HTTP_409_CONFLICT
+        raise HTTPException(code, message) from exc
+
+    repository.audit(
+        session,
+        f"rule.{payload.action}d",
+        detail=f"{rule_kind}:{rule_id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return next(
+        rule
+        for rule in collect_rules(session, state="all")
+        if rule.rule_kind == rule_kind and rule.id == rule_id
+    )
+
+
+@router.get("/admin/rules/{rule_kind}/{rule_id}/history", response_model=list[RuleStateChangeOut])
+def rule_history(
+    rule_kind: str,
+    rule_id: int,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+) -> list[RuleStateChangeOut]:
+    """Every move this rule has made, and who made it.
+
+    Args:
+        rule_kind: Which rule surface.
+        rule_id: The rule.
+        session: The request's session.
+        _user: The calling administrator.
+
+    Returns:
+        The state changes, newest first.
+    """
+    rows = session.execute(
+        sa.select(models.RuleStateChange)
+        .where(
+            models.RuleStateChange.rule_kind == rule_kind,
+            models.RuleStateChange.rule_id == rule_id,
+        )
+        .order_by(models.RuleStateChange.at.desc())
+    ).scalars()
+    return [
+        RuleStateChangeOut(
+            id=row.id,
+            from_state=row.from_state,
+            to_state=row.to_state,
+            note=row.note,
+            actor=row.actor,
+            at=row.at,
+        )
+        for row in rows
+    ]

@@ -307,6 +307,10 @@ class Finding(Base):
     detail: Mapped[str] = mapped_column(sa.Text, default="")
     leg: Mapped[str] = mapped_column(sa.String(30), default="osl_config")
     rule_ref: Mapped[str] = mapped_column(sa.String(40), default="")
+    #: True while the rule behind it is in shadow: stored and counted, shown to
+    #: nobody, which is how a new rule's precision is measured before it starts
+    #: interrupting reviewers (ADR-021).
+    shadow: Mapped[bool] = mapped_column(sa.Boolean, default=False, index=True)
     element_ref: Mapped[str] = mapped_column(sa.String(40), default="")
     evidence: Mapped[Any] = mapped_column(Json, default=dict)
 
@@ -550,6 +554,14 @@ class CheckDefinitionRow(Base):
     severity: Mapped[str] = mapped_column(sa.String(20), default="medium")
     scope: Mapped[str] = mapped_column(sa.String(200), default="all")
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    #: draft · shadow · active · disabled · deleted (ADR-021). ``is_active`` stays as
+    #: the switch every existing query reads; this is the fuller lifecycle, and the
+    #: two are kept consistent by the one function that moves a rule between states.
+    state: Mapped[str] = mapped_column(sa.String(20), default="active", index=True)
+    #: shipped · admin · learned. What a finding's explanation starts from.
+    origin: Mapped[str] = mapped_column(sa.String(20), default="admin")
+    candidate_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
+    deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True, index=True)
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
@@ -564,6 +576,11 @@ class ComplianceRuleRow(Base):
     scope: Mapped[str] = mapped_column(sa.String(200), default="all")
     reasoning: Mapped[str] = mapped_column(sa.Text, default="")
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    #: draft · shadow · active · disabled · deleted (ADR-021).
+    state: Mapped[str] = mapped_column(sa.String(20), default="active", index=True)
+    origin: Mapped[str] = mapped_column(sa.String(20), default="admin")
+    candidate_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
+    deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True, index=True)
 
 
 class ReversePassCategoryRow(Base):
@@ -595,6 +612,156 @@ class FinalReport(Base):
         sa.ForeignKey("users.id"), nullable=True
     )
     generated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class TrainingObservation(Base):
+    """One thing a person knows, in their own words, anchored to what they mean.
+
+    The raw material of a learned rule (ADR-021). It never runs. It is never deleted
+    either: synthesis marks it, and a rejection keeps it with its reason, because the
+    record of what someone said is worth more than the row it occupies.
+    """
+
+    __tablename__ = "training_observations"
+
+    id: Mapped[int] = _pk()
+    run_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: The finding it was raised from, when a reviewer wrote it while deciding one.
+    finding_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("findings.id", ondelete="SET NULL"), nullable=True
+    )
+    author_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    author: Mapped[str] = mapped_column(sa.String(200), default="")
+
+    #: reconciliation · field_constraint · correction · note
+    kind: Mapped[str] = mapped_column(sa.String(30), default="reconciliation", index=True)
+    #: The typed selections this points at: report cells, OSL sections, config paths.
+    #: The anchor is what makes reliable synthesis possible; prose alone is a guess.
+    anchors: Mapped[Any] = mapped_column(Json, default=list)
+    #: What the person actually wrote. Treated as data, never as an instruction.
+    statement: Mapped[str] = mapped_column(sa.Text, default="")
+    expectation: Mapped[str] = mapped_column(sa.Text, default="")
+    severity_hint: Mapped[str] = mapped_column(sa.String(20), default="medium")
+    #: global · customer · programme. The narrowest that fits is the default.
+    scope_hint: Mapped[str] = mapped_column(sa.String(30), default="customer")
+    customer_name: Mapped[str] = mapped_column(sa.String(200), default="", index=True)
+    scope_code: Mapped[str] = mapped_column(sa.String(20), default="")
+
+    #: new · queued · synthesized · rejected · superseded. Forward only.
+    status: Mapped[str] = mapped_column(sa.String(20), default="new", index=True)
+    status_note: Mapped[str] = mapped_column(sa.Text, default="")
+    #: Which candidate it fed, set when it is synthesized. The row itself is untouched.
+    candidate_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
+    synthesized_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    #: Bumped on every edit; an observation is editable by its author until an
+    #: administrator queues it, and the audit trail has to survive the convenience.
+    version: Mapped[int] = mapped_column(sa.Integer, default=1)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
+    updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
+
+
+class RuleCandidate(Base):
+    """A rule the model drafted from observations, waiting for a person (ADR-021).
+
+    It never runs. Code has already validated it by the time an administrator sees
+    it, and approval is what turns it into a rule the pipeline evaluates.
+    """
+
+    __tablename__ = "rule_candidates"
+
+    id: Mapped[int] = _pk()
+    name: Mapped[str] = mapped_column(sa.String(120), default="")
+    #: check · compliance_rule · field_constraint — which existing rule surface this
+    #: becomes on approval. Training adds no second evaluator.
+    target_kind: Mapped[str] = mapped_column(sa.String(30), default="check")
+    #: The structured rule, shaped by the target kind's own schema.
+    body: Mapped[Any] = mapped_column(Json, default=dict)
+    reasoning: Mapped[str] = mapped_column(sa.Text, default="")
+    severity: Mapped[str] = mapped_column(sa.String(20), default="medium")
+    scope: Mapped[str] = mapped_column(sa.String(200), default="all")
+    source_observation_ids: Mapped[Any] = mapped_column(Json, default=list)
+
+    #: draft · approved · rejected. A rejected candidate keeps its sources so a later
+    #: attempt can start from them.
+    status: Mapped[str] = mapped_column(sa.String(20), default="draft", index=True)
+    admin_note: Mapped[str] = mapped_column(sa.Text, default="")
+    #: What the model produced, kept beside what was approved. The difference is the
+    #: only measure of how much correcting the model needs.
+    model_draft: Mapped[Any] = mapped_column(Json, default=dict)
+    model_used: Mapped[str] = mapped_column(sa.String(200), default="")
+    prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
+    #: Overlaps with an active rule, found by fingerprint at approval time.
+    conflicts: Mapped[Any] = mapped_column(Json, default=list)
+    #: What a replay against the golden set and recent runs would have changed.
+    replay: Mapped[Any] = mapped_column(Json, default=dict)
+
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    decided_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    decided_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    decided_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
+
+
+class FieldConstraint(Base):
+    """A rule about one attribute, written in plain words and stored as data.
+
+    "This field is never blank" is what people actually have to say. The human
+    language is the input to synthesis; what runs is structured and evaluated by code
+    (ADR-001, ADR-021).
+    """
+
+    __tablename__ = "field_constraints"
+
+    id: Mapped[int] = _pk()
+    #: The canonical attribute name, resolved through the alias table.
+    field: Mapped[str] = mapped_column(sa.String(200), index=True)
+    #: not_blank · allowed_values · forbidden_values · range · format · fill_rate_min
+    constraint: Mapped[str] = mapped_column(sa.String(40))
+    value: Mapped[Any] = mapped_column(Json, default=dict)
+    #: Which report types it applies to; empty means every one that carries the field.
+    report_kinds: Mapped[Any] = mapped_column(Json, default=list)
+    severity: Mapped[str] = mapped_column(sa.String(20), default="medium")
+    reasoning: Mapped[str] = mapped_column(sa.Text, default="")
+    #: ``all``, a customer name, or ``programme:CODE``. The narrowest that fits.
+    scope: Mapped[str] = mapped_column(sa.String(200), default="all")
+
+    #: draft · shadow · active · disabled · deleted. See RuleLifecycle.
+    state: Mapped[str] = mapped_column(sa.String(20), default="active", index=True)
+    origin: Mapped[str] = mapped_column(sa.String(20), default="admin")
+    candidate_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True, index=True)
+
+
+class RuleStateChange(Base):
+    """Every move a rule makes between states, and who made it (ADR-021).
+
+    Nothing transitions by itself, so every row here has an actor. Under the EU AI
+    Act's human-oversight provisions and the NIST AI Risk Management Framework the
+    record of the human decision is itself the required artifact, and it is only
+    cheap to keep if it is kept from the start.
+    """
+
+    __tablename__ = "rule_state_changes"
+
+    id: Mapped[int] = _pk()
+    #: check · compliance_rule · field_constraint
+    rule_kind: Mapped[str] = mapped_column(sa.String(30), index=True)
+    rule_id: Mapped[int] = mapped_column(sa.Integer, index=True)
+    from_state: Mapped[str] = mapped_column(sa.String(20), default="")
+    to_state: Mapped[str] = mapped_column(sa.String(20), default="")
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    actor_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    actor: Mapped[str] = mapped_column(sa.String(200), default="")
+    at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
 
 
 class AppSetting(Base):

@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Annotated, Any, Final, Optional, cast
 
@@ -30,6 +32,8 @@ from vigilai.config.store import resolve
 from vigilai.db import catalog, models, repository
 from vigilai.db.queue import JobQueue
 from vigilai.db.types import utcnow
+from vigilai.parsers import detect
+from vigilai.parsers.base import ParseError
 from vigilai.pipeline.s4_trace import describe_rule
 from vigilai.report.pdf import renderer_available
 from vigilai.rules.schema import Rule
@@ -885,4 +889,88 @@ def run_stats(
         prompt_tokens=int(totals[2]),
         completion_tokens=int(totals[3]),
         stages=stages,
+    )
+
+
+#: Extension the detection scratch file is written under, so openpyxl recognises it.
+DETECT_SUFFIX: Final[str] = ".xlsx"
+
+
+def _detected_sheets(results: dict[str, detect.DetectionResult]) -> list[schemas.DetectedSheet]:
+    """Convert per-sheet detection into wire models.
+
+    Args:
+        results: Sheet name to its result.
+
+    Returns:
+        One row per sheet, in workbook order.
+    """
+    rows: list[schemas.DetectedSheet] = []
+    for name, result in results.items():
+        best = result.best
+        rows.append(
+            schemas.DetectedSheet(
+                sheet=name,
+                verdict=result.verdict,
+                reason=result.reason,
+                key=best.key if best else None,
+                label=best.label if best else None,
+                score=best.score if best else 0.0,
+            )
+        )
+    return rows
+
+
+@router.post("/detect-type", response_model=schemas.TypeDetection)
+def detect_type(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    _user: CurrentUser = Depends(current_user),
+) -> schemas.TypeDetection:
+    """Work out what an uploaded workbook is, before a run exists.
+
+    The file is written to a temporary path, read, and deleted. It is deliberately not
+    stored: an upload that has not been assigned to a run belongs to nothing, so no
+    retention rule would ever delete it and it would sit on the shared volume for good.
+
+    Args:
+        file: The workbook to identify.
+        session: The request's session.
+        data_dir: The shared volume, where the samples it is compared against live.
+        _user: The caller.
+
+    Returns:
+        The scored candidates, a verdict the form can show as "I am not sure", and a
+        per-sheet mapping so a multi-tab workbook can map to several types.
+
+    Raises:
+        HTTPException: 400 when the upload cannot be read as a workbook.
+    """
+    scratch = Path(tempfile.mkdtemp(prefix="vigilai-detect-")) / f"upload{DETECT_SUFFIX}"
+    try:
+        with scratch.open("wb") as handle:
+            shutil.copyfileobj(file.file, handle)
+        try:
+            result = detect.detect(session, scratch, data_dir)
+            per_sheet = detect.detect_sheets(session, scratch, data_dir)
+        except ParseError as exc:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"could not read that file as a workbook ({exc})"
+            ) from exc
+    finally:
+        shutil.rmtree(scratch.parent, ignore_errors=True)
+
+    best = result.best
+    return schemas.TypeDetection(
+        verdict=result.verdict,
+        reason=result.reason,
+        key=best.key if best else None,
+        label=best.label if best else None,
+        score=best.score if best else 0.0,
+        candidates=[
+            schemas.DetectedCandidate(key=c.key, label=c.label, score=c.score)
+            for c in result.candidates
+        ],
+        sheets=_detected_sheets(per_sheet),
     )

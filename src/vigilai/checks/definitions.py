@@ -131,9 +131,16 @@ class AdminConfig:
         compliance_rules: Rules that must be present in the config.
         categories: Reverse-pass scoping.
         named_values: Pointers the checks refer to by name.
+        field_constraints: Per-attribute rules, written in plain words by a reviewer
+            and stored as structured data (ADR-021).
+        shadow_rule_refs: Which rules are still in shadow, as ``kind:id``. Their
+            findings are recorded and counted but shown to nobody, so a new rule's
+            precision can be measured before it interrupts a reviewer.
     """
 
     checks: tuple[CheckDefinition, ...] = ()
     compliance_rules: tuple[ComplianceRule, ...] = ()
     categories: tuple[ReversePassCategory, ...] = tuple(DEFAULT_CATEGORIES)
     named_values: tuple[object, ...] = field(default_factory=tuple)
+    field_constraints: tuple[object, ...] = field(default_factory=tuple)
+    shadow_rule_refs: frozenset[str] = frozenset()
