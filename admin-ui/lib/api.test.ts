@@ -33,14 +33,45 @@ describe("the admin API client", () => {
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
   });
 
-  it("uploads an artifact sample as multipart, to that type's own path", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ id: 1 }));
+  it("adds an artifact sample as multipart, with its label", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1 }, 201));
     const file = new File(["x"], "billing.xlsx");
-    await api.uploadSample("billing", file);
+    await api.addSample("billing", file, "2026 layout");
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/v1/admin/artifact-types/billing/sample");
+    expect(url).toBe("/api/v1/admin/artifact-types/billing/samples");
     expect(init.body).toBeInstanceOf(FormData);
     expect((init.body as FormData).get("file")).toBe(file);
+    expect((init.body as FormData).get("label")).toBe("2026 layout");
+  });
+
+  it("refuses a fourth sample as a 409", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ detail: "already has 3 samples; remove one before adding another" }, 409)
+    );
+    await expect(api.addSample("billing", new File(["x"], "b.xlsx"))).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it("builds a plain download URL rather than fetching the workbook", async () => {
+    expect(api.sampleDownloadUrl("billing", 7)).toBe(
+      "/api/v1/admin/artifact-types/billing/samples/7/download"
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("previews one sample by its own id", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ sample_id: 7, sheets: [] }));
+    await api.previewSample("billing", 7);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/v1/admin/artifact-types/billing/samples/7/preview"
+    );
+  });
+
+  it("returns nothing when a sample is deleted", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(api.deleteSample("billing", 7)).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
   });
 
   it("deletes a scope by its code", async () => {
@@ -228,6 +259,114 @@ describe("the admin API client", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toBeUndefined();
     expect(result.ok).toBe(true);
+  });
+
+  it("reads observations from the shared prefix, because users file them", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listObservations();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/observations?status=new");
+  });
+
+  it("surfaces Train AI mode being off as a 404 rather than swallowing it", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "Train AI mode is off" }, 404));
+    await expect(api.listObservations()).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("rejects an observation with the reason its author will read", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 4, status: "rejected" }));
+    await api.rejectObservation(4, "already covered by an existing check");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/observations/4/reject");
+    expect(JSON.parse(init.body)).toEqual({ reason: "already covered by an existing check" });
+  });
+
+  it("synthesizes from the selected observation ids", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([{ id: 1 }], 201));
+    await api.synthesize([3, 4]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/candidates");
+    expect(JSON.parse(init.body)).toEqual({ observation_ids: [3, 4] });
+  });
+
+  it("raises an already-synthesized observation as a 409", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ detail: "observation 3 is already synthesized" }, 409)
+    );
+    await expect(api.synthesize([3])).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("lists draft candidates by default", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listCandidates();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/candidates?status=draft");
+  });
+
+  it("replays a candidate with a POST and no body", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, replay: { runs_examined: 12 } }));
+    await api.replayCandidate(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/candidates/1/replay");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+  });
+
+  it("approves into shadow unless activation is asked for explicitly", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(jsonResponse({ id: 1, status: "approved" }))
+    );
+    await api.approveCandidate(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({});
+    await api.approveCandidate(1, { activate_now: true, scope: "AM" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      activate_now: true,
+      scope: "AM",
+    });
+  });
+
+  it("rejects a candidate with its reason", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, status: "rejected" }));
+    await api.rejectCandidate(1, "too broad");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/candidates/1/reject");
+    expect(JSON.parse(init.body)).toEqual({ reason: "too broad" });
+  });
+
+  it("lists active rules by default and passes the search through", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse([])));
+    await api.listRules();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/rules?state=active&search=");
+    await api.listRules("all", "billing count");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/admin/rules?state=all&search=billing%20count");
+  });
+
+  it("sends the typed word with a rule action", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 5, state: "disabled" }));
+    await api.actOnRule("check", 5, "disable", "disable", "too noisy");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/rules/check/5/action");
+    expect(JSON.parse(init.body)).toEqual({
+      action: "disable",
+      confirm: "disable",
+      note: "too noisy",
+    });
+  });
+
+  it("raises a mistyped confirmation as a 400 from the API", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "type 'delete' to confirm" }, 400));
+    await expect(api.actOnRule("check", 5, "delete", "")).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("raises an expired restore window as a 409", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "the restore window has passed" }, 409));
+    await expect(api.actOnRule("check", 5, "restore", "restore")).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it("reads a rule's history on its own path", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.ruleHistory("field_constraint", 9);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/rules/field_constraint/9/history");
   });
 
   it("reads the first message out of a validation error body", async () => {

@@ -8,11 +8,12 @@
  * the server says the inputs were already run (`docs/design.md` "LLM cost controls").
  */
 
-import { AlertTriangle, Play, ShieldCheck } from "lucide-react";
+import { AlertTriangle, HelpCircle, Play, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import { FileDrop } from "@/components/file-drop";
+import { ReportSlotField, emptyPart, type ReportPart } from "@/components/report-slot";
 import {
   Button,
   Card,
@@ -27,7 +28,7 @@ import {
 } from "@/components/ui/primitives";
 import { PageHeader } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import type { DuplicateRun, NewRunOptions } from "@/lib/types";
+import type { ArtifactSlot, DuplicateRun, NewRunOptions, TypeDetection } from "@/lib/types";
 import { fmtTime } from "@/lib/utils";
 
 export default function NewRunPage() {
@@ -42,10 +43,21 @@ export default function NewRunPage() {
   const [scope, setScope] = React.useState("");
   const [hasSuppressions, setHasSuppressions] = React.useState(false);
 
+  // Kept as strings because an empty box means "unstated", which is a different
+  // answer from zero and must survive the round trip without becoming one.
+  const [deliverableCount, setDeliverableCount] = React.useState("");
+  const [outputsValidated, setOutputsValidated] = React.useState("");
+  const [deliveryNotes, setDeliveryNotes] = React.useState("");
+
   // The slots are whatever the admin catalog says they are, so switching a report type
   // off in the admin-ui removes it here with no deploy (ADR-020).
   const [options, setOptions] = React.useState<NewRunOptions | null>(null);
   const [files, setFiles] = React.useState<Record<string, File | null>>({});
+  // A report slot holds a list of parts, because the same report type can be
+  // delivered once per segment or per deliverable (ADR-021 milestone 6.1b).
+  const [parts, setParts] = React.useState<Record<string, ReportPart[]>>({});
+  const [unsure, setUnsure] = React.useState<TypeDetection | null>(null);
+  const [unsureFile, setUnsureFile] = React.useState<File | null>(null);
 
   const [duplicate, setDuplicate] = React.useState<DuplicateRun | null>(null);
   const [rerunReason, setRerunReason] = React.useState("");
@@ -65,13 +77,131 @@ export default function NewRunPage() {
   }, []);
 
   const slots = options?.artifacts ?? [];
-  const reportSlots = slots.filter((slot) => slot.kind === "report");
-  const reportCount = reportSlots.filter((slot) => files[slot.key]).length;
-  const requiredMissing = slots.some((slot) => slot.is_required && !files[slot.key]);
+  const reportSlots = React.useMemo(
+    () => (options?.artifacts ?? []).filter((slot) => slot.kind === "report"),
+    [options]
+  );
+  const inputSlots = slots.filter((slot) => slot.kind !== "report");
+
+  function slotParts(key: string): ReportPart[] {
+    return parts[key] ?? [];
+  }
+
+  function filesIn(key: string): File[] {
+    return slotParts(key)
+      .map((part) => part.file)
+      .filter((file): file is File => file !== null);
+  }
+
+  const reportCount = reportSlots.reduce((total, slot) => total + filesIn(slot.key).length, 0);
+  const requiredMissing = slots.some((slot) =>
+    slot.kind === "report"
+      ? slot.is_required && filesIn(slot.key).length === 0
+      : slot.is_required && !files[slot.key]
+  );
   const ready =
     Boolean(customer.trim() && order.trim() && configurationId.trim()) &&
     !requiredMissing &&
     reportCount > 0;
+
+  /** Give every report slot its first, empty part once the catalog has loaded. */
+  React.useEffect(() => {
+    if (reportSlots.length === 0) return;
+    setParts((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const slot of reportSlots) {
+        if (!next[slot.key] || next[slot.key].length === 0) {
+          next[slot.key] = [emptyPart()];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [reportSlots]);
+
+  function patchPart(key: string, partId: string, patch: Partial<ReportPart>) {
+    setParts((prev) => ({
+      ...prev,
+      [key]: (prev[key] ?? []).map((part) =>
+        part.id === partId ? { ...part, ...patch } : part
+      ),
+    }));
+  }
+
+  /**
+   * Ask the backend what a workbook is and show the answer.
+   *
+   * A failure is swallowed on purpose: detection is a convenience and must never stand
+   * between someone and a submission, so the slot they chose simply stands.
+   */
+  async function detect(key: string, partId: string, file: File) {
+    patchPart(key, partId, { detecting: true, detection: null });
+    try {
+      const detection = await api.detectType(file);
+      patchPart(key, partId, { detecting: false, detection });
+    } catch {
+      patchPart(key, partId, { detecting: false, detection: null });
+    }
+  }
+
+  function setPartFile(key: string, partId: string, file: File | null) {
+    patchPart(key, partId, { file, detection: null });
+    if (file) void detect(key, partId, file);
+  }
+
+  function addPart(key: string) {
+    setParts((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), emptyPart()] }));
+  }
+
+  function removePart(key: string, partId: string) {
+    setParts((prev) => {
+      const remaining = (prev[key] ?? []).filter((part) => part.id !== partId);
+      return { ...prev, [key]: remaining.length > 0 ? remaining : [emptyPart()] };
+    });
+  }
+
+  /** Put an already-chosen file into another slot, only ever on a person's press. */
+  function movePart(fromKey: string, partId: string, toKey: string) {
+    if (fromKey === toKey) return;
+    const moving = slotParts(fromKey).find((part) => part.id === partId);
+    if (!moving) return;
+    setParts((prev) => {
+      const source = (prev[fromKey] ?? []).filter((part) => part.id !== partId);
+      const target = (prev[toKey] ?? []).filter((part) => part.file !== null);
+      return {
+        ...prev,
+        [fromKey]: source.length > 0 ? source : [emptyPart()],
+        [toKey]: [...target, { ...moving, detection: null }],
+      };
+    });
+  }
+
+  /** Place a file the person could not classify into whichever slot detection named. */
+  function placeDetected(file: File, key: string) {
+    setParts((prev) => {
+      const target = (prev[key] ?? []).filter((part) => part.file !== null);
+      return { ...prev, [key]: [...target, { ...emptyPart(), file }] };
+    });
+    setUnsure(null);
+    setUnsureFile(null);
+  }
+
+  async function detectUnsure(file: File) {
+    setUnsureFile(file);
+    setUnsure(null);
+    try {
+      const detection = await api.detectType(file);
+      if (detection.verdict === "confident" && detection.key) {
+        placeDetected(file, detection.key);
+        return;
+      }
+      setUnsure(detection);
+    } catch {
+      // Same rule as the per-slot call: no opinion rather than an obstacle.
+      setUnsureFile(null);
+    }
+  }
 
   function buildForm(reason: string): FormData {
     const form = new FormData();
@@ -83,9 +213,26 @@ export default function NewRunPage() {
     form.set("has_suppressions", hasSuppressions ? "true" : "false");
     if (runDate) form.set("run_date", runDate);
     if (reason) form.set("rerun_reason", reason);
+    if (deliverableCount.trim()) form.set("deliverable_count", deliverableCount.trim());
+    if (outputsValidated.trim()) form.set("outputs_validated", outputsValidated.trim());
+    if (deliveryNotes.trim()) form.set("delivery_notes", deliveryNotes.trim());
     for (const slot of slots) {
+      if (slot.kind === "report") continue;
       const file = files[slot.key];
       if (file) form.set(slot.key, file);
+    }
+    // Repeated parts under one key, with the labels in the same order: the server
+    // pairs the nth label with the nth file, so a gap would mislabel everything after
+    // it. Labels are sent only when at least one was written, which keeps the ordinary
+    // one-file-per-slot request exactly as it was.
+    for (const slot of reportSlots) {
+      const present = slotParts(slot.key).filter((part) => part.file !== null);
+      for (const part of present) {
+        if (part.file) form.append(slot.key, part.file);
+      }
+      if (present.some((part) => part.label.trim())) {
+        for (const part of present) form.append(`${slot.key}__label`, part.label.trim());
+      }
     }
     return form;
   }
@@ -211,6 +358,40 @@ export default function NewRunPage() {
                   Whether records were suppressed before delivery.
                 </span>
               </fieldset>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="deliverable-count">Deliverables in this campaign</Label>
+                <Input
+                  id="deliverable-count"
+                  type="number"
+                  min={0}
+                  value={deliverableCount}
+                  onChange={(event) => setDeliverableCount(event.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="outputs-validated">Outputs this run covers</Label>
+                <Input
+                  id="outputs-validated"
+                  type="number"
+                  min={0}
+                  value={outputsValidated}
+                  onChange={(event) => setOutputsValidated(event.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label htmlFor="delivery-notes">Delivery notes</Label>
+                <Input
+                  id="delivery-notes"
+                  value={deliveryNotes}
+                  onChange={(event) => setDeliveryNotes(event.target.value)}
+                  placeholder="Anything about the delivery itself: which segments were sent, what is still to come."
+                />
+                <span className="text-[0.7rem] text-muted-foreground">
+                  The two numbers are checked against the files uploaded, so a shortfall becomes a
+                  finding rather than going unnoticed. Leave them blank if you do not know; blank
+                  means unstated and produces no finding.
+                </span>
+              </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="notes">Additional notes</Label>
                 <Textarea
@@ -229,9 +410,7 @@ export default function NewRunPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4 pt-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                {slots
-                  .filter((slot) => slot.kind !== "report")
-                  .map((slot) => (
+                {inputSlots.map((slot) => (
                     <FileDrop
                       key={slot.key}
                       label={slot.label}
@@ -239,9 +418,9 @@ export default function NewRunPage() {
                       accept={slot.accept}
                       required={slot.is_required}
                       file={files[slot.key] ?? null}
-                      onChange={(file) => setFiles((prev) => ({ ...prev, [slot.key]: file }))}
-                    />
-                  ))}
+                    onChange={(file) => setFiles((prev) => ({ ...prev, [slot.key]: file }))}
+                  />
+                ))}
               </div>
 
               <div>
@@ -251,19 +430,43 @@ export default function NewRunPage() {
                     at least one Excel file
                   </span>
                 </div>
+                <p className="mb-2 text-[0.7rem] text-muted-foreground">
+                  A slot can hold several files. Label each one when it does: a finding names the
+                  file it came from, and &quot;the field distribution is wrong&quot; is useless when
+                  five were uploaded.
+                </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {reportSlots.map((slot) => (
-                    <FileDrop
+                    <ReportSlotField
                       key={slot.key}
-                      label={slot.label}
-                      hint={slot.description}
-                      accept={slot.accept}
-                      required={slot.is_required}
-                      file={files[slot.key] ?? null}
-                      onChange={(file) => setFiles((prev) => ({ ...prev, [slot.key]: file }))}
+                      slot={slot}
+                      parts={slotParts(slot.key)}
+                      targets={reportSlots}
+                      onFile={(partId, file) => setPartFile(slot.key, partId, file)}
+                      onLabel={(partId, label) => patchPart(slot.key, partId, { label })}
+                      onAdd={() => addPart(slot.key)}
+                      onRemove={(partId) => removePart(slot.key, partId)}
+                      onMove={(partId, targetKey) => movePart(slot.key, partId, targetKey)}
+                      onDismissDetection={(partId) =>
+                        patchPart(slot.key, partId, { detection: null })
+                      }
                     />
                   ))}
                 </div>
+
+                <UnsureControl
+                  detection={unsure}
+                  fileName={unsureFile?.name ?? ""}
+                  slots={reportSlots}
+                  onFile={(file) => void detectUnsure(file)}
+                  onChoose={(key) => {
+                    if (unsureFile) placeDetected(unsureFile, key);
+                  }}
+                  onCancel={() => {
+                    setUnsure(null);
+                    setUnsureFile(null);
+                  }}
+                />
               </div>
             </CardContent>
           </Card>
@@ -405,6 +608,90 @@ function DuplicateDialog({
           </Button>
         </div>
       </Card>
+    </div>
+  );
+}
+
+interface UnsureControlProps {
+  detection: TypeDetection | null;
+  fileName: string;
+  slots: ArtifactSlot[];
+  onFile: (file: File) => void;
+  onChoose: (key: string) => void;
+  onCancel: () => void;
+}
+
+/**
+ * The way in for someone who does not know what their workbook is called.
+ *
+ * Nobody should have to know that their file is a "field distribution". A confident
+ * detection drops the file straight into the right slot; anything less asks, because
+ * a wrong silent assignment is worse than a question.
+ */
+function UnsureControl({
+  detection,
+  fileName,
+  slots,
+  onFile,
+  onChoose,
+  onCancel,
+}: UnsureControlProps) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="mt-3 rounded-md border border-dashed p-2.5 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+          <HelpCircle className="h-4 w-4" /> I&apos;m not sure what this is
+        </Button>
+        <span className="text-muted-foreground">
+          Choose the file and it will be identified and put in the right slot.
+        </span>
+        <input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          onChange={(event) => {
+            const chosen = event.target.files?.[0];
+            if (chosen) onFile(chosen);
+            event.target.value = "";
+          }}
+        />
+      </div>
+
+      {detection ? (
+        <div className="mt-2 rounded-md border bg-muted/40 p-2 text-[0.7rem] leading-relaxed">
+          <p>
+            <b>
+              {fileName}:{" "}
+              {detection.verdict === "ambiguous"
+                ? "this could be more than one thing."
+                : "this did not match any known report type."}
+            </b>{" "}
+            {detection.reason}
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {(detection.candidates.length > 0
+              ? detection.candidates.filter((candidate) =>
+                  slots.some((slot) => slot.key === candidate.key)
+                )
+              : slots.map((slot) => ({ key: slot.key, label: slot.label, score: 0 }))
+            ).map((candidate) => (
+              <Button
+                key={candidate.key}
+                size="xs"
+                variant="outline"
+                onClick={() => onChoose(candidate.key)}
+              >
+                It is the {candidate.label}
+              </Button>
+            ))}
+            <Button size="xs" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

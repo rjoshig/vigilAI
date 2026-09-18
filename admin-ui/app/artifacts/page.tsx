@@ -620,15 +620,18 @@ function SampleStrip({
       <div className="flex flex-wrap items-start gap-2">
         {type.samples.length === 0 ? (
           <span className="py-2 text-xs text-muted-foreground">
-            No samples yet. Named values resolve against these, so a pointer cannot be tested
-            until one is here.
+            No samples yet. Named values resolve against these, so a pointer cannot be tested until
+            one is here.
           </span>
         ) : null}
 
         {type.samples.map((sample) => (
           <div key={sample.id} className="min-w-[15rem] max-w-xs rounded-md border bg-card p-2">
             <div className="text-xs font-semibold">{sample.label || sample.filename}</div>
-            <div className="mono truncate text-[0.7rem] text-muted-foreground" title={sample.filename}>
+            <div
+              className="mono truncate text-[0.7rem] text-muted-foreground"
+              title={sample.filename}
+            >
               {sample.filename} · {sizeOf(sample.size_bytes)}
             </div>
             <div className="mt-0.5 text-[0.7rem] text-muted-foreground">

@@ -29,7 +29,15 @@ def test_the_console_lists_every_setting_with_its_source(client: TestClient, api
     """Seeing the layer beside the value is what prevents an hour of confusion."""
     groups = client.get(f"{api}/admin/settings").json()
     names = [group["name"] for group in groups]
-    assert names == ["Model", "Login", "Throughput", "Uploads", "Retention", "Platform"]
+    assert names == [
+        "Model",
+        "Training",
+        "Login",
+        "Throughput",
+        "Uploads",
+        "Retention",
+        "Platform",
+    ]
 
     settings = {s["key"]: s for group in groups for s in group["settings"]}
     assert settings["llm.max_tokens"]["source"] in ("env", "default")

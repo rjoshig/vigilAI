@@ -7,6 +7,7 @@ import {
   FileText,
   FolderGit2,
   LayoutList,
+  Lightbulb,
   Moon,
   LogOut,
   Plus,
@@ -20,6 +21,7 @@ import { usePathname } from "next/navigation";
 import * as React from "react";
 
 import { useAuth } from "@/components/auth-gate";
+import { useTrainingEnabled } from "@/components/observation-dialog";
 import { Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +43,13 @@ const NAV: NavItem[] = [
   { href: "/runs/new", label: "New run", icon: Plus },
   { href: "/configs", label: "Config history", icon: FolderGit2 },
 ];
+
+/** Shown only while Train AI mode is on, so the app is unchanged when it is off. */
+const TRAINING_NAV: NavItem = {
+  href: "/observations",
+  label: "My observations",
+  icon: Lightbulb,
+};
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -74,6 +83,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // Null while login is off, which is the shipped default, so the footer stays as it was.
   const { user, signOut } = useAuth();
+  const trainingEnabled = useTrainingEnabled();
+  const nav = trainingEnabled ? [...NAV, TRAINING_NAV] : NAV;
 
   return (
     <div className="flex min-h-screen">
@@ -93,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-2 pb-1 text-[0.625rem] font-semibold uppercase tracking-wider text-muted-foreground">
             Menu
           </div>
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active =
               item.href === "/runs" ? pathname === "/runs" : pathname.startsWith(item.href);
             const Icon = item.icon;

@@ -280,6 +280,15 @@ def synthesize(
     except LLMResponseError as exc:
         raise SynthesisError(f"the model did not return a usable answer: {exc}") from exc
 
+    if not parsed.rules:
+        # Nothing was produced, so nothing is marked. Marking an observation as
+        # synthesized when no candidate exists would take it out of the queue and
+        # leave the person who wrote it waiting for an answer that never comes.
+        raise SynthesisError(
+            "the model returned no rules for these statements; they are unchanged and "
+            "still in the queue"
+        )
+
     source_ids = [observation.id for observation in selected]
     scope = _scope_for(selected)
     created: list[models.RuleCandidate] = []

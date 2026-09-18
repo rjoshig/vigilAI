@@ -56,6 +56,7 @@ class SettingSpec:
 #: The sections the console draws, in order.
 GROUPS: Final[tuple[str, ...]] = (
     "Model",
+    "Training",
     "Login",
     "Throughput",
     "Uploads",

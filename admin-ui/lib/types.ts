@@ -317,12 +317,7 @@ export interface ProviderTestResult {
 
 /* ------------------------------------------------- The training loop (ADR-021) */
 
-export type AnchorKind =
-  | "report_cell"
-  | "report_field"
-  | "osl_section"
-  | "config_path"
-  | "finding";
+export type AnchorKind = "report_cell" | "report_field" | "osl_section" | "config_path" | "finding";
 
 /**
  * What an observation points at. The anchor is what makes reliable synthesis

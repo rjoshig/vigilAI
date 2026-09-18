@@ -245,3 +245,21 @@ def test_a_rejected_candidate_keeps_its_sources(
     )
     assert rejected.status_code == 200
     assert rejected.json()["source_observation_ids"] == [created["id"]]
+
+
+def test_a_synthesis_that_produces_nothing_leaves_the_queue_alone(
+    client: TestClient, api: str, training_on: None
+) -> None:
+    """Marking an observation with no candidate behind it strands its author.
+
+    No scripted responder is installed here, so the stand-in returns nothing usable,
+    which is exactly the case this guards.
+    """
+    created = _observe(client, api, "Something the model cannot express at all.").json()
+    response = client.post(f"{api}/admin/candidates", json={"observation_ids": [created["id"]]})
+    assert response.status_code == 422
+    assert "still in the queue" in response.json()["detail"]
+
+    unchanged = client.get(f"{api}/observations").json()[0]
+    assert unchanged["status"] == "new"
+    assert unchanged["editable"] is True

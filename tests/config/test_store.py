@@ -198,3 +198,23 @@ def test_the_bootstrapping_settings_are_not_editable() -> None:
         "platform.data_dir",
         "platform.bind_host",
     }
+
+
+def test_every_setting_belongs_to_a_listed_group() -> None:
+    """The console renders group by group, so a setting in no group is unreachable.
+
+    This is not hypothetical: three training settings were added with a group the
+    GROUPS tuple did not list, and the endpoint silently dropped them while every
+    other test still passed.
+    """
+    from vigilai.config.registry import GROUPS
+
+    orphans = {spec.key: spec.group for spec in SETTINGS if spec.group not in GROUPS}
+    assert not orphans, f"settings in no listed group: {orphans}"
+
+
+def test_every_group_holds_at_least_one_setting() -> None:
+    """An empty section is a heading with nothing under it."""
+    from vigilai.config.registry import GROUPS, group_of
+
+    assert all(group_of(group) for group in GROUPS)

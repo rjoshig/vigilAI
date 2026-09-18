@@ -7,12 +7,26 @@
  * polls every three seconds until the pipeline finishes.
  */
 
-import { BarChart3, CheckCircle2, Copy, FileText, Lock, RefreshCw, XCircle } from "lucide-react";
+import {
+  BarChart3,
+  CheckCircle2,
+  Copy,
+  FileText,
+  Lightbulb,
+  Lock,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 
 import { EvidencePanel } from "@/components/evidence-panel";
+import {
+  ObservationDialog,
+  anchorOf,
+  useTrainingEnabled,
+} from "@/components/observation-dialog";
 import { StageProgress } from "@/components/stage-progress";
 import {
   Badge,
@@ -47,7 +61,7 @@ import {
   isOk,
 } from "@/lib/display";
 import { buildMatrix, countByStatus, ruleValues, type MatrixRow } from "@/lib/matrix";
-import type { Finding, Requirements, RunDetail, Severity } from "@/lib/types";
+import type { Anchor, Finding, Requirements, RunDetail, Severity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 3000;
@@ -66,6 +80,9 @@ export default function ReviewPage() {
   const [tab, setTab] = React.useState<Tab>("matrix");
   const [openFinding, setOpenFinding] = React.useState<Finding | null>(null);
   const [busy, setBusy] = React.useState(false);
+  // Nothing about training is drawn while this is false, which is the shipped default.
+  const trainingEnabled = useTrainingEnabled();
+  const [observing, setObserving] = React.useState<ObservationTarget | null>(null);
 
   const loadRun = React.useCallback(async () => {
     try {
@@ -189,6 +206,26 @@ export default function ReviewPage() {
             >
               <RefreshCw className="h-4 w-4" /> Re-check
             </Button>
+            {trainingEnabled ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setObserving({
+                    anchors: [
+                      anchorOf("osl_section", {
+                        reference: `run:${run.id}`,
+                        value: `${run.customer_name} · ${run.order_number}`,
+                      }),
+                    ],
+                    context: `This run — ${run.customer_name} · ${run.order_number}`,
+                    findingId: null,
+                  })
+                }
+              >
+                <Lightbulb className="h-4 w-4" /> What should this check?
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" onClick={() => void clone()}>
               <Copy className="h-4 w-4" /> Clone
             </Button>
@@ -307,12 +344,23 @@ export default function ReviewPage() {
               onDecide={decide}
               onBulkOk={() => void bulkOk()}
               onOpen={setOpenFinding}
+              onObserve={trainingEnabled ? setObserving : null}
             />
           )}
         </>
       ) : null}
 
       <EvidencePanel finding={openFinding} onClose={() => setOpenFinding(null)} />
+
+      {observing ? (
+        <ObservationDialog
+          anchors={observing.anchors}
+          context={observing.context}
+          runId={run.id}
+          findingId={observing.findingId}
+          onClose={() => setObserving(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -428,15 +476,70 @@ function FilterChip({ label, on, onClick }: { label: string; on: boolean; onClic
   );
 }
 
+/** What an observation raised from this screen points at. */
+interface ObservationTarget {
+  anchors: Anchor[];
+  context: string;
+  findingId: number | null;
+}
+
+/**
+ * The anchor for an observation raised from a finding.
+ *
+ * Raising one here is the most valuable path in the loop, because it turns a
+ * dismissal into training input rather than a note nobody reads again.
+ */
+function findingTarget(finding: Finding): ObservationTarget {
+  const evidence = finding.evidence ?? {};
+  const anchors: Anchor[] = [
+    anchorOf("finding", { reference: finding.finding_id, value: finding.title }),
+  ];
+  if (evidence.report_name || evidence.report_cell) {
+    anchors.push(
+      anchorOf("report_cell", {
+        artifact: evidence.report_name ?? "",
+        sheet: evidence.report_sheet ?? "",
+        cell: evidence.report_cell ?? "",
+        value: evidence.report_value ?? "",
+      })
+    );
+  }
+  if (evidence.config_path) {
+    anchors.push(
+      anchorOf("config_path", {
+        reference: evidence.config_path,
+        value: evidence.config_value ?? "",
+      })
+    );
+  }
+  if (evidence.osl_ref) {
+    anchors.push(anchorOf("osl_section", { reference: evidence.osl_ref }));
+  }
+  return {
+    anchors,
+    context: `${finding.finding_id} — ${finding.title}`,
+    findingId: finding.id,
+  };
+}
+
 interface FindingsTabProps {
   findings: Finding[];
   busy: boolean;
   onDecide: (finding: Finding, ok: boolean, note: string) => Promise<void>;
   onBulkOk: () => void;
   onOpen: (finding: Finding) => void;
+  /** Null when Train AI mode is off, which removes the control entirely. */
+  onObserve: ((target: ObservationTarget) => void) | null;
 }
 
-function FindingsTab({ findings, busy, onDecide, onBulkOk, onOpen }: FindingsTabProps) {
+function FindingsTab({
+  findings,
+  busy,
+  onDecide,
+  onBulkOk,
+  onOpen,
+  onObserve,
+}: FindingsTabProps) {
   const [severity, setSeverity] = React.useState<Severity | "all">("all");
   const [search, setSearch] = React.useState("");
 
@@ -485,6 +588,7 @@ function FindingsTab({ findings, busy, onDecide, onBulkOk, onOpen }: FindingsTab
             busy={busy}
             onDecide={onDecide}
             onOpen={onOpen}
+            onObserve={onObserve}
           />
         ))}
       </div>
@@ -497,11 +601,13 @@ function FindingCard({
   busy,
   onDecide,
   onOpen,
+  onObserve,
 }: {
   finding: Finding;
   busy: boolean;
   onDecide: (finding: Finding, ok: boolean, note: string) => Promise<void>;
   onOpen: (finding: Finding) => void;
+  onObserve: ((target: ObservationTarget) => void) | null;
 }) {
   const [note, setNote] = React.useState(finding.review_note);
   const decided = finding.review_status !== "undecided";
@@ -557,6 +663,16 @@ function FindingCard({
           onChange={(event) => setNote(event.target.value)}
           aria-label={`Comment on ${finding.finding_id}`}
         />
+        {onObserve ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onObserve(findingTarget(finding))}
+            title="Turn what you know into something the tool can check"
+          >
+            <Lightbulb className="h-4 w-4" /> What should this check?
+          </Button>
+        ) : null}
       </div>
     </Card>
   );
