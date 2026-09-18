@@ -518,6 +518,14 @@ matters.
     against their name, and the outcome comes back to them with the administrator's
     reason. Approval is the real control, so a permission list would guard nothing,
     and a loop that never answers its contributors stops receiving contributions.
+11. **No rule expires on its own, and every rule is findable.** One searchable admin
+    screen lists every rule whatever its origin, filtered to active by default. An
+    administrator enables, disables, or deletes; nothing happens on a timer, because
+    a rule that has not fired in a year is either load-bearing or dead and nothing
+    inside the system can tell which. Deletion is soft and restorable for six months,
+    after which a tombstone remains so findings on old runs still explain themselves.
+    Each of these actions asks the administrator to type the word, because a rule
+    change reaches every future run.
 7. **Provenance is stored, including the diff.** Source observations, model, provider,
    prompt version, approver, timestamp, and what changed between the model's draft and
    the approved rule. The diff is the only measure of how much correcting the model
@@ -527,7 +535,10 @@ matters.
    one evaluator, and one place to look when a finding is wrong.
 
 **Consequences:** Every learned rule can be explained: who said what, which model drew
-which conclusion, who agreed, and what it has done since. The cost is that nothing is
+which conclusion, who agreed, what it has done since, and who last changed its state.
+Because nothing expires, the rule set only grows unless someone tends it, which is why
+the noisy-rule and dead-rule reports are part of the same phase rather than a later
+nicety. The cost is that nothing is
 fast — an observation becomes an enforced rule only after synthesis, approval, replay,
 and a shadow period — and that is the correct trade for a rule that touches every
 customer's validation. Two counters have to exist from the first day, fired count and

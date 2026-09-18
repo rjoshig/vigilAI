@@ -69,23 +69,39 @@ One state machine, for every rule, however it was born — typed by an administr
 synthesized from observations, or shipped as a default.
 
 ```
-observation(s) ──synthesize──▶ draft ──approve──▶ shadow ──activate──▶ active ──retire──▶ retired
-                                 │                   │                    │
-                                 └──reject           └──reject            └──superseded by a newer version
+observation(s) ──synthesize──▶ draft ──approve──▶ shadow ──activate──▶ active
+                                 │                   │                  ▲ │
+                                 └──reject           └──reject          │ └──disable──▶ disabled
+                                                                        └────enable────┘
+                                                                                │
+                                                        delete (either state) ──┴──▶ deleted
+                                                                                      │ restorable
+                                                                                      │ for 6 months
+                                                                                      ▼
+                                                                                  permanent
 ```
 
-- **draft** — the model has proposed it, code has validated it, nobody has agreed to it.
-  It never runs.
+- **draft** — the model has proposed it, code has validated it, nobody has agreed to
+  it. It never runs.
 - **shadow** — it runs on every run, its findings are stored and counted, and no
   reviewer sees them. This is where its precision becomes knowable.
 - **active** — it produces findings like any other rule.
-- **retired** — it no longer runs. Past findings are untouched and past runs stay
-  reproducible through `rules_version`, which already exists.
+- **disabled** — switched off by an administrator, reversible at any time. This is
+  where a noisy rule goes, and where a rule goes that is wrong for now but may be
+  right later.
+- **deleted** — soft. It no longer runs and no longer appears in the default view, and
+  an administrator can restore it for **six months**.
+- **permanent** — after the restore window it cannot be brought back. What survives is
+  its identity, its version, and its provenance, so findings from old runs that cite
+  it still explain themselves.
 
-**Every transition records who did it and when**, and no transition happens by itself.
-That log is not bookkeeping: under the EU AI Act's human-oversight provisions and the
-NIST AI Risk Management Framework, the record of the human decision is itself the
-required artifact, and it is cheap to keep only if it is kept from the start.
+**No rule ever expires on its own.** A rule that has not fired in a year is either
+load-bearing or dead, and nothing inside the system can tell which. The dead-rule
+report surfaces the candidates and a person decides. Every transition records who did
+it and when, and no transition happens by itself. That log is not bookkeeping: under
+the EU AI Act's human-oversight provisions and the NIST AI Risk Management Framework,
+the record of the human decision is itself the required artifact, and it is cheap to
+keep only if it is kept from the start.
 
 ## Scope · ⬜ not started
 
@@ -303,16 +319,48 @@ The part that makes "smarter over time" true rather than aspirational.
       marked **Not OK** (kept) versus **OK** (dismissed), last fired, age.
 - [ ] **Noisy-rule and dead-rule reports.** A rule whose findings are dismissed above a
       threshold, or which has not fired in a long time, is surfaced for review with a
-      one-click retire. Nothing is retired automatically: a rule with a 90% dismissal
-      rate may be the one rule that matters, and only a person knows.
+      one-click disable. Nothing is disabled automatically and nothing expires: a rule
+      with a 90% dismissal rate may be the one rule that matters, and only a person
+      knows.
 - [ ] **A noisy rule is usually an under-scoped rule, not a wrong one.** The most common
       cause of false positives is a rule that encodes an assumption true of most
       records and not all — a field that is genuinely optional for one segment, a
       format that legacy records predate. So the retire prompt offers "narrow the
       scope" beside "retire", because narrowing is usually the right answer and nobody
       reaches for it unprompted.
-- [ ] Deactivating a rule never edits a past finding. Old runs stay reproducible
-      through `rules_version`, which already exists.
+- [ ] Disabling or deleting a rule never edits a past finding. Old runs stay
+      reproducible through `rules_version`, which already exists.
+
+### 6.1i — One searchable rules screen · ⬜ not started
+
+Every rule the tool holds, in one place, whatever its origin. A learned rule that
+cannot be found is worse than no learned rule, because nobody knows why a finding
+appeared.
+
+- [ ] An admin console **Rules** screen listing checks, compliance rules, and field
+      constraints together, with an **origin** column: shipped, written by an
+      administrator, or learned from observations.
+- [ ] **Search** across name, the plain-language reasoning, the field or named values
+      a rule touches, and its scope. This is the screen someone opens when a finding
+      surprises them, so it has to answer "what made this fire" quickly.
+- [ ] **A state filter defaulting to active.** The other states — shadow, disabled,
+      deleted — are one click away, so nothing is hidden and nothing is in the way.
+- [ ] Per rule: its state, scope, severity, origin, fired count, dismissal rate, when
+      it last fired, and for a learned rule its source observations and approver.
+- [ ] **Enable, disable, delete, and restore**, each requiring the administrator to
+      type the word — `enable`, `disable`, `delete`, `restore` — in a confirmation
+      dialog. A rule change reaches every future run, and a typed word is the cheapest
+      way to make sure the click was meant. *(Typing to confirm on the reversible
+      actions is deliberate, at the user's request. If it proves to be friction in
+      practice, enable and disable are the two to reconsider.)*
+- [ ] **Delete is soft and restorable for six months.** A deleted rule stops running
+      immediately, leaves the default view, and can be brought back whole, with its
+      provenance and its history intact.
+- [ ] After six months the retention sweep makes the deletion permanent. It keeps a
+      tombstone — identity, version, provenance, and reasoning — because findings on
+      old runs cite the rule by reference and must still explain themselves.
+- [ ] Every one of these actions is an audit event naming the administrator, and
+      deletions and restores are visible in the rule's own history.
 
 ### 6.1h — Documentation and tests · ⬜ not started
 
@@ -350,6 +398,12 @@ The part that makes "smarter over time" true rather than aspirational.
    dashboard shows its fired count and dismissal rate.
 10. [ ] An observation containing an instruction to the model does not change the shape
     of the synthesized rule, and one containing PII is refused when saved.
+11. [ ] The rules screen finds a rule by a word from its reasoning, shows active rules
+    by default, and reaches disabled and deleted ones through the filter.
+12. [ ] Disabling, deleting, and restoring each require the word typed, take effect on
+    the next run, and appear in the audit log with the administrator's name.
+13. [ ] A rule deleted five months ago can be restored whole; one deleted seven months
+    ago cannot, and a finding from an old run that cites it still explains itself.
 
 ## Decisions (2026-09-18)
 
@@ -367,10 +421,11 @@ Answered by the user; the reasoning is in ADR-021.
 | Showing existing rules while writing | **Yes, inline**, to stop duplicate observations. |
 | An observation contradicting an active rule | **Flagged as a conflict** for the administrator, as a signal the old rule may be wrong. |
 | Telling the author the outcome | **Yes, with the reason.** |
+| Does a learned rule expire | **Never on its own.** Rules live in a searchable admin screen and an administrator enables, disables, or deletes them. |
+| Deleting a rule | **Soft, restorable for six months**, then permanent with a tombstone so old findings still explain themselves. |
+| Confirming a state change | **Type the word** — enable, disable, delete, restore — in a second dialog. |
 
 ## Still open
 
-- [ ] **Does a learned rule ever expire?** A rule nobody has seen fire in a year is
-      either load-bearing or dead, and there is no way to tell from the inside. The
-      dead-rule report in 6.1g surfaces the candidates; whether anything expires on its
-      own is undecided.
+Nothing. Every design question in this phase is answered; the remaining unknowns are
+implementation details that do not change the shape.

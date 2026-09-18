@@ -79,6 +79,9 @@ uses them yet.
 | **Replay** | Running a candidate rule against the golden set and recent finalized runs to see what it would have changed, before approving it. |
 | **Dismissal rate** | The share of a rule's findings that reviewers marked OK. The measure of whether a rule is earning its place. |
 | **Part** | One of several files uploaded for the same report type in one run, with a label. A check declares whether it evaluates `each` part or the `total`. |
+| **Disabled** | A rule an administrator switched off. Reversible at any time, and where a noisy rule goes rather than being deleted. |
+| **Soft delete** | A deleted rule stops running and leaves the default view, and can be restored whole for six months. After that the deletion is permanent. |
+| **Tombstone** | What survives a permanent deletion: identity, version, provenance, and reasoning, so findings on old runs that cite the rule still explain themselves. |
 | **Field constraint** | A rule about one attribute — never blank, allowed values, a range, a format — stored as structured data and evaluated by code, though it was written in plain words. |
 
 ## Identity vocabulary (Phase 6.2, specified but not built)

@@ -64,11 +64,11 @@ answer as an ADR when it lands.
 - [ ] Should users see only their own runs, or everyone's? (v1 has no login: everyone's.)
 - [ ] Is 90-day storage of DIRT files containing PII approved?
 - [ ] Comparison against the same customer's previous run (drift)? Cheap once history exists.
-- [x] Phase 6.1's and 6.2's design questions — answered 2026-09-18 and recorded in the
-      "Decisions" table of each phase doc; ADR-021 and ADR-022 are accepted. One
-      remains: **does a learned rule ever expire?**
-- [ ] Does a learned rule ever expire? The dead-rule report surfaces candidates; whether
-      anything retires on its own is undecided ([phase-6.1.md](phase-6.1.md)).
+- [x] Phase 6.1's and 6.2's design questions — all answered 2026-09-18 and recorded in
+      the "Decisions" table of each phase doc; ADR-021 and ADR-022 are accepted.
+      Learned rules never expire on their own: they live in a searchable admin screen
+      and an administrator enables, disables, or deletes them, with deletion
+      restorable for six months.
 - [ ] Are the fixed compliance rules maintained in the admin-ui or sourced elsewhere?
 - [x] Must every high-severity finding have a decision before the final report can be generated? **Yes** (ADR-015).
 - [ ] Do in-house configs name waterfall steps differently from the OSL (for example

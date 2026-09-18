@@ -80,7 +80,11 @@ their name, an administrator activates a shadowed rule with the numbers shown ra
 than a fixed threshold, replay reads the golden set plus recent finalized runs,
 observations are kept indefinitely, and authors hear the outcome with a reason.
 
-One question is still open: whether a learned rule ever expires.
+The last open question is now answered too: **no rule expires on its own.** Every
+rule lives in one searchable admin screen, filtered to active by default, where an
+administrator enables, disables, or deletes it. Deletion is soft and restorable for
+six months, then permanent with a tombstone so old findings still explain themselves.
+Every one of those actions asks for the word to be typed.
 
 ### Phase 6.2 (specified 2026-09-18)
 
@@ -109,6 +113,42 @@ is one of the open questions.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-18 (rule lifecycle settled; no rule expires on its own)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 6.1 (specification) ·
+**Status:** decided, nothing built.
+
+### What was completed
+
+- The last open design question answered. Learned rules **never expire on their own**,
+  because nothing inside the system can tell a load-bearing rule from a dead one.
+- New milestone 6.1i, one searchable **Rules** screen holding checks, compliance
+  rules, and field constraints together with an origin column, a state filter
+  defaulting to active, and per-rule statistics.
+- The lifecycle gained `disabled` (reversible) and a **soft delete restorable for six
+  months**, then permanent with a tombstone so findings on old runs that cite a rule
+  still explain themselves. `retired` is gone; it was a second word for `disabled`.
+- Enable, disable, delete, and restore each require the administrator to type the
+  word. Noted in the doc that typing to confirm on the two reversible actions is
+  deliberate and is the thing to reconsider if it becomes friction.
+- ADR-021 gained decision 11 and a consequence: because nothing expires, the rule set
+  grows unless someone tends it, which is what the noisy-rule and dead-rule reports
+  are for.
+
+### Pending
+
+Both phases are fully specified and decided. Nothing is built.
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here": Phase 6.2, milestone 6.2a.
 
 ---
 
