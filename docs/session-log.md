@@ -11,24 +11,41 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Current phase | **2 — Pipeline core (CLI)** |
-| Current milestone | 2a–2e done (all nine stages run); **2f next** (CLI and golden set) |
+| Current phase | **2 complete** → **3 next** (web app) |
+| Current milestone | Phase 2 done except the real-model benchmark (deferred, ADR-014) |
 | Branch | `claude/funny-cerf-jsyvpe` (Phase 0 PR still open against `main`) |
 | Last updated | 2026-09-18 |
 
-**Next action:** milestone 2f — `src/vigilai/cli.py`
-(`vigilai run --osl … --config … --report dirt=… --out findings.json`, with
-`--provider`, `--cache`, and `--log-level`), `tests/fixtures/golden/` (10–20 synthetic
-OSLs with known rules), and `scripts/golden_set.py` printing precision and recall per
-`req_type`. The six generator cases already carry their oracles in `manifest.json`;
-extend that set rather than inventing a second format.
+**Next action:** before Phase 3, ask the user to confirm the phase gate, since Phase 2
+acceptance criterion 2 is deliberately incomplete (ADR-014: no local model yet). Then
+read `docs/phase-3.md` end to end and start the web app: docker-compose, Postgres plus
+the Procrastinate queue, the API under `/api/v1`, and user-ui.
 
-**Environment:** `.venv` on Python 3.10.14; `source .venv/bin/activate` then
-`black . --target-version py310 && flake8 && mypy src/ && pytest`.
+**Try it now:**
 
-**Blocked on the user (does not block 2f):** a sanitized shape reference for the real
-OSL / config / report layouts, and a local model for the 2f benchmark (deferred by
-ADR-014). Remaining open questions are in `docs/phase-plan.md`.
+```bash
+source .venv/bin/activate
+python scripts/generate_fixtures.py --out /tmp/fx
+vigilai run --osl /tmp/fx/cases/geography_extra_state/osl.docx \
+  --config /tmp/fx/cases/geography_extra_state/config.json \
+  --report dirt=/tmp/fx/cases/geography_extra_state/reports/dirt.xlsx \
+  --report state_distribution=/tmp/fx/cases/geography_extra_state/reports/state_distribution.xlsx \
+  --report counts=/tmp/fx/cases/geography_extra_state/reports/counts.xlsx \
+  --out /tmp/findings.json --provider mock
+python scripts/golden_set.py
+```
+
+**Environment:** `.venv` on Python 3.10.14; `black . --target-version py310 && flake8 &&
+mypy src/ && pytest`.
+
+**Outstanding, needs the user:**
+
+- A local model (Ollama plus a Gemma) or an Anthropic key, to close Phase 2 criterion 2
+  and validate the prompt wording. Expect a prompt-version bump afterwards.
+- A sanitized shape reference for the real OSL, config, and report layouts. The parsers
+  sit behind Protocols (ADR-006) precisely so this can arrive late, but every layout
+  assumption in the code today came from the synthetic fixtures.
+- The remaining open questions in `docs/phase-plan.md`.
 
 ---
 
@@ -324,6 +341,53 @@ nine stages now run end to end.
 ### Blockers
 
 None.
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (Phase 2 — milestone 2f; Phase 2 complete)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 2 · **Status:** complete except the
+deferred real-model benchmark.
+
+### What was completed
+
+- `src/vigilai/cli.py`: `vigilai run` with `--osl`, `--config`, repeatable `--report
+  KIND=PATH`, `--out`, `--provider`, `--cache`, `--stage`, and `--log-level`. Writes a
+  findings document carrying the summary, per-severity counts, per-stage statistics,
+  the finalize-gate state, and every finding with its evidence.
+- `scripts/synthetic_model.py`: the scripted stand-in that answers each LLM stage by
+  reading the prompt. Lifted out of the test conftest so the golden set and the suite
+  drive the pipeline identically.
+- Golden set expanded to 12 cases covering every finding type in the design doc's table,
+  each carrying its oracle in `manifest.json`.
+- `scripts/golden_set.py`: scores recall and precision per finding type and per case,
+  writes a Markdown report, and exits non-zero on a regression so CI can gate on it.
+- `docs/benchmarks/`: the synthetic baseline, 12 / 12 cases, and a README stating plainly
+  what that number does and does not prove.
+- 505 tests, 95% branch coverage. All four gates clean.
+
+### Notable decisions and fixes
+
+- The CLI exits 0 for a run that completes and finds problems, and non-zero only when
+  the run itself fails. A wrapper has to be able to tell "the delivery is wrong" from
+  "the check did not happen".
+- A failed run still writes its document, carrying the stages that completed and the
+  error, so a caller can see how far it got.
+- `run_command` takes an optional client, which is the seam the golden set injects the
+  scripted stand-in through. No fixture-aware code lives in `src/vigilai/`.
+- The scripted model could not read a filter whose threshold is stored in `value`
+  rather than `min`, which cost one golden-set case. Fixed in the responder, since a
+  real model would read both spellings.
+
+### Pending
+
+Phase 2 acceptance criterion 2: the real-model golden-set run. Everything else is done.
+
+### Blockers
+
+The real-model run needs a local model or an API key from the user (ADR-014).
 
 ### Next concrete action
 

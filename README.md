@@ -95,6 +95,7 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/glossary.md`](docs/glossary.md) — OSL, DIRT, waterfall, req_type, named value, trace, finding…
 - [`docs/session-log.md`](docs/session-log.md) — working journal (read first / write last)
 - [`standards/`](standards/README.md) — coding standards and git rules
+- [`docs/benchmarks/README.md`](docs/benchmarks/README.md) — golden-set accuracy numbers.
 - [`mock/README.md`](mock/README.md), [`user-ui/README.md`](user-ui/README.md),
   [`admin-ui/README.md`](admin-ui/README.md), [`src/vigilai/README.md`](src/vigilai/README.md),
   [`tests/README.md`](tests/README.md), [`scripts/README.md`](scripts/README.md)

@@ -163,7 +163,7 @@ def test_stage_4_reports_not_related_when_nothing_implements_a_rule(
 
 
 def test_shortlist_narrows_by_type_then_field() -> None:
-    from tests.pipeline.conftest import FIXTURE_ALIASES
+    from synthetic_model import FIXTURE_ALIASES
 
     rule = Rule(
         rule_id="R-1",
@@ -203,7 +203,7 @@ def test_shortlist_narrows_by_type_then_field() -> None:
 
 def test_shortlist_falls_back_to_type_when_no_field_matches() -> None:
     """A missing alias must not masquerade as "no config rule"."""
-    from tests.pipeline.conftest import FIXTURE_ALIASES
+    from synthetic_model import FIXTURE_ALIASES
 
     rule = Rule(
         rule_id="R-1",
@@ -225,7 +225,7 @@ def test_shortlist_falls_back_to_type_when_no_field_matches() -> None:
 
 
 def test_exact_match_resolves_aliases_and_number_formatting() -> None:
-    from tests.pipeline.conftest import FIXTURE_ALIASES
+    from synthetic_model import FIXTURE_ALIASES
 
     rule = Rule(
         rule_id="R-1",

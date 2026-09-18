@@ -69,6 +69,8 @@ class Criterion:
             mismatch case; ``None`` means the config omits the rule entirely.
         delivered_min: The minimum the DIRT reports for this attribute.
         delivered_max: The maximum the DIRT reports.
+        config_operator: The operator the config uses. ``None`` means it matches the
+            OSL; setting it creates an operator mismatch with identical thresholds.
     """
 
     field_name: str
@@ -78,6 +80,7 @@ class Criterion:
     config_value: float | None
     delivered_min: float
     delivered_max: float
+    config_operator: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +100,10 @@ class Case:
         osl_attributes: Attributes the OSL asks for.
         config_attributes: Attributes the config outputs.
         report_attributes: Attributes the reports actually carry.
-        waterfall: Step names in order.
+        waterfall: Step names in order, as the OSL states them.
+        config_waterfall: Step names the config runs. ``None`` means it matches.
+        extra_config_filter: An ``(attribute, threshold)`` the config filters on and the
+            OSL never mentions, for the reverse pass.
         input_count: Records entering the flow.
         step_removals: Records removed at each step, parallel to ``waterfall`` after the
             first (input) step.
@@ -120,8 +126,10 @@ class Case:
     config_attributes: tuple[str, ...]
     report_attributes: tuple[str, ...]
     waterfall: tuple[str, ...]
-    input_count: int
-    step_removals: tuple[int, ...]
+    config_waterfall: tuple[str, ...] | None = None
+    extra_config_filter: tuple[str, float] | None = None
+    input_count: int = 1_000_000
+    step_removals: tuple[int, ...] = ()
     unexplained_loss: int = 0
     expected_findings: tuple[str, ...] = ()
     notes: str = ""
@@ -261,6 +269,127 @@ CASES: Final[tuple[Case, ...]] = (
         unexplained_loss=588,
         expected_findings=("count_does_not_reconcile",),
     ),
+    Case(
+        name="operator_boundary_drift",
+        description="Config uses > where the OSL says at least, so the boundary value differs.",
+        customer=CUSTOMERS[1],
+        order_number="ORD-10007",
+        configuration_id="CFG-SYNTH-OPERATOR-07",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=(
+            Criterion("SCORE_V3", "score", ">=", 755.0, 755.0, 755.0, 850.0, config_operator=">"),
+            Criterion("AGE", "age", ">=", 21.0, 21.0, 21.0, 94.0),
+            Criterion("REV_UTIL", "revolving utilization", "<", 0.60, 0.60, 0.0, 0.599),
+            Criterion("OPEN_TRADES", "open trades", ">=", 2.0, 2.0, 2.0, 41.0),
+        ),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        expected_findings=("operator_mismatch",),
+    ),
+    Case(
+        name="extra_config_filter",
+        description="The config filters on an attribute the OSL never mentions.",
+        customer=CUSTOMERS[2],
+        order_number="ORD-10008",
+        configuration_id="CFG-SYNTH-EXTRA-08",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=(
+            Criterion("SCORE_V3", "score", ">=", 755.0, 755.0, 755.0, 850.0),
+            Criterion("AGE", "age", ">=", 21.0, 21.0, 21.0, 94.0),
+            Criterion("REV_UTIL", "revolving utilization", "<", 0.60, 0.60, 0.0, 0.599),
+            Criterion("OPEN_TRADES", "open trades", ">=", 2.0, 2.0, 2.0, 41.0),
+        ),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        extra_config_filter=("INCOME_EST", 40_000),
+        expected_findings=("extra_rule_in_config",),
+    ),
+    Case(
+        name="report_violates_state_rule",
+        description="Config matches the OSL, but the delivered file contains an unlisted state.",
+        customer=CUSTOMERS[3],
+        order_number="ORD-10009",
+        configuration_id="CFG-SYNTH-REPORTONLY-09",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ", "OH"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        expected_findings=("report_violates_rule",),
+    ),
+    Case(
+        name="missing_waterfall_step",
+        description="The OSL requires an exclusions step the config pipeline does not run.",
+        customer=CUSTOMERS[0],
+        order_number="ORD-10010",
+        configuration_id="CFG-SYNTH-STEPS-10",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        config_waterfall=("input", "geography", "score", "age", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        expected_findings=("rule_missing_in_config",),
+    ),
+    Case(
+        name="reordered_waterfall",
+        description="The config runs the score step before geography; the OSL says otherwise.",
+        customer=CUSTOMERS[1],
+        order_number="ORD-10011",
+        configuration_id="CFG-SYNTH-ORDER-11",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        config_waterfall=("input", "score", "geography", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        expected_findings=("waterfall_order_mismatch",),
+    ),
+    Case(
+        name="missing_state_in_config",
+        description="The OSL allows two states; the config filters to one of them.",
+        customer=CUSTOMERS[2],
+        order_number="ORD-10012",
+        configuration_id="CFG-SYNTH-NARROW-12",
+        osl_states=("IL", "AZ"),
+        config_states=("IL",),
+        report_states=("IL",),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(700_000, 150_000, 3_905, 1_204, 2_109),
+        expected_findings=("rule_missing_in_config",),
+    ),
 )
 
 
@@ -395,15 +524,20 @@ def write_config(case: Case, path: Path) -> None:
     filters: list[dict[str, object]] = [
         {"field": "ST", "op": "in", "value": list(case.config_states)},
     ]
+    if case.extra_config_filter is not None:
+        attribute, threshold = case.extra_config_filter
+        filters.append({"field": attribute, "op": ">=", "value": threshold})
+
     rules: dict[str, object] = {}
     for criterion in case.criteria:
         if criterion.config_value is None:
             continue
         key = criterion.field_name.lower()
-        bound = "max" if criterion.operator in ("<", "<=") else "min"
+        operator = criterion.config_operator or criterion.operator
+        bound = "max" if operator in ("<", "<=") else "min"
         rules[key] = {
             "field": criterion.field_name,
-            "op": criterion.operator,
+            "op": operator,
             bound: criterion.config_value,
         }
 
@@ -418,7 +552,7 @@ def write_config(case: Case, path: Path) -> None:
         "suppressions": {"ofac": True, "deceased": True},
         "dedupe": {"key": ["SSN", "ZIP"]},
         "output": {"fields": list(case.config_attributes)},
-        "pipeline": {"steps": list(case.waterfall)},
+        "pipeline": {"steps": list(case.config_waterfall or case.waterfall)},
         "logging": {"level": "INFO", "destination": "stdout"},
     }
     path.parent.mkdir(parents=True, exist_ok=True)
