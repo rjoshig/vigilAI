@@ -28,7 +28,7 @@ def templates(client: TestClient, api: str, fixtures_root: Path, cases: dict[str
     for kind in ("billing", "counts", "dirt"):
         path = fixtures_root / case["reports"][kind]
         response = client.post(
-            f"{api}/admin/artifact-types/{kind}/sample",
+            f"{api}/admin/artifact-types/{kind}/samples",
             files={
                 "file": (
                     f"{kind}_sample.xlsx",
@@ -101,12 +101,12 @@ def test_a_sample_is_stored_with_its_sheets(client: TestClient, api: str, templa
     body = client.get(f"{api}/admin/artifact-types").json()
     counts = next(t for t in body if t["key"] == "counts")
     assert "Flow" in counts["sheets"]
-    assert counts["has_sample"] is True
+    assert len(counts["samples"]) == 1
 
 
 def test_a_sample_for_an_unknown_type_is_a_404(client: TestClient, api: str) -> None:
     response = client.post(
-        f"{api}/admin/artifact-types/invoices/sample",
+        f"{api}/admin/artifact-types/invoices/samples",
         files={"file": ("x.xlsx", b"PK", "application/vnd.ms-excel")},
     )
     assert response.status_code == 404

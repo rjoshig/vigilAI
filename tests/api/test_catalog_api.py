@@ -111,7 +111,7 @@ def test_a_sample_upload_is_recorded_against_the_type(
     """Uploading a sample is how an administrator shows what the report looks like."""
     path = fixtures_root / cases["baseline_match"]["reports"]["dirt"]
     response = client.post(
-        f"{api}/admin/artifact-types/dirt/sample",
+        f"{api}/admin/artifact-types/dirt/samples",
         files={
             "file": (
                 "dirt_sample.xlsx",
@@ -122,12 +122,13 @@ def test_a_sample_upload_is_recorded_against_the_type(
     )
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["has_sample"] is True
+    assert len(body["samples"]) == 1
+    assert body["samples"][0]["filename"] == "dirt_sample.xlsx"
     assert body["sheets"]
 
     assert (
         client.post(
-            f"{api}/admin/artifact-types/nope/sample",
+            f"{api}/admin/artifact-types/nope/samples",
             files={
                 "file": (
                     "s.xlsx",
@@ -310,3 +311,97 @@ def test_configured_guidance_reaches_the_prompts(
     assert "Suppressions were applied to it." in joined
     assert "Opt-out suppression is mandatory." in joined
     assert "About the document below: Ignore the cover page." in joined
+
+
+# --- samples (ADR-021) --------------------------------------------------------------
+
+
+def _sample(
+    fixtures_root: Any, cases: dict[str, Any], kind: str = "dirt"
+) -> tuple[str, bytes, str]:
+    """A synthetic workbook to upload as a sample."""
+    path = fixtures_root / cases["baseline_match"]["reports"][kind]
+    return (
+        f"{kind}_sample.xlsx",
+        path.read_bytes(),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+def test_a_type_holds_up_to_three_samples(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """Real layouts vary between customers, and one sample hides that."""
+    for index in range(3):
+        response = client.post(
+            f"{api}/admin/artifact-types/dirt/samples",
+            files={"file": _sample(fixtures_root, cases)},
+            data={"label": f"customer {index}"},
+        )
+        assert response.status_code == 201, response.text
+
+    body = response.json()
+    assert len(body["samples"]) == 3
+    assert [s["label"] for s in body["samples"]] == ["customer 0", "customer 1", "customer 2"]
+
+    fourth = client.post(
+        f"{api}/admin/artifact-types/dirt/samples",
+        files={"file": _sample(fixtures_root, cases)},
+    )
+    assert fourth.status_code == 409
+    assert "remove one" in fourth.json()["detail"]
+
+
+def test_a_sample_can_be_downloaded_and_removed(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """An administrator has to be able to open the sample in use, not just read about it."""
+    name, content, media = _sample(fixtures_root, cases)
+    created = client.post(
+        f"{api}/admin/artifact-types/dirt/samples", files={"file": (name, content, media)}
+    ).json()
+    sample_id = created["samples"][0]["id"]
+
+    downloaded = client.get(f"{api}/admin/artifact-types/dirt/samples/{sample_id}/download")
+    assert downloaded.status_code == 200
+    assert downloaded.content == content
+    assert name in downloaded.headers["content-disposition"]
+
+    assert client.delete(f"{api}/admin/artifact-types/dirt/samples/{sample_id}").status_code == 204
+    after = client.get(f"{api}/admin/artifact-types").json()
+    assert next(t for t in after if t["key"] == "dirt")["samples"] == []
+
+
+def test_a_sample_preview_shows_cells_with_their_labels(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """This is what someone reads while deciding where a named value should point."""
+    created = client.post(
+        f"{api}/admin/artifact-types/counts/samples",
+        files={"file": _sample(fixtures_root, cases, "counts")},
+    ).json()
+    sample_id = created["samples"][0]["id"]
+
+    preview = client.get(f"{api}/admin/artifact-types/counts/samples/{sample_id}/preview")
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["sheets"]
+    first = body["sheets"][0]
+    assert first["name"]
+    assert first["cells"]
+    assert all(cell["cell"] for cell in first["cells"])
+
+
+def test_a_sample_of_another_type_is_not_reachable_through_this_one(
+    client: TestClient, api: str, fixtures_root: Any, cases: dict[str, Any]
+) -> None:
+    """The key in the path is part of the identity, not decoration."""
+    created = client.post(
+        f"{api}/admin/artifact-types/dirt/samples",
+        files={"file": _sample(fixtures_root, cases)},
+    ).json()
+    sample_id = created["samples"][0]["id"]
+    assert (
+        client.get(f"{api}/admin/artifact-types/counts/samples/{sample_id}/preview").status_code
+        == 404
+    )

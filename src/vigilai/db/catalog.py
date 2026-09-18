@@ -54,7 +54,7 @@ class ArtifactSpec:
         is_builtin: Whether it ships with the tool. A built-in may be disabled but not
             deleted, because the fixed report checks look for its key.
         sort_order: Display order on the form.
-        has_sample: Whether a sample workbook has been uploaded.
+        has_sample: Whether at least one sample workbook has been uploaded.
     """
 
     key: str
@@ -287,7 +287,7 @@ def load_artifacts(session: Session, active_only: bool = False) -> list[Artifact
             is_required=row.is_required,
             is_builtin=row.is_builtin,
             sort_order=row.sort_order,
-            has_sample=bool(row.storage_path),
+            has_sample=bool(row.samples),
         )
         for row in rows
     ]

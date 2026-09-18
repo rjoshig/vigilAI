@@ -14,7 +14,17 @@ from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Sequence, cast
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from vigilai.api import schemas_admin as wire
@@ -85,6 +95,82 @@ def _sheets(path: Path, key: str) -> list[str]:
         return [sheet.name for sheet in parser_for(key).parse(path).sheets]
     except ParseError:
         return []
+
+
+#: The most samples one artifact type may hold. Enough to show how a layout varies
+#: between customers, few enough that an administrator reads them all (ADR-021).
+MAX_SAMPLES: Final[int] = 3
+
+#: How many populated cells a preview returns per sheet. A person scanning for where
+#: a value lives reads the top of a sheet, not four thousand rows of it.
+PREVIEW_CELLS: Final[int] = 400
+
+
+def _get_sample(session: Session, key: str, sample_id: int) -> models.ArtifactSample:
+    """Fetch one sample, checking it belongs to the type in the path.
+
+    Args:
+        session: The request's session.
+        key: The artifact key.
+        sample_id: The sample.
+
+    Returns:
+        The sample.
+
+    Raises:
+        HTTPException: 404 when it does not exist or belongs to another type.
+    """
+    sample = session.get(models.ArtifactSample, sample_id)
+    if sample is None or sample.artifact_type.key != key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"sample {sample_id} not found for {key!r}")
+    return sample
+
+
+def _sheet_preview(sheet: Any, masked: tuple[str, ...]) -> wire.SheetPreview:
+    """Render one sheet's populated cells for the console.
+
+    Args:
+        sheet: The parsed sheet.
+        masked: The masked-column patterns, applied at parse time already; the names
+            are reported so the console can say why a column reads as ``[masked]``.
+
+    Returns:
+        The preview, truncated to the first few hundred populated cells. The label to
+        a cell's left is included because that is how a named value should point at
+        it: a label survives an inserted row and a cell address does not.
+    """
+    cells: list[wire.CellPreview] = []
+    for row_index, row in enumerate(sheet.rows, start=1):
+        first_text = ""
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.strip():
+                first_text = cell.value.strip()
+                break
+        for column_index, cell in enumerate(row, start=1):
+            if cell.value is None or str(cell.value).strip() == "":
+                continue
+            if len(cells) >= PREVIEW_CELLS:
+                break
+            text = str(cell.value)
+            cells.append(
+                wire.CellPreview(
+                    cell=cell.address,
+                    value=text[:200],
+                    label=first_text[:200] if text != first_text else "",
+                    row=row_index,
+                    column=column_index,
+                )
+            )
+        if len(cells) >= PREVIEW_CELLS:
+            break
+
+    del masked  # applied at parse time; kept in the signature so the reason is visible
+    return wire.SheetPreview(
+        name=sheet.name,
+        rows=len(sheet.rows),
+        columns=len(sheet.header) if sheet.header else 0,
+        cells=cells,
+    )
 
 
 def _artifact_out(
@@ -238,40 +324,51 @@ def save_artifact_type(
 
 
 @router.post(
-    "/artifact-types/{key}/sample",
+    "/artifact-types/{key}/samples",
     response_model=wire.ArtifactTypeOut,
     status_code=status.HTTP_201_CREATED,
 )
 def upload_sample(
     key: str,
     file: Annotated[UploadFile, File()],
+    label: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_admin),
 ) -> wire.ArtifactTypeOut:
-    """Upload or replace the sample for one artifact type.
+    """Add a sample to an artifact type, up to three.
 
     Args:
         key: The artifact key.
+        label: What distinguishes this sample from the others, such as the customer
+            or the year.
+        notes: Anything worth saying about it.
         file: The sample.
         session: The request's session.
         data_dir: The shared volume.
-        user: The caller.
+        user: The calling administrator.
 
     Returns:
-        The updated type, with the sheets the sample holds.
+        The updated type with all of its samples.
 
     Raises:
         HTTPException: 404 when the type does not exist, 400 when the upload is
-            rejected.
+            rejected, and 409 when three samples are already stored. Three is enough
+            to show how a layout varies and few enough that an administrator reads
+            them all; the fourth is refused rather than silently dropping one.
     """
-    require_admin(user)
     catalog.seed_defaults(session)
     row = session.execute(
         sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+    if len(row.samples) >= MAX_SAMPLES:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{key!r} already has {MAX_SAMPLES} samples; remove one before adding another",
+        )
 
     try:
         stored = store_upload(
@@ -285,11 +382,151 @@ def upload_sample(
     except UploadError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    row.filename = stored.filename
-    row.storage_path = stored.storage_key
+    sample = models.ArtifactSample(
+        artifact_type_id=row.id,
+        label=label.strip(),
+        notes=notes.strip(),
+        filename=stored.filename,
+        storage_path=stored.storage_key,
+        sha256=stored.sha256,
+        size_bytes=stored.size_bytes,
+        # Read once here so the console and the type detector never have to open the
+        # workbook again, which is the slow part of both.
+        sheets=_sheets(data_dir / stored.storage_key, key),
+        uploaded_by_user_id=user.id,
+        uploaded_by=user.name,
+    )
+    session.add(sample)
     session.flush()
-    repository.audit(session, "admin.sample_uploaded", detail=key)
+    session.refresh(row)
+    repository.audit(session, "admin.sample_uploaded", detail=key, user_id=user.id, actor=user.name)
     return _artifact_out(row, data_dir)
+
+
+@router.get("/artifact-types/{key}/samples/{sample_id}/download")
+def download_sample(
+    key: str,
+    sample_id: int,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> FileResponse:
+    """Download a stored sample.
+
+    An administrator has to be able to see the sample in use; describing it is not
+    the same as opening it.
+
+    Args:
+        key: The artifact key.
+        sample_id: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Returns:
+        The file, under the name it was uploaded with.
+
+    Raises:
+        HTTPException: 404 when the sample or its file is missing.
+    """
+    sample = _get_sample(session, key, sample_id)
+    path = data_dir / sample.storage_path
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "the stored file is missing")
+    repository.audit(
+        session,
+        "admin.sample_downloaded",
+        detail=f"{key}/{sample_id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return FileResponse(
+        path,
+        filename=sample.filename or f"{key}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.get(
+    "/artifact-types/{key}/samples/{sample_id}/preview",
+    response_model=wire.SamplePreviewOut,
+)
+def preview_sample(
+    key: str,
+    sample_id: int,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    _user: CurrentUser = Depends(require_admin),
+) -> wire.SamplePreviewOut:
+    """Show what a sample contains, cell by cell.
+
+    This is what someone reads while deciding what a report means and where a named
+    value should point. Values pass through the same masking as a real upload,
+    because a sample is a file that may hold customer data (ADR-003).
+
+    Args:
+        key: The artifact key.
+        sample_id: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        _user: The calling administrator.
+
+    Returns:
+        Each sheet with its populated cells, their addresses, and the label to the
+        left of each one where there is one.
+
+    Raises:
+        HTTPException: 404 when the sample is missing, 422 when it cannot be parsed.
+    """
+    sample = _get_sample(session, key, sample_id)
+    path = data_dir / sample.storage_path
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "the stored file is missing")
+    try:
+        document = parser_for(key).parse(path)
+    except ParseError as exc:
+        raise HTTPException(HTTP_422, f"the sample could not be read: {exc}") from exc
+
+    masked = repository.load_masked_columns(session)
+    return wire.SamplePreviewOut(
+        sample_id=sample.id,
+        filename=sample.filename,
+        sheets=[_sheet_preview(sheet, masked) for sheet in document.sheets],
+    )
+
+
+@router.delete("/artifact-types/{key}/samples/{sample_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sample(
+    key: str,
+    sample_id: int,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> None:
+    """Remove one sample.
+
+    Args:
+        key: The artifact key.
+        sample_id: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    sample = _get_sample(session, key, sample_id)
+    path = data_dir / sample.storage_path
+    session.delete(sample)
+    if path.exists():
+        path.unlink()
+    repository.audit(
+        session,
+        "admin.sample_deleted",
+        detail=f"{key}/{sample_id}",
+        user_id=user.id,
+        actor=user.name,
+    )
 
 
 @router.delete("/artifact-types/{key}", status_code=status.HTTP_204_NO_CONTENT)
