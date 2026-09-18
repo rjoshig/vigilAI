@@ -26,6 +26,7 @@ from vigilai.llm.client import (
     LLMResult,
 )
 from vigilai.llm.settings import LLMSettings
+from vigilai.llm.tripwire import assert_clean
 
 __all__ = ["BaseClient", "extract_json"]
 
@@ -154,6 +155,14 @@ class BaseClient(ABC):
             LLMError: When the transport fails.
         """
         version = prompt_version or self.settings.prompt_version
+
+        # The backstop for ADR-003. Masking happens at parse time, so nothing should
+        # reach here; this catches the case where a new stage, a fixture, or a parser
+        # change lets something through. Checked before the cache, so the answer does
+        # not depend on whether this content was seen before.
+        if self.settings.pii_tripwire:
+            assert_clean(f"{system}\n{user}", stage=stage)
+
         content = self._canonical(system, user, schema)
 
         cached = self.cache.lookup(content, version)

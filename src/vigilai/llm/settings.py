@@ -30,6 +30,7 @@ _DEFAULTS: Final[Mapping[str, str]] = {
     "LLM_MAX_CONCURRENCY": "4",
     "LLM_MAX_TOKENS_PER_RUN": "400000",
     "LLM_LOG_PROMPTS": "false",
+    "LLM_PII_TRIPWIRE": "true",
     "LLM_PROMPT_VERSION": "1",
 }
 
@@ -53,6 +54,9 @@ class LLMSettings(BaseModel):
         max_tokens_per_run: The run budget; exceeding it stops the run.
         log_prompts: Whether prompt text may be logged. False except for synthetic data
             on a developer machine (ADR-003).
+        pii_tripwire: Whether to scan every assembled prompt for personal data and
+            refuse to send it on a match. On by default and left on: it is the backstop
+            for masking, and a prompt already sent cannot be recalled.
         prompt_version: The global prompt-set version, part of every cache key.
     """
 
@@ -68,6 +72,7 @@ class LLMSettings(BaseModel):
     max_concurrency: int = Field(default=4, gt=0)
     max_tokens_per_run: int = Field(default=400_000, gt=0)
     log_prompts: bool = False
+    pii_tripwire: bool = True
     prompt_version: str = "1"
 
     @field_validator("base_url")
@@ -159,6 +164,7 @@ class LLMSettings(BaseModel):
                 max_concurrency=integer("LLM_MAX_CONCURRENCY"),
                 max_tokens_per_run=integer("LLM_MAX_TOKENS_PER_RUN"),
                 log_prompts=boolean("LLM_LOG_PROMPTS"),
+                pii_tripwire=boolean("LLM_PII_TRIPWIRE"),
                 prompt_version=get("LLM_PROMPT_VERSION"),
             )
         except ValueError as exc:

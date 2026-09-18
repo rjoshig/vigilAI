@@ -337,3 +337,38 @@ confused about which store it is using. Alembic migrations must stay portable: a
 changes only, no Postgres-only DDL, and both backends are exercised in the test suite.
 Anything that genuinely needs Postgres (a partial index, `LISTEN/NOTIFY`) needs a new
 ADR and a documented fallback for SQLite.
+
+## ADR-018 — A PII tripwire on every prompt, failing closed
+
+**Status:** accepted 2026-09-18 (Phase 6)
+
+**Context:** ADR-003 says no sample row or PII reaches a prompt, and masking at parse
+time is how that is enforced. That is the right place for it, but it is one layer: a new
+stage that assembles its own text, a fixture that leaks, or a parser change that stops
+masking a column would all defeat it silently. Phase 6 asks for a tripwire on every
+assembled prompt.
+
+**Decision:** `vigilai/llm/tripwire.py` scans every assembled prompt inside the adapter,
+before the cache lookup and therefore before any path to the network. It matches
+formats, not meanings: SSN, card number, email, phone, street address, and a labelled
+date of birth. On a match it **raises**, and the prompt is not sent.
+
+Three details that make it usable rather than theatre:
+
+- **It fails closed.** A prompt already sent cannot be recalled, so the cost of a false
+  positive (a failed run with a clear message) is far below the cost of a false negative
+  (customer data in a third party's logs).
+- **The patterns are narrow.** A "looks like a name" rule would fire on ordinary
+  requirement text and teach people to switch the tripwire off, which is worse than not
+  having one. The test suite asserts that ten samples of real pipeline text pass.
+- **The error carries no value.** Matches are reported by pattern name, position, and a
+  redacted shape. The exception message reaches logs, and logs hold ids and counts only.
+
+It runs before the cache so the answer cannot depend on whether the same content was
+seen before. `LLM_PII_TRIPWIRE=false` exists for a deployment that must, and a single
+pattern can be disabled individually, which is the right response to a false positive.
+
+**Consequences:** Every prompt pays a handful of regex scans, which is nothing beside a
+model call. A deployment whose own data legitimately matches a pattern narrows that
+pattern rather than disabling the tripwire. The masked-column list remains the primary
+control; this is the backstop that says when it has failed.

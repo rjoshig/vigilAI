@@ -41,6 +41,11 @@ IDLE_SLEEP_SECONDS: Final[float] = 1.0
 #: up by another rather than sitting in ``running`` forever.
 STALE_CLAIM_SECONDS: Final[int] = 900
 
+#: How often to make sure a purge job is queued. The worker schedules its own retention
+#: sweep so a deployment needs no cron entry; several workers racing to queue one is
+#: harmless because the queue is idempotent about it.
+PURGE_INTERVAL_SECONDS: Final[int] = 24 * 60 * 60
+
 
 class Worker:
     """Claims and runs jobs until told to stop."""
@@ -65,6 +70,7 @@ class Worker:
         self._is_sqlite = is_sqlite
         self._llm_settings = llm_settings or LLMSettings.from_env()
         self._stopping = False
+        self._last_purge_scheduled = 0.0
         self._handlers: Mapping[str, Callable[[ClaimedJob], None]] = {
             TASK_RUN_PIPELINE: self._run_pipeline,
             TASK_RECHECK: self._recheck,
@@ -93,6 +99,7 @@ class Worker:
             if max_iterations is not None and iterations >= max_iterations:
                 break
             iterations += 1
+            self.ensure_purge_scheduled()
 
             if self.run_once():
                 processed += 1
@@ -101,6 +108,28 @@ class Worker:
 
         _LOG.info("worker stopped after %d job(s)", processed)
         return processed
+
+    def ensure_purge_scheduled(self) -> bool:
+        """Queue the retention sweep if one is not already waiting.
+
+        Args:
+            None.
+
+        Returns:
+            ``True`` when a purge job was queued.
+        """
+        now = time.monotonic()
+        if self._last_purge_scheduled and now - self._last_purge_scheduled < PURGE_INTERVAL_SECONDS:
+            return False
+        self._last_purge_scheduled = now
+
+        with session_scope(self._factory) as session:
+            queue = JobQueue(session, self._is_sqlite)
+            if queue.queued_count(TASK_PURGE):
+                return False
+            queue.enqueue(TASK_PURGE)
+        _LOG.info("scheduled the retention purge")
+        return True
 
     def run_once(self) -> bool:
         """Claim and run at most one job.
@@ -141,7 +170,11 @@ class Worker:
             exc: What went wrong. Only its type and message are stored, never file
                 content (ADR-003).
         """
-        message = f"{type(exc).__name__}: {exc}"
+        # PipelineError already names its stage, so prefixing the class name again
+        # produces "PipelineError: s1_parse: …" in the UI. Keep the message readable.
+        from vigilai.pipeline.run import PipelineError
+
+        message = str(exc) if isinstance(exc, PipelineError) else f"{type(exc).__name__}: {exc}"
         _LOG.error("job %d (%s) raised %s", job.id, job.task, type(exc).__name__)
 
         with session_scope(self._factory) as session:

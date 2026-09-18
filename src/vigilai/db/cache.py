@@ -12,6 +12,7 @@ import logging
 from typing import Final
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from vigilai.db.models import LlmCacheEntry, LlmCall
@@ -64,27 +65,45 @@ class DbCache:
             )
 
     def put(self, entry: CacheEntry) -> None:
-        """Store an entry, replacing any existing one for the same key.
+        """Store an entry, tolerating another worker having stored the same one.
+
+        Two workers on different runs routinely reach the same cache key: the key is a
+        content hash, so an identical OSL section in two runs produces one. Both miss,
+        both call the model, and both write. The check-then-insert is not atomic on
+        either backend, so the loser gets a unique-constraint violation.
+
+        Losing that race is harmless — the key is the content, so the two answers are
+        for the same input — and it must never fail the run that was only trying to
+        save a future call.
 
         Args:
             entry: The entry to store.
         """
-        with session_scope(self._factory) as session:
-            row = session.get(LlmCacheEntry, entry.key)
-            if row is None:
-                session.add(
-                    LlmCacheEntry(
-                        key=entry.key,
-                        stage=entry.stage,
-                        text=entry.text,
-                        data=dict(entry.data) if entry.data is not None else None,
-                        hits=entry.hits,
+        try:
+            with session_scope(self._factory) as session:
+                row = session.get(LlmCacheEntry, entry.key)
+                if row is None:
+                    session.add(
+                        LlmCacheEntry(
+                            key=entry.key,
+                            stage=entry.stage,
+                            text=entry.text,
+                            data=dict(entry.data) if entry.data is not None else None,
+                            hits=entry.hits,
+                        )
                     )
-                )
-            else:
-                row.stage = entry.stage
-                row.text = entry.text
-                row.data = dict(entry.data) if entry.data is not None else None
+                else:
+                    row.stage = entry.stage
+                    row.text = entry.text
+                    row.data = dict(entry.data) if entry.data is not None else None
+        except IntegrityError:
+            _LOG.debug(
+                "cache key %s was stored concurrently; keeping the stored entry", entry.key[:12]
+            )
+        except SQLAlchemyError as exc:
+            # A cache write is an optimisation. Failing the run over one would trade a
+            # saved call for a lost run, which is the wrong way round.
+            _LOG.warning("could not write the cache entry (%s); continuing", type(exc).__name__)
 
 
 def record_calls(session: Session, call_log: CallLog, run_id: int | None) -> int:

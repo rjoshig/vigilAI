@@ -40,7 +40,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 3 | Web app: docker-compose, database + queue, API, user-ui | `docs/phase-3.md` | ✅ complete (compose run unverified) |
 | 4 | admin-ui and configurable checks | `docs/phase-4.md` | ✅ complete |
 | 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ✅ complete (PDF unverified) |
-| 6 | Hardening and in-house fit | `docs/phase-6.md` | ⬜ not started |
+| 6 | Hardening and in-house fit | `docs/phase-6.md` | 🟡 in progress (rest is in-house) |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
 commit that changes a phase's status; `docs/phase-plan.md` must agree with it.

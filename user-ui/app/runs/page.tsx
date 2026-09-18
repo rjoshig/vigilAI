@@ -12,7 +12,6 @@ import { Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
-import { StageProgress } from "@/components/stage-progress";
 import {
   Badge,
   Button,
@@ -31,11 +30,53 @@ import {
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import { STATUS_LABEL, STATUS_TONE, isActive } from "@/lib/display";
-import type { RunSummary } from "@/lib/types";
+import { STAGE_LABELS, type RunSummary } from "@/lib/types";
 import { fmtRelative } from "@/lib/utils";
 
 /** How often to re-read the list while something is moving. */
 const POLL_MS = 3000;
+
+/**
+ * What the Progress column shows, which depends entirely on where the run is.
+ *
+ * The list endpoint does not carry per-stage records — it would be a join per row for
+ * a column most rows do not need — so a finished run reports its outcome rather than
+ * an empty progress bar, which is what it used to show.
+ */
+function RunProgress({ run }: { run: RunSummary }) {
+  if (run.status === "queued") {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Queue position <b>#{run.queue_position ?? "?"}</b>
+      </span>
+    );
+  }
+  if (run.status === "running") {
+    return (
+      <span className="text-xs text-info">
+        {run.current_stage ? (STAGE_LABELS[run.current_stage] ?? run.current_stage) : "Starting…"}
+      </span>
+    );
+  }
+  if (run.status === "failed") {
+    // The stored error already names the stage it failed at, so prefixing it again
+    // produced "Failed at s1_parse: PipelineError: s1_parse: …".
+    return <span className="text-xs text-destructive">{run.error || "Failed"}</span>;
+  }
+  if (run.status === "draft") {
+    return <span className="text-xs text-muted-foreground">Draft — no files uploaded yet</span>;
+  }
+
+  const total = run.high + run.medium + run.low + run.review;
+  const finished = run.finished_at ? fmtRelative(run.finished_at) : "";
+  return (
+    <span className="text-xs text-muted-foreground">
+      {run.status === "finalized" ? "Report frozen" : "Pipeline complete"}
+      {finished ? ` ${finished}` : ""} ·{" "}
+      {total === 0 ? "no findings" : `${total} finding${total === 1 ? "" : "s"}`}
+    </span>
+  );
+}
 
 export default function RunsPage() {
   const [runs, setRuns] = React.useState<RunSummary[] | null>(null);
@@ -168,17 +209,9 @@ export default function RunsPage() {
                       <Badge tone={STATUS_TONE[run.status]}>{STATUS_LABEL[run.status]}</Badge>
                     </TD>
                     <TD>
-                      {run.status === "queued" ? (
-                        <span className="text-xs text-muted-foreground">
-                          Queue position <b>#{run.queue_position ?? "?"}</b>
-                        </span>
-                      ) : run.status === "failed" ? (
-                        <span className="text-xs text-destructive">{run.error || "Failed"}</span>
-                      ) : (
-                        <StageProgress stages={[]} currentStage={run.current_stage} compact />
-                      )}
+                      <RunProgress run={run} />
                     </TD>
-                    <TD className="text-center tabular-nums">
+                    <TD className="whitespace-nowrap text-center tabular-nums">
                       {run.high + run.medium + run.low === 0 ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (

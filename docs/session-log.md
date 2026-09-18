@@ -11,46 +11,51 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0, 1, 2, 3, 4, 5** (see [`phase-plan.md`](phase-plan.md)) |
-| Current phase | **6 — Hardening and in-house fit**, not started |
+| Phases complete | **0–5**; **6 in progress** (the rest needs real files and in-house infra) |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
-**The product works end to end.** Submit an OSL, a config, and the reports; the worker
-runs the nine stages; a reviewer decides each finding; the frozen one-page report is
-generated once and downloadable as a PDF.
+**The product is built and works end to end.** Submit an OSL, a config, and the
+reports; the worker runs the nine stages; a reviewer decides each finding; the frozen
+one-page report is generated once and never regenerated.
 
-**Run it locally** — no Docker needed, SQLite is the default (ADR-017):
+### See it running
 
 ```bash
 source .venv/bin/activate
-uvicorn vigilai.api.app:get_app --factory --reload      # :8000
-python -m vigilai.worker.app                             # another terminal
-cd user-ui && npm run dev                                # :3000
-cd admin-ui && npm run dev                               # :3001
+export DATABASE_URL="sqlite+pysqlite:///$PWD/data/demo.db" VIGILAI_DATA_DIR="$PWD/data"
+python scripts/seed_demo.py          # 8 runs in every lifecycle state + admin data
+uvicorn vigilai.api.app:get_app --factory --reload   # :8000
+python -m vigilai.worker.app                          # another terminal
+cd user-ui && npm run dev                             # :3000
+cd admin-ui && npm run dev                            # :3001
 ```
+
+`scripts/seed_demo.py` loads the aliases, the five report templates, the design doc's
+three example checks, the compliance rules, and runs sitting at queued, needs review,
+finalized OK, finalized Not OK, and failed.
 
 **Gates:** `black . --target-version py310 && flake8 && mypy src/ && pytest &&
 bash scripts/check_docs.sh`, and in each UI: `npm run lint && npm run typecheck &&
 npm run format:check && npm test && npm run build`.
 
-**Next action:** Phase 6 (hardening and in-house fit) is the last phase. Read
-`docs/phase-6.md`. Much of it depends on the user's outstanding items below, so confirm
-priorities before starting.
+### Outstanding, needs the user
 
-**Outstanding, needs the user:**
-
-- **Merge the Phase 0 PR and create `dev` from `main`.** Seventeen commits are stacked
-  on one session branch.
-- **Run `docker compose up --build` once** on a machine with Docker (Phase 3 criterion
-  1), and **produce one PDF** with `pip install -e ".[pdf]" && playwright install
-  chromium` (Phase 5 criterion 3).
-- **A local model** or an Anthropic key, to close Phase 2 criterion 2 (ADR-014) and
-  validate the prompt wording. Expect a prompt-version bump afterwards.
-- **A sanitized shape reference** for the real OSL, config, and report layouts. Every
-  layout assumption in the code came from synthetic fixtures; Phase 6 is where that is
-  reconciled.
-- The remaining open questions in [`phase-plan.md`](phase-plan.md).
+- **Merge the Phase 0 PR and create `dev` from `main`.** Eighteen commits are stacked
+  on one session branch. This is the thing to do first.
+- **A decision on retention for DIRT files** (90 days by default), and **security and
+  compliance sign-off** on retention and PII handling. Both are Phase 6 criteria and
+  both want an ADR.
+- **A local model** or an API key: `python scripts/golden_set.py --provider openai
+  --out docs/benchmarks/phase-2.md` closes Phase 2 criterion 2 and Phase 6 criterion 2
+  in one command. Expect a prompt-version bump afterwards.
+- **A sanitized shape reference** for the real OSL, config, and report layouts. The
+  parser Protocols exist so this is the only code that changes, but every layout
+  assumption today came from synthetic fixtures.
+- **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
+  **With Playwright:** `pip install -e ".[pdf]" && playwright install chromium`, then
+  download one PDF (Phase 5 criterion 3).
+- Whether a data dictionary exists to seed the alias table from.
 
 ---
 
@@ -533,6 +538,66 @@ Phase 6, and the user items under "Resume here".
 ### Blockers
 
 None for Phase 6, though most of it wants the real file samples.
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (Phase 6 — hardening, and the demo)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 6 · **Status:** in progress —
+everything doable from a development checkout is done.
+
+### What was completed
+
+- **ADR-018, the PII tripwire.** Every assembled prompt is scanned inside the adapter,
+  before the cache and therefore before any path to the network, and a match **raises**
+  rather than warns. The patterns match formats, not meanings, and a test asserts that
+  ten samples of real pipeline text pass: a tripwire that fires on ordinary content
+  gets switched off, which is worse than not having one. Matches are reported by
+  pattern name and a redacted shape, never the value.
+- Retention: the worker schedules its own 24-hour sweep, so no cron entry is needed,
+  and `scripts/purge.py --dry-run` reports what would go before anything does.
+- Audit completeness and log safety, both asserted by tests rather than reviewed by eye.
+- `scripts/load_test.py`, and `scripts/seed_demo.py` which loads admin reference data
+  plus eight runs covering every lifecycle state.
+- The deployment checklist in `deployment.md`, with the in-house items marked as such.
+- 731 Python tests, 35 user-ui, 10 admin-ui. Every gate clean.
+
+### What the load test found
+
+A real race, which is what a load test is for. Two workers on different runs reach the
+same cache key — the key is a content hash, so an identical OSL section in two runs
+produces one — both miss, both call the model, and both insert. The loser got a unique
+constraint violation and **its run failed**. Three of twelve runs died under four
+workers.
+
+A cache write is an optimisation. Failing a run over one trades a saved call for a lost
+run, which is the wrong way round. `DbCache.put` now treats a duplicate as what it is —
+another worker stored the same answer for the same content — and any other write error
+as a warning. Twelve of twelve now pass, and `tests/db/test_concurrency.py` covers it.
+This would have happened on Postgres too.
+
+### What the demo found
+
+Bringing the UI up against real data showed three things the tests could not:
+
+- Finished runs rendered an empty grey progress bar, because the list endpoint does not
+  carry per-stage records. They now report their outcome instead.
+- The failed run read "Failed at s1_parse: PipelineError: s1_parse: …" — the stored
+  error already names its stage.
+- With one day of history the usage sparkline filled the card edge to edge and read as
+  a rendering fault. It now caps the bar width until there are enough points.
+
+### Pending
+
+The Phase 6 items that need real files, the in-house model, or the platform and
+compliance teams. They are marked **in-house** in `phase-6.md` and listed under
+"Resume here".
+
+### Blockers
+
+None that are mine. Everything left is on the user's list.
 
 ### Next concrete action
 

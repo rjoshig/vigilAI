@@ -110,3 +110,60 @@ alembic upgrade head        # the api container does this on start
 
 The backend in use is logged once at startup by both the api and the worker, so a
 deployment can always be checked rather than assumed.
+
+## Pre-deployment checklist
+
+Tick these on the machine that will run the service. Items marked **in-house** cannot
+be done from a development checkout and are what Phase 6 hands to the platform team.
+
+### Data and retention
+
+- [ ] `DATABASE_URL` points at the intended backend, and the startup log line confirms
+      it (ADR-017). Compose sets Postgres; anything else is SQLite by default.
+- [ ] `alembic upgrade head` has run. The api container does this on start.
+- [ ] `VIGILAI_DATA_DIR` is a mounted volume, not a container-local path, or every
+      uploaded file and frozen report disappears on restart.
+- [ ] `python scripts/purge.py --dry-run` reports what you expect before the first real
+      purge. The worker schedules a sweep every 24 hours by itself; no cron entry is
+      needed.
+- [ ] **in-house** A decision on whether DIRT files need a shorter window than the
+      90-day default, recorded as an ADR (open question in `phase-plan.md`).
+
+### Privacy
+
+- [ ] `LLM_LOG_PROMPTS=false`. It exists for synthetic data on a developer machine, and
+      the adapter logs a warning on every call while it is on.
+- [ ] `LLM_PII_TRIPWIRE=true`. It scans every assembled prompt and refuses to send a
+      match; a prompt already sent cannot be recalled.
+- [ ] The masked-column list in the admin-ui covers every identifying column in the
+      **real** DIRT layout. The shipped defaults cover the obvious ones and are a
+      starting point, not an answer.
+- [ ] **in-house** TLS terminates at the reverse proxy, and the Docker volumes are
+      encrypted at rest. Confirm against the internal standard.
+- [ ] **in-house** Security and compliance have signed off on retention and PII
+      handling, recorded as an ADR.
+
+### The model
+
+- [ ] `LLM_PROVIDER`, `LLM_BASE_URL`, and `LLM_MODEL` point at the in-house gateway, and
+      `/health` is green.
+- [ ] `LLM_MAX_TOKENS_PER_RUN` is set to something the finance owner has seen.
+- [ ] Guided or JSON-schema decoding is enabled if the serving stack supports it; vLLM
+      does, and it removes most format errors.
+- [ ] **in-house** `python scripts/golden_set.py --provider openai --out
+      docs/benchmarks/phase-2.md` has been run against that model and the numbers
+      recorded. Expect a prompt-version bump afterwards.
+
+### Scale
+
+- [ ] Worker replicas × `LLM_MAX_CONCURRENCY` is below what the model endpoint will
+      serve. Two workers at concurrency 4 is eight in-flight calls.
+- [ ] `python scripts/load_test.py --runs 50 --workers 8` passes locally. It measures
+      the code paths, not production throughput; the real number needs the real model.
+- [ ] **in-house** A load test at the expected concurrency, with the results recorded.
+
+### Files
+
+- [ ] **in-house** One real OSL, config, and report set runs end to end with only the
+      parser implementations changed, and a synthetic fixture mirroring each real
+      layout's *shape* has been added to `tests/fixtures/` (never the real file).
