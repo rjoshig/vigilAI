@@ -174,6 +174,29 @@ export const api = {
     return `${BASE}/runs/${runId}/report.pdf`;
   },
 
+  /**
+   * Fetch the PDF and hand the caller the bytes.
+   *
+   * A plain `<a href download>` cannot check a status: when the endpoint answers 503
+   * because this deployment has no browser installed, the anchor happily saves the
+   * JSON error body as a file called `report.pdf`. So the request goes through the
+   * client, which raises on a non-2xx, and only a real PDF ever reaches the disk.
+   */
+  async fetchReportPdf(runId: number): Promise<Blob> {
+    const response = await fetch(this.reportPdfUrl(runId), { cache: "no-store" });
+    if (!response.ok) {
+      throw new ApiError(response.status, await errorDetail(response));
+    }
+    const blob = await response.blob();
+    if (blob.type && !blob.type.includes("pdf")) {
+      throw new ApiError(
+        response.status,
+        `the server returned ${blob.type} rather than a PDF; the report is still available as HTML`
+      );
+    }
+    return blob;
+  },
+
   /** Read stage timings, calls, tokens, and cache hits. */
   getStats(runId: number): Promise<RunStats> {
     return request<RunStats>(`/runs/${runId}/stats`);

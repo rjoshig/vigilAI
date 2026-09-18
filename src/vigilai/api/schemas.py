@@ -82,6 +82,9 @@ class RunDetail(RunSummary):
     input_fingerprint: str = ""
     can_finalize: bool = False
     finalized: bool = False
+    #: Whether this deployment can render a PDF at all. False when the optional [pdf]
+    #: extra is not installed, which is a deployment fact, not a per-run one.
+    pdf_available: bool = False
     stages: list[StageInfo] = Field(default_factory=list)
     files: dict[str, str] = Field(default_factory=dict)
 

@@ -148,12 +148,24 @@
       @media print {
         .no-print { display: none !important; }
         body { background: #fff; }
-        /* Every finding is expanded in the PDF: a collapsed detail is invisible on
-           paper, and the PDF is the artifact people file. */
+        /* Every finding is expanded on paper: a collapsed section is invisible there,
+           and the PDF is the artifact people file. CSS alone cannot do this — a closed
+           <details> hides its children through the browser's own mechanism, which
+           `display` on the child does not override — so the script below sets the open
+           attribute before printing. These rules handle the rest of the appearance. */
         details { break-inside: avoid; border: 1px solid #ddd; }
-        details summary::before { content: none; }
-        details .body { display: block !important; }
+        /* The disclosure arrow is interaction, not information. It has to beat the
+           details[open] rule above, which is more specific than a bare summary. */
+        details summary::before,
+        details[open] summary::before { content: none !important; }
+        /* Identifiers must not wrap: "R-001" split across two lines is unreadable and
+           breaks a search of the PDF. */
+        td .mono, td.mono { white-space: nowrap; }
+        details > .body { display: block !important; }
         h2 { break-after: avoid; }
+        table { break-inside: auto; }
+        tr { break-inside: avoid; }
+        thead { display: table-header-group; }
       }
     </style>
   </head>
@@ -375,5 +387,32 @@
         downloads are recorded in the audit log.
       </p>
     </div>
+
+    <script>
+      // Expand every section before printing, and leave it expanded: a collapsed
+      // <details> prints as a heading with nothing under it, and the printed copy is
+      // the one people file. CSS cannot do this on its own, because a closed
+      // <details> hides its children through the browser's own mechanism rather than
+      // through a style the print sheet could override.
+      (function () {
+        function expandAll() {
+          document.querySelectorAll("details").forEach(function (section) {
+            section.open = true;
+          });
+        }
+        window.addEventListener("beforeprint", expandAll);
+        // Headless renderers print without firing beforeprint, so honour the print
+        // media query directly as well.
+        var printing = window.matchMedia && window.matchMedia("print");
+        if (printing) {
+          if (printing.matches) expandAll();
+          if (printing.addEventListener) {
+            printing.addEventListener("change", function (event) {
+              if (event.matches) expandAll();
+            });
+          }
+        }
+      })();
+    </script>
   </body>
 </html>

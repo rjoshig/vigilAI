@@ -43,3 +43,21 @@ export function fmtRelative(iso: string | null | undefined): string {
   if (seconds < 172800) return "yesterday";
   return new Date(iso).toLocaleDateString();
 }
+
+/**
+ * Save a fetched blob to the user's disk.
+ *
+ * Used instead of an `<a href download>` pointing at the API, because an anchor cannot
+ * check a response status and will happily save an error body under the filename the
+ * user expected.
+ */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

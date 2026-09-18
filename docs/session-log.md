@@ -62,8 +62,7 @@ one, enters this repository.
   parser Protocols exist so this is the only code that changes, but every layout
   assumption today came from synthetic fixtures.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
-  **With Playwright:** `pip install -e ".[pdf]" && playwright install chromium`, then
-  download one PDF (Phase 5 criterion 3).
+  This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
 
 ---
@@ -658,3 +657,53 @@ None.
 ### Next concrete action
 
 See "Resume here". Phase 7 is not it.
+
+## Session: 2026-09-18 (PDF download fix)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Status:** fixed and verified with a real
+browser. Phase 5 is now complete on every criterion.
+
+### The report
+
+Clicking "Download PDF" saved a JSON file.
+
+### What was actually wrong — three things
+
+1. **Playwright was not installed**, so the endpoint correctly answered 503 with a JSON
+   body explaining that. Installed it and Chromium; PDFs now render.
+2. **The UI could not tell.** It used a plain `<a href download>`, which has no way to
+   check a status: it saved the 503 body under the name the user expected. It now
+   fetches through the API client, which raises on a non-2xx and on a 200 that is not a
+   PDF, and only a real document reaches the disk. The run detail carries
+   `pdf_available`, so the button is disabled with an explanation rather than failing
+   after the click.
+3. **The PDF was missing its content**, which only showed up once one could be made:
+   one page, 1021 characters, every section a heading with nothing under it. The print
+   rule `details .body { display: block }` cannot work, because a closed `<details>`
+   hides its children through the browser's own mechanism rather than through a style.
+   The report now sets `open` on every section before printing, and the renderer does
+   the same itself so an already-frozen report still prints in full. Two pages, 3147
+   characters, all seven matrix rows, every reviewer comment.
+
+Two smaller things the verification caught: the disclosure arrow printed, because
+`details[open] summary::before` outranked the rule meant to hide it; and identifiers
+wrapped mid-token, so `R-001` arrived in the PDF as `R-` and `001`.
+
+### A note worth keeping
+
+Run 9 had already cached a PDF from the broken renderer. The HTML is the frozen record
+and must never be regenerated (ADR-005), but the **PDF is a rendering of it** —
+re-rendering the same HTML gives the same document. So after fixing a renderer, delete
+`data/reports/*.pdf` and they rebuild. That is now a line in the deployment checklist
+and a comment at the point in the code where the decision is made.
+
+Run 9 also demonstrated the freeze working as intended: its stored HTML predates the
+template fix and still carries the old stylesheet, while its PDF now prints in full
+because the *renderer* opens the sections. That is why the fix went in both places.
+
+### Tests
+
+Four regression tests on the API side and four in the UI client, covering the exact
+shape of the bug: a 503 must be an unmistakable status with a non-PDF body, a 200 must
+be a real PDF with a filename, and the client must raise rather than hand back bytes in
+either failure case. 732 Python tests, 39 user-ui, 10 admin-ui.

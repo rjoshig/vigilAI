@@ -39,7 +39,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 2 | Pipeline core as a CLI: parsers, rule schema, LLM adapter + cache, stages 1–9, golden set | `docs/phase-2.md` | ✅ complete (ADR-014 defers the real-model benchmark) |
 | 3 | Web app: docker-compose, database + queue, API, user-ui | `docs/phase-3.md` | ✅ complete (compose run unverified) |
 | 4 | admin-ui and configurable checks | `docs/phase-4.md` | ✅ complete |
-| 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ✅ complete (PDF unverified) |
+| 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ✅ complete |
 | 6 | Hardening and in-house fit | `docs/phase-6.md` | 🟡 in progress (rest is in-house) |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 

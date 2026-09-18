@@ -1,9 +1,7 @@
 # Phase 5 — Final report
 
-**Status:** ✅ **complete** (2026-09-18), with one criterion partly met: the PDF
-path is implemented and tested against an injected renderer, but no PDF has been
-produced by a real browser here because Playwright's Chromium is not installed on the
-development machine.
+**Status:** ✅ **complete** (2026-09-18). Playwright and Chromium were installed and a
+real two-page PDF was produced and checked, so every criterion is now met.
 
 **Goal:** the frozen one-page interactive HTML report in the
 compare-file report format, generated after review, with PDF download. Effort 1–2 weeks.
@@ -30,16 +28,15 @@ and final report" and "UI and report".
 - [x] user-ui Final report screen: view, Download PDF, Clone run.
 - [x] Masked values everywhere (app, HTML, PDF); no unmask control in v1.
 
-## Acceptance criteria · 🟡 in progress
+## Acceptance criteria · ✅ complete
 
 1. [x] Finalizing a reviewed synthetic run produces an HTML file that opens from `file://`
    with no network and matches the mock's layout.
 2. [x] The stored HTML never changes after finalize (hash asserted across a re-review attempt,
    which is rejected).
-3. [~] PDF is produced from the stored HTML, all findings expanded, masked values only.
-   The endpoint renders from the stored file (asserted), renders once and then serves
-   (asserted), and the print stylesheet expands every finding (asserted). **Outstanding:**
-   a PDF produced by a real browser. Playwright is an optional extra (`pip install
-   -e ".[pdf]"`) installed in the worker image; without it the endpoint returns 503 and
-   says to open the HTML instead.
+3. [x] PDF is produced from the stored HTML, all findings expanded, masked values only.
+   Verified with a real browser: a two-page PDF whose text carries all seven matrix
+   rows, every finding with its reviewer comment, the evidence, and the run metadata.
+   Without the `[pdf]` extra the endpoint returns 503 and the UI disables the button
+   and says why, rather than downloading the error body.
 4. [x] Review, view, and download make zero LLM calls (asserted).

@@ -162,6 +162,17 @@ be done from a development checkout and are what Phase 6 hands to the platform t
       the code paths, not production throughput; the real number needs the real model.
 - [ ] **in-house** A load test at the expected concurrency, with the results recorded.
 
+### Reports
+
+- [ ] A finalized run downloads as a PDF, and the PDF contains the expanded findings
+      rather than a page of headings. `pip install -e ".[pdf]" && playwright install
+      chromium` in the worker image; `GET /runs/{id}` reports `pdf_available` so the UI
+      can say so before anyone clicks.
+- [ ] After fixing anything in the report template or the PDF renderer, delete the
+      stored `data/reports/*.pdf` files. They are a cache of a rendering and will not
+      update themselves. The `.html` files are the frozen record and are **never**
+      deleted or regenerated (ADR-005).
+
 ### Files
 
 - [ ] **in-house** One real OSL, config, and report set runs end to end with only the

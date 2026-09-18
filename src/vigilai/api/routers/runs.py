@@ -29,6 +29,7 @@ from vigilai.db import models, repository
 from vigilai.db.queue import JobQueue
 from vigilai.db.types import utcnow
 from vigilai.pipeline.s4_trace import describe_rule
+from vigilai.report.pdf import renderer_available
 from vigilai.rules.schema import Rule
 from vigilai.worker.app import TASK_RECHECK, TASK_RUN_PIPELINE
 
@@ -174,6 +175,7 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
     ]
     return schemas.RunDetail(
         **base.model_dump(),
+        pdf_available=renderer_available(),
         notes=run.notes,
         run_date=run.run_date,
         rules_version=run.rules_version,

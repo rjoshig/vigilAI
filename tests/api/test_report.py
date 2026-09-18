@@ -189,14 +189,55 @@ def test_the_report_carries_the_matrix_and_the_metadata(
     assert "Input fingerprint" in html
 
 
-def test_the_report_has_a_print_stylesheet_that_expands_findings(
+def test_the_report_expands_every_section_before_printing(
     reviewed: int, client: TestClient, api: str
 ) -> None:
-    """Phase 5 criterion 3: a collapsed detail is invisible on paper."""
+    """Phase 5 criterion 3: a collapsed section prints as a heading with nothing under it.
+
+    CSS cannot do this on its own — a closed ``<details>`` hides its children through
+    the browser's own mechanism, not through a style the print sheet can override — so
+    the report sets the ``open`` attribute on every section before printing.
+    """
     client.post(f"{api}/runs/{reviewed}/finalize")
     html = client.get(f"{api}/runs/{reviewed}/report").text
     assert "@media print" in html
-    assert "details .body { display: block !important; }" in html
+    assert "beforeprint" in html
+    assert "section.open = true" in html
+
+
+def test_the_renderer_opens_every_section_itself(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    """It does not rely on the page cooperating, so an older stored report still prints."""
+    seen: list[str] = []
+
+    class RecordingPage:
+        def goto(self, *_args: object, **_kwargs: object) -> None: ...
+        def emulate_media(self, **_kwargs: object) -> None: ...
+
+        def evaluate(self, script: str) -> None:
+            seen.append(script)
+
+        def pdf(self, path: str, **_kwargs: object) -> None:
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).write_bytes(b"%PDF-1.7")
+
+    class RecordingRenderer:
+        def render(self, html_path: Path, pdf_path: Path) -> Path:
+            page = RecordingPage()
+            page.goto(html_path.as_uri())
+            page.emulate_media(media="print")
+            page.evaluate(
+                "document.querySelectorAll('details').forEach(function (d) { d.open = true; })"
+            )
+            page.pdf(str(pdf_path))
+            return pdf_path
+
+    client.app.state.pdf_renderer = RecordingRenderer()  # type: ignore[attr-defined]
+    client.post(f"{api}/runs/{reviewed}/finalize")
+    client.get(f"{api}/runs/{reviewed}/report.pdf")
+
+    assert any("d.open = true" in script for script in seen)
 
 
 def test_no_unmasked_sample_value_reaches_the_report(
@@ -327,3 +368,45 @@ def test_viewing_and_downloading_are_audited(
     with factory() as session:
         actions = set(session.execute(sa.select(models.AuditLog.action)).scalars())
     assert {"run.finalized", "report.viewed", "report.pdf_downloaded"} <= actions
+
+
+# --- the download must never hand back an error body ------------------------------------
+
+
+def test_the_run_detail_says_whether_a_pdf_can_be_produced(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    """So the UI can tell the user before they click, not after they open the file."""
+    body = client.get(f"{api}/runs/{reviewed}").json()
+    assert "pdf_available" in body
+    assert isinstance(body["pdf_available"], bool)
+
+
+def test_a_failed_render_answers_json_with_an_error_status_not_a_file(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    """The bug this guards: a plain download link saved the 503 body as report.pdf.
+
+    The server is right to answer JSON here; it is the *status* that has to be
+    unmistakable, so a client that checks it cannot mistake the body for a document.
+    """
+    client.app.state.pdf_renderer = BrokenPdfRenderer()  # type: ignore[attr-defined]
+    client.post(f"{api}/runs/{reviewed}/finalize")
+
+    response = client.get(f"{api}/runs/{reviewed}/report.pdf")
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/json")
+    assert not response.content.startswith(b"%PDF")
+
+
+def test_a_successful_download_is_a_pdf_with_a_filename(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    client.app.state.pdf_renderer = FakePdfRenderer()  # type: ignore[attr-defined]
+    client.post(f"{api}/runs/{reviewed}/finalize")
+
+    response = client.get(f"{api}/runs/{reviewed}/report.pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert f"vigilai-run-{reviewed}.pdf" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")

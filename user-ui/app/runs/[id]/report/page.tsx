@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import type { RunDetail } from "@/lib/types";
+import { saveBlob } from "@/lib/utils";
 
 export default function ReportPage() {
   const params = useParams<{ id: string }>();
@@ -33,6 +34,7 @@ export default function ReportPage() {
   const [run, setRun] = React.useState<RunDetail | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [downloading, setDownloading] = React.useState(false);
 
   const load = React.useCallback(async () => {
     try {
@@ -46,6 +48,28 @@ export default function ReportPage() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Download the PDF through the client so a failure is shown rather than saved.
+   *
+   * The first request renders it, which takes a few seconds; after that the stored
+   * file is served.
+   */
+  async function downloadPdf() {
+    setDownloading(true);
+    setError(null);
+    try {
+      saveBlob(await api.fetchReportPdf(runId), `vigilai-run-${runId}.pdf`);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? `The PDF could not be produced: ${caught.detail}`
+          : "The PDF could not be produced."
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function finalize() {
     setBusy(true);
@@ -84,11 +108,20 @@ export default function ReportPage() {
               <Badge tone="muted">
                 <Lock className="h-3 w-3" /> frozen
               </Badge>
-              <a href={api.reportPdfUrl(runId)} download>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4" /> Download PDF
-                </Button>
-              </a>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!run.pdf_available || downloading}
+                title={
+                  run.pdf_available
+                    ? "Rendered from the stored report; the first download takes a few seconds"
+                    : "This deployment has no browser installed, so it cannot render PDFs. Open the HTML report instead."
+                }
+                onClick={() => void downloadPdf()}
+              >
+                <Download className="h-4 w-4" />
+                {downloading ? "Rendering…" : "Download PDF"}
+              </Button>
               <a href={api.reportUrl(runId)} target="_blank" rel="noreferrer">
                 <Button variant="outline" size="sm">
                   <ExternalLink className="h-4 w-4" /> Open in a tab
@@ -139,13 +172,21 @@ export default function ReportPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden p-0">
-          <iframe
-            title={`Final report for run ${runId}`}
-            src={api.reportUrl(runId)}
-            className="h-[calc(100vh-11rem)] w-full border-0 bg-white"
-          />
-        </Card>
+        <>
+          {!run.pdf_available ? (
+            <p className="mb-3 text-xs text-muted-foreground">
+              PDF download is unavailable on this deployment: no headless browser is installed. The
+              report below is the same document, and it opens offline.
+            </p>
+          ) : null}
+          <Card className="overflow-hidden p-0">
+            <iframe
+              title={`Final report for run ${runId}`}
+              src={api.reportUrl(runId)}
+              className="h-[calc(100vh-11rem)] w-full border-0 bg-white"
+            />
+          </Card>
+        </>
       )}
     </>
   );

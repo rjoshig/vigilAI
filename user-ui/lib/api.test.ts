@@ -109,3 +109,55 @@ describe("the API client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/configs?latest_only=true");
   });
 });
+
+describe("downloading the PDF", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the bytes when the server sends a PDF", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(new Blob([new Uint8Array([37, 80, 68, 70])], { type: "application/pdf" }), {
+        status: 200,
+      })
+    );
+    const blob = await api.fetchReportPdf(1);
+    expect(blob.type).toBe("application/pdf");
+  });
+
+  it("raises rather than handing back an error body", async () => {
+    // The bug this guards: a plain <a download> saved this JSON as "report.pdf".
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail: "playwright is not installed" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    await expect(api.fetchReportPdf(1)).rejects.toMatchObject({
+      status: 503,
+      detail: "playwright is not installed",
+    });
+  });
+
+  it("raises when a 200 carries something that is not a PDF", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(new Blob(["{}"], { type: "application/json" }), { status: 200 })
+    );
+    await expect(api.fetchReportPdf(1)).rejects.toThrow(/rather than a PDF/);
+  });
+
+  it("does not cache the download", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(new Blob([""], { type: "application/pdf" }), { status: 200 })
+    );
+    await api.fetchReportPdf(1);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
+  });
+});

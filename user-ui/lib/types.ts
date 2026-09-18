@@ -106,6 +106,8 @@ export interface RunDetail extends RunSummary {
   input_fingerprint: string;
   can_finalize: boolean;
   finalized: boolean;
+  /** Whether this deployment can render a PDF at all (the optional [pdf] extra). */
+  pdf_available: boolean;
   stages: StageInfo[];
   files: Record<string, string>;
 }

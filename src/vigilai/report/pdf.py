@@ -92,9 +92,16 @@ class PlaywrightRenderer:
                 try:
                     page = browser.new_page()
                     page.goto(html_path.resolve().as_uri(), timeout=TIMEOUT_MS)
-                    # The print stylesheet expands every <details>; emulating print
-                    # media is what makes those rules apply.
                     page.emulate_media(media="print")
+                    # Open every section explicitly rather than trusting the page to do
+                    # it. A collapsed <details> prints as a heading with nothing under
+                    # it, which would quietly drop the findings from the artifact people
+                    # file. The report also does this itself; doing it here means an
+                    # older stored report still prints in full.
+                    page.evaluate(
+                        "document.querySelectorAll('details')"
+                        ".forEach(function (d) { d.open = true; })"
+                    )
                     page.pdf(
                         path=str(pdf_path),
                         format=PAGE_FORMAT,
@@ -152,7 +159,13 @@ def render_pdf(html_path: Path, pdf_path: Path, renderer: PdfRenderer | None = N
     if not html_path.exists():
         raise FileNotFoundError(f"the stored report {html_path.name} is missing")
     if pdf_path.exists() and pdf_path.stat().st_size > 0:
-        # Already rendered: the PDF is as frozen as the HTML it came from.
+        # Already rendered, so serve it rather than launching a browser again.
+        #
+        # This is a cache, not a freeze. The *HTML* is the frozen record (ADR-005); the
+        # PDF is a rendering of it, and re-rendering the same HTML produces the same
+        # document. So after fixing a rendering bug, delete the stored `.pdf` files and
+        # they regenerate from the unchanged HTML. Deleting the `.html` would be a
+        # different matter entirely and is never correct.
         return pdf_path
     return (renderer or PlaywrightRenderer()).render(html_path, pdf_path)
 
