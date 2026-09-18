@@ -9,20 +9,26 @@ risk.
 
 | Phase | Title | Rough effort | Status | Doc |
 | --- | --- | --- | --- | --- |
-| 0 | Repo setup — structure, CLAUDE.md, docs, phase docs, standards, git rules, tooling | days | **in progress** | [phase-0.md](phase-0.md) |
-| 1 | UI mock — static `mock/` (user-ui, admin-ui, final report) | 1 week | **done** | [phase-1.md](phase-1.md) |
-| 2 | Pipeline core — CLI: files in, findings JSON out; parsers, rule schema, LLM adapter, cache, golden set on synthetic fixtures | 4–5 weeks | **done** (real-model benchmark deferred, ADR-014) | [phase-2.md](phase-2.md) |
-| 3 | Web app — docker-compose, new run, queue, history, review screen, stats, user-ui | 3 weeks | planned | [phase-3.md](phase-3.md) |
-| 4 | Admin-ui and checks — templates, named values, checks, compliance rules, LLM-assisted authoring | 2–3 weeks | planned | [phase-4.md](phase-4.md) |
-| 5 | Final report — one-page HTML in the compare-file format, freeze, PDF export | 1–2 weeks | planned | [phase-5.md](phase-5.md) |
-| 6 | Hardening and in-house fit — PII masking, audit, retention, load test, adapt parsers to real samples | 2 weeks | planned | [phase-6.md](phase-6.md) |
+| 0 | Repo setup — structure, CLAUDE.md, docs, phase docs, standards, git rules, tooling | days | ✅ **complete** | [phase-0.md](phase-0.md) |
+| 1 | UI mock — static `mock/` (user-ui, admin-ui, final report) | 1 week | ✅ **complete** | [phase-1.md](phase-1.md) |
+| 2 | Pipeline core — CLI: files in, findings JSON out; parsers, rule schema, LLM adapter, cache, golden set on synthetic fixtures | 4–5 weeks | ✅ **complete** — real-model benchmark deferred (ADR-014) | [phase-2.md](phase-2.md) |
+| 3 | Web app — docker-compose, new run, queue, history, review screen, stats, user-ui | 3 weeks | ⬜ not started | [phase-3.md](phase-3.md) |
+| 4 | Admin-ui and checks — templates, named values, checks, compliance rules, LLM-assisted authoring | 2–3 weeks | ⬜ not started | [phase-4.md](phase-4.md) |
+| 5 | Final report — one-page HTML in the compare-file format, freeze, PDF export | 1–2 weeks | ⬜ not started | [phase-5.md](phase-5.md) |
+| 6 | Hardening and in-house fit — PII masking, audit, retention, load test, adapt parsers to real samples | 2 weeks | ⬜ not started | [phase-6.md](phase-6.md) |
 
 Effort assumes 1–2 developers and is a starting estimate.
 
 ## Status vocabulary
 
-`planned` → `in progress` → `complete` (acceptance criteria met, recorded in the phase doc
-with the date) · `superseded` / `dropped` with an ADR reference.
+⬜ `not started` → 🟡 `in progress` → ✅ `complete` · `superseded` / `dropped` with an ADR
+reference.
+
+A phase is **complete** only when every box in its phase doc is ticked and the date is on
+its status line. A criterion that is deliberately left open stays unticked, is labelled
+**outstanding** or **deferred** with the ADR that allows it, and is repeated in the
+"Resume here" block of [`session-log.md`](session-log.md). This table and the phase docs
+are updated in the same commit as the work they describe.
 
 ## Open questions carried from the design doc
 
@@ -37,4 +43,9 @@ answer as an ADR when it lands.
 - [ ] Comparison against the same customer's previous run (drift)? Cheap once history exists.
 - [ ] Are the fixed compliance rules maintained in the admin-ui or sourced elsewhere?
 - [x] Must every high-severity finding have a decision before the final report can be generated? **Yes** (ADR-015).
+- [ ] Do in-house configs name waterfall steps differently from the OSL (for example
+      `suppress` against `exclusions`)? If so the step names need the alias table too.
+      Raised by ADR-016; confirm against real files in Phase 6.
+- [ ] Which model and endpoint should the golden set be benchmarked against? Phase 2
+      acceptance criterion 2 is open until this is answered (ADR-014).
 - [ ] Confirm "last modified" means a timestamp inside the config JSON, not the upload time.

@@ -22,7 +22,9 @@ block at the top says which phase we are in and the exact next action. If you ar
 to do something that contradicts it, stop and reconcile before acting.
 
 **At the end of every session, update the "Resume here" block and append an entry** to
-`docs/session-log.md`: completed, pending, blockers, branch, next concrete action.
+`docs/session-log.md`: completed, pending, blockers, branch, next concrete action. Leave
+every doc describing what is true at that commit, not what was planned — see
+"Doc-driven workflow".
 
 ## Phase gating
 
@@ -30,15 +32,34 @@ Work proceeds in sequential phases (`docs/phase-plan.md` is the master table). D
 phase N+1 before phase N's acceptance criteria are met; if you think you must, ask first.
 Before starting phase N, read `docs/phase-N.md` end to end.
 
-| Phase | Theme | Doc |
-| --- | --- | --- |
-| 0 | Repo setup: structure, CLAUDE.md, docs, standards, git rules, tooling (no app code) | `docs/phase-0.md` |
-| 1 | Static `mock/` (user-ui, admin-ui, final report) | `docs/phase-1.md` |
-| 2 | Pipeline core as a CLI: parsers, rule schema, LLM adapter + cache, stages 1–9, golden set | `docs/phase-2.md` |
-| 3 | Web app: docker-compose, Postgres + queue, API, user-ui | `docs/phase-3.md` |
-| 4 | admin-ui and configurable checks | `docs/phase-4.md` |
-| 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` |
-| 6 | Hardening and in-house fit | `docs/phase-6.md` |
+| Phase | Theme | Doc | Status |
+| --- | --- | --- | --- |
+| 0 | Repo setup: structure, CLAUDE.md, docs, standards, git rules, tooling (no app code) | `docs/phase-0.md` | ✅ complete |
+| 1 | Static `mock/` (user-ui, admin-ui, final report) | `docs/phase-1.md` | ✅ complete |
+| 2 | Pipeline core as a CLI: parsers, rule schema, LLM adapter + cache, stages 1–9, golden set | `docs/phase-2.md` | ✅ complete (ADR-014 defers the real-model benchmark) |
+| 3 | Web app: docker-compose, Postgres + queue, API, user-ui | `docs/phase-3.md` | ⬜ not started |
+| 4 | admin-ui and configurable checks | `docs/phase-4.md` | ⬜ not started |
+| 5 | Final one-page report, freeze, PDF | `docs/phase-5.md` | ⬜ not started |
+| 6 | Hardening and in-house fit | `docs/phase-6.md` | ⬜ not started |
+
+**This table is part of the docs and goes stale like any other.** Update it in the same
+commit that changes a phase's status; `docs/phase-plan.md` must agree with it.
+
+### Finishing a phase
+
+The moment a phase's last task lands, in the same commit:
+
+1. **Tick every box** in `docs/phase-N.md` — scope items and acceptance criteria alike.
+   A criterion that is deliberately left open stays unticked and is labelled
+   **outstanding** or **deferred**, naming the ADR that allows it. Never tick a box for
+   work that was not done.
+2. Set the phase doc's status line to `✅ **complete**` with the date.
+3. Update the status in **both** tables: the one above and `docs/phase-plan.md`.
+4. Carry any deferred criterion into the **"Resume here"** block of
+   `docs/session-log.md`, so it cannot be forgotten.
+5. Tick any open question in `docs/phase-plan.md` the phase answered, and record the
+   answer as an ADR.
+6. Stop and report to the user before starting phase N+1.
 
 ## Hard rules (from the design doc; ADR-001…008)
 
@@ -62,11 +83,22 @@ A PR that breaks one of these is rejected regardless of tests. Details:
 
 ## Doc-driven workflow
 
+**The documentation is always current.** A doc that describes a plan the code has moved
+past is worse than no doc: the next session trusts it. Docs change in the same commit as
+the code they describe, never in a follow-up.
+
 - Any non-obvious decision goes in `docs/decisions.md` as a new ADR (append-only).
 - Architectural changes update `docs/architecture.md` in the same commit as the code.
-- Phase docs (`docs/phase-N.md`) get checked off as tasks land.
+- **Phase docs get checked off as tasks land**, not at the end of a phase. If you
+  finished it, tick it; if you skipped it, say so and why.
+- Renaming or moving anything updates every doc that names it, in the same commit
+  (`grep -rn "<old name>" --include="*.md" .` before you commit).
+- Docs record **what is true now**, not how we got here. No provenance notes about which
+  other repos an idea came from; a decision worth keeping goes in an ADR on its own
+  merits.
 - Something the design doc doesn't cover: flag `# SPEC GAP:` and ask; don't guess.
 - Terms: `docs/glossary.md`.
+- `bash scripts/check_docs.sh` must pass before every commit.
 
 ## Local environment
 
@@ -121,8 +153,10 @@ Docs: `bash scripts/check_docs.sh`.
 ## What "done" means for a task
 
 1. Code written, typed, documented. 2. Tests exist and pass. 3. `black`, `flake8`,
-`mypy` (and UI gates) clean. 4. Phase doc updated. 5. `docs/session-log.md` updated.
-6. Commit pushed.
+`mypy` (and UI gates) clean. 4. **Phase doc boxes ticked** for what landed. 5. Any ADR
+the work implies is written. 6. `docs/session-log.md` "Resume here" and a new entry
+updated. 7. `bash scripts/check_docs.sh` passes. 8. Commit pushed to the remote — work
+that is not pushed does not count as done.
 
 ## When in doubt
 

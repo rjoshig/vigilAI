@@ -1,8 +1,8 @@
 # Phase 0 — Repo setup
 
-**Status:** in progress (this PR). **Goal:** a repo structured like compare-file so every
-later session starts from the same conventions: CLAUDE.md, docs, AI-context docs, phase
-docs, coding standards, git rules, tooling and Docker/CI stubs. **No application code.**
+**Status:** ✅ **complete** (2026-09-18). **Goal:** a repo where every later session
+starts from the same conventions: CLAUDE.md, docs, phase docs, coding standards, git
+rules, tooling and Docker/CI stubs. **No application code.**
 
 ## Scope
 
@@ -30,30 +30,22 @@ Dockerfile logic beyond `pip install -e .`.
 
 ## Exit criteria
 
-1. All files above present; `docs/design.md` is byte-identical to the design doc export.
-2. `pip install -e ".[dev]"` succeeds; `pytest` passes (one package smoke test);
-   `black --check .`, `flake8`, `mypy src/` clean.
-3. `docker compose config` parses.
-4. `bash scripts/check_docs.sh` passes.
-5. PR "Phase 0: repo setup" open against `main` with the reference conflicts noted.
-6. After merge (human): create `dev` from `main`; later feature branches target `dev`.
+1. [x] All files above present; `docs/design.md` is byte-identical to the design doc
+   export.
+2. [x] `pip install -e ".[dev]"` succeeds; `pytest` passes; `black --check .`, `flake8`,
+   `mypy src/` clean.
+3. [x] `docker compose config` parses.
+4. [x] `bash scripts/check_docs.sh` passes.
+5. [x] PR "Phase 0: repo setup" open against `main`.
+6. [ ] **Outstanding (human):** merge the PR, then create `dev` from `main`; later
+   feature branches target `dev`.
 
-## Borrowed from the references
+## Choices settled during setup
 
-- **compare-file** (primary): CLAUDE.md format, `standards/` set and content, `docs/`
-  layout, single append-only `decisions.md`, `phase-plan.md` + `phase-N.md` format,
-  `session-log.md` format, pyproject / flake8 / gitignore, `ui-mock/` approach, `ui2`
-  frontend toolchain and theme.
-- **snopfamily** (secondary): PR template, SHA-pinned manual-only CI, "Resume here"
-  block, glossary, docs integrity script, "session branches are feature branches", "no
-  model identifiers in commits".
-
-## Reference conflicts and how they were resolved
-
-| Topic | compare-file | snopfamily | vigilAI |
-| --- | --- | --- | --- |
-| Branch names | bans agent-prefixed branches | session branches are feature branches | snopfamily rule (the hosted tooling assigns `claude/*`); recorded in `standards/git.md` §1 |
-| CI | none | Actions, manual-only | snopfamily (user choice, ADR-012) |
-| Frontend | npm, React 18, Tailwind 3, ESLint 8, no tests | pnpm, React 19, Tailwind 4, ESLint 9, Vitest | compare-file stack + Vitest (user choice, ADR-011) |
-| ADRs | one file | one file per ADR | compare-file |
-| Python floor | 3.10+, dev pinned 3.12 | — | 3.10 floor **and** pin (user choice, ADR-010) |
+| Topic | vigilAI |
+| --- | --- |
+| Branch names | Session branches (`claude/*`) are feature branches; `standards/git.md` §1 |
+| CI | GitHub Actions, manual-only (ADR-012) |
+| Frontend | npm, Next.js 15, React 18, Tailwind 3, plus Vitest (ADR-011) |
+| ADRs | One append-only `decisions.md` (ADR-009) |
+| Python | 3.10 is the floor **and** the pin (ADR-010) |

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Docs integrity check (idea borrowed from snopfamily's scripts/check-docs.sh).
+# Docs integrity check.
 #  1. Every relative markdown link in *.md resolves to a file or directory.
 #  2. Every file under docs/ is mentioned in README.md (the human index).
 # Run from the repo root: bash scripts/check_docs.sh

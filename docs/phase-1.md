@@ -1,6 +1,6 @@
 # Phase 1 — UI mock
 
-**Status:** complete (walkthrough signed off 2026-09-18). **Goal:** a static, clickable `mock/` showing every screen of
+**Status:** ✅ **complete** (walkthrough signed off 2026-09-18). **Goal:** a static, clickable `mock/` showing every screen of
 user-ui, admin-ui, and the final report, so engineers and stakeholders see the target
 before anything is built. Same approach as `compare-file/ui-mock/`: plain HTML + one shared
 `styles.css` + one shared `app.js`, opens from `file://`, no build, no backend. Effort ~1 week.

@@ -151,22 +151,20 @@ and the UIs, not the endpoints.
 
 ---
 
-## ADR-009 — Repo structure follows compare-file; branching main / dev / feature; session branches are feature branches
+## ADR-009 — Repo layout and branching: main / dev / feature, with session branches as feature branches
 
 **Status:** accepted 2026-09-18 (repo setup)
 
-**Context:** The user wants vigilAI structured like `rjoshig/compare-file` (primary
-reference) with good practices from `rjoshig/snopfamily` (secondary). The two conflict on
-branch naming: compare-file bans agent-prefixed branches; the hosted tooling assigns
-`claude/<slug>` session branches.
+**Context:** The repo needs a documentation layout and a branching model that work with
+hosted tooling, which assigns `claude/<slug>` session branch names rather than letting a
+developer choose them.
 
-**Decision:** Layout, `CLAUDE.md` format, `standards/`, `docs/` with a single append-only
-`decisions.md`, `phase-plan.md` + `phase-N.md`, `session-log.md`, and the `ui-mock/`
-approach follow compare-file. Branching is `main` ← `dev` ← `feature/*`, squash merges,
-human merges. Session branches created by the tooling are treated as feature branches
-(snopfamily rule); nobody creates such names by hand. Borrowed from snopfamily: the PR
-template, the "Resume here" block, `glossary.md`, the docs integrity script, and "no model
-identifiers in commits".
+**Decision:** A single append-only `decisions.md`, `phase-plan.md` plus one
+`phase-N.md` per phase, `session-log.md` with a "Resume here" block, `glossary.md`, a
+docs integrity script, `standards/`, and the static `mock/`. Branching is `main` ←
+`dev` ← `feature/*`, squash merges, human merges. Session branches created by the
+tooling are treated as feature branches; nobody creates such names by hand. Commit
+messages carry no model identifiers.
 
 **Consequences:** The Phase 0 PR targets `main` (no `dev` yet); `dev` is created from
 `main` after it merges. Recorded in `standards/git.md`.
@@ -192,9 +190,9 @@ py310–py312; mypy `python_version = "3.10"`. Docker images use `python:3.10-sl
 
 **Status:** accepted 2026-09-18 (user decision)
 
-**Context:** compare-file ui2 uses npm, Next.js 15, React 18, Tailwind 3, ESLint 8,
-Prettier, and has no unit tests; snopfamily uses pnpm, React 19, Tailwind 4, ESLint 9
-flat config, Vitest. The design doc requires the ui2 look and feel.
+**Context:** The design doc requires the compare-file ui2 look and feel, so both apps
+adopt its toolchain: npm, Next.js 15, React 18, Tailwind 3, ESLint 8, Prettier. That
+toolchain ships no unit tests, which this project needs.
 
 **Decision:** Both apps use the ui2 toolchain and copy its theme tokens and UI primitives,
 plus Vitest + Testing Library for unit tests. `user-ui` on :3000, `admin-ui` on :3001,
@@ -209,8 +207,8 @@ no shared package between them.
 
 **Status:** accepted 2026-09-18 (user decision)
 
-**Context:** compare-file has no CI; snopfamily has Actions but runs them only on
-`workflow_dispatch` to conserve Actions credit.
+**Context:** CI should exist for a pre-merge check but must not consume Actions credit
+on every push.
 
 **Decision:** `.github/workflows/ci.yml` exists with the full gate set (Python, both UIs,
 docs) but triggers only on `workflow_dispatch`. The local pre-push checklist in

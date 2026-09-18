@@ -2,8 +2,7 @@
 
 Applies to everything under `src/vigilai/` (parsers, rules, pipeline, checks, llm, db,
 api, worker, report, cli) and the `tests/` suite. The tooling config (`pyproject.toml`,
-`.flake8`) is authoritative for exact settings; this doc explains intent. Adapted from
-`compare-file/standards/python.md`.
+`.flake8`) is authoritative for exact settings; this doc explains intent.
 
 ## Tooling contract
 

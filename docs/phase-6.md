@@ -1,6 +1,6 @@
 # Phase 6 — Hardening and in-house fit
 
-**Status:** planned. **Goal:** production readiness on the internal network and adaptation
+**Status:** ⬜ **not started**. **Goal:** production readiness on the internal network and adaptation
 of the parsers to the real file layouts, which are only available in-house. Effort ~2
 weeks. Depends on Phases 3–5.
 

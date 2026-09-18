@@ -1,6 +1,6 @@
 # Phase 5 — Final report
 
-**Status:** planned. **Goal:** the frozen one-page interactive HTML report in the
+**Status:** ⬜ **not started**. **Goal:** the frozen one-page interactive HTML report in the
 compare-file report format, generated after review, with PDF download. Effort 1–2 weeks.
 Depends on Phase 3 (Phase 4 for admin-check findings to appear). Read `design.md` "Review
 and final report" and "UI and report".

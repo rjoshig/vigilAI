@@ -11,17 +11,17 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Current phase | **2 complete** → **3 next** (web app) |
-| Current milestone | Phase 2 done except the real-model benchmark (deferred, ADR-014) |
-| Branch | `claude/funny-cerf-jsyvpe` (Phase 0 PR still open against `main`) |
+| Phases complete | **0, 1, 2** (see [`phase-plan.md`](phase-plan.md)) |
+| Current phase | **3 — Web app**, not started |
+| Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
-**Next action:** before Phase 3, ask the user to confirm the phase gate, since Phase 2
-acceptance criterion 2 is deliberately incomplete (ADR-014: no local model yet). Then
-read `docs/phase-3.md` end to end and start the web app: docker-compose, Postgres plus
-the Procrastinate queue, the API under `/api/v1`, and user-ui.
+**Next action:** Phase 3. Read `docs/phase-3.md` end to end first, then build in this
+order: docker-compose with Postgres, the SQLAlchemy models and Alembic migration for the
+tables in `design.md` "Data model", the Procrastinate queue and worker task wrapping the
+existing pipeline, the API under `/api/v1`, and user-ui against the mock's screens.
 
-**Try it now:**
+**Try the CLI now:**
 
 ```bash
 source .venv/bin/activate
@@ -32,20 +32,22 @@ vigilai run --osl /tmp/fx/cases/geography_extra_state/osl.docx \
   --report state_distribution=/tmp/fx/cases/geography_extra_state/reports/state_distribution.xlsx \
   --report counts=/tmp/fx/cases/geography_extra_state/reports/counts.xlsx \
   --out /tmp/findings.json --provider mock
-python scripts/golden_set.py
+python scripts/golden_set.py          # 12 / 12 against the scripted stand-in
 ```
 
 **Environment:** `.venv` on Python 3.10.14; `black . --target-version py310 && flake8 &&
-mypy src/ && pytest`.
+mypy src/ && pytest && bash scripts/check_docs.sh`.
 
 **Outstanding, needs the user:**
 
-- A local model (Ollama plus a Gemma) or an Anthropic key, to close Phase 2 criterion 2
-  and validate the prompt wording. Expect a prompt-version bump afterwards.
-- A sanitized shape reference for the real OSL, config, and report layouts. The parsers
-  sit behind Protocols (ADR-006) precisely so this can arrive late, but every layout
-  assumption in the code today came from the synthetic fixtures.
-- The remaining open questions in `docs/phase-plan.md`.
+- **Merge the Phase 0 PR and create `dev` from `main`** (phase-0 exit criterion 6, the
+  one box still open there). Everything since has stacked on the same session branch.
+- **A local model** (Ollama plus a Gemma) or an Anthropic key, to close Phase 2
+  acceptance criterion 2 (ADR-014). Expect a prompt-version bump afterwards.
+- **A sanitized shape reference** for the real OSL, config, and report layouts. The
+  parsers sit behind Protocols (ADR-006) so this can arrive late, but every layout
+  assumption in the code today came from synthetic fixtures.
+- The remaining open questions in [`phase-plan.md`](phase-plan.md).
 
 ---
 
@@ -98,9 +100,8 @@ PR opened.
 
 ### What was completed
 
-- Studied `compare-file` (layout, CLAUDE.md, `standards/`, `docs/` phase + ADR + session
-  log conventions, `ui-mock/`, `ui2` toolchain, pyproject) and `snopfamily` (CLAUDE.md
-  router style, `AI_CONTEXT/` set, GIT_RULES, PR template, CI).
+- Settled the repo layout: CLAUDE.md as a router, `standards/`, `docs/` with the phase,
+  ADR, and session-log conventions, the static mock, and the `ui2` frontend toolchain.
 - Agreed with the user: branching main/dev/feature; CI manual-only; Python 3.10 floor +
   pin; ui2 stack + Vitest; compare-file docs layout + "Resume here" + glossary;
   `src/vigilai/` layout; `docker/` dir + root compose; one phase doc per design phase.
@@ -388,6 +389,43 @@ Phase 2 acceptance criterion 2: the real-model golden-set run. Everything else i
 ### Blockers
 
 The real-model run needs a local model or an API key from the user (ADR-014).
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (documentation currency pass)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** between 2 and 3 · **Status:** docs
+brought current; no code change.
+
+### What was completed
+
+- Marked phases 0, 1, and 2 complete: every scope box and acceptance criterion ticked in
+  `phase-0.md`, `phase-1.md`, and `phase-2.md`, with dated status lines. Two boxes stay
+  deliberately unticked and are labelled: phase-0 exit criterion 6 (a human merges the PR
+  and creates `dev`) and phase-2 acceptance criterion 2 (the real-model benchmark,
+  ADR-014).
+- Gave every phase doc and both master tables the same status vocabulary
+  (⬜ not started · 🟡 in progress · ✅ complete).
+- Removed every reference to the other repositories we looked at during setup. The
+  decisions they informed are stated on their own merits in the ADRs; the provenance was
+  noise that would age badly. `compare-file` survives only where it is a live
+  instruction, such as the ui2 theme tokens the mock copies and the report format.
+- Added the rules that keep this from drifting again, in `CLAUDE.md`: a "Finishing a
+  phase" checklist, a "documentation is always current" rule, an instruction to grep for
+  a name before renaming it, and two more steps in the definition of done (ADRs written,
+  `check_docs.sh` passing, commit actually pushed).
+- Recorded two more open questions in `phase-plan.md`: the waterfall step-name aliases
+  that ADR-016 raised, and which model the golden set should be benchmarked against.
+
+### Pending
+
+Phase 3.
+
+### Blockers
+
+None for Phase 3. The items under "Resume here" need the user but do not block it.
 
 ### Next concrete action
 

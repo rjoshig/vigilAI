@@ -1,9 +1,13 @@
 # Phase 2 — Pipeline core (CLI)
 
-**Status:** 2a–2f complete. Acceptance criteria 1 and 3–5 met; criterion 2's
-real-model run is deferred by ADR-014. **Goal:** the whole nine-stage pipeline runnable from the command
-line on synthetic fixtures: files in, findings JSON out. Parsers, the canonical rule
-schema, the LLM adapter with cache, and a golden set that measures extraction accuracy.
+**Status:** ✅ **complete** (2026-09-18), with one criterion deliberately open:
+milestones 2a–2f are done and acceptance criteria 1 and 3–5 are met, but criterion 2's
+real-model benchmark is deferred by ADR-014 until a model is available. Phase 3 may
+start; this must close before Phase 6.
+
+**Goal:** the whole nine-stage pipeline runnable from the command line on synthetic
+fixtures: files in, findings JSON out. Parsers, the canonical rule schema, the LLM
+adapter with cache, and a golden set that measures extraction accuracy.
 Effort 4–5 weeks. This is the riskiest phase (LLM extraction quality), which is why it
 comes before the web app.
 

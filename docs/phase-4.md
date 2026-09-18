@@ -1,6 +1,6 @@
 # Phase 4 — Admin-ui and configurable checks
 
-**Status:** planned. **Goal:** cross-report checks defined by admins as data, not code,
+**Status:** ⬜ **not started**. **Goal:** cross-report checks defined by admins as data, not code,
 plus the other admin-maintained reference data, and the separate admin-ui on its own URL.
 Effort 2–3 weeks. Depends on Phase 3. Read `design.md` "Configurable checks (admin-ui)".
 

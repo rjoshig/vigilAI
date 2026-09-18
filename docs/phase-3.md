@@ -1,6 +1,6 @@
 # Phase 3 — Web app
 
-**Status:** planned. **Goal:** the pipeline running as a service: docker-compose with
+**Status:** ⬜ **not started**. **Goal:** the pipeline running as a service: docker-compose with
 Postgres (data + queue), the FastAPI api, Procrastinate workers, and the user-ui. Effort
 ~3 weeks. Depends on Phase 2.
 

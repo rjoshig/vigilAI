@@ -1,8 +1,7 @@
 # Git & Workflow Standards
 
 How we branch, commit, and open PRs. These rules are **canonical**; `CLAUDE.md` keeps a
-short summary and links here. Adapted from `compare-file/standards/git.md` with two rules
-borrowed from `snopfamily/AI_CONTEXT/GIT_RULES.md` (session branches, no model identifiers).
+short summary and links here.
 
 This repo is a **Python service** (`src/vigilai/`: pipeline, worker, CLI, FastAPI) plus
 **two Next.js apps** (`user-ui/`, `admin-ui/`). CI exists but is **manual-only** (ADR-012),
