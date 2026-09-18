@@ -11,7 +11,7 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**; **6 in progress**; **6.1 and 6.2 specified and decided, not started**; **7 dormant** (runs only on request) |
+| Phases complete | **0–5**, **6.1**, **6.2**, **6.3**; **6 in progress**; **7 dormant** (runs only on request) |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
@@ -63,41 +63,30 @@ runs in shadow before it counts. ADR-021 holds the shape and is **proposed**, no
 accepted, because six open questions at the foot of the phase doc change the design.
 Answer those first.
 
-### Next: build Phase 6.2, then Phase 6.1
+### What was built on 2026-09-18
 
-Sixteen design questions across both phases were answered on 2026-09-18 and are
-recorded in the **Decisions** table of each phase doc. ADR-021 and ADR-022 are
-accepted. The user chose to **build 6.2 first**, so the training loop is attributed to
-real people from its first day rather than retrofitted.
+Three phases, in this order, all with their gates green.
 
-The load-bearing answers: the API refuses to serve on the default password off
-loopback; sessions last eight hours with an hour idle; twelve-character minimum and
-lockout, no complexity rules and no expiry; with login off everything is attributed to
-the placeholder and there is no free-text name box; single sign-on is expected
-eventually and the session table is shaped for it. On the training side: a learned
-rule starts at the narrowest scope that fits, anyone may file an observation under
-their name, an administrator activates a shadowed rule with the numbers shown rather
-than a fixed threshold, replay reads the golden set plus recent finalized runs,
-observations are kept indefinitely, and authors hear the outcome with a reason.
+**6.2, optional login.** Two `.env` switches, both off. With them off the product is
+exactly what it was and every action is attributed to a seeded placeholder, John Doe.
+With them on, an administrator creates accounts for both roles, everyone changes their
+password at first sign-in, and the API refuses to serve a non-loopback deployment
+while the bootstrap password stands.
 
-The last open question is now answered too: **no rule expires on its own.** Every
-rule lives in one searchable admin screen, filtered to active by default, where an
-administrator enables, disables, or deletes it. Deletion is soft and restorable for
-six months, then permanent with a tombstone so old findings still explain themselves.
-Every one of those actions asks for the word to be typed.
+**6.3, runtime settings.** The admin console overrides `.env`, which overrides the
+built-in default, for the model, login, throughput, uploads and retention. The console
+shows which layer every value came from. The database URL, the data directory, the
+bind address and the master key are never editable there, because each is needed to
+reach or protect the settings store itself.
 
-### Phase 6.2 (specified 2026-09-18)
+**6.1, richer inputs and Train AI mode.** Three samples per artifact type, viewable
+and downloadable. Several files per report type, each labelled, with findings naming
+the part. A deliverable count that code checks against the files that arrived.
+Workbook type detection that asks when unsure. And the training loop: a reviewer's
+sentence, anchored to what they meant, becomes a candidate rule the model drafts, code
+validates, a replay tests, and a person approves into shadow.
 
-[`phase-6.2.md`](phase-6.2.md) adds login that **ships off**. Two `.env` switches, one
-per app. An administrator creates every account; there is no self-registration. The
-design turns on one idea: **there is always a current user**, a seeded placeholder
-while login is off, so nothing stores a nullable author and no handler branches on
-whether authentication is enabled. ADR-022 amends ADR-008 and is **proposed**, not
-accepted. The bootstrap credential is `admin` / `admin123` as requested, with a forced
-change at first sign-in; whether production should refuse to serve until it is changed
-is one of the open questions.
-
-### Outstanding, needs the user
+### Outstanding, needs the user### Outstanding, needs the user
 
 - **Merge the Phase 0 PR and create `dev` from `main`.** Eighteen commits are stacked
   on one session branch. This is the thing to do first.
@@ -113,6 +102,53 @@ is one of the open questions.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-18 (phases 6.1, 6.2 and 6.3 built)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Status:** complete, gates green.
+862 Python tests, 45 admin-ui tests, 55 user-ui tests; `black`, `flake8`, `mypy`,
+`check_docs`, and both UIs' five gates all clean.
+
+### What was completed
+
+- **Phase 6.2**: `auth/` with scrypt passwords and server-side sessions, the bootstrap
+  administrator, account administration, attribution on runs, reviews, captured
+  configs and audit entries, and login pages in both apps.
+- **Phase 6.3**: `config/` with a registry, three-layer resolution, an encrypted
+  secret, a change log, and the settings screen showing each value's source.
+- **Phase 6.1**: `artifact_samples`, report parts, delivery counts, workbook
+  detection, `training/` with the rule lifecycle and synthesis, field constraints,
+  and the training and rules screens.
+- Five migrations, each verified up and down, two of them moving data first.
+
+### Four defects the work itself surfaced
+
+- Every **read-only admin route was unguarded**: only the mutating ones called the old
+  admin helper. The router now depends on `require_admin` as a whole.
+- A **failed sign-in was rolled back with its own request**, so the lockout counter
+  never survived its increment. It commits before raising.
+- **Synthesis marked observations even when it produced nothing**, stranding their
+  authors. Found by running it live, not by a test.
+- **Three settings were unreachable**: black had already reformatted the `GROUPS`
+  tuple, so the edit adding the section silently missed, and the endpoint renders
+  group by group. A test now asserts every setting belongs to a listed group.
+
+### Pending
+
+- Phase 6.1: the standalone sample-exploration screen, and flagging a contradiction
+  when an observation is written rather than at the candidate stage.
+- Phase 6.2: naming the reviewer of each decision on the frozen report.
+- Everything under "Outstanding, needs the user".
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here".
 
 ---
 

@@ -1,10 +1,10 @@
 # Phase 6.1 — Richer inputs and a trainable rule loop
 
-**Status:** ⬜ **not started** — specified 2026-09-18, design questions answered the
-same day (see "Decisions"), scheduled **after Phase 6.2** so the training loop is
-attributed to real people from the first day rather than retrofitted. Depends on
-Phase 4 (checks as data) and ADR-020 (the catalog as data). It does **not** depend on
-Phase 6 finishing, and it does not touch Phase 7.
+**Status:** ✅ **complete** (2026-09-18), with two items deliberately open and marked
+below: the standalone sample-exploration screen in the user app, and flagging a
+contradiction at the moment an observation is written rather than at the candidate
+stage. Every acceptance criterion is met. Built after Phase 6.2 so the training loop
+is attributed to real people from its first day.
 
 **Goal:** two things the tool cannot do today.
 
@@ -105,7 +105,7 @@ keep only if it is kept from the start.
 
 ## Scope · 🟡 in progress
 
-### 6.1a — Several samples per artifact type · 🟡 in progress
+### 6.1a — Several samples per artifact type · ✅ complete
 
 Today an artifact type holds one sample workbook, in `filename` and `storage_path` on
 `artifact_types`, and the admin-ui can replace it but cannot show it. Real report types
@@ -128,7 +128,7 @@ vary between customers, and one sample hides that.
 - [x] Named-value resolution runs against **every** sample, not one, and the admin-ui
       shows which samples a pointer resolves on. A pointer that works on one layout and
       not another is the exact defect this milestone exists to surface.
-- [ ] admin-ui: a samples strip on each artifact type — up to three cards, each with
+- [x] admin-ui: a samples strip on each artifact type — up to three cards, each with
       its label, sheet list, a **View** action opening the preview grid, a **Download**
       action, and a **Remove**. Replace stays, on the individual sample.
 
@@ -197,10 +197,11 @@ on.
 - [x] `app_settings`: a small key/value table for operator switches, with
       `train_ai_mode` the first one. `GET /runs/options` reports it, so the user-ui
       shows the training affordances only when it is on.
-- [ ] **A data-point viewer**, shared by the three input kinds: a report workbook as
-      sheets, labels, cell addresses and (masked) values; an OSL as sections and the
-      requirements extracted from them; a config as JSON paths. Reachable from a run
-      and from a standalone "explore a sample" screen.
+- [~] **A data-point viewer.** The admin console previews a sample workbook cell by
+      cell, with the label to each cell's left, and an observation raised from a
+      finding carries that finding's evidence as its anchor. **Outstanding:** the
+      standalone "explore a sample" screen in the user app, and browsing an OSL's
+      sections or a config's JSON paths to anchor against.
 - [x] **An observation is anchored to a selection, not only to prose.** The user clicks
       a cell, a label, an OSL section, or a config path, and writes what they mean. The
       stored observation carries both. This is the difference between a rule the model
@@ -229,18 +230,19 @@ on.
 - [x] **An observation is editable by its author until an administrator queues it**,
       after which it freezes. Every edit is versioned, so the audit trail survives the
       convenience.
-- [ ] **An observation that contradicts an active rule is flagged as a conflict**, not
-      filtered out. Someone on the ground saying the opposite of a live rule is often
-      the most valuable thing in the queue, and the administrator sees both.
+- [~] **An observation that contradicts an active rule is flagged as a conflict**, not
+      filtered out. Conflict detection runs at the candidate stage and the
+      administrator sees the overlap before approving. **Outstanding:** flagging it at
+      the moment the observation is written, which is when the author could reconsider.
 - [x] A reviewer can raise an observation straight from a finding — "this fired but it
       is fine, because…" — which turns the dismissals the tool already collects into
       training input instead of leaving them as a review note nobody reads again.
 
-### 6.1f — Train AI mode: synthesis and approval · 🟡 in progress
+### 6.1f — Train AI mode: synthesis and approval · ✅ complete
 
 The administrator-facing half. Nothing here runs by itself.
 
-- [ ] An admin-ui **review queue**: observations grouped by anchor and by field, with
+- [x] An admin-ui **review queue**: observations grouped by anchor and by field, with
       their author, run, and text, and bulk select.
 - [x] **Synthesis is one explicit action on a selected group**, producing
       `rule_candidates`: `name`, `target_kind` (`check` | `compliance_rule` |
@@ -331,23 +333,23 @@ The part that makes "smarter over time" true rather than aspirational.
 - [x] Disabling or deleting a rule never edits a past finding. Old runs stay
       reproducible through `rules_version`, which already exists.
 
-### 6.1i — One searchable rules screen · 🟡 in progress
+### 6.1i — One searchable rules screen · ✅ complete
 
 Every rule the tool holds, in one place, whatever its origin. A learned rule that
 cannot be found is worse than no learned rule, because nobody knows why a finding
 appeared.
 
-- [ ] An admin console **Rules** screen listing checks, compliance rules, and field
+- [x] An admin console **Rules** screen listing checks, compliance rules, and field
       constraints together, with an **origin** column: shipped, written by an
       administrator, or learned from observations.
 - [x] **Search** across name, the plain-language reasoning, the field or named values
       a rule touches, and its scope. This is the screen someone opens when a finding
       surprises them, so it has to answer "what made this fire" quickly.
-- [ ] **A state filter defaulting to active.** The other states — shadow, disabled,
+- [x] **A state filter defaulting to active.** The other states — shadow, disabled,
       deleted — are one click away, so nothing is hidden and nothing is in the way.
 - [x] Per rule: its state, scope, severity, origin, fired count, dismissal rate, when
       it last fired, and for a learned rule its source observations and approver.
-- [ ] **Enable, disable, delete, and restore**, each requiring the administrator to
+- [x] **Enable, disable, delete, and restore**, each requiring the administrator to
       type the word — `enable`, `disable`, `delete`, `restore` — in a confirmation
       dialog. A rule change reaches every future run, and a typed word is the cheapest
       way to make sure the click was meant. *(Typing to confirm on the reversible
@@ -362,11 +364,11 @@ appeared.
 - [x] Every one of these actions is an audit event naming the administrator, and
       deletions and restores are visible in the rule's own history.
 
-### 6.1h — Documentation and tests · 🟡 in progress
+### 6.1h — Documentation and tests · ✅ complete
 
 - [x] ADR-021 (inputs: several samples, several files, detection) and ADR-022 (the
       training loop) written before the code, not after.
-- [ ] `docs/design.md`, `docs/architecture.md`, `docs/llm-privacy.md` (the synthesis
+- [x] `docs/design.md`, `docs/architecture.md`, `docs/llm-privacy.md` (the synthesis
       prompt is a new place text reaches the model), `docs/glossary.md` (observation,
       candidate rule, shadow mode, part, anchor) updated in the same commits.
 - [x] Tests per module as usual, plus: a synthetic end-to-end training test that goes
@@ -376,33 +378,33 @@ appeared.
       shape; a tripwire test asserting an observation containing a fake account number
       is refused at save.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · ✅ complete
 
-1. [ ] An artifact type holds up to three samples; each can be viewed as a grid and
+1. [x] An artifact type holds up to three samples; each can be viewed as a grid and
    downloaded, and a named value shows which samples it resolves on.
-2. [ ] A run accepts several files for one report type, each labelled, and a check
+2. [x] A run accepts several files for one report type, each labelled, and a check
    declaring `each` produces one finding per failing part, naming it.
-3. [ ] A run declaring more deliverables than the files uploaded produces a finding.
-4. [ ] An unlabelled workbook is assigned its type by fingerprint against the samples,
+3. [x] A run declaring more deliverables than the files uploaded produces a finding.
+4. [x] An unlabelled workbook is assigned its type by fingerprint against the samples,
    an uncertain one asks the user, and a multi-tab workbook maps to several types.
-5. [ ] With Train AI mode off, the user-ui is exactly what it is today, and no new
+5. [x] With Train AI mode off, the user-ui is exactly what it is today, and no new
    table is written to.
-6. [ ] With it on, a reviewer anchors an observation to a cell and to an OSL section,
+6. [x] With it on, a reviewer anchors an observation to a cell and to an OSL section,
    writes a sentence, and an administrator sees it in the queue.
-7. [ ] An administrator synthesizes a group of observations into a candidate rule,
+7. [x] An administrator synthesizes a group of observations into a candidate rule,
    sees the replay against the golden set and recent runs, approves it, and the rule
    fires on the next run with its provenance visible on the finding.
-8. [ ] A field-level statement in plain words becomes a structured `field_constraints`
+8. [x] A field-level statement in plain words becomes a structured `field_constraints`
    row, and a blank in that field becomes a finding at the stated severity.
-9. [ ] A promoted rule runs in shadow until an administrator activates it, and the
+9. [x] A promoted rule runs in shadow until an administrator activates it, and the
    dashboard shows its fired count and dismissal rate.
-10. [ ] An observation containing an instruction to the model does not change the shape
+10. [x] An observation containing an instruction to the model does not change the shape
     of the synthesized rule, and one containing PII is refused when saved.
-11. [ ] The rules screen finds a rule by a word from its reasoning, shows active rules
+11. [x] The rules screen finds a rule by a word from its reasoning, shows active rules
     by default, and reaches disabled and deleted ones through the filter.
-12. [ ] Disabling, deleting, and restoring each require the word typed, take effect on
+12. [x] Disabling, deleting, and restoring each require the word typed, take effect on
     the next run, and appear in the audit log with the administrator's name.
-13. [ ] A rule deleted five months ago can be restored whole; one deleted seven months
+13. [x] A rule deleted five months ago can be restored whole; one deleted seven months
     ago cannot, and a finding from an old run that cites it still explains itself.
 
 ## Decisions (2026-09-18)
