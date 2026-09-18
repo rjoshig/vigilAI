@@ -18,7 +18,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from vigilai.api import schemas_admin as wire
-from vigilai.api.deps import CurrentUser, current_user, get_data_dir, get_session
+from vigilai.api.deps import (
+    CurrentUser,
+    current_user,
+    get_data_dir,
+    get_session,
+    require_admin,
+)
 from vigilai.api.uploads import UploadError, store_upload
 from vigilai.checks.expressions import (
     ExpressionError,
@@ -42,7 +48,9 @@ __all__ = ["router"]
 
 _LOG: Final = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+# Every route here needs an administrator, the read-only ones included: a listing
+# tells a caller what the tool checks and who its customers are.
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 #: Where uploaded sample workbooks live on the shared volume.
 TEMPLATE_DIR: Final[str] = "templates"
@@ -56,27 +64,6 @@ _CODE_RE: Final = re.compile(r"^[A-Z0-9_]{2,20}$")
 
 #: Starlette renamed its 422 constant; the number is stable.
 HTTP_422: Final[int] = 422
-
-
-def _admin(user: CurrentUser) -> CurrentUser:
-    """Guard admin routes.
-
-    v1 has no login and the admin-ui is separated by URL rather than by role, so this
-    always passes. It exists because adding a real check later must be an edit to one
-    function, not to twenty routes (ADR-008).
-
-    Args:
-        user: The caller.
-
-    Returns:
-        The caller.
-
-    Raises:
-        HTTPException: 403 when the caller is not an admin.
-    """
-    if not user.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "admin access is required")
-    return user
 
 
 # ---------------------------------------------------------------- artifact types
@@ -197,7 +184,7 @@ def save_artifact_type(
         HTTPException: 422 when the key is malformed, or when a built-in's key or kind
             is being changed — those are referenced by the fixed report checks.
     """
-    _admin(user)
+    require_admin(user)
     catalog.seed_defaults(session)
 
     key = payload.key.strip().lower()
@@ -263,7 +250,7 @@ def upload_sample(
         HTTPException: 404 when the type does not exist, 400 when the upload is
             rejected.
     """
-    _admin(user)
+    require_admin(user)
     catalog.seed_defaults(session)
     row = session.execute(
         sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
@@ -309,7 +296,7 @@ def delete_artifact_type(
             referring to a type nothing can describe — disabling it is the right move,
             and it keeps the history readable.
     """
-    _admin(user)
+    require_admin(user)
     row = session.execute(
         sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
     ).scalar_one_or_none()
@@ -402,7 +389,7 @@ def save_scope(
     Raises:
         HTTPException: 422 when the code is malformed.
     """
-    _admin(user)
+    require_admin(user)
     catalog.seed_defaults(session)
 
     code = payload.code.strip().upper()
@@ -453,7 +440,7 @@ def delete_scope(
     Raises:
         HTTPException: 404 when it does not exist, 409 when runs already reference it.
     """
-    _admin(user)
+    require_admin(user)
     row = session.execute(
         sa.select(models.RunScope).where(models.RunScope.code == code.upper())
     ).scalar_one_or_none()
@@ -636,7 +623,7 @@ def create_named_value(
     Returns:
         The stored pointer with what it resolves to.
     """
-    _admin(user)
+    require_admin(user)
     row = session.execute(
         sa.select(models.NamedValueRow).where(models.NamedValueRow.name == payload.name)
     ).scalar_one_or_none()
@@ -674,7 +661,7 @@ def delete_named_value(
             Deleting it anyway would turn a working check into "could not evaluate" on
             the next run, with nothing to point at.
     """
-    _admin(user)
+    require_admin(user)
     row = session.get(models.NamedValueRow, value_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"named value {value_id} not found")
@@ -755,7 +742,7 @@ def save_check(
         HTTPException: 422 when an expression check has no valid expression, or a
             judgment check has no instruction.
     """
-    _admin(user)
+    require_admin(user)
 
     if payload.kind == "expression":
         if not payload.expression.strip():
@@ -826,7 +813,7 @@ def set_check_active(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    _admin(user)
+    require_admin(user)
     row = session.get(models.CheckDefinitionRow, check_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"check {check_id} not found")
@@ -876,7 +863,7 @@ def draft_check(
         HTTPException: 502 when the model cannot be reached or its answer does not
             validate after the single retry.
     """
-    _admin(user)
+    require_admin(user)
 
     available = payload.report_types or catalog.active_report_keys(session) or sorted(PARSERS)
 
@@ -970,7 +957,7 @@ def test_expression(
     Returns:
         The outcome, naming any value that could not be resolved.
     """
-    _admin(user)
+    require_admin(user)
     documents = _load_templates(session, data_dir)
     rows = list(session.execute(sa.select(models.NamedValueRow)).scalars())
 
@@ -1060,7 +1047,7 @@ def save_compliance_rule(
     Returns:
         The stored rule.
     """
-    _admin(user)
+    require_admin(user)
     row = session.execute(
         sa.select(models.ComplianceRuleRow).where(models.ComplianceRuleRow.name == payload.name)
     ).scalar_one_or_none()
@@ -1095,7 +1082,7 @@ def delete_compliance_rule(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    _admin(user)
+    require_admin(user)
     row = session.get(models.ComplianceRuleRow, rule_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"compliance rule {rule_id} not found")
@@ -1156,7 +1143,7 @@ def save_category(
     Returns:
         The stored category.
     """
-    _admin(user)
+    require_admin(user)
     existing = list(session.execute(sa.select(models.ReversePassCategoryRow)).scalars())
     if not existing:
         from vigilai.checks.definitions import DEFAULT_CATEGORIES
@@ -1233,7 +1220,7 @@ def create_alias(
     Returns:
         The stored alias.
     """
-    _admin(user)
+    require_admin(user)
     row = models.AttributeAlias(
         canonical_name=payload.canonical_name.strip(),
         alias=payload.alias.strip(),
@@ -1263,7 +1250,7 @@ def delete_alias(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    _admin(user)
+    require_admin(user)
     row = session.get(models.AttributeAlias, alias_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"alias {alias_id} not found")
@@ -1324,7 +1311,7 @@ def create_masked_column(
     Returns:
         The stored pattern.
     """
-    _admin(user)
+    require_admin(user)
     if not session.execute(sa.select(models.MaskedColumn).limit(1)).scalar_one_or_none():
         for default in DEFAULT_MASKED_COLUMNS:
             session.add(models.MaskedColumn(pattern=default, description="Shipped default"))
@@ -1361,7 +1348,7 @@ def delete_masked_column(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    _admin(user)
+    require_admin(user)
     row = session.get(models.MaskedColumn, column_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"masked column {column_id} not found")

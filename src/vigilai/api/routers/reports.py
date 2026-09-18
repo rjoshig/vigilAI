@@ -157,10 +157,18 @@ def finalize(
             html_sha256=rendered.sha256,
             verdict=rendered.verdict,
             generated_by=user.name,
+            generated_by_user_id=user.id,
         )
     )
     run.status = "finalized"
-    repository.audit(session, "run.finalized", run_id, rendered.verdict)
+    repository.audit(
+        session,
+        "run.finalized",
+        run_id,
+        rendered.verdict,
+        user_id=user.id,
+        actor=user.name,
+    )
     _LOG.info("run %d finalized: %s", run_id, rendered.verdict)
 
     return {

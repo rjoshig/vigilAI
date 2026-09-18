@@ -398,7 +398,7 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
             )
         )
 
-    _capture_config_from_upload(session, run, data_dir, stored)
+    _capture_config_from_upload(session, run, data_dir, stored, user)
     queue.enqueue(TASK_RUN_PIPELINE, run_id=run.id)
     repository.audit(
         session,
@@ -432,7 +432,7 @@ def _parse_date(value: str | None) -> dt.date | None:
 
 
 def _capture_config_from_upload(
-    session: Session, run: models.Run, data_dir: Path, stored: list[Any]
+    session: Session, run: models.Run, data_dir: Path, stored: list[Any], user: CurrentUser
 ) -> None:
     """Record the uploaded config in the versioned config history.
 
@@ -441,6 +441,8 @@ def _capture_config_from_upload(
         run: The run row.
         data_dir: The shared volume.
         stored: The stored files.
+        user: Who submitted the run, recorded against the captured version so the
+            config history can show who ran it (ADR-022).
     """
     config_file = next((f for f in stored if f.kind == "config"), None)
     if config_file is None:
@@ -454,7 +456,13 @@ def _capture_config_from_upload(
     if not isinstance(content, dict):
         return
     captured = repository.capture_config(
-        session, run.configuration_id, run.customer_name, content, config_file.sha256
+        session,
+        run.configuration_id,
+        run.customer_name,
+        content,
+        config_file.sha256,
+        created_by=user.id,
+        created_by_name=user.name,
     )
     run.config_last_modified = captured.last_modified
 
@@ -723,7 +731,7 @@ def recheck(
 def clone_run(
     run_id: int,
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(current_user),
 ) -> schemas.CloneResult:
     """Create a draft run prefilled from an existing one.
 
@@ -733,7 +741,7 @@ def clone_run(
     Args:
         run_id: The run to copy.
         session: The request's session.
-        _user: The caller.
+        user: The caller, recorded as the clone's submitter.
 
     Returns:
         The new run.
@@ -747,11 +755,21 @@ def clone_run(
         run_date=source.run_date,
         status="draft",
         cloned_from_id=source.id,
+        user_id=user.id,
+        scope=source.scope,
+        has_suppressions=source.has_suppressions,
     )
     session.add(clone)
     session.flush()
     clone.expires_at = repository.expiry_from(clone.created_at or utcnow())
-    repository.audit(session, "run.cloned", clone.id, f"from {source.id}")
+    repository.audit(
+        session,
+        "run.cloned",
+        clone.id,
+        f"from {source.id}",
+        user_id=user.id,
+        actor=user.name,
+    )
     return schemas.CloneResult(run_id=clone.id, cloned_from=source.id, status=clone.status)
 
 

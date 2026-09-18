@@ -38,6 +38,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-vigilai}:${POSTGRES_PASSWORD:-vigilai}@postgres:5432/${POSTGRES_DB:-vigilai}
       VIGILAI_DATA_DIR: /data
+      # The container binds to every interface, so with admin login on the api will
+      # refuse to serve until the bootstrap password is changed (ADR-022).
+      VIGILAI_BIND_HOST: "0.0.0.0"
     volumes:
       - files:/data # the shared volume (uploads, reports, PDFs)
     depends_on:
@@ -69,6 +72,9 @@ services:
       timeout: 5s
       retries: 3
 
+  # Login is off by default (ADR-022). To turn it on, set VIGILAI_ADMIN_AUTH and
+  # VIGILAI_USER_AUTH in .env; the api then refuses to serve until the bootstrap
+  # password is changed, because it binds to 0.0.0.0 here.
   user-ui:
     build:
       context: ./user-ui

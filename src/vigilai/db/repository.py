@@ -493,7 +493,13 @@ def load_elements(session: Session, run_id: int) -> list[ConfigElement]:
 
 
 def capture_config(
-    session: Session, configuration_id: str, customer: str, content: Mapping[str, Any], sha: str
+    session: Session,
+    configuration_id: str,
+    customer: str,
+    content: Mapping[str, Any],
+    sha: str,
+    created_by: int | None = None,
+    created_by_name: str = "",
 ) -> models.Config:
     """Record a config, versioning it only when the content actually changed.
 
@@ -503,6 +509,9 @@ def capture_config(
         customer: The customer.
         content: The decoded config.
         sha: The file hash.
+        created_by: Who submitted the run that carried it (ADR-022).
+        created_by_name: Their display name, kept beside the id so the config history
+            still reads after an account is renamed.
 
     Returns:
         The existing row when the content is unchanged, otherwise a new version.
@@ -527,6 +536,8 @@ def capture_config(
         content=dict(content),
         sha256=sha,
         last_modified=str(content.get("last_modified", "")),
+        created_by=created_by_name,
+        created_by_user_id=created_by,
     )
     session.add(row)
     session.flush()
@@ -534,7 +545,14 @@ def capture_config(
     return row
 
 
-def audit(session: Session, action: str, run_id: int | None = None, detail: str = "") -> None:
+def audit(
+    session: Session,
+    action: str,
+    run_id: int | None = None,
+    detail: str = "",
+    user_id: int | None = None,
+    actor: str = "",
+) -> None:
     """Record who did what.
 
     Args:
@@ -542,8 +560,19 @@ def audit(session: Session, action: str, run_id: int | None = None, detail: str 
         action: The action name, e.g. ``"run.view"``.
         run_id: The run involved.
         detail: Extra context. Ids and counts only, never file content (ADR-003).
+        user_id: The account behind the action (ADR-022).
+        actor: Their display name, kept beside the id so the entry still reads after
+            an account is renamed.
     """
-    session.add(models.AuditLog(action=action, run_id=run_id, detail=detail[:2000]))
+    session.add(
+        models.AuditLog(
+            action=action,
+            run_id=run_id,
+            detail=detail[:2000],
+            user_id=user_id,
+            actor=actor[:200],
+        )
+    )
 
 
 def expiry_from(created: dt.datetime, days: int = models.RETENTION_DAYS) -> dt.datetime:

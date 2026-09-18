@@ -65,6 +65,7 @@ def review_finding(
     finding.review_status = payload.review_status
     finding.review_note = payload.review_note
     finding.reviewed_at = utcnow()
+    finding.reviewed_by_user_id = user.id
     repository.audit(
         session, "finding.reviewed", finding.run_id, f"{finding.finding_id}={payload.review_status}"
     )
@@ -76,7 +77,7 @@ def review_finding(
 def bulk_ok_low_severity(
     run_id: int,
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(current_user),
 ) -> int:
     """Mark every undecided low-severity finding as confirmed.
 
@@ -86,7 +87,7 @@ def bulk_ok_low_severity(
     Args:
         run_id: The run.
         session: The request's session.
-        _user: The caller.
+        user: The caller, recorded as the reviewer of each one.
 
     Returns:
         How many findings were decided.
@@ -98,8 +99,15 @@ def bulk_ok_low_severity(
             models.Finding.severity == "low",
             models.Finding.review_status == "undecided",
         )
-        .values(review_status="confirmed", reviewed_at=utcnow())
+        .values(review_status="confirmed", reviewed_at=utcnow(), reviewed_by_user_id=user.id)
     )
     decided = int(result.rowcount)  # type: ignore[attr-defined]
-    repository.audit(session, "finding.bulk_ok", run_id, f"{decided} low-severity")
+    repository.audit(
+        session,
+        "finding.bulk_ok",
+        run_id,
+        f"{decided} low-severity",
+        user_id=user.id,
+        actor=user.name,
+    )
     return decided

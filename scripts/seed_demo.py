@@ -29,6 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from synthetic_model import FIXTURE_ALIASES, build_client  # noqa: E402
 
 import vigilai.worker.runner as runner  # noqa: E402
+from vigilai.auth import accounts  # noqa: E402
+from vigilai.auth.passwords import hash_password  # noqa: E402
 from vigilai.db import catalog, models  # noqa: E402
 from vigilai.db.session import create_all, create_engine, session_factory  # noqa: E402
 from vigilai.db.settings import DbSettings  # noqa: E402
@@ -154,6 +156,20 @@ def seed_admin(session: Any, data_dir: Path, fixtures: Path, manifest: dict[str,
         fixtures: The fixtures root.
         manifest: The decoded fixture manifest.
     """
+    accounts.ensure_placeholder(session)
+    if not session.execute(
+        sa.select(models.User).where(models.User.username == "demoadmin")
+    ).first():
+        session.add(
+            models.User(
+                username="demoadmin",
+                name="Dana Admin",
+                email="demoadmin@example.com",
+                password_hash=hash_password("demo-administrator"),
+                role="admin",
+            )
+        )
+
     for canonical, alias in FIXTURE_ALIASES.canonical_by_alias.items():
         session.add(models.AttributeAlias(canonical_name=alias, alias=canonical))
 

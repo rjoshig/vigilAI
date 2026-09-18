@@ -15,7 +15,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from vigilai.api.deps import get_db_settings, get_llm_settings
-from vigilai.api.routers import admin, configs, findings, reports, runs
+from vigilai.api.routers import admin, auth, configs, findings, reports, runs, users
+from vigilai.auth.accounts import (
+    DefaultPasswordInUse,
+    bootstrap_admin_uses_default_password,
+    ensure_bootstrap,
+    ensure_placeholder,
+)
+from vigilai.auth.settings import AuthSettings
 from vigilai.db.cache import DbCache
 from vigilai.db.session import create_all, create_engine, healthcheck, session_factory
 from vigilai.db.settings import DbSettings
@@ -29,7 +36,9 @@ API_PREFIX: Final[str] = "/api/v1"
 
 
 def create_app(
-    settings: DbSettings | None = None, llm_settings: LLMSettings | None = None
+    settings: DbSettings | None = None,
+    llm_settings: LLMSettings | None = None,
+    auth_settings: AuthSettings | None = None,
 ) -> FastAPI:
     """Build the application.
 
@@ -38,12 +47,14 @@ def create_app(
             so tests get their own SQLite file without touching the environment.
         llm_settings: Adapter settings, used only by the admin check-drafting endpoint.
             The api makes no other model call.
+        auth_settings: The authentication switches, both off when omitted (ADR-022).
 
     Returns:
         The configured app.
     """
     resolved = settings or get_db_settings()
     resolved_llm = llm_settings or get_llm_settings()
+    resolved_auth = auth_settings or AuthSettings.from_env()
     engine = create_engine(resolved)
     factory = session_factory(engine)
 
@@ -56,8 +67,36 @@ def create_app(
 
         Yields:
             Control, for the lifetime of the process.
+
+        Raises:
+            DefaultPasswordInUse: When admin login is on, the bootstrap password is
+                still the documented default, and the server is not on loopback. A
+                warning is easy to miss and this is the one credential everybody
+                knows, so a real deployment refuses to serve until it is changed
+                (ADR-022).
         """
         create_all(engine)
+        with factory() as bootstrap_session:
+            ensure_placeholder(bootstrap_session)
+            if resolved_auth.admin_auth:
+                ensure_bootstrap(bootstrap_session)
+            bootstrap_session.commit()
+
+            if resolved_auth.admin_auth and bootstrap_admin_uses_default_password(
+                bootstrap_session
+            ):
+                if resolved_auth.is_loopback:
+                    _LOG.warning(
+                        "the bootstrap administrator still has the default password; "
+                        "change it at first sign-in"
+                    )
+                else:
+                    raise DefaultPasswordInUse(
+                        "refusing to serve: admin login is on, the bootstrap password "
+                        f"is unchanged, and the bind address {resolved_auth.bind_host!r} "
+                        "is not loopback. Sign in locally and change it first."
+                    )
+
         _LOG.info("api ready (database=%s)", resolved.backend)
         yield
         engine.dispose()
@@ -76,6 +115,7 @@ def create_app(
     app.state.is_sqlite = resolved.is_sqlite
     app.state.data_dir = resolved.data_dir
     app.state.llm_settings = resolved_llm
+    app.state.auth_settings = resolved_auth
     app.state.llm_cache_backend = DbCache(factory)
     # Injectable so a test can render a PDF without launching a browser; None means
     # the default Playwright renderer (vigilai/report/pdf.py).
@@ -95,11 +135,13 @@ def create_app(
     )
 
     for router in (
+        auth.router,
         runs.router,
         findings.router,
         configs.router,
         reports.router,
         admin.router,
+        users.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

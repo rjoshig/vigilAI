@@ -66,17 +66,59 @@ def _pk() -> Mapped[int]:
 
 
 class User(Base):
-    """Empty and unused in v1; the provision for adding login later (ADR-008)."""
+    """An account. Present whether or not login is enabled (ADR-022).
+
+    One row always exists: the placeholder every action is attributed to while login
+    is off. Accounts are created by an administrator and **deactivated, never
+    deleted**, so what a person did stays attributed to them.
+    """
 
     __tablename__ = "users"
 
     id: Mapped[int] = _pk()
+    #: What is typed at the sign-in prompt, e.g. ``admin``.
+    username: Mapped[str] = mapped_column(sa.String(100), unique=True, index=True)
     name: Mapped[str] = mapped_column(sa.String(200), default="")
     email: Mapped[str] = mapped_column(sa.String(320), unique=True)
     password_hash: Mapped[str] = mapped_column(sa.String(200), default="")
+    #: ``admin`` or ``user``. Two roles, no permission matrix.
     role: Mapped[str] = mapped_column(sa.String(50), default="user")
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    #: Set on every account an administrator creates, including the bootstrap admin:
+    #: a password another person typed is already known to two people.
+    must_change_password: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+    #: The account attributed to while login is off. Cannot sign in, cannot be deleted.
+    is_placeholder: Mapped[bool] = mapped_column(sa.Boolean, default=False, index=True)
+    last_login_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    failed_attempts: Mapped[int] = mapped_column(sa.Integer, default=0)
+    locked_until: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    deactivated_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class UserSession(Base):
+    """One signed-in session.
+
+    Server-side rather than a self-contained token, because revoking a session and
+    knowing who is signed in both matter more here than saving a database read. Only a
+    hash of the token is stored, so the table is not a set of working credentials.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = _pk()
+    token_hash: Mapped[str] = mapped_column(sa.String(64), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(sa.ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    #: How the session was established. ``password`` today; the column exists so an
+    #: external identity provider can attach here later without a migration (ADR-022).
+    origin: Mapped[str] = mapped_column(sa.String(30), default="password")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    last_seen_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    expires_at: Mapped[dt.datetime] = mapped_column(Utc, index=True)
+    revoked_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
 
 
 class Run(Base):
@@ -85,7 +127,11 @@ class Run(Base):
     __tablename__ = "runs"
 
     id: Mapped[int] = _pk()
-    user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    #: Who submitted it. The placeholder account while login is off (ADR-022), so the
+    #: run list and the config history always have a name to show.
+    user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True, index=True
+    )
     customer_name: Mapped[str] = mapped_column(sa.String(200), index=True)
     order_number: Mapped[str] = mapped_column(sa.String(100), index=True)
     configuration_id: Mapped[str] = mapped_column(sa.String(200), index=True)
@@ -174,6 +220,11 @@ class Config(Base):
     sha256: Mapped[str] = mapped_column(sa.String(64), index=True)
     last_modified: Mapped[str] = mapped_column(sa.String(64), default="")
     created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    #: The account behind ``created_by`` (ADR-022); the name is kept too, so the
+    #: config history still reads after an account is renamed.
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
@@ -248,6 +299,10 @@ class Finding(Base):
 
     #: Which rules version produced this, so old reports stay reproducible.
     rules_version: Mapped[int] = mapped_column(sa.Integer, default=1)
+    #: Who decided it (ADR-022). The placeholder while login is off.
+    reviewed_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
     #: undecided · confirmed · false_positive · accepted_risk
     review_status: Mapped[str] = mapped_column(sa.String(30), default="undecided", index=True)
     review_note: Mapped[str] = mapped_column(sa.Text, default="")
@@ -341,6 +396,9 @@ class AuditLog(Base):
 
     id: Mapped[int] = _pk()
     user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    #: The actor's display name, kept beside the id so the entry still reads after an
+    #: account is renamed.
+    actor: Mapped[str] = mapped_column(sa.String(200), default="")
     action: Mapped[str] = mapped_column(sa.String(60), index=True)
     run_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True, index=True)
     detail: Mapped[str] = mapped_column(sa.Text, default="")
@@ -484,6 +542,9 @@ class FinalReport(Base):
     html_sha256: Mapped[str] = mapped_column(sa.String(64))
     verdict: Mapped[str] = mapped_column(sa.String(20))
     generated_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    generated_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
     generated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 

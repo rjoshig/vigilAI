@@ -18,6 +18,7 @@ from typing import Callable, Final, Mapping, Sequence
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from vigilai.auth.sessions import purge_expired_sessions
 from vigilai.db import models, repository
 from vigilai.db.queue import ClaimedJob, JobQueue
 from vigilai.db.session import create_all, create_engine, session_factory, session_scope
@@ -225,6 +226,11 @@ class Worker:
         """
         with session_scope(self._factory) as session:
             repository.purge_expired(session, self._data_dir)
+            # Housekeeping rather than a control: a session past its expiry already
+            # fails to resolve, so this only keeps the table from growing forever.
+            gone = purge_expired_sessions(session)
+            if gone:
+                _LOG.info("removed %d expired session(s)", gone)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
