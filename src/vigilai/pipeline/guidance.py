@@ -39,12 +39,19 @@ class RunGuidance:
         scope_label: The programme's name, e.g. ``"Account Monitoring"``.
         scope_instructions: Compliance expectations true of every run in the scope.
         has_suppressions: Whether the submitter said suppressions were applied.
+        deliverable_count: How many deliverables the campaign has, as stated. Zero
+            means unstated.
+        outputs_validated: How many of them this run covers. Zero means unstated.
+        delivery_notes: Anything else the submitter said about the delivery.
         artifact_context: Per-artifact guidance, keyed by artifact key.
     """
 
     scope_label: str = ""
     scope_instructions: str = ""
     has_suppressions: bool | None = None
+    deliverable_count: int = 0
+    outputs_validated: int = 0
+    delivery_notes: str = ""
     artifact_context: dict[str, str] | None = None
 
     @property
@@ -58,6 +65,8 @@ class RunGuidance:
         return not (
             self.scope_label
             or self.scope_instructions.strip()
+            or self.deliverable_count
+            or self.delivery_notes.strip()
             or any((self.artifact_context or {}).values())
         )
 
@@ -115,6 +124,14 @@ def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
             if guidance.has_suppressions
             else "No suppressions were applied to it."
         )
+    if guidance.deliverable_count:
+        covered = guidance.outputs_validated or guidance.deliverable_count
+        lines.append(
+            f"The campaign has {guidance.deliverable_count} deliverable(s); this run "
+            f"validates {covered} of them."
+        )
+    if guidance.delivery_notes.strip():
+        lines.append(f"The submitter added: {_clip(guidance.delivery_notes)}")
     if guidance.scope_instructions.strip():
         lines.append(
             "Standing instructions for this programme, as background: "

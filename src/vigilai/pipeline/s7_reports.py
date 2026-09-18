@@ -9,7 +9,7 @@ resolved produces a "could not evaluate" finding; the run never skips a check si
 from __future__ import annotations
 
 import logging
-from typing import Final
+from typing import Any, Final
 
 from vigilai.checks.definitions import AdminConfig
 from vigilai.checks.expressions import ExpressionError, UnresolvedValue, evaluate
@@ -45,40 +45,47 @@ def run(context: RunContext) -> None:
                 # Settled elsewhere: waterfall order is an OSL-against-config question
                 # and stage 5 answers it.
                 continue
-            outcome = run_derived_check(check, context.reports, context.aliases)
-            if outcome.passed is True:
-                continue
-            if outcome.passed is None:
+            # A campaign can deliver the same report type several times, so a check
+            # runs once per uploaded file and a finding names the one it came from
+            # (ADR-021). "The field distribution is wrong" is useless when five were
+            # uploaded.
+            for documents, part_name in _views(context):
+                outcome = run_derived_check(check, documents, context.aliases)
+                if outcome.passed is True:
+                    continue
+                suffix = f" ({part_name})" if part_name else ""
+                if outcome.passed is None:
+                    context.add_finding(
+                        Finding(
+                            finding_id=context.next_finding_id(),
+                            type="could_not_evaluate",
+                            severity="review",
+                            title=f"Could not check {check.description}{suffix}",
+                            detail=outcome.detail,
+                            leg="osl_reports",
+                            rule_id=rule.rule_id,
+                            evidence=_evidence(rule, outcome),
+                        )
+                    )
+                    continue
                 context.add_finding(
                     Finding(
                         finding_id=context.next_finding_id(),
-                        type="could_not_evaluate",
-                        severity="review",
-                        title=f"Could not check {check.description}",
+                        type=(
+                            "count_does_not_reconcile"
+                            if check.kind == "counts_reconcile"
+                            else "report_violates_rule"
+                        ),
+                        severity=_VIOLATION_SEVERITY,
+                        title=(f"The delivery does not satisfy: {check.description}{suffix}"),
                         detail=outcome.detail,
                         leg="osl_reports",
                         rule_id=rule.rule_id,
                         evidence=_evidence(rule, outcome),
                     )
                 )
-                continue
-            context.add_finding(
-                Finding(
-                    finding_id=context.next_finding_id(),
-                    type=(
-                        "count_does_not_reconcile"
-                        if check.kind == "counts_reconcile"
-                        else "report_violates_rule"
-                    ),
-                    severity=_VIOLATION_SEVERITY,
-                    title=f"The delivery does not satisfy: {check.description}",
-                    detail=outcome.detail,
-                    leg="osl_reports",
-                    rule_id=rule.rule_id,
-                    evidence=_evidence(rule, outcome),
-                )
-            )
 
+    _check_deliverable_count(context)
     _run_admin_checks(context, settings, customer)
 
     _LOG.info(
@@ -86,6 +93,77 @@ def run(context: RunContext) -> None:
         context.run_id,
         len(context.findings) - before,
     )
+
+
+def _check_deliverable_count(context: RunContext) -> None:
+    """Compare the declared deliverable count with the files that arrived.
+
+    This is the point of asking for the number. A count the model is merely told is a
+    count nobody verifies, so code compares it and a shortfall becomes a finding
+    rather than a sentence in a prompt (ADR-021).
+
+    Args:
+        context: The run context, whose ``findings`` this may append to.
+    """
+    declared = context.guidance.deliverable_count
+    if not declared:
+        return
+
+    uploaded = sum(len(parts) for parts in context.report_parts.values()) or len(context.reports)
+    covered = context.guidance.outputs_validated or declared
+    if uploaded >= covered:
+        return
+
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="deliverables_missing",
+            severity="high",
+            title=(
+                f"The run declares {covered} output(s) to validate but {uploaded} "
+                "report file(s) were uploaded"
+            ),
+            detail=(
+                f"The campaign was described as having {declared} deliverable(s). "
+                f"Validating {uploaded} of them leaves the rest unchecked, so this "
+                "run cannot show that the delivery as a whole is correct."
+            ),
+            leg="osl_reports",
+            # Counts only: this check reads no file content at all.
+            evidence=Evidence(report_name="uploaded files"),
+        )
+    )
+
+
+def _views(context: RunContext) -> list[tuple[dict[str, Any], str]]:
+    """The sets of documents a check should be evaluated against.
+
+    Args:
+        context: The run context.
+
+    Returns:
+        One entry per combination of parts, each with the name to put in a finding.
+        The ordinary case is a single file per kind, which gives exactly one entry
+        with no name and therefore findings that read exactly as they did before.
+        When one kind arrives several times, each of its parts is evaluated against
+        the other kinds' first files, because a check spanning two reports has to
+        pair them somehow and pairing every part of one with the single file of the
+        other is the only reading that is never wrong.
+    """
+    parts = context.report_parts or {kind: [] for kind in context.reports}
+    multiple = [kind for kind, items in parts.items() if len(items) > 1]
+    if not multiple:
+        return [(dict(context.reports), "")]
+
+    views: list[tuple[dict[str, Any], str]] = []
+    for kind in multiple:
+        for part in parts[kind]:
+            if part.document is None:
+                continue
+            documents = dict(context.reports)
+            documents[kind] = part.document
+            views.append((documents, part.name))
+    return views
 
 
 def _evidence(rule: object, outcome: CheckOutcome) -> Evidence:

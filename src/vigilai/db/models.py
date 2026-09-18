@@ -156,6 +156,14 @@ class Run(Base):
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+    #: How many deliverables the campaign has, as the submitter states it. Zero means
+    #: they did not say. Code checks it against the files uploaded, because a count
+    #: the model is merely told is a count nobody verifies (ADR-021).
+    deliverable_count: Mapped[int] = mapped_column(sa.Integer, default=0)
+    #: How many of those outputs this run is validating. Zero means they did not say.
+    outputs_validated: Mapped[int] = mapped_column(sa.Integer, default=0)
+    #: Anything else about the delivery the reviewer should know.
+    delivery_notes: Mapped[str] = mapped_column(sa.Text, default="")
     rules_version: Mapped[int] = mapped_column(sa.Integer, default=1)
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
@@ -193,6 +201,11 @@ class RunFile(Base):
     run_id: Mapped[int] = mapped_column(sa.ForeignKey("runs.id", ondelete="CASCADE"), index=True)
     #: osl · config · dirt · field_distribution · state_distribution · counts · billing · report
     kind: Mapped[str] = mapped_column(sa.String(40))
+    #: Position within the kind, from one. A campaign can deliver the same report
+    #: type several times, one per segment or deliverable (ADR-021).
+    part: Mapped[int] = mapped_column(sa.Integer, default=1)
+    #: What the submitter called this file, used to name the part in a finding.
+    part_label: Mapped[str] = mapped_column(sa.String(200), default="")
     filename: Mapped[str] = mapped_column(sa.String(500))
     storage_key: Mapped[str] = mapped_column(sa.String(500))
     sha256: Mapped[str] = mapped_column(sa.String(64), index=True)

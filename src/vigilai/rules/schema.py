@@ -85,6 +85,8 @@ FindingType = Literal[
     "cross_report_disagreement",
     "profile_anomaly",
     "low_confidence_extraction",
+    #: The run declared more outputs than the files uploaded cover (ADR-021).
+    "deliverables_missing",
     "could_not_evaluate",
 ]
 

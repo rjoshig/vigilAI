@@ -274,6 +274,9 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     rerun_reason: Annotated[str, Form()] = "",
     scope: Annotated[str, Form()] = "",
     has_suppressions: Annotated[bool, Form()] = False,
+    deliverable_count: Annotated[int, Form()] = 0,
+    outputs_validated: Annotated[int, Form()] = 0,
+    delivery_notes: Annotated[str, Form()] = "",
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(current_user),
@@ -301,6 +304,11 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
             regime the delivery sits under (ADR-020).
         has_suppressions: Whether suppressions were applied. Defaults to no, because
             assuming they were would let a missing suppression pass unremarked.
+        deliverable_count: How many deliverables the campaign has. Zero means the
+            submitter did not say. Code checks it against the files that arrive
+            (ADR-021).
+        outputs_validated: How many of those this run covers. Zero means unstated.
+        delivery_notes: Anything else about the delivery worth knowing.
         session: The request's session.
         data_dir: The shared volume.
         user: The caller.
@@ -318,14 +326,25 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     active = {a.key for a in catalog.load_artifacts(session, active_only=True)}
     form = await request.form()
 
-    uploads: list[tuple[str, UploadFile]] = [("osl", osl), ("config", config)]
+    # (key, file, part ordinal, part label). A slot may carry several files: some
+    # campaigns deliver one field distribution per segment (ADR-021). `getlist` is
+    # what makes that work; `get` would silently keep only the last.
+    uploads: list[tuple[str, UploadFile, int, str]] = [
+        ("osl", osl, 1, ""),
+        ("config", config, 1, ""),
+    ]
     for key in sorted(active - {"osl", "config"}):
-        value = form.get(key)
-        # `request.form()` yields Starlette's UploadFile; FastAPI's is a subclass, so
-        # testing against the subclass silently matched nothing and every report was
-        # dropped. Test the base.
-        if isinstance(value, StarletteUploadFile) and value.filename:
-            uploads.append((key, cast(UploadFile, value)))
+        labels = [str(value) for value in form.getlist(f"{key}__label")]
+        ordinal = 0
+        for value in form.getlist(key):
+            # `request.form()` yields Starlette's UploadFile; FastAPI's is a subclass,
+            # so testing against the subclass silently matched nothing and every
+            # report was dropped. Test the base.
+            if not isinstance(value, StarletteUploadFile) or not value.filename:
+                continue
+            ordinal += 1
+            label = labels[ordinal - 1] if ordinal <= len(labels) else ""
+            uploads.append((key, cast(UploadFile, value), ordinal, label.strip()))
 
     if len(uploads) < 3:
         raise HTTPException(
@@ -376,29 +395,36 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         user_id=user.id,
         scope=scope.strip().upper(),
         has_suppressions=has_suppressions,
+        deliverable_count=max(0, deliverable_count),
+        outputs_validated=max(0, outputs_validated),
+        delivery_notes=delivery_notes.strip(),
     )
     session.add(run)
     session.flush()
     run.expires_at = repository.expiry_from(run.created_at or utcnow())
 
-    stored = []
+    stored: list[tuple[Any, int, str]] = []
     try:
-        for kind, upload in uploads:
+        for kind, upload, part, part_label in uploads:
             stored.append(
-                store_upload(
-                    upload.file,
-                    upload.filename or kind,
-                    upload.content_type or "",
-                    kind,
-                    data_dir,
-                    str(run.id),
+                (
+                    store_upload(
+                        upload.file,
+                        upload.filename or kind,
+                        upload.content_type or "",
+                        kind,
+                        data_dir,
+                        str(run.id),
+                    ),
+                    part,
+                    part_label,
                 )
             )
     except UploadError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     digest = repository.fingerprint(
-        (f.sha256 for f in stored), repository.active_check_versions(session)
+        (f.sha256 for f, _, _ in stored), repository.active_check_versions(session)
     )
     duplicate = session.execute(
         sa.select(models.Run)
@@ -428,11 +454,13 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
 
     run.input_fingerprint = digest
     run.rerun_reason = rerun_reason.strip()
-    for file in stored:
+    for file, part, part_label in stored:
         session.add(
             models.RunFile(
                 run_id=run.id,
                 kind=file.kind,
+                part=part,
+                part_label=part_label,
                 filename=file.filename,
                 storage_key=file.storage_key,
                 sha256=file.sha256,
@@ -486,7 +514,7 @@ def _capture_config_from_upload(
         user: Who submitted the run, recorded against the captured version so the
             config history can show who ran it (ADR-022).
     """
-    config_file = next((f for f in stored if f.kind == "config"), None)
+    config_file = next((f for f, _, _ in stored if f.kind == "config"), None)
     if config_file is None:
         return
     try:

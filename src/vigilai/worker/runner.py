@@ -23,7 +23,13 @@ from vigilai.llm.cache import LLMCache
 from vigilai.llm.client import CallLog
 from vigilai.llm.factory import build_client
 from vigilai.llm.settings import LLMSettings
-from vigilai.pipeline.context import RECHECK_STAGES, STAGE_ORDER, RunContext, StageRecord
+from vigilai.pipeline.context import (
+    RECHECK_STAGES,
+    STAGE_ORDER,
+    ReportPart,
+    RunContext,
+    StageRecord,
+)
 from vigilai.pipeline.guidance import RunGuidance
 from vigilai.pipeline.run import PipelineError, run_pipeline
 
@@ -52,12 +58,43 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
         scope_label=scope.label if scope else "",
         scope_instructions=scope.standing_instructions if scope else "",
         has_suppressions=run.has_suppressions,
+        deliverable_count=run.deliverable_count,
+        outputs_validated=run.outputs_validated,
+        delivery_notes=run.delivery_notes,
         artifact_context={
             artifact.key: artifact.ai_context
             for artifact in catalog.load_artifacts(session)
             if artifact.ai_context.strip()
         },
     )
+
+
+def _parts(session: Session, run: models.Run, data_dir: Path) -> dict[str, list[ReportPart]]:
+    """Group a run's uploaded report files by kind, in upload order.
+
+    Args:
+        session: An open session; unused, kept so the helper reads beside the others.
+        run: The run row, whose files are already loaded.
+        data_dir: The shared volume.
+
+    Returns:
+        Report kind to its parts. The ordinary case is one part per kind; a campaign
+        that delivers several files of one type gets one entry each, labelled
+        (ADR-021).
+    """
+    del session
+    grouped: dict[str, list[ReportPart]] = {}
+    for file in sorted(run.files, key=lambda f: (f.kind, f.part, f.id)):
+        if file.kind in _NON_REPORT_KINDS:
+            continue
+        grouped.setdefault(file.kind, []).append(
+            ReportPart(
+                label=file.part_label,
+                ordinal=file.part,
+                path=data_dir / file.storage_key,
+            )
+        )
+    return grouped
 
 
 def build_context(
@@ -103,6 +140,7 @@ def build_context(
         osl_path=paths["osl"],
         config_path=paths["config"],
         report_paths={k: v for k, v in paths.items() if k not in _NON_REPORT_KINDS},
+        report_parts=_parts(session, run, data_dir),
         client=client,
         customer=run.customer_name,
         admin=repository.load_admin_config(session, run.customer_name),

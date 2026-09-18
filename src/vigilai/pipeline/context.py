@@ -64,6 +64,38 @@ STAGE_ORDER: Final[tuple[StageName, ...]] = (
 RECHECK_STAGES: Final[tuple[StageName, ...]] = ("s5_compare", "s6_reverse", "s7_reports")
 
 
+@dataclass(frozen=True, slots=True)
+class ReportPart:
+    """One uploaded file of a report kind (ADR-021).
+
+    A campaign can deliver the same report type several times: one field distribution
+    per segment, per state, or per deliverable. The label is what the submitter called
+    it, and it is what a finding names so "the field distribution is wrong" is not the
+    only thing a reviewer is told.
+
+    Attributes:
+        label: What the submitter called this file. Empty when they gave no label,
+            in which case a finding falls back to the ordinal.
+        ordinal: Its position within its kind, starting at one.
+        path: Where the file is on the shared volume.
+        document: The parsed workbook, set by stage 1.
+    """
+
+    label: str
+    ordinal: int
+    path: Path
+    document: ReportDocument | None = None
+
+    @property
+    def name(self) -> str:
+        """How to refer to this part in a finding.
+
+        Returns:
+            The label when there is one, otherwise "part N".
+        """
+        return self.label or f"part {self.ordinal}"
+
+
 @dataclass
 class StageRecord:
     """Status and timing for one stage (the ``run_stages`` table).
@@ -95,7 +127,10 @@ class RunContext:
         run_id: Identifier for the run.
         osl_path: The requirement spec.
         config_path: The ETL config.
-        report_paths: Report kind to file.
+        report_paths: Report kind to its first file, kept because most checks want
+            exactly one workbook.
+        report_parts: Report kind to every uploaded file of that kind, each with its
+            label. One entry per kind is the ordinary case.
         client: The LLM adapter. The only route to a model (ADR-004).
         customer: The customer this run is for, used to scope admin checks and
             compliance rules.
@@ -134,6 +169,11 @@ class RunContext:
     osl: OslDocument | None = None
     config: ConfigDocument | None = None
     reports: dict[ReportKind, ReportDocument] = field(default_factory=dict)
+    #: Every uploaded file per report kind, in upload order, with the label the
+    #: submitter gave it. A campaign can deliver the same report type several times,
+    #: one per segment or per deliverable (ADR-021). ``reports`` stays the first part
+    #: of each kind, so a check that does not care about parts is unchanged.
+    report_parts: dict[ReportKind, list[ReportPart]] = field(default_factory=dict)
 
     rules: list[Rule] = field(default_factory=list)
     elements: list[ConfigElement] = field(default_factory=list)
