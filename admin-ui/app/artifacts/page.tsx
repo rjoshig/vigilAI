@@ -9,7 +9,7 @@
  * so rather than looking like a required setting.
  */
 
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Download, Eye, Plus, Trash2, Upload } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -33,7 +33,7 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import type { ArtifactType, NamedValue } from "@/lib/types";
+import type { ArtifactType, NamedValue, Sample, SamplePreview } from "@/lib/types";
 
 const EMPTY_POINTER = {
   name: "",
@@ -198,7 +198,6 @@ export default function ArtifactsPage() {
               <TR className="hover:bg-transparent">
                 <TH>Input</TH>
                 <TH>Meaning</TH>
-                <TH>Sample</TH>
                 <TH>Enabled</TH>
                 <TH />
               </TR>
@@ -223,15 +222,6 @@ export default function ArtifactsPage() {
                         <span className="text-[0.7rem]">no AI context</span>
                       )}
                     </TD>
-                    <TD className="text-xs text-muted-foreground">
-                      {type.has_sample ? (
-                        <span className="truncate">
-                          {type.filename} · {type.sheets.join(", ") || "no sheets read"}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </TD>
                     <TD>
                       <label className="flex items-center gap-1.5 text-xs">
                         <input
@@ -245,29 +235,6 @@ export default function ArtifactsPage() {
                       </label>
                     </TD>
                     <TD className="whitespace-nowrap text-right">
-                      <label>
-                        <span className="sr-only">Upload a sample for {type.label}</span>
-                        <input
-                          type="file"
-                          accept={
-                            type.kind === "osl"
-                              ? ".docx"
-                              : type.kind === "config"
-                                ? ".json"
-                                : ".xlsx"
-                          }
-                          className="hidden"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            if (file)
-                              void act("upload the sample", () => api.uploadSample(type.key, file));
-                          }}
-                        />
-                        <span className="mr-1 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border bg-card px-2.5 text-xs font-medium hover:bg-accent">
-                          <Upload className="h-3.5 w-3.5" />
-                          {type.has_sample ? "Replace" : "Sample"}
-                        </span>
-                      </label>
                       <Button
                         variant="ghost"
                         size="xs"
@@ -290,9 +257,19 @@ export default function ArtifactsPage() {
                       )}
                     </TD>
                   </TR>
+                  <TR className="hover:bg-transparent">
+                    <TD colSpan={4} className="bg-muted/10">
+                      <SampleStrip
+                        type={type}
+                        busy={busy}
+                        onChanged={() => void load()}
+                        onError={setError}
+                      />
+                    </TD>
+                  </TR>
                   {editing === type.key ? (
                     <TR className="hover:bg-transparent">
-                      <TD colSpan={5} className="bg-muted/30">
+                      <TD colSpan={4} className="bg-muted/30">
                         <ArtifactEditor
                           type={type}
                           busy={busy}
@@ -565,6 +542,225 @@ function ArtifactEditor({
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** The file extension an artifact type's sample is expected to have. */
+function acceptFor(kind: ArtifactType["kind"]): string {
+  if (kind === "osl") return ".docx";
+  if (kind === "config") return ".json";
+  return ".xlsx";
+}
+
+function sizeOf(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const MAX_SAMPLES = 3;
+
+/**
+ * Up to three samples per type. Real report layouts vary between customers, and one
+ * sample averages that variation away instead of showing it (ADR-021).
+ */
+function SampleStrip({
+  type,
+  busy,
+  onChanged,
+  onError,
+}: {
+  type: ArtifactType;
+  busy: boolean;
+  onChanged: () => void;
+  onError: (message: string) => void;
+}) {
+  const [label, setLabel] = React.useState("");
+  const [working, setWorking] = React.useState(false);
+  const [preview, setPreview] = React.useState<SamplePreview | null>(null);
+  const [sheet, setSheet] = React.useState("");
+  const fileInput = React.useRef<HTMLInputElement>(null);
+  const full = type.samples.length >= MAX_SAMPLES;
+
+  async function run(what: string, action: () => Promise<unknown>) {
+    setWorking(true);
+    try {
+      await action();
+      onChanged();
+    } catch (caught) {
+      onError(caught instanceof ApiError ? caught.detail : `Could not ${what}.`);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function view(sample: Sample) {
+    if (preview?.sample_id === sample.id) {
+      setPreview(null);
+      return;
+    }
+    setWorking(true);
+    try {
+      const loaded = await api.previewSample(type.key, sample.id);
+      setPreview(loaded);
+      setSheet(loaded.sheets[0]?.name ?? "");
+    } catch (caught) {
+      onError(caught instanceof ApiError ? caught.detail : "Could not read the sample.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  const shown = preview?.sheets.find((one) => one.name === sheet) ?? preview?.sheets[0] ?? null;
+  const disabled = busy || working;
+
+  return (
+    <div className="py-1">
+      <div className="flex flex-wrap items-start gap-2">
+        {type.samples.length === 0 ? (
+          <span className="py-2 text-xs text-muted-foreground">
+            No samples yet. Named values resolve against these, so a pointer cannot be tested
+            until one is here.
+          </span>
+        ) : null}
+
+        {type.samples.map((sample) => (
+          <div key={sample.id} className="min-w-[15rem] max-w-xs rounded-md border bg-card p-2">
+            <div className="text-xs font-semibold">{sample.label || sample.filename}</div>
+            <div className="mono truncate text-[0.7rem] text-muted-foreground" title={sample.filename}>
+              {sample.filename} · {sizeOf(sample.size_bytes)}
+            </div>
+            <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
+              {sample.sheets.length > 0 ? sample.sheets.join(", ") : "no sheets read"}
+            </div>
+            <div className="text-[0.7rem] text-muted-foreground">
+              uploaded by {sample.uploaded_by || "—"}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              <Button
+                variant="outline"
+                size="xs"
+                disabled={disabled}
+                onClick={() => void view(sample)}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                {preview?.sample_id === sample.id ? "Hide" : "View"}
+              </Button>
+              {/* A plain link, so the browser streams the workbook to disk rather than
+                  the page holding the whole file in memory. */}
+              <a
+                href={api.sampleDownloadUrl(type.key, sample.id)}
+                download={sample.filename}
+                className="inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-[0.7rem] font-medium hover:bg-accent"
+              >
+                <Download className="h-3.5 w-3.5" /> Download
+              </a>
+              <Button
+                variant="ghost"
+                size="xs"
+                disabled={disabled}
+                aria-label={`Remove ${sample.label || sample.filename}`}
+                onClick={() =>
+                  void run("remove the sample", () => api.deleteSample(type.key, sample.id))
+                }
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+
+        <div className="min-w-[13rem] rounded-md border border-dashed p-2">
+          {full ? (
+            <p className="text-[0.7rem] text-muted-foreground">
+              Three samples is the limit. Remove one before adding another.
+            </p>
+          ) : (
+            <>
+              <Label htmlFor={`sample-label-${type.key}`}>Label</Label>
+              <Input
+                id={`sample-label-${type.key}`}
+                className="mt-1 h-7 text-xs"
+                placeholder="what tells it apart"
+                value={label}
+                onChange={(event) => setLabel(event.target.value)}
+              />
+              <input
+                ref={fileInput}
+                type="file"
+                accept={acceptFor(type.kind)}
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  void run("add the sample", async () => {
+                    await api.addSample(type.key, file, label.trim());
+                    setLabel("");
+                  });
+                }}
+              />
+              <Button
+                className="mt-1.5"
+                variant="outline"
+                size="xs"
+                disabled={disabled}
+                onClick={() => fileInput.current?.click()}
+              >
+                <Upload className="h-3.5 w-3.5" /> Add sample
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {preview ? (
+        <div className="mt-2 rounded-md border bg-card p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold">{preview.filename}</span>
+            <Select
+              className="h-7 text-xs"
+              aria-label="Sheet"
+              value={shown?.name ?? ""}
+              onChange={(event) => setSheet(event.target.value)}
+            >
+              {preview.sheets.map((one) => (
+                <option key={one.name} value={one.name}>
+                  {one.name} ({one.rows}×{one.columns})
+                </option>
+              ))}
+            </Select>
+            <span className="text-[0.7rem] text-muted-foreground">
+              Values are masked exactly as they are at parse time.
+            </span>
+          </div>
+          {shown === null || shown.cells.length === 0 ? (
+            <p className="p-2 text-xs text-muted-foreground">Nothing was read from this sheet.</p>
+          ) : (
+            <div className="mt-2 max-h-80 overflow-y-auto">
+              <Table>
+                <thead>
+                  <TR className="hover:bg-transparent">
+                    <TH>Cell</TH>
+                    <TH>Label</TH>
+                    <TH>Value</TH>
+                  </TR>
+                </thead>
+                <tbody>
+                  {shown.cells.map((cell) => (
+                    <TR key={cell.cell}>
+                      <TD className="mono text-xs">{cell.cell}</TD>
+                      <TD className="text-xs text-muted-foreground">{cell.label || "—"}</TD>
+                      <TD className="text-xs">{cell.value}</TD>
+                    </TR>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

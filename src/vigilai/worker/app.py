@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
 from vigilai.auth.sessions import purge_expired_sessions
+from vigilai.training.lifecycle import purge_deleted_rules
 from vigilai.db import models, repository
 from vigilai.db.queue import ClaimedJob, JobQueue
 from vigilai.db.session import create_all, create_engine, session_factory, session_scope
@@ -252,6 +253,12 @@ class Worker:
             gone = purge_expired_sessions(session)
             if gone:
                 _LOG.info("removed %d expired session(s)", gone)
+            # A rule deleted more than six months ago becomes permanent here. The row
+            # survives as a tombstone: findings on old runs cite a rule by reference,
+            # and a reference to nothing explains nothing (ADR-021).
+            tombstoned = purge_deleted_rules(session)
+            if tombstoned:
+                _LOG.info("%d deleted rule(s) are now permanent", tombstoned)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

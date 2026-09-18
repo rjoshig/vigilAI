@@ -17,12 +17,16 @@ import type {
   FinalizeResult,
   Finding,
   NewRunOptions,
+  Observation,
+  ObservationInput,
   RecheckResult,
   Requirements,
   ReviewStatus,
   RunDetail,
   RunStats,
   RunSummary,
+  TrainingConfig,
+  TypeDetection,
 } from "@/lib/types";
 
 /** Where the API lives. The Next rewrite proxies this to FastAPI, so there is no CORS. */
@@ -256,6 +260,54 @@ export const api = {
   /** Read stage timings, calls, tokens, and cache hits. */
   getStats(runId: number): Promise<RunStats> {
     return request<RunStats>(`/runs/${runId}/stats`);
+  },
+
+  /**
+   * Work out what an uploaded workbook is, before a run exists.
+   *
+   * The endpoint stores nothing, so this is safe to call as soon as a file is chosen.
+   * A caller treats a failure as "no opinion": detection is a convenience and must
+   * never stand between a person and a submission.
+   */
+  detectType(file: File): Promise<TypeDetection> {
+    const form = new FormData();
+    form.set("file", file);
+    return request<TypeDetection>("/runs/detect-type", { method: "POST", body: form });
+  },
+
+  /**
+   * Whether Train AI mode is on. When it is off, no other training endpoint is called
+   * and nothing about training is drawn (ADR-021).
+   */
+  getTrainingConfig(): Promise<TrainingConfig> {
+    return request<TrainingConfig>("/training/config");
+  },
+
+  /**
+   * Record something a reviewer knows. 422 means the text looks like it contains
+   * personal data; its detail is written for the person to read and act on, so a
+   * caller shows it verbatim rather than replacing it with wording of its own.
+   */
+  createObservation(body: ObservationInput): Promise<Observation> {
+    return request<Observation>("/observations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** The caller's own observations, so an author can follow what became of what they wrote. */
+  listMyObservations(): Promise<Observation[]> {
+    return request<Observation[]>("/observations?mine=true");
+  },
+
+  /** Correct an observation. 409 once an administrator has picked it up. */
+  updateObservation(observationId: number, body: ObservationInput): Promise<Observation> {
+    return request<Observation>(`/observations/${observationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   },
 
   /** List captured configs. */
