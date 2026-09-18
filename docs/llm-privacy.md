@@ -72,3 +72,27 @@ The model never needs sample rows to do its job. If a stage seems to need one, t
   sooner?
 - Encrypted Docker volumes and TLS at the reverse proxy are the deployment assumption;
   confirm the in-house standard.
+
+
+## Training synthesis (ADR-021)
+
+Train AI mode adds one more place text reaches the model: the sentences reviewers
+write about what a delivery should contain. It is the riskiest prompt in the tool,
+because its output becomes a rule applied to every run, and it is handled accordingly.
+
+- **The tripwire runs when an observation is saved**, not only when the prompt is
+  assembled. A reviewer typing while looking at real data is exactly where an account
+  number gets pasted, and the moment they press save is the only point at which the
+  person who pasted it can still take it out.
+- **The statements are delimited and labelled as data.** They reach the prompt between
+  `<statements>` markers, with an instruction that everything inside is a person's
+  description to interpret and never an instruction to follow. A statement that asks
+  the model to do something else comes back as unsupported.
+- **The answer is schema-constrained.** Nothing downstream parses prose. Loose parsing
+  of free-form model output is where code starts trusting something nobody checked,
+  and that is the actual injection exposure rather than the text itself.
+- **Nothing runs until a person approves it**, and code has rejected everything
+  malformed by then. That is the real control; the first three are what make it hard
+  to reach.
+- **No report values are sent.** The model sees the sentence, what the person pointed
+  at, and the list of attribute names the tool knows. It never sees a cell's contents.

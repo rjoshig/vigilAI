@@ -8,6 +8,8 @@ import type {
   ArtifactType,
   ArtifactTypeIn,
   AuthConfig,
+  Candidate,
+  CandidateApproval,
   Category,
   Check,
   CheckIn,
@@ -19,7 +21,13 @@ import type {
   NamedValue,
   NamedValueIn,
   NewUser,
+  Observation,
   ProviderTestResult,
+  Rule,
+  RuleActionWord,
+  RuleStateChange,
+  RuleStateFilter,
+  SamplePreview,
   Scope,
   ScopeIn,
   Setting,
@@ -30,6 +38,8 @@ import type {
 
 const BASE = "/api/v1/admin";
 const AUTH = "/api/v1/auth";
+/** Observations are filed by users, so they live outside the admin prefix. */
+const ROOT = "/api/v1";
 
 /** An error carrying the status, so a caller can tell 409 from 422 from a timeout. */
 export class ApiError extends Error {
@@ -134,12 +144,32 @@ export const api = {
   saveArtifactType: (payload: ArtifactTypeIn): Promise<ArtifactType> =>
     request<ArtifactType>("/artifact-types", json("POST", payload)),
 
-  /** Upload or replace the sample workbook for one artifact type. */
-  uploadSample(key: string, file: File): Promise<ArtifactType> {
+  /**
+   * Add one sample to an artifact type. 409 once three are stored, because the
+   * fourth is refused rather than silently replacing one.
+   */
+  addSample(key: string, file: File, label = "", notes = ""): Promise<ArtifactType> {
     const form = new FormData();
     form.set("file", file);
-    return request<ArtifactType>(`/artifact-types/${key}/sample`, { method: "POST", body: form });
+    form.set("label", label);
+    form.set("notes", notes);
+    return request<ArtifactType>(`/artifact-types/${key}/samples`, { method: "POST", body: form });
   },
+
+  /**
+   * The download address of one sample. It is a plain URL rather than a fetch, so the
+   * browser streams the workbook to disk instead of the page holding it in memory.
+   */
+  sampleDownloadUrl: (key: string, sampleId: number): string =>
+    `${BASE}/artifact-types/${key}/samples/${sampleId}/download`,
+
+  /** What a sample contains, already masked. */
+  previewSample: (key: string, sampleId: number): Promise<SamplePreview> =>
+    request<SamplePreview>(`/artifact-types/${key}/samples/${sampleId}/preview`),
+
+  /** Remove one sample. */
+  deleteSample: (key: string, sampleId: number): Promise<void> =>
+    request<void>(`/artifact-types/${key}/samples/${sampleId}`, { method: "DELETE" }),
 
   /** Delete an admin-defined type. Refused for a built-in or one a run has used. */
   deleteArtifactType: (key: string): Promise<void> =>
@@ -252,4 +282,64 @@ export const api = {
 
   /** Read the dashboard numbers. */
   getUsage: (): Promise<Usage> => request<Usage>("/usage"),
+
+  /* ----------------------------------------------- The training loop (ADR-021) */
+
+  /**
+   * The observations waiting to be looked at. 404 means Train AI mode is off, not
+   * that something went wrong, so the caller shows an explanation rather than an
+   * error.
+   */
+  listObservations: (status = "new"): Promise<Observation[]> =>
+    request<Observation[]>(`/observations?status=${encodeURIComponent(status)}`, undefined, ROOT),
+
+  /** Turn an observation down. The reason is shown to whoever wrote it. */
+  rejectObservation: (id: number, reason: string): Promise<Observation> =>
+    request<Observation>(`/observations/${id}/reject`, json("POST", { reason })),
+
+  /**
+   * Ask the model to draft rules from the selected observations. This is the only
+   * call that reaches the model here, and it writes nothing that runs.
+   */
+  synthesize: (observationIds: number[]): Promise<Candidate[]> =>
+    request<Candidate[]>("/candidates", json("POST", { observation_ids: observationIds })),
+
+  /** The candidates waiting for a decision. */
+  listCandidates: (status = "draft"): Promise<Candidate[]> =>
+    request<Candidate[]>(`/candidates?status=${encodeURIComponent(status)}`),
+
+  /** Fill in what this candidate would have changed on runs that already happened. */
+  replayCandidate: (id: number): Promise<Candidate> =>
+    request<Candidate>(`/candidates/${id}/replay`, { method: "POST" }),
+
+  /** Approve a candidate. It becomes a rule in shadow unless `activate_now` is set. */
+  approveCandidate: (id: number, payload: CandidateApproval = {}): Promise<Candidate> =>
+    request<Candidate>(`/candidates/${id}/approve`, json("POST", payload)),
+
+  /** Turn a candidate down, with the reason the author of its observations sees. */
+  rejectCandidate: (id: number, reason: string): Promise<Candidate> =>
+    request<Candidate>(`/candidates/${id}/reject`, json("POST", { reason })),
+
+  /** Every rule, in the order the server sorted them. Filtered to active by default. */
+  listRules: (state: RuleStateFilter = "active", search = ""): Promise<Rule[]> =>
+    request<Rule[]>(
+      `/rules?state=${encodeURIComponent(state)}&search=${encodeURIComponent(search)}`
+    ),
+
+  /**
+   * Change a rule's state. `confirm` has to be the action word: the API enforces it
+   * with a 400, because a rule change reaches every future run.
+   */
+  actOnRule: (
+    ruleKind: string,
+    id: number,
+    action: RuleActionWord,
+    confirm: string,
+    note = ""
+  ): Promise<Rule> =>
+    request<Rule>(`/rules/${ruleKind}/${id}/action`, json("POST", { action, confirm, note })),
+
+  /** Every state this rule has moved between, with who moved it. */
+  ruleHistory: (ruleKind: string, id: number): Promise<RuleStateChange[]> =>
+    request<RuleStateChange[]>(`/rules/${ruleKind}/${id}/history`),
 };

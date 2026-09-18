@@ -45,11 +45,50 @@ export interface ArtifactTypeIn {
   sort_order: number;
 }
 
+/**
+ * One uploaded example of an artifact type. A type holds up to three, because real
+ * report layouts vary between customers and a single sample hides that (ADR-021).
+ */
+export interface Sample {
+  id: number;
+  label: string;
+  filename: string;
+  sheets: string[];
+  size_bytes: number;
+  notes: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
+/** One populated cell of a sample, addressed the way a named value addresses it. */
+export interface CellPreview {
+  cell: string;
+  value: string;
+  label: string;
+  row: number;
+  column: number;
+}
+
+export interface SheetPreview {
+  name: string;
+  rows: number;
+  columns: number;
+  cells: CellPreview[];
+}
+
+/** What a sample contains. Values arrive already masked, exactly as at parse time. */
+export interface SamplePreview {
+  sample_id: number;
+  filename: string;
+  sheets: SheetPreview[];
+}
+
 export interface ArtifactType extends ArtifactTypeIn {
   id: number;
   is_builtin: boolean;
-  filename: string;
-  has_sample: boolean;
+  /** Up to three. */
+  samples: Sample[];
+  /** Every sheet name across all of the samples, merged. */
   sheets: string[];
   runs_using: number;
 }
@@ -274,4 +313,135 @@ export interface ProviderTestResult {
   model: string;
   detail: string;
   latency_ms: number;
+}
+
+/* ------------------------------------------------- The training loop (ADR-021) */
+
+export type AnchorKind =
+  | "report_cell"
+  | "report_field"
+  | "osl_section"
+  | "config_path"
+  | "finding";
+
+/**
+ * What an observation points at. The anchor is what makes reliable synthesis
+ * possible; the sentence alone is a guess.
+ */
+export interface Anchor {
+  kind: AnchorKind;
+  artifact: string;
+  sheet: string;
+  cell: string;
+  field: string;
+  reference: string;
+  value: string;
+}
+
+/** Something a reviewer knows, in their own words, against something they selected. */
+export interface Observation {
+  id: number;
+  kind: "reconciliation" | "field_constraint" | "correction" | "note";
+  anchors: Anchor[];
+  statement: string;
+  expectation: string;
+  severity_hint: Severity;
+  scope_hint: "global" | "customer" | "programme";
+  run_id: number | null;
+  finding_id: number | null;
+  author: string;
+  status: string;
+  status_note: string;
+  candidate_id: number | null;
+  customer_name: string;
+  scope_code: string;
+  version: number;
+  editable: boolean;
+  created_at: string;
+  synthesized_at: string | null;
+}
+
+/** An overlap between a candidate and a rule that already runs. */
+export interface CandidateConflict {
+  rule_kind: string;
+  id: number;
+  summary: string;
+  scope: string;
+  state: string;
+  same: boolean;
+}
+
+/** What a candidate would have changed, had it been running already. */
+export interface CandidateReplay {
+  runs_examined?: number;
+  related_findings?: number;
+  previously_dismissed?: number;
+  note?: string;
+}
+
+/** A rule the model drafted. It does not run; only an approved rule does. */
+export interface Candidate {
+  id: number;
+  name: string;
+  target_kind: string;
+  body: Record<string, unknown>;
+  reasoning: string;
+  severity: string;
+  scope: string;
+  status: string;
+  admin_note: string;
+  source_observation_ids: number[];
+  model_used: string;
+  prompt_version: string;
+  conflicts: CandidateConflict[];
+  replay: CandidateReplay;
+  created_by: string;
+  decided_by: string;
+  created_at: string;
+}
+
+/** What an administrator decides about a candidate, beyond approve or reject. */
+export interface CandidateApproval {
+  note?: string;
+  /** Narrower than the candidate proposed, when the administrator wants it so. */
+  scope?: string;
+  /** Straight to active rather than into shadow. Rarely the right answer. */
+  activate_now?: boolean;
+}
+
+export type RuleState = "active" | "shadow" | "disabled" | "deleted" | "draft";
+
+/** The state filter also accepts "all", which is not a state a rule can be in. */
+export type RuleStateFilter = RuleState | "all";
+
+export type RuleActionWord = "enable" | "disable" | "delete" | "restore" | "activate";
+
+/** One rule on the rules screen, whatever its origin. */
+export interface Rule {
+  id: number;
+  rule_kind: string;
+  name: string;
+  summary: string;
+  reasoning: string;
+  severity: string;
+  scope: string;
+  state: string;
+  origin: string;
+  fired: number;
+  dismissed: number;
+  dismissal_rate: number;
+  last_fired_at: string | null;
+  source_observation_ids: number[];
+  deleted_at: string | null;
+  restorable_until: string | null;
+}
+
+/** One move a rule made between states, with who did it. */
+export interface RuleStateChange {
+  id: number;
+  from_state: string;
+  to_state: string;
+  note: string;
+  actor: string;
+  at: string;
 }

@@ -291,3 +291,100 @@ export interface CurrentUser {
   is_placeholder: boolean;
   must_change_password: boolean;
 }
+
+/* ------------------------------------------- Workbook type detection (6.1d) */
+
+/** One artifact type an uploaded workbook might be, with its score. */
+export interface DetectedCandidate {
+  key: string;
+  label: string;
+  score: number;
+}
+
+/** What one tab of a workbook looks like, scored on its own. */
+export interface DetectedSheet {
+  sheet: string;
+  verdict: DetectionVerdict;
+  reason: string;
+  key: string | null;
+  label: string | null;
+  score: number;
+}
+
+/**
+ * How sure the detector is. "I am not sure" has to be representable, because a wrong
+ * silent assignment is worse than a question.
+ */
+export type DetectionVerdict = "confident" | "ambiguous" | "unknown";
+
+/** What `POST /runs/detect-type` returns. It stores nothing. */
+export interface TypeDetection {
+  verdict: DetectionVerdict;
+  reason: string;
+  key: string | null;
+  label: string | null;
+  score: number;
+  candidates: DetectedCandidate[];
+  sheets: DetectedSheet[];
+}
+
+/* ------------------------------------------------- The training loop (ADR-021) */
+
+/** Whether Train AI mode is on. Off by default; nothing about training shows when off. */
+export interface TrainingConfig {
+  enabled: boolean;
+}
+
+export type AnchorKind = "report_cell" | "report_field" | "osl_section" | "config_path" | "finding";
+
+/**
+ * What an observation points at. The anchor is what makes reliable synthesis possible;
+ * the sentence alone is a guess.
+ */
+export interface Anchor {
+  kind: AnchorKind;
+  artifact: string;
+  sheet: string;
+  cell: string;
+  field: string;
+  reference: string;
+  value: string;
+}
+
+/** What kind of thing the reviewer is telling the tool. */
+export type ObservationKind = "reconciliation" | "field_constraint" | "correction" | "note";
+
+/** How wide a rule drawn from this observation should apply. */
+export type ObservationScope = "global" | "customer" | "programme";
+
+/** Where an observation can be in its lifecycle. It never runs; only an approved rule does. */
+export type ObservationStatus = "new" | "queued" | "synthesized" | "rejected" | "superseded";
+
+/** The body `POST /observations` and `PATCH /observations/{id}` both take. */
+export interface ObservationInput {
+  kind: ObservationKind;
+  anchors: Anchor[];
+  statement: string;
+  expectation: string;
+  severity_hint: Severity;
+  scope_hint: ObservationScope;
+  run_id?: number | null;
+  finding_id?: number | null;
+}
+
+/** A stored observation, as its author sees it. */
+export interface Observation extends ObservationInput {
+  id: number;
+  author: string;
+  status: ObservationStatus;
+  /** On a rejection, the administrator's reason, in their words. */
+  status_note: string;
+  candidate_id: number | null;
+  customer_name: string;
+  scope_code: string;
+  version: number;
+  /** Whether the author may still edit it. False once an administrator picks it up. */
+  editable: boolean;
+  created_at: string;
+  synthesized_at: string | null;
+}

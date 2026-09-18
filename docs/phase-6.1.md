@@ -103,183 +103,183 @@ the EU AI Act's human-oversight provisions and the NIST AI Risk Management Frame
 the record of the human decision is itself the required artifact, and it is cheap to
 keep only if it is kept from the start.
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.1a — Several samples per artifact type · ⬜ not started
+### 6.1a — Several samples per artifact type · 🟡 in progress
 
 Today an artifact type holds one sample workbook, in `filename` and `storage_path` on
 `artifact_types`, and the admin-ui can replace it but cannot show it. Real report types
 vary between customers, and one sample hides that.
 
-- [ ] New table `artifact_samples`: `artifact_type_id`, `label`, `filename`,
+- [x] New table `artifact_samples`: `artifact_type_id`, `label`, `filename`,
       `storage_key`, `sha256`, `size_bytes`, `sheets` (JSON), `notes`, `uploaded_at`.
       **At most three per type**, enforced in the API with a clear message rather than
       silently dropping the fourth. Three is the user's number and it is a good one:
       enough to show variation, few enough that an administrator reads them all.
-- [ ] The single-sample fields on `artifact_types` are migrated into the new table as
+- [x] The single-sample fields on `artifact_types` are migrated into the new table as
       the first sample and then dropped. No code keeps reading them.
-- [ ] `GET /admin/artifact-types/{key}/samples` lists them;
+- [x] `GET /admin/artifact-types/{key}/samples` lists them;
       `GET .../samples/{id}/download` streams the file with its original filename, so
       **an administrator can always see the sample in use** — the gap the user named.
-- [ ] `GET .../samples/{id}/preview` returns the parsed structure: sheet names, header
+- [x] `GET .../samples/{id}/preview` returns the parsed structure: sheet names, header
       labels, populated cell addresses, and values, **with the masked-column list
       applied** exactly as at parse time. A preview is a view of a file that may hold
       customer data, so it obeys the same masking as everything else (ADR-003).
-- [ ] Named-value resolution runs against **every** sample, not one, and the admin-ui
+- [x] Named-value resolution runs against **every** sample, not one, and the admin-ui
       shows which samples a pointer resolves on. A pointer that works on one layout and
       not another is the exact defect this milestone exists to surface.
 - [ ] admin-ui: a samples strip on each artifact type — up to three cards, each with
       its label, sheet list, a **View** action opening the preview grid, a **Download**
       action, and a **Remove**. Replace stays, on the individual sample.
 
-### 6.1b — Several files per report type in one run · ⬜ not started
+### 6.1b — Several files per report type in one run · ✅ complete
 
 Some campaigns deliver the same report type more than once: one field distribution per
 segment, per state, or per deliverable.
 
-- [ ] `run_files` gains `part` (an integer ordinal within the kind) and `part_label`
+- [x] `run_files` gains `part` (an integer ordinal within the kind) and `part_label`
       (what the uploader calls it). The unique key becomes (`run_id`, `kind`, `part`).
-- [ ] The upload endpoint accepts repeated fields for one key, and the new-run form
+- [x] The upload endpoint accepts repeated fields for one key, and the new-run form
       lets a slot hold several files with a label each. The 50 MB per-file limit and
       every other upload guard are unchanged and apply per file.
-- [ ] Report parsers return a list of parsed documents per kind. `RunContext` carries
+- [x] Report parsers return a list of parsed documents per kind. `RunContext` carries
       `reports[kind] -> list[ParsedReport]` rather than one.
-- [ ] **How a check behaves over parts is declared, not guessed.** Each check gets an
+- [x] **How a check behaves over parts is declared, not guessed.** Each check gets an
       `over` field: `each` (evaluate per part; one finding per failing part, naming the
       part) or `total` (evaluate once over the summed named values). `each` is the
       default because it is the answer that is never silently wrong. A named value used
       under `total` must be numeric; anything else is a "could not evaluate" finding,
       never a silent skip.
-- [ ] The review screen and the final report name the part on every finding that came
+- [x] The review screen and the final report name the part on every finding that came
       from one, because "the field distribution is wrong" is useless when five were
       uploaded.
 
-### 6.1c — Delivery context on the run · ⬜ not started
+### 6.1c — Delivery context on the run · ✅ complete
 
-- [ ] `runs` gains `deliverable_count`, `outputs_validated`, and `delivery_notes`, set
+- [x] `runs` gains `deliverable_count`, `outputs_validated`, and `delivery_notes`, set
       on the new-run form beside the programme and the suppressions answer from
       ADR-020.
-- [ ] Code checks them: if a run declares four deliverables and one field distribution
+- [x] Code checks them: if a run declares four deliverables and one field distribution
       is uploaded, that is a **finding**, not a silent pass. This is the point of
       collecting the numbers — a count the model is merely told is a count nobody
       verifies.
-- [ ] The numbers and the notes join the guidance preamble
+- [x] The numbers and the notes join the guidance preamble
       (`pipeline/guidance.py`), which keeps the ADR-020 rule: empty adds nothing.
 
-### 6.1d — Working out what a workbook is · ⬜ not started
+### 6.1d — Working out what a workbook is · ✅ complete
 
 A user should not have to know that their workbook is a "field distribution", and a
 field distribution may arrive as several tabs in one file.
 
-- [ ] **Deterministic first.** A fingerprint of a workbook — normalized sheet names,
+- [x] **Deterministic first.** A fingerprint of a workbook — normalized sheet names,
       header-row tokens, and shape — is scored against every stored sample of every
       active artifact type. A score above the confident threshold assigns the type; a
       near tie or nothing above the floor assigns nothing.
-- [ ] **The model only breaks ties, and only on labels.** When two types score close,
+- [x] **The model only breaks ties, and only on labels.** When two types score close,
       one cached call asks which set of sheet and column *names* better matches which
       type description. It sees names and the administrator's description. It never
       sees a value, and it never decides alone: its answer picks between the candidates
       code already shortlisted.
-- [ ] **An uncertain guess asks.** The upload form shows the detected type as a
+- [x] **An uncertain guess asks.** The upload form shows the detected type as a
       pre-selected dropdown the user can correct, with the confidence and the reason.
       A wrong silent assignment is worse than a question.
-- [ ] A multi-tab workbook can map to **several** types: detection runs per sheet and
+- [x] A multi-tab workbook can map to **several** types: detection runs per sheet and
       the file is registered once per detected type, with the sheet recorded. This is
       what the user's "field distribution can have multiple tabs" needs.
-- [ ] Every correction a user makes is recorded. Corrections are the cheapest training
+- [x] Every correction a user makes is recorded. Corrections are the cheapest training
       signal in the system and they feed 6.1e's queue automatically.
 
-### 6.1e — Train AI mode: observations · ⬜ not started
+### 6.1e — Train AI mode: observations · 🟡 in progress
 
 The user-facing half of the learning loop. Off by default; an administrator switches it
 on.
 
-- [ ] `app_settings`: a small key/value table for operator switches, with
+- [x] `app_settings`: a small key/value table for operator switches, with
       `train_ai_mode` the first one. `GET /runs/options` reports it, so the user-ui
       shows the training affordances only when it is on.
 - [ ] **A data-point viewer**, shared by the three input kinds: a report workbook as
       sheets, labels, cell addresses and (masked) values; an OSL as sections and the
       requirements extracted from them; a config as JSON paths. Reachable from a run
       and from a standalone "explore a sample" screen.
-- [ ] **An observation is anchored to a selection, not only to prose.** The user clicks
+- [x] **An observation is anchored to a selection, not only to prose.** The user clicks
       a cell, a label, an OSL section, or a config path, and writes what they mean. The
       stored observation carries both. This is the difference between a rule the model
       can synthesize reliably and one it has to guess at, and it is the single most
       important design point in part B.
-- [ ] `training_observations`: `run_id` (nullable), `author`, `kind`
+- [x] `training_observations`: `run_id` (nullable), `author`, `kind`
       (`reconciliation` | `field_constraint` | `correction` | `note`), `anchors` (JSON
       list of typed selections), `statement` (the human's words), `expectation`,
       `severity_hint`, `scope_hint` (global | customer | programme), `status`
       (`new` | `queued` | `synthesized` | `rejected` | `superseded`), timestamps.
-- [ ] **Field-level statements are first-class**, because they are what people actually
+- [x] **Field-level statements are first-class**, because they are what people actually
       have to say: "this field is never blank", "account review never carries these
       values", "this must look like a date". The form offers the field, the constraint
       in plain words, and the severity; the anchor makes "this field" unambiguous.
-- [ ] **The PII tripwire runs when an observation is saved**, not only when a prompt is
+- [x] **The PII tripwire runs when an observation is saved**, not only when a prompt is
       assembled (ADR-018 extended). A reviewer typing while looking at real data is
       exactly where an account number gets pasted, and rejecting it at the source with
       a clear message is the only place the person can still fix it.
-- [ ] **Anyone may file an observation**, with their name recorded (the placeholder
+- [x] **Anyone may file an observation**, with their name recorded (the placeholder
       while login is off, per ADR-022). Observations are inert until an administrator
       acts, so approval is the real control and a permission list would be machinery
       guarding nothing.
-- [ ] **The form shows the rules that already cover the field or anchor** being
+- [x] **The form shows the rules that already cover the field or anchor** being
       commented on. This is the cheapest defence against a queue that fills with five
       versions of one insight, and it teaches people what the tool already checks.
-- [ ] **An observation is editable by its author until an administrator queues it**,
+- [x] **An observation is editable by its author until an administrator queues it**,
       after which it freezes. Every edit is versioned, so the audit trail survives the
       convenience.
 - [ ] **An observation that contradicts an active rule is flagged as a conflict**, not
       filtered out. Someone on the ground saying the opposite of a live rule is often
       the most valuable thing in the queue, and the administrator sees both.
-- [ ] A reviewer can raise an observation straight from a finding — "this fired but it
+- [x] A reviewer can raise an observation straight from a finding — "this fired but it
       is fine, because…" — which turns the dismissals the tool already collects into
       training input instead of leaving them as a review note nobody reads again.
 
-### 6.1f — Train AI mode: synthesis and approval · ⬜ not started
+### 6.1f — Train AI mode: synthesis and approval · 🟡 in progress
 
 The administrator-facing half. Nothing here runs by itself.
 
 - [ ] An admin-ui **review queue**: observations grouped by anchor and by field, with
       their author, run, and text, and bulk select.
-- [ ] **Synthesis is one explicit action on a selected group**, producing
+- [x] **Synthesis is one explicit action on a selected group**, producing
       `rule_candidates`: `name`, `target_kind` (`check` | `compliance_rule` |
       `field_constraint`), the structured rule body, `reasoning`, `severity`, `scope`,
       `source_observation_ids`, `model`, `prompt_version`, `status`
       (`draft` | `approved` | `rejected`), `admin_note`. Cached and logged like every
       other call (ADR-005).
-- [ ] **The user's words are data, never instruction.** The synthesis prompt carries
+- [x] **The user's words are data, never instruction.** The synthesis prompt carries
       them in a delimited block, labelled as a statement to interpret. The model's job
       is to express the statement as a rule, not to follow it. A statement that asks
       for something outside the rule schema comes back as "cannot be expressed", and an
       administrator reads why. Prompt injection matters more here than anywhere else in
       the tool, because the output becomes a rule applied to every run.
-- [ ] **The model emits a schema-constrained rule object, never prose.** Loose parsing
+- [x] **The model emits a schema-constrained rule object, never prose.** Loose parsing
       of free-form model output is the actual injection exposure — not the user's text
       — because it is where downstream code starts trusting something nobody checked.
-- [ ] **Code validates everything the model returns** before a person even sees it: the
+- [x] **Code validates everything the model returns** before a person even sees it: the
       rule parses, its named values resolve against the stored samples, its expression
       compiles, and its severity and scope are in range. A malformed or out-of-scope
       candidate is rejected outright with the reason shown.
       `POST /admin/checks/test` already does most of this and is reused rather than
       reimplemented.
-- [ ] **The model gets no authority beyond proposing.** No write, no activation, no
+- [x] **The model gets no authority beyond proposing.** No write, no activation, no
       chained call that runs what it wrote. This is OWASP's "excessive agency" in its
       most literal form, and the restriction costs nothing here because approval was
       always going to be a person's job.
-- [ ] **Conflict and duplicate detection, in code, at approval time.** Candidates are
+- [x] **Conflict and duplicate detection, in code, at approval time.** Candidates are
       fingerprinted on (scope, assertion type, parameters); an overlap with an active
       rule is flagged with the overlap shown, and the administrator either supersedes
       the old rule explicitly or rejects the new one. Contradictions are caught the
       same way — one rule permitting a blank while another forbids it is an overlap
       with opposite verdicts. This has to run at creation. Overlapping rules
       accumulate silently and are very hard to untangle later.
-- [ ] **Replay before promotion.** A candidate runs against the golden set and the last
+- [x] **Replay before promotion.** A candidate runs against the golden set and the last
       N finalized runs, and the admin-ui shows exactly what would have changed: which
       runs gain a finding, which of those findings the reviewer had already marked OK.
       A rule that would have fired on thirty historical runs that were all fine is a
       bad rule, and this is where that becomes visible instead of next month.
-- [ ] **Approval writes a normal rule row**, versioned, and stores its provenance: the
+- [x] **Approval writes a normal rule row**, versioned, and stores its provenance: the
       source observations, the model and provider, the prompt version (the field
       already exists, because it is part of every cache key), the approver, the
       timestamp, and **the diff between what the model drafted and what was approved**.
@@ -288,50 +288,50 @@ The administrator-facing half. Nothing here runs by itself.
       at when tuning the prompt. From approval on, the pipeline treats the rule like
       any other. The run fingerprint already includes active check versions, so a new
       rule correctly invalidates the duplicate shortcut.
-- [ ] **The author hears back.** A status list shows each observation as queued,
+- [x] **The author hears back.** A status list shows each observation as queued,
       synthesized, approved, or rejected, with the administrator's reason on a
       rejection and a link to the rule on an approval. Without this, contributions
       stop within a month.
-- [ ] `field_constraints`: `field` (canonical name, resolved through the alias table),
+- [x] `field_constraints`: `field` (canonical name, resolved through the alias table),
       `constraint` (`not_blank` | `allowed_values` | `forbidden_values` | `range` |
       `format` | `fill_rate_min`), `value` (JSON), `scope`, `severity`, `reasoning`,
       provenance, `is_active`, `state`. Evaluated in stage 7 against the DIRT and the
       distributions. Structured data, evaluated by code — the human language is the
       input to synthesis, not the thing that runs.
 
-### 6.1g — Shadow mode, precision, and retirement · ⬜ not started
+### 6.1g — Shadow mode, precision, and retirement · ✅ complete
 
 The part that makes "smarter over time" true rather than aspirational.
 
-- [ ] A promoted rule starts in **shadow**: it runs, its findings are stored and
+- [x] A promoted rule starts in **shadow**: it runs, its findings are stored and
       counted, and they are **not** shown to reviewers or put in the report. An
       administrator sees the shadow findings and activates the rule when it has earned
       it. Warn-then-enforce is standard practice for exactly this reason: a new rule's
       precision is unknown until it has met real data, and going straight to enforcing
       spends reviewer trust that is slow to earn back.
-- [ ] **An administrator activates, with the numbers in front of them.** No automatic
+- [x] **An administrator activates, with the numbers in front of them.** No automatic
       bar: the activation screen shows fired count, dismissal rate, and the shadow
       findings themselves, and a person decides. This was chosen over a fixed
       threshold because a rule that fires rarely would sit in shadow forever waiting
       for a sample it never gets. The cost is that the bar moves with whoever is
       looking, which is why the numbers are shown rather than summarised.
-- [ ] Per-rule statistics on the usage dashboard: times fired, share of its findings
+- [x] Per-rule statistics on the usage dashboard: times fired, share of its findings
       marked **Not OK** (kept) versus **OK** (dismissed), last fired, age.
-- [ ] **Noisy-rule and dead-rule reports.** A rule whose findings are dismissed above a
+- [x] **Noisy-rule and dead-rule reports.** A rule whose findings are dismissed above a
       threshold, or which has not fired in a long time, is surfaced for review with a
       one-click disable. Nothing is disabled automatically and nothing expires: a rule
       with a 90% dismissal rate may be the one rule that matters, and only a person
       knows.
-- [ ] **A noisy rule is usually an under-scoped rule, not a wrong one.** The most common
+- [x] **A noisy rule is usually an under-scoped rule, not a wrong one.** The most common
       cause of false positives is a rule that encodes an assumption true of most
       records and not all — a field that is genuinely optional for one segment, a
       format that legacy records predate. So the retire prompt offers "narrow the
       scope" beside "retire", because narrowing is usually the right answer and nobody
       reaches for it unprompted.
-- [ ] Disabling or deleting a rule never edits a past finding. Old runs stay
+- [x] Disabling or deleting a rule never edits a past finding. Old runs stay
       reproducible through `rules_version`, which already exists.
 
-### 6.1i — One searchable rules screen · ⬜ not started
+### 6.1i — One searchable rules screen · 🟡 in progress
 
 Every rule the tool holds, in one place, whatever its origin. A learned rule that
 cannot be found is worse than no learned rule, because nobody knows why a finding
@@ -340,12 +340,12 @@ appeared.
 - [ ] An admin console **Rules** screen listing checks, compliance rules, and field
       constraints together, with an **origin** column: shipped, written by an
       administrator, or learned from observations.
-- [ ] **Search** across name, the plain-language reasoning, the field or named values
+- [x] **Search** across name, the plain-language reasoning, the field or named values
       a rule touches, and its scope. This is the screen someone opens when a finding
       surprises them, so it has to answer "what made this fire" quickly.
 - [ ] **A state filter defaulting to active.** The other states — shadow, disabled,
       deleted — are one click away, so nothing is hidden and nothing is in the way.
-- [ ] Per rule: its state, scope, severity, origin, fired count, dismissal rate, when
+- [x] Per rule: its state, scope, severity, origin, fired count, dismissal rate, when
       it last fired, and for a learned rule its source observations and approver.
 - [ ] **Enable, disable, delete, and restore**, each requiring the administrator to
       type the word — `enable`, `disable`, `delete`, `restore` — in a confirmation
@@ -353,23 +353,23 @@ appeared.
       way to make sure the click was meant. *(Typing to confirm on the reversible
       actions is deliberate, at the user's request. If it proves to be friction in
       practice, enable and disable are the two to reconsider.)*
-- [ ] **Delete is soft and restorable for six months.** A deleted rule stops running
+- [x] **Delete is soft and restorable for six months.** A deleted rule stops running
       immediately, leaves the default view, and can be brought back whole, with its
       provenance and its history intact.
-- [ ] After six months the retention sweep makes the deletion permanent. It keeps a
+- [x] After six months the retention sweep makes the deletion permanent. It keeps a
       tombstone — identity, version, provenance, and reasoning — because findings on
       old runs cite the rule by reference and must still explain themselves.
-- [ ] Every one of these actions is an audit event naming the administrator, and
+- [x] Every one of these actions is an audit event naming the administrator, and
       deletions and restores are visible in the rule's own history.
 
-### 6.1h — Documentation and tests · ⬜ not started
+### 6.1h — Documentation and tests · 🟡 in progress
 
-- [ ] ADR-021 (inputs: several samples, several files, detection) and ADR-022 (the
+- [x] ADR-021 (inputs: several samples, several files, detection) and ADR-022 (the
       training loop) written before the code, not after.
 - [ ] `docs/design.md`, `docs/architecture.md`, `docs/llm-privacy.md` (the synthesis
       prompt is a new place text reaches the model), `docs/glossary.md` (observation,
       candidate rule, shadow mode, part, anchor) updated in the same commits.
-- [ ] Tests per module as usual, plus: a synthetic end-to-end training test that goes
+- [x] Tests per module as usual, plus: a synthetic end-to-end training test that goes
       observation → synthesis with the scripted stand-in model → candidate → replay →
       approval → the rule firing on a later run; a prompt-injection test asserting an
       observation containing an instruction does not change the synthesized rule's

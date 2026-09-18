@@ -330,6 +330,7 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | user-ui | Runs | History with filters. Queue position and live stage progress |
 | user-ui | Review | Traceability matrix and findings. OK / Not OK and a comment per finding. Edit a requirement or a link, then Re-check. Generate final report |
 | user-ui | Final report | The frozen one-page HTML report. Download PDF. Clone run |
+| user-ui | Observations | What this person has recorded in Train AI mode and what became of it. Only when the mode is on (ADR-021) |
 | user-ui | Run stats | Stage timings, LLM calls, tokens, cache hits |
 | user-ui | Config history | Captured configs by configuration ID and version, with created and last-modified dates. Copy one into a new run. Same layout as the config history in the compare-file ui2 mock |
 | admin-ui | Artifact types | Define which inputs the tool accepts — the OSL, the config, and each report — with a label, a meaning, an optional sample workbook, model guidance, and an on/off switch. Named values are defined here too |
@@ -337,6 +338,10 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | admin-ui | Checks | Create, test, version, enable or disable cross-report checks |
 | admin-ui | Compliance and scope | Must-have compliance rules and reverse pass categories |
 | admin-ui | Reference data | Attribute aliases and masked columns |
+| admin-ui | Settings | Every runtime setting with the layer it came from, its change history, and a model connection test (ADR-023) |
+| admin-ui | Users | Accounts for both roles, created by an administrator; login ships off (ADR-022) |
+| admin-ui | Training | The observation queue, synthesis into candidate rules, replay, and approval into shadow (ADR-021) |
+| admin-ui | Rules | Every rule whatever its origin, searchable, with its statistics and its lifecycle |
 | admin-ui | Usage | Runs per day, tokens, cache hit rate, false-positive rate |
 
 **Interactive HTML report**

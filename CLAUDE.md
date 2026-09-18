@@ -102,6 +102,12 @@ The moment a phase's last task lands, in the same commit:
    off the behaviour is exactly as it was. **There is always a current user** — a
    seeded placeholder when login is off — so nothing stores a nullable author.
 
+8. **A rule learned from a person enters the same rule surface the engine already
+   runs** (ADR-021), and **nothing activates without a human approving it**. The model
+   proposes a schema-constrained rule; code validates it, fingerprints it for overlap,
+   and evaluates it. An approved rule runs in **shadow** until someone activates it.
+   No rule expires on its own, and nothing in the training record is ever deleted.
+
 A PR that breaks one of these is rejected regardless of tests. Details:
 `docs/llm-privacy.md`, `docs/decisions.md`.
 
@@ -147,7 +153,7 @@ the code they describe, never in a follow-up.
 - Type hints on every signature, Google-style docstrings, `pathlib`, `logging` (never
   `print`), no magic numbers, pure functions where possible, `argparse` CLI.
 - `src/vigilai/` subpackages: `parsers/ rules/ pipeline/ checks/ llm/ db/ api/ worker/
-  report/` + `cli.py`. Dependencies point down; `api/` never imports `pipeline/`.
+  report/ auth/ config/ training/` + `cli.py`. Dependencies point down; `api/` never imports `pipeline/`.
 - Pydantic v2 at boundaries only (LLM output schemas, API wire models, config).
 - Prompts are versioned; the version is part of every cache key.
 - Frontend: Next.js 15 App Router, TypeScript strict, Tailwind 3, npm, Vitest. Theme
