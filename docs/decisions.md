@@ -458,3 +458,67 @@ remember to bump. The cost is that a careless administrator can now weaken a pro
 the 1500-character clip and the "background, not requirement" wording are the guard,
 and the golden set is the detector. `report_templates` is replaced by `artifact_types`;
 the sample workbook it held is now a field on the type.
+
+## ADR-021 — Learned rules are proposed by the model, approved by a person, and shadowed before they count
+
+**Status:** proposed 2026-09-18 — the shape is settled; the open questions in
+[`phase-6.1.md`](phase-6.1.md) must be answered before it is accepted.
+
+**Context:** The tool's rules are fixed at two points today: the checks an
+administrator writes by hand, and the reference data they maintain. The people who know
+the most about what should be checked are the reviewers, and what they know arrives as
+a sentence — "this field is never blank for account review", "this column is what
+clause 4.2 is actually asking for". Today that sentence goes in a review note and is
+never read again. The request is to capture it, turn it into a rule, and have the tool
+get better as it is used.
+
+The risk is equally plain. A sentence typed by a user, passed through a model, becoming
+a rule applied to every run, is a path from free text to global policy. Done carelessly
+it produces prompt injection with real consequences, a findings list nobody trusts, and
+rules nobody can explain.
+
+**Decision:** Build the loop as a state machine with a person at the only gate that
+matters.
+
+1. **Observations are anchored, not just written.** A user selects the cell, the OSL
+   section, or the config path they mean, and writes their sentence against it. The
+   anchor is what makes reliable synthesis possible; prose alone is a guess.
+2. **Suggested and active are different states.** `draft → shadow → active → retired`,
+   every transition stamped with an actor and a time, nothing automatic. This is what
+   every mature data-quality tool does, and the one convention worth copying without
+   modification.
+3. **The model proposes; code disposes.** Synthesis returns a schema-constrained rule
+   object. Code validates it, compiles its expression, resolves its named values
+   against the stored samples, and fingerprints it against existing rules for overlap.
+   The model has no write, no activation, and no chained execution — its capability is
+   "draft a record", which is OWASP's excessive-agency guidance applied literally.
+   ADR-001 is unchanged: the model reads meaning, code does every comparison.
+4. **The user's words are data.** They reach the prompt inside a delimited block marked
+   as a statement to interpret, never as an instruction to follow. The real control is
+   not the delimiter, though: it is that nothing the model returns runs until a person
+   approves it and a schema has already rejected everything malformed.
+5. **Replay before promotion.** A candidate is run against the golden set and recent
+   finalized runs, and the administrator sees what would have changed before deciding.
+   The golden set already exists for prompt changes; this is the same instrument
+   pointed at rule changes.
+6. **Shadow before it counts.** An approved rule runs silently until it has met a
+   minimum number of runs with a dismissal rate under a ceiling. Precision is unknown
+   until a rule has met real data, and a false-positive flood costs reviewer trust that
+   takes months to earn back.
+7. **Provenance is stored, including the diff.** Source observations, model, provider,
+   prompt version, approver, timestamp, and what changed between the model's draft and
+   the approved rule. The diff is the only measure of how much correcting the model
+   needs, and the first place to look when tuning the synthesis prompt.
+8. **Learned rules land in the existing tables** — `check_definitions`,
+   `compliance_rules`, and the new `field_constraints` — so there is one rule surface,
+   one evaluator, and one place to look when a finding is wrong.
+
+**Consequences:** Every learned rule can be explained: who said what, which model drew
+which conclusion, who agreed, and what it has done since. The cost is that nothing is
+fast — an observation becomes an enforced rule only after synthesis, approval, replay,
+and a shadow period — and that is the correct trade for a rule that touches every
+customer's validation. Two counters have to exist from the first day, fired count and
+dismissal rate, because alert fatigue is invisible without them and obvious with them.
+The audit log and the human-decision record are required artifacts rather than
+nice-to-haves, which the NIST AI Risk Management Framework and the EU AI Act's
+human-oversight provisions both expect of a system where a model shapes a decision.

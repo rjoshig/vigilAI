@@ -11,7 +11,7 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**; **6 in progress**; **7 dormant** (runs only on request) |
+| Phases complete | **0–5**; **6 in progress**; **6.1 specified, not started**; **7 dormant** (runs only on request) |
 | Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
 | Last updated | 2026-09-18 |
 
@@ -53,6 +53,16 @@ assume today and what would break each assumption, so the analysis starts from t
 rather than a blank page. Its first rule is that no real file, and nothing derived from
 one, enters this repository.
 
+### Phase 6.1 is specified and waiting on six answers
+
+[`phase-6.1.md`](phase-6.1.md) covers richer inputs (up to three samples per artifact
+type, several files per report type, workbook type detection, delivery counts) and
+**Train AI mode**: reviewers record anchored observations in their own words, an
+administrator has the model synthesize them into candidate rules, and an approved rule
+runs in shadow before it counts. ADR-021 holds the shape and is **proposed**, not
+accepted, because six open questions at the foot of the phase doc change the design.
+Answer those first.
+
 ### Outstanding, needs the user
 
 - **Merge the Phase 0 PR and create `dev` from `main`.** Eighteen commits are stacked
@@ -69,6 +79,45 @@ one, enters this repository.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-18 (Phase 6.1 specified — richer inputs and a trainable rule loop)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 6.1 (specification only) ·
+**Status:** documented, nothing built.
+
+### What was completed
+
+- `docs/phase-6.1.md`: eight milestones covering up to three samples per artifact type
+  with view and download, several files per report type with per-part findings,
+  delivery counts that code verifies, workbook type detection that is deterministic
+  first and asks when unsure, and the training loop.
+- ADR-021 (**proposed**): observations are anchored to a cell, clause, or config path
+  rather than being prose alone; suggested and active are different states; the model
+  emits a schema-constrained rule object and has no authority to write or activate;
+  candidates are replayed against the golden set and recent runs before approval; an
+  approved rule runs in shadow until its dismissal rate earns activation; provenance
+  includes the diff between the model's draft and the approved rule.
+- Prior art surveyed and recorded in the phase doc: Great Expectations, Soda, Deequ
+  constraint suggestion, dbt, and the suggested-monitor products. They agree on the
+  point that matters — machine-suggested rules never auto-promote.
+- `scripts/update_phase_status.py` now globs `phase-[0-6]*.md`, so 6.1's markers are
+  derived and checked like every other phase. Glossary, phase-plan, CLAUDE.md, and
+  README updated.
+
+### Pending
+
+- The six open questions at the foot of the phase doc. Each becomes an ADR, and
+  ADR-021 cannot move from proposed to accepted until they are answered.
+
+### Blockers
+
+Nothing technical. The design is decided enough to build once those answers land.
+
+### Next concrete action
+
+See "Resume here".
 
 ---
 

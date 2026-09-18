@@ -63,3 +63,20 @@ where a term maps to code, the subpackage is named.
 | **Config history** | Captured configs by configuration ID and version (`configs`), copyable into a new run. |
 | **Retention** | Runs, files, and stats are deleted after 90 days (`runs.expires_at`); aggregated usage stats are kept. |
 | **Shared volume** | The one Docker volume, mounted into api and worker, that holds uploads, reports, and PDFs. |
+
+## Training vocabulary (Phase 6.1, specified but not built)
+
+These terms appear in [`phase-6.1.md`](phase-6.1.md) and ADR-021. Nothing in the code
+uses them yet.
+
+| Term | Meaning |
+| --- | --- |
+| **Train AI mode** | An operator switch. When off the user-ui is exactly what it is today; when on, reviewers can record **observations**. |
+| **Observation** | One thing a person knows, in their own words, anchored to what they mean. The raw material of a learned rule; it never runs. |
+| **Anchor** | The typed selection an observation points at: a report cell or label, an OSL section, or a config JSON path. What makes synthesis reliable rather than a guess. |
+| **Candidate rule** | A rule the model drafted from one or more observations, validated by code and waiting for an administrator. It never runs. |
+| **Shadow** | A rule state: it runs on every run and its findings are counted but shown to nobody, so its precision can be measured before it interrupts a reviewer. |
+| **Replay** | Running a candidate rule against the golden set and recent finalized runs to see what it would have changed, before approving it. |
+| **Dismissal rate** | The share of a rule's findings that reviewers marked OK. The measure of whether a rule is earning its place. |
+| **Part** | One of several files uploaded for the same report type in one run, with a label. A check declares whether it evaluates `each` part or the `total`. |
+| **Field constraint** | A rule about one attribute — never blank, allowed values, a range, a format — stored as structured data and evaluated by code, though it was written in plain words. |

@@ -162,7 +162,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    paths = sorted(args.docs.glob("phase-[0-6].md"))
+    paths = sorted(args.docs.glob("phase-[0-6]*.md"))
     if not paths:
         print(f"no phase docs found in {args.docs}", file=sys.stderr)
         return 1
