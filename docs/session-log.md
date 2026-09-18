@@ -12,23 +12,24 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Current phase | **2 — Pipeline core (CLI)** |
-| Current milestone | 2a–2c done (fixtures, parsers, rules, LLM adapter); **2d next** (stages 1–5) |
+| Current milestone | 2a–2d done (fixtures, parsers, rules, LLM adapter, stages 1–5); **2e next** |
 | Branch | `claude/funny-cerf-jsyvpe` (Phase 0 PR still open against `main`) |
 | Last updated | 2026-09-18 |
 
-**Next action:** milestone 2d — `pipeline/s1_parse.py` … `s5_compare.py` and
-`pipeline/run.py` (orchestrator with per-stage status and resume from the last good
-stage). Stage 4 shortlists by `req_type` + alias in code, links exact matches without a
-call, and asks the judge only about unclear pairs. The acceptance test is the design
-doc's worked example (IL/AZ vs IL/AZ/TX) end to end on the mock client; the
-`geography_extra_state` fixture case already encodes it.
+**Next action:** milestone 2e — `pipeline/s6_reverse.py` (scoped categories),
+`s7_reports.py` (per-`req_type` report checks plus the expression evaluator in
+`checks/`), `s8_verify.py`, `s9_summarize.py`, and `checks/expressions.py` (safe
+evaluator over named values, no `eval`; an unresolvable value becomes a
+"could_not_evaluate" finding, never a silent skip). Replace the four `_not_implemented`
+placeholders in `pipeline/run.py` as each lands. Target: every finding type in the
+design doc's table is produced by at least one fixture case.
 
 **Environment:** `.venv` on Python 3.10.14; `source .venv/bin/activate` then
 `black . --target-version py310 && flake8 && mypy src/ && pytest`. Fixtures regenerate
 with `python scripts/generate_fixtures.py --out tests/fixtures` (the suite generates its
 own into a temp directory, so committed fixtures are not required).
 
-**Blocked on the user (does not block 2d–2f):** a sanitized shape reference for the real
+**Blocked on the user (does not block 2e–2f):** a sanitized shape reference for the real
 OSL / config / report layouts, and a local model for the 2f benchmark (deferred by
 ADR-014). Remaining open questions are in `docs/phase-plan.md`.
 
@@ -227,6 +228,54 @@ See "Resume here".
 ### Pending
 
 2d (stages 1–5), 2e (stages 6–9), 2f (CLI and golden set).
+
+### Blockers
+
+None.
+
+### Next concrete action
+
+See "Resume here".
+
+## Session: 2026-09-18 (Phase 2 — milestone 2d)
+
+**Branch:** `claude/funny-cerf-jsyvpe` · **Phase:** 2 · **Status:** 2d complete.
+
+### What was completed
+
+- `pipeline/context.py`: `RunContext` (the object a run threads through its stages),
+  `StageRecord` per-stage status and timing, the re-check stage list, and the
+  finalize-gate check (ADR-015).
+- Stages 1–5: parse; extract requirements one OSL section per call; describe config
+  blocks one per call with technical blocks classified in code and skipped; trace with
+  a code-first shortlist and exact-match link, judge only for unclear pairs; compare
+  sets, intervals with their operators, attribute lists, waterfall order, and quantities.
+- `pipeline/run.py`: orchestrator recording status, duration, calls, cache hits, and
+  tokens per stage; resume from the last good stage; `recheck()` reruns stages 5–7 only
+  and asserts it makes no LLM call.
+- 341 tests, 94% branch coverage, including the design doc's worked example end to end
+  (OSL {IL, AZ} vs config {IL, AZ, TX} reports TX as extra) and a direct test for every
+  comparison branch.
+
+### Notable decisions and fixes
+
+- ADR-016: waterfall order is compared on shared steps only. Comparing the lists
+  literally reported a mismatch on every run, because a config's step list carries
+  boundary markers the OSL never mentions.
+- The judge prompt now always carries the element's type and payload, not just its prose
+  description: "the processing order" does not tell a judge which requirement family a
+  block belongs to.
+- The stage 4 shortlist falls back to type-only when no field name matches, so a missing
+  alias surfaces as a weak trace rather than masquerading as "no config rule".
+- Building the fake judge exposed the same trap in test form: matching on `req_type`
+  alone linked a score requirement to an age rule. The responder now discriminates on
+  the attribute, as the real prompt instructs.
+- A stage that fails records itself as failed before the error propagates, so the run's
+  own record says where it stopped.
+
+### Pending
+
+2e (stages 6–9 and the expression evaluator), 2f (CLI and golden set).
 
 ### Blockers
 

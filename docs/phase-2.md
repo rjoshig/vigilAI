@@ -1,6 +1,6 @@
 # Phase 2 — Pipeline core (CLI)
 
-**Status:** in progress (2a–2c done; 2d next). **Goal:** the whole nine-stage pipeline runnable from the command
+**Status:** in progress (2a–2d done; 2e next). **Goal:** the whole nine-stage pipeline runnable from the command
 line on synthetic fixtures: files in, findings JSON out. Parsers, the canonical rule
 schema, the LLM adapter with cache, and a golden set that measures extraction accuracy.
 Effort 4–5 weeks. This is the riskiest phase (LLM extraction quality), which is why it
@@ -55,12 +55,13 @@ adapter", "LLM cost controls", and `llm-privacy.md` end to end before starting.
       added by mistake in a later phase.
 
 ### 2d — Stages 1–5
-- [ ] `pipeline/s1_parse.py` … `s5_compare.py`, `pipeline/run.py` orchestrator with
+- [x] `pipeline/s1_parse.py` … `s5_compare.py`, `pipeline/run.py` orchestrator with
       per-stage status, resume from the last good stage.
-- [ ] Stage 4 shortlists by `req_type` + alias in code, links exact matches without the
+- [x] Stage 4 shortlists by `req_type` + alias in code, links exact matches without the
       LLM, and asks the judge one narrow question per unclear pair.
-- Tests: the worked example from the design doc (IL/AZ vs IL/AZ/TX) end to end with the
-  mock client.
+- [x] Tests: the worked example from the design doc (IL/AZ vs IL/AZ/TX) end to end with
+      the mock client, plus a direct test per comparison branch. 341 tests total, 94%
+      branch coverage.
 
 ### 2e — Stages 6–9
 - [ ] `pipeline/s6_reverse.py` (scoped categories), `s7_reports.py` (per-`req_type`

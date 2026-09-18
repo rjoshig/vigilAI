@@ -271,3 +271,27 @@ not only in the UI.
 **Consequences:** The mock already shows this behaviour. The gate is a named constant, not
 a magic value, so it can be tightened later (the admin-ui Compliance screen mocks a
 selector for it) without a schema change.
+
+## ADR-016 — Stage 5 compares waterfall order on shared steps only; extra config steps belong to the reverse pass
+
+**Status:** accepted 2026-09-18
+
+**Context:** An OSL states the processing order in prose ("process in this order:
+geography, then score, then age, then exclusions, then dedupe"). A config's step list
+also carries boundary markers the OSL never mentions, such as the `input` step, and may
+add steps of its own. Comparing the two lists literally reported an order mismatch on
+every run, which would have trained reviewers to ignore the finding type entirely.
+
+**Decision:** Stage 5 compares the relative order of the steps the OSL and the config
+*share*. A step the OSL requires and the config lacks is reported as
+`rule_missing_in_config` (High). A step present only in the config is **not** a stage 5
+finding: it is an extra config element, which is the scoped reverse pass's job in stage 6
+(`docs/design.md` "Processing pipeline", step 6). Step names are compared
+case-insensitively.
+
+**Consequences:** A genuine reordering and a genuinely missing step are still caught.
+An extra config step is still surfaced, but by stage 6 and against the reverse-pass
+category list, so an admin can scope it. If in-house configs turn out to name the same
+step differently from the OSL (for example `suppress` against `exclusions`), the step
+names need the alias table too; that is a `# SPEC GAP:` to confirm against real files in
+Phase 6.
