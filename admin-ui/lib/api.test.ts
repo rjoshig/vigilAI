@@ -267,6 +267,28 @@ describe("the admin API client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/observations?status=new");
   });
 
+  it("passes the kind filter through only when one is given", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listObservations("new", "config_note");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/observations?status=new&kind=config_note");
+  });
+
+  it("reads the Train AI switch from the shared prefix, like the user app", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ enabled: true }));
+    const config = await api.getTrainingConfig();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/training/config");
+    expect(config.enabled).toBe(true);
+  });
+
+  it("switches a configuration note off with a query parameter and no body", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 9, is_active: false }));
+    await api.setConfigNoteActive(9, false);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/config-notes/9/active?is_active=false");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+  });
+
   it("surfaces Train AI mode being off as a 404 rather than swallowing it", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: "Train AI mode is off" }, 404));
     await expect(api.listObservations()).rejects.toMatchObject({ status: 404 });

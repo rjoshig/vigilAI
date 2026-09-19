@@ -25,6 +25,30 @@ import {
 import { api, ApiError } from "@/lib/api";
 import type { Anchor, Candidate, Observation } from "@/lib/types";
 
+/** Which kinds the queue shows. A configuration note is an observation too (ADR-024). */
+type QueueFilter = "all" | "observations" | "config_notes";
+
+const FILTERS: { value: QueueFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "observations", label: "Observations" },
+  { value: "config_notes", label: "Configuration notes" },
+];
+
+/**
+ * The configuration every selected item is a note on, or null. The backend scopes a
+ * candidate to `config:<id>` on its own when this holds; the console only says so.
+ */
+function sharedConfiguration(observations: Observation[], selected: number[]): string | null {
+  const chosen = observations.filter((one) => selected.includes(one.id));
+  if (chosen.length === 0) return null;
+  const first = chosen[0];
+  if (first.kind !== "config_note") return null;
+  const same = chosen.every(
+    (one) => one.kind === "config_note" && one.configuration_id === first.configuration_id
+  );
+  return same ? first.configuration_id : null;
+}
+
 /** An anchor on one line: what the person pointed at, as they pointed at it. */
 function anchorText(anchor: Anchor): string {
   const parts = [anchor.artifact, anchor.sheet, anchor.cell, anchor.field, anchor.reference];
@@ -98,6 +122,38 @@ function ReasonForm({
   );
 }
 
+/** The earlier wordings of a note, kept because the record of what was said matters. */
+function EarlierWordings({ observation }: { observation: Observation }) {
+  const [open, setOpen] = React.useState(false);
+  if (observation.revisions.length === 0) return null;
+  const count = observation.revisions.length;
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        className="text-[0.7rem] text-muted-foreground underline-offset-2 hover:underline"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {open ? "Hide" : "Show"} earlier wording{count === 1 ? "" : "s"} ({count})
+      </button>
+      {open ? (
+        <ul className="mt-1 space-y-1 border-l-2 pl-2">
+          {observation.revisions.map((revision) => (
+            <li key={revision.version} className="text-xs">
+              <span className="text-[0.7rem] text-muted-foreground">
+                v{revision.version} · {revision.by || "unattributed"} · {when(revision.at)}
+              </span>
+              <p className="text-muted-foreground">{revision.statement}</p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export default function TrainingPage() {
   const [observations, setObservations] = React.useState<Observation[] | null>(null);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
@@ -107,10 +163,16 @@ export default function TrainingPage() {
   // to explain rather than an error to report.
   const [off, setOff] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [filter, setFilter] = React.useState<QueueFilter>("all");
 
   const load = React.useCallback(async () => {
     try {
-      const loaded = await api.listObservations("new");
+      // The API filters by kind but not by its absence, so "Observations" is narrowed
+      // here after the full list arrives.
+      const loaded = await api.listObservations(
+        "new",
+        filter === "config_notes" ? "config_note" : ""
+      );
       setObservations(loaded);
       setOff(false);
       setError(null);
@@ -128,11 +190,16 @@ export default function TrainingPage() {
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not read the candidates.");
     }
-  }, []);
+  }, [filter]);
 
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  const shown = (observations ?? []).filter(
+    (observation) => filter !== "observations" || observation.kind !== "config_note"
+  );
+  const scopedTo = sharedConfiguration(shown, selected);
 
   async function act(what: string, run: () => Promise<unknown>) {
     setBusy(true);
@@ -194,30 +261,58 @@ export default function TrainingPage() {
               <GraduationCap className="h-4 w-4 text-muted-foreground" />
               Observations
             </CardTitle>
-            <Button
-              size="xs"
-              disabled={busy || selected.length === 0}
-              onClick={() =>
-                void act("synthesize the selection", async () => {
-                  await api.synthesize(selected);
-                  setSelected([]);
-                })
-              }
-            >
-              <Sparkles className="h-3.5 w-3.5" /> Synthesize selected ({selected.length})
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {scopedTo ? (
+                <span className="text-[0.7rem] text-muted-foreground">
+                  The rule will be scoped to configuration <span className="mono">{scopedTo}</span>
+                </span>
+              ) : null}
+              <Button
+                size="xs"
+                disabled={busy || selected.length === 0}
+                onClick={() =>
+                  void act("synthesize the selection", async () => {
+                    await api.synthesize(selected);
+                    setSelected([]);
+                  })
+                }
+              >
+                <Sparkles className="h-3.5 w-3.5" /> Synthesize selected ({selected.length})
+              </Button>
+            </div>
           </CardHeader>
+          <div
+            className="flex flex-wrap items-center gap-1 border-b px-3 py-2"
+            role="group"
+            aria-label="Show"
+          >
+            {FILTERS.map((option) => (
+              <Button
+                key={option.value}
+                variant={filter === option.value ? "secondary" : "ghost"}
+                size="xs"
+                aria-pressed={filter === option.value}
+                onClick={() => setFilter(option.value)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
           <CardContent className="p-0">
             {!observations ? (
               <Skeleton className="m-4 h-56" />
-            ) : observations.length === 0 ? (
+            ) : shown.length === 0 ? (
               <EmptyState
                 title="Nothing waiting"
-                hint="Observations filed by reviewers arrive here."
+                hint={
+                  filter === "config_notes"
+                    ? "Notes written against a configuration arrive here."
+                    : "Observations filed by reviewers arrive here."
+                }
               />
             ) : (
               <ul>
-                {observations.map((observation) => (
+                {shown.map((observation) => (
                   <li key={observation.id} className="border-b p-3 last:border-b-0">
                     <div className="flex items-start gap-2">
                       <input
@@ -232,11 +327,25 @@ export default function TrainingPage() {
                           <span className="text-xs font-semibold">
                             {observation.author || "unattributed"}
                           </span>
-                          <Badge tone="outline">{observation.kind}</Badge>
-                          <Badge tone="muted">{observation.severity_hint}</Badge>
-                          {observation.customer_name ? (
-                            <Badge tone="info">{observation.customer_name}</Badge>
-                          ) : null}
+                          {observation.kind === "config_note" ? (
+                            <>
+                              <Badge tone="info">Configuration note</Badge>
+                              <span className="mono text-sm font-semibold">
+                                {observation.configuration_id || "—"}
+                              </span>
+                              <Badge tone={observation.is_active ? "success" : "muted"}>
+                                {observation.is_active ? "active" : "switched off"}
+                              </Badge>
+                            </>
+                          ) : (
+                            <>
+                              <Badge tone="outline">{observation.kind}</Badge>
+                              <Badge tone="muted">{observation.severity_hint}</Badge>
+                              {observation.customer_name ? (
+                                <Badge tone="info">{observation.customer_name}</Badge>
+                              ) : null}
+                            </>
+                          )}
                           <span className="text-[0.7rem] text-muted-foreground">
                             {when(observation.created_at)}
                           </span>
@@ -259,7 +368,30 @@ export default function TrainingPage() {
                             </span>
                           ))}
                         </div>
-                        <div className="mt-2">
+                        {observation.kind === "config_note" ? (
+                          <EarlierWordings observation={observation} />
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {observation.kind === "config_note" ? (
+                            // Off stops the note reaching the model on the next run; the
+                            // text is kept, so it can be switched back on (ADR-024).
+                            <Button
+                              variant="outline"
+                              size="xs"
+                              disabled={busy}
+                              onClick={() =>
+                                void act(
+                                  observation.is_active
+                                    ? "switch the note off"
+                                    : "switch the note on",
+                                  () =>
+                                    api.setConfigNoteActive(observation.id, !observation.is_active)
+                                )
+                              }
+                            >
+                              {observation.is_active ? "Switch off" : "Switch on"}
+                            </Button>
+                          ) : null}
                           <ReasonForm
                             label="Reject"
                             busy={busy}

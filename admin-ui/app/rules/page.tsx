@@ -46,6 +46,17 @@ const ORIGIN_LABELS: Record<string, string> = {
   learned: "learned",
 };
 
+/**
+ * A scope of `config:<id>` is stored as one token, but an administrator reads it as
+ * the configuration it names (ADR-024). Every other scope form is shown as stored.
+ */
+function scopeLabel(scope: string): string {
+  const CONFIG_PREFIX = "config:";
+  return scope.startsWith(CONFIG_PREFIX)
+    ? `configuration ${scope.slice(CONFIG_PREFIX.length)}`
+    : scope;
+}
+
 function when(value: string | null): string {
   if (!value) return "never";
   const parsed = new Date(value);
@@ -274,7 +285,7 @@ export default function RulesPage() {
                         <TD>
                           <Badge tone={STATE_TONES[rule.state] ?? "muted"}>{rule.state}</Badge>
                         </TD>
-                        <TD className="text-xs">{rule.scope}</TD>
+                        <TD className="text-xs">{scopeLabel(rule.scope)}</TD>
                         <TD className="text-xs">{rule.severity}</TD>
                         <TD className="tabular-nums">{rule.fired}</TD>
                         <TD className="tabular-nums">
