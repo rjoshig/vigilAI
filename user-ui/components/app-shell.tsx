@@ -68,7 +68,7 @@ function TrainingModeLine({ enabled }: { enabled: boolean }) {
         aria-hidden="true"
         className={cn(
           "inline-block h-2 w-2 flex-shrink-0 rounded-full",
-          enabled ? "bg-success" : "bg-muted-foreground/50"
+          enabled ? "train-live bg-success" : "bg-muted-foreground/50"
         )}
       />
       <span>Train AI mode {enabled ? "on" : "off"}</span>
@@ -117,12 +117,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* The box is the one theme-independent surface in the rail: the mark's dark
             housing has to read on the navy palette as well as on white. */}
         <Link href="/" aria-label="Greenlight AI home" className="flex items-center gap-2.5 p-4">
-          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-[#F3F7F5]">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-[#FCD800]">
             <Logo size={30} />
           </span>
           <div>
             <div className="text-base font-bold leading-tight tracking-tight">Greenlight AI</div>
-            <div className="text-[0.8125rem] font-medium">Delivery Enablement</div>
+            <div className="text-[0.8125rem] font-medium">User Console</div>
             <div className="text-[0.625rem] text-muted-foreground">
               Nothing ships without a green light.
             </div>
