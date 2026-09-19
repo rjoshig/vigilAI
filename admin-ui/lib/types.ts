@@ -496,3 +496,16 @@ export interface RuleStateChange {
   actor: string;
   at: string;
 }
+
+/** Which definitions keep ten versions with revert (ADR-029). */
+export type VersionKind = "artifact-type" | "programme";
+
+/** One retained version of an artifact type or a programme's rule set. */
+export interface DefinitionVersion {
+  version: number;
+  summary: string;
+  reverted_from: number | null;
+  created_by: string;
+  created_at: string;
+  snapshot: Record<string, unknown>;
+}

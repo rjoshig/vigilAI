@@ -1,6 +1,6 @@
 # Phase 6.8 — Scoped compliance, validation guides, and versioned definitions
 
-**Status:** 🟡 **in progress** — decided 2026-09-19; 6.8a landed 2026-09-19.
+**Status:** 🟡 **in progress** — decided 2026-09-19; 6.8a and 6.8c landed 2026-09-19.
 
 **Goal:** three things an administrator cannot express today, and a safety net for
 the definitions they edit.
@@ -63,19 +63,19 @@ additive context and additive checks, never a precondition (ADR-020's rule, kept
       without a config path stay explanation only.
 - [ ] The frozen report notes which guide version was in force.
 
-### 6.8c — Versioned definitions with revert · ⬜ not started
+### 6.8c — Versioned definitions with revert · ✅ complete
 
-- [ ] `definition_versions`: `kind` (artifact_type | programme_rules), `object_id`,
+- [x] `definition_versions`: `kind` (artifact_type | programme_rules), `object_id`,
       `version`, `snapshot` (JSON), `created_by`, `created_at`. Written on every save
       of an artifact type (fields, sample list, guide) and on every change to a
       programme's rule set. **Keep the last ten** per object; older ones are purged
-      by the retention sweep.
-- [ ] Sample files referenced by an old version are kept on disk while any retained
+      by the retention sweep, except any a run inside the retention window names.
+- [x] Sample files referenced by an old version are kept on disk while any retained
       version references them, so a revert brings the workbooks back too.
-- [ ] Admin console: a **Versions** control on each artifact type and programme card
+- [x] Admin console: a **Versions** control on each artifact type and programme card
       listing the ten with who and when and a one-line diff summary; **Revert**
       restores the snapshot as a new version, with the typed word, and is audited.
-- [ ] Runs record the artifact-type version they were parsed under, so a finding on
+- [x] Runs record the artifact-type version they were parsed under, so a finding on
       an old run still points at the definition that produced it.
 
 ### 6.8d — Documentation and tests · 🟡 in progress
@@ -96,7 +96,7 @@ additive context and additive checks, never a precondition (ADR-020's rule, kept
    and a config path, with examples filled from the samples; the next run shows the
    model was given it and a shadow check exists for it.
 3. [ ] With no guide, a run's prompts and findings are unchanged from today.
-4. [ ] After eleven edits to an artifact type, ten versions are listed; reverting to
+4. [x] After eleven edits to an artifact type, ten versions are listed; reverting to
    the third restores its fields, samples, and guide, and appears as version twelve.
 
 ## Decisions (2026-09-19)

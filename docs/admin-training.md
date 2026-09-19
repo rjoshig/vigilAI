@@ -61,6 +61,11 @@ What the tool accepts: the OSL, the configuration, and each report type. For eac
   them, so a type with no sample cannot be detected and its checks cannot be tested.
 - **Named values** are pointers into a report that checks refer to by name. Prefer a
   label lookup over a cell address: it survives an inserted row.
+- **Versions.** Every save of a type, its samples included, keeps a snapshot. The
+  **Versions** button lists the last ten with who, when, and what changed; **Revert**
+  puts one back, after you type `revert`, and appears as a new version so nothing is
+  ever lost. A removed sample's workbook stays on disk while a listed version still
+  names it, so a revert brings the file back too.
 
 ## Delivery programmes
 
@@ -77,6 +82,12 @@ strictness: **must** (a breach is a high finding), **should** (medium), or
 **advisory** (low). The model reads each delivery against them and names what it
 breaks; the strictness decides how serious that is, and code applies it. Add as many
 rules as the programme needs; switch one off from the Rules screen when it misfires.
+
+**Rule versions.** A programme's rule set is versioned as a whole: adding, editing,
+or changing the state of a rule makes a version. **Rule versions** on the card lists
+the last ten; reverting restores the wording, strictness and state of every rule as
+they were, and a rule that did not exist then is deleted (restorable from the Rules
+screen for six months).
 
 ## Checks and compliance rules
 

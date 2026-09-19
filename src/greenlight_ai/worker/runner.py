@@ -15,7 +15,7 @@ from typing import Final
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from greenlight_ai.db import catalog, models, repository
+from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.db.cache import DbCache, record_calls
 from greenlight_ai.db.session import session_scope
 from greenlight_ai.db.types import utcnow
@@ -214,6 +214,7 @@ def execute_run(
         run.error = ""
         run.model_used = settings.model
         run.prompt_version = settings.prompt_version
+        run.definition_versions = versions.current_versions(session)
         context = build_context(session, run, data_dir, settings, factory, call_log)
         resume_from = context.resume_from()
 

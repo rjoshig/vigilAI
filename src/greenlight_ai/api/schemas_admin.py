@@ -354,3 +354,22 @@ class ProgrammeRuleOut(ProgrammeRuleIn):
     state: str = "active"
     origin: str = "admin"
     created_by: str = ""
+
+
+class VersionOut(BaseModel):
+    """One retained version of a definition (ADR-029)."""
+
+    version: int
+    summary: str = ""
+    reverted_from: int | None = None
+    created_by: str = ""
+    created_at: dt.datetime
+    snapshot: dict[str, Any] = Field(default_factory=dict)
+
+
+class RevertIn(BaseModel):
+    """The typed confirmation for a revert."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirm: str = ""

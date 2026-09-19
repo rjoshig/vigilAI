@@ -37,6 +37,8 @@ import type {
   TestResult,
   TrainingConfig,
   Usage,
+  DefinitionVersion,
+  VersionKind,
 } from "@/lib/types";
 
 const BASE = "/api/v1/admin";
@@ -388,4 +390,23 @@ export const api = {
   /** Every state this rule has moved between, with who moved it. */
   ruleHistory: (ruleKind: string, id: number): Promise<RuleStateChange[]> =>
     request<RuleStateChange[]>(`/rules/${ruleKind}/${id}/history`),
+
+  /** The last ten versions of an artifact type or a programme's rules, newest first. */
+  listVersions: (kind: VersionKind, key: string): Promise<DefinitionVersion[]> =>
+    request<DefinitionVersion[]>(`/versions/${kind}/${encodeURIComponent(key)}`),
+
+  /**
+   * Put an old version back as a new one. `confirm` has to be the word `revert`;
+   * the API enforces it with a 400.
+   */
+  revertVersion: (
+    kind: VersionKind,
+    key: string,
+    version: number,
+    confirm: string
+  ): Promise<DefinitionVersion> =>
+    request<DefinitionVersion>(
+      `/versions/${kind}/${encodeURIComponent(key)}/${version}/revert`,
+      json("POST", { confirm })
+    ),
 };
