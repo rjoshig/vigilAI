@@ -90,7 +90,7 @@ def _check_compliance(context: RunContext, admin: AdminConfig, customer: str) ->
 
     paths = [block.json_path for block in context.config.blocks]
     for rule in admin.compliance_rules:
-        if not rule.applies_to(customer):
+        if not rule.applies_to(customer, context.guidance.scope_code):
             continue
         matching = [p for p in paths if rule.json_path_contains in p]
         if matching:

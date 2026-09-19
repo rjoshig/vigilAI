@@ -853,3 +853,34 @@ suppression flags and pipeline steps were described as technical plumbing.
 **Consequences:** The pipeline no longer breaks on a well-meaning answer in a slightly
 different shape. The stand-in is unchanged and still passes. The Anthropic key used
 for the run lives only in `.env` and should be rotated.
+
+## ADR-029 — Scope is one token; guides are additive; a version is a snapshot and a revert is a new version
+
+**Status:** accepted 2026-09-19 (user decisions, Phase 6.8)
+
+**Context:** A compliance rule or check applied everywhere or to one customer, never
+to one delivery programme. An artifact type carried a paragraph of guidance and up
+to three samples, with no structured way to say what a report cell means and where
+it answers to. And nothing an administrator edits kept its history.
+
+**Decision:**
+
+1. **Scope is one stored token**: `all`, a customer name, or `programme:CODE`. Code
+   decides scope with no lookup (`checks/definitions.in_scope`). A programme scope
+   matches only a run of that programme; a run with no programme sees global and
+   customer rules only. The Rules, Checks and Compliance screens read the token as
+   words.
+2. **A validation guide is additive.** Entries reach the model as background, never
+   as a precondition (ADR-020). An entry with a resolvable locator and a config path
+   becomes a check automatically, **born in shadow** (ADR-021), activated from the
+   Rules screen when the numbers say so. An OSL reference is a section number and a
+   phrase, either optional.
+3. **A version is a snapshot; a revert is a new version.** Artifact types with their
+   samples and guide, and a programme's rule set, are snapshotted on every save. Ten
+   are listed; a version a run inside the retention window still references is kept
+   beyond the ten. Reverting writes the snapshot back as the next version, so nothing
+   is ever lost, and is audited with the typed word.
+
+**Consequences:** The pipeline's scope check is a pure function with a test per
+form. A guide can be written entirely from the sample preview. The definitions an
+administrator edits are as safe to change as the configurations already were.

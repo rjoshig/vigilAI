@@ -459,7 +459,7 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
     values = resolve_all(named, context.reports)
 
     for check in admin.checks:
-        if not check.applies_to(customer):
+        if not check.applies_to(customer, context.guidance.scope_code):
             continue
         if check.kind == "judgment":
             # Judgment checks are answered by the model in stage 8's style, and are out

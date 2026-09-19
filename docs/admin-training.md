@@ -86,6 +86,11 @@ values and the expression; you correct it, **test it against the samples**, and
 activate it. **Compliance rules** say what must be present in every configuration in
 scope. Both are versioned; a change never edits an old finding.
 
+**Scope.** Every check and compliance rule applies **everywhere**, to **one delivery
+programme**, or to **one customer**. A rule scoped to Account Solicitation is never
+evaluated on an Account Monitoring run, and a run with no programme sees only global
+and customer rules. Pick the scope on the form; the list shows it in words.
+
 ## The training queue
 
 **Training** is where what reviewers wrote arrives. Two cards.

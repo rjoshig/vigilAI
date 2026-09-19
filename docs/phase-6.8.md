@@ -1,6 +1,6 @@
 # Phase 6.8 — Scoped compliance, validation guides, and versioned definitions
 
-**Status:** ⬜ **not started** — proposed and decided 2026-09-19. Ready to build.
+**Status:** 🟡 **in progress** — decided 2026-09-19; 6.8a landed 2026-09-19.
 
 **Goal:** three things an administrator cannot express today, and a safety net for
 the definitions they edit.
@@ -28,18 +28,18 @@ the definitions they edit.
 **In the absence of a guide the model works exactly as it does now.** A guide is
 additive context and additive checks, never a precondition (ADR-020's rule, kept).
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.8a — Compliance and checks scoped to a programme · ⬜ not started
+### 6.8a — Compliance and checks scoped to a programme · ✅ complete
 
-- [ ] `scope` on `compliance_rules` and `check_definitions` accepts `programme:CODE`;
+- [x] `scope` on `compliance_rules` and `check_definitions` accepts `programme:CODE`;
       `applies_to` in `checks/definitions.py` and the stage 6 filter honour it,
       alongside `all` and a customer name.
-- [ ] `load_admin_config` receives the run's programme code and keeps only rules in
-      scope, so a rule for Account Solicitation is never evaluated on Archives.
-- [ ] Compliance screen and Checks screen: a scope picker (everywhere / programme /
+- [x] the pipeline reads the run's programme code from its guidance and keeps only
+      rules in scope, so a rule for Account Solicitation is never evaluated on Archives.
+- [x] Compliance screen and Checks screen: a scope picker (everywhere / programme /
       customer) on create and edit; the list shows the scope.
-- [ ] The Rules screen renders `programme:CODE` as the programme's name (done for
+- [x] The Rules screen renders `programme:CODE` as the programme's name (done for
       programme rules already).
 
 ### 6.8b — Validation guides · ⬜ not started
@@ -78,18 +78,18 @@ additive context and additive checks, never a precondition (ADR-020's rule, kept
 - [ ] Runs record the artifact-type version they were parsed under, so a finding on
       an old run still points at the definition that produced it.
 
-### 6.8d — Documentation and tests · ⬜ not started
+### 6.8d — Documentation and tests · 🟡 in progress
 
-- [ ] ADR-027 (guides are additive; versions are snapshots, revert is a new version).
+- [x] ADR-029 (scope tokens; guides are additive; versions are snapshots, revert is a new version).
 - [ ] Training documents, glossary, and this phase closed out.
 - [ ] Tests: a programme-scoped compliance rule fires on its programme and not on
       another; a guide entry with a config path compiles into a shadow check that
       fires; a guide without one changes only the prompt; ten versions kept and the
       eleventh purged; revert restores samples and guide together.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · 🟡 in progress
 
-1. [ ] A compliance rule scoped to Account Solicitation produces a finding on an
+1. [x] A compliance rule scoped to Account Solicitation produces a finding on an
    Account Solicitation run and none on an Account Monitoring run; a global rule
    fires on both.
 2. [ ] An administrator writes a guide entry pointing a report cell at an OSL section

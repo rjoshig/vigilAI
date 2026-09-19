@@ -31,8 +31,9 @@ import {
   Table,
   Textarea,
 } from "@/components/ui/primitives";
+import { ScopePicker, scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
-import type { Check, CheckIn, DraftResponse, Severity, TestResult } from "@/lib/types";
+import type { Check, CheckIn, DraftResponse, Scope, Severity, TestResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SEVERITY_TONE: Record<Severity, "destructive" | "warn" | "info" | "muted"> = {
@@ -57,10 +58,13 @@ export default function ChecksPage() {
   const [checks, setChecks] = React.useState<Check[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [authoring, setAuthoring] = React.useState(false);
+  const [programmes, setProgrammes] = React.useState<Scope[] | null>(null);
 
   const load = React.useCallback(async () => {
     try {
-      setChecks(await api.listChecks());
+      const [nextChecks, nextProgrammes] = await Promise.all([api.listChecks(), api.listScopes()]);
+      setChecks(nextChecks);
+      setProgrammes(nextProgrammes);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
@@ -140,7 +144,7 @@ export default function ChecksPage() {
                     <TD>
                       <Badge tone={SEVERITY_TONE[check.severity]}>{check.severity}</Badge>
                     </TD>
-                    <TD className="text-xs">{check.scope}</TD>
+                    <TD className="text-xs">{scopeLabel(check.scope, programmes)}</TD>
                     <TD>
                       <Button
                         size="xs"
@@ -160,6 +164,7 @@ export default function ChecksPage() {
 
       {authoring ? (
         <AuthorDialog
+          programmes={programmes}
           onClose={() => setAuthoring(false)}
           onSaved={() => {
             setAuthoring(false);
@@ -171,7 +176,15 @@ export default function ChecksPage() {
   );
 }
 
-function AuthorDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function AuthorDialog({
+  onClose,
+  onSaved,
+  programmes,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+  programmes: Scope[] | null;
+}) {
   const [description, setDescription] = React.useState("");
   const [draft, setDraft] = React.useState<DraftResponse | null>(null);
   const [check, setCheck] = React.useState<CheckIn>({ ...EMPTY });
@@ -329,15 +342,14 @@ function AuthorDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () =
                     <option value="low">Low</option>
                   </Select>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="check-scope">Scope</Label>
-                  <Input
-                    id="check-scope"
-                    value={check.scope}
-                    onChange={(event) => setCheck({ ...check, scope: event.target.value })}
-                  />
-                </div>
               </div>
+
+              <ScopePicker
+                idPrefix="check"
+                value={check.scope}
+                programmes={programmes}
+                onChange={(scope) => setCheck({ ...check, scope })}
+              />
 
               <div className="flex flex-col gap-1">
                 <Label htmlFor="check-reasoning">Reasoning shown to users</Label>
