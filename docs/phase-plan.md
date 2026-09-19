@@ -33,7 +33,7 @@ would arrive on a different machine, and it is dormant until the user asks for i
 (ADR-019).
 
 The delivery itself, from readiness through UAT to region-by-region rollout, is
-planned in [`rollout-plan.md`](rollout-plan.md), which is revisited at every milestone
+planned in [`gd-rollout-plan.md`](gd-rollout-plan.md), which is revisited at every milestone
 here.
 
 ## Status vocabulary

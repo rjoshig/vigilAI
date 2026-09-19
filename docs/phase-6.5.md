@@ -40,7 +40,7 @@ Last revisit: 2026-09-19, after Phase 6.4.
 - [x] Both referenced from `README.md`, `CLAUDE.md`, and the rollout plan.
 - [ ] Both re-read after the next milestone and their alignment dates moved.
 - [ ] A short walkthrough recorded for each, once the deployment the training will run
-      on exists (Stage 1 of `rollout-plan.md`).
+      on exists (Stage 1 of `gd-rollout-plan.md`).
 
 ## Acceptance criteria, re-checked at each revisit
 

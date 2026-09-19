@@ -34,11 +34,13 @@ every doc describing what is true at that commit, not what was planned — see
   removed, fix what is stale, and move the "Last aligned with the code" date. A
   training document that describes a screen the product no longer has is worse than
   none. Details: `docs/phase-6.5.md`.
-- **The rollout plan, at every milestone.** `docs/rollout-plan.md` is how the tool
-  reaches the delivery teams: readiness, a focus-group UAT with a benchmark against
-  the manual check, senior associates validating with Train AI mode on so the rules
-  are theirs, then region by region. When a phase closes, re-read it and update the
-  readiness checklist.
+- **The Global Delivery rollout plan, at every milestone.** `docs/gd-rollout-plan.md`
+  is the delivery side: who owns the product, the support tiers and where a user
+  goes, escalation severities, who patches and who adds features, the acceptance
+  criteria a scope must meet, the intake questionnaire, and the four gated stages
+  (readiness, focus-group UAT with a benchmark, senior associates validating with
+  Train AI mode on, then region by region). When a phase closes, re-read it and
+  update the readiness checklist.
 
 ## Phase gating
 

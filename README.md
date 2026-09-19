@@ -106,9 +106,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   screen by screen, for associates
 - [`docs/admin-training.md`](docs/admin-training.md) — **administrator training**: the
   admin console, the training queue, the rules, and a weekly routine
-- [`docs/rollout-plan.md`](docs/rollout-plan.md) — **global delivery rollout**: readiness,
-  focus-group UAT with a benchmark, senior-associate validation with Train AI mode on,
-  then region by region
+- [`docs/gd-rollout-plan.md`](docs/gd-rollout-plan.md) — **Global Delivery rollout**:
+  ownership, support tiers, escalation, change and release, acceptance criteria, the
+  intake questionnaire, and the four gated stages from readiness to region by region
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
