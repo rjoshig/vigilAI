@@ -3,7 +3,7 @@
 How we branch, commit, and open PRs. These rules are **canonical**; `CLAUDE.md` keeps a
 short summary and links here.
 
-This repo is a **Python service** (`src/vigilai/`: pipeline, worker, CLI, FastAPI) plus
+This repo is a **Python service** (`src/greenlight_ai/`: pipeline, worker, CLI, FastAPI) plus
 **two Next.js apps** (`user-ui/`, `admin-ui/`). CI exists but is **manual-only** (ADR-012),
 so the local **pre-push checklist (§3) is the gate** — mandatory, not advisory.
 
@@ -39,8 +39,8 @@ Claude Code never pushes to `main` and never merges.
 - The **human** deletes branches after merge.
 
 ### When Claude Code may commit directly to `dev`
-Only if **all** hold: fewer than 5 files · no schema/migration change (`src/vigilai/db/`) ·
-no API contract change (`src/vigilai/api/` routes or wire models) · no cross-subpackage
+Only if **all** hold: fewer than 5 files · no schema/migration change (`src/greenlight_ai/db/`) ·
+no API contract change (`src/greenlight_ai/api/` routes or wire models) · no cross-subpackage
 change (§5) · not a refactor. Otherwise → `feature/*` first.
 
 ### Max change size
@@ -148,7 +148,7 @@ If unsure whether a git operation is safe: **stop, describe the situation, ask.*
 
 ## 5. One-subpackage-per-task rule
 
-Don't modify more than one subpackage of `src/vigilai/` (or one UI app) in a single task
+Don't modify more than one subpackage of `src/greenlight_ai/` (or one UI app) in a single task
 unless the task explicitly requires it. If it must cross boundaries, say so before writing
 code:
 > "This task requires changes to: [subpackages] because [reason]."
@@ -197,7 +197,7 @@ and wait for confirmation.
 
 ## 9. Schema / data safety (Postgres + shared volume)
 
-The schema lives in `src/vigilai/db/` (SQLAlchemy models + Alembic migrations). Without
+The schema lives in `src/greenlight_ai/db/` (SQLAlchemy models + Alembic migrations). Without
 explicit human approval, never:
 - drop or rename a table or column,
 - change an id format, a `status` vocabulary, or a count column's meaning,

@@ -13,9 +13,9 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.db.queue import JobQueue
-from vigilai.worker.app import Worker
+from greenlight_ai.db import models
+from greenlight_ai.db.queue import JobQueue
+from greenlight_ai.worker.app import Worker
 
 Submit = Callable[..., Any]
 

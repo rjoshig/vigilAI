@@ -34,12 +34,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from synthetic_model import FIXTURE_ALIASES, build_client  # noqa: E402
 
-import vigilai.worker.runner as runner  # noqa: E402
-from vigilai.db import models  # noqa: E402
-from vigilai.db.session import create_all, create_engine, session_factory  # noqa: E402
-from vigilai.db.settings import DbSettings  # noqa: E402
-from vigilai.llm.settings import LLMSettings  # noqa: E402
-from vigilai.worker.app import Worker  # noqa: E402
+import greenlight_ai.worker.runner as runner  # noqa: E402
+from greenlight_ai.db import models  # noqa: E402
+from greenlight_ai.db.session import create_all, create_engine, session_factory  # noqa: E402
+from greenlight_ai.db.settings import DbSettings  # noqa: E402
+from greenlight_ai.llm.settings import LLMSettings  # noqa: E402
+from greenlight_ai.worker.app import Worker  # noqa: E402
 
 _LOG: Final = logging.getLogger("load_test")
 
@@ -101,7 +101,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from fastapi.testclient import TestClient
 
-    from vigilai.api.app import create_app
+    from greenlight_ai.api.app import create_app
 
     _install_stand_in_model()
 

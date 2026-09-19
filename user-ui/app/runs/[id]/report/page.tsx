@@ -59,7 +59,7 @@ export default function ReportPage() {
     setDownloading(true);
     setError(null);
     try {
-      saveBlob(await api.fetchReportPdf(runId), `vigilai-run-${runId}.pdf`);
+      saveBlob(await api.fetchReportPdf(runId), `greenlight-ai-run-${runId}.pdf`);
     } catch (caught) {
       setError(
         caught instanceof ApiError

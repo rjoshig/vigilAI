@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
-from vigilai.checks.reports import REPORT_CHECKED_KINDS, attribute_stats, run_derived_check
-from vigilai.parsers import parser_for
-from vigilai.parsers.base import ReportDocument, ReportKind
-from vigilai.rules.derive import DerivedCheck
-from vigilai.rules.normalize import AliasTable
+from greenlight_ai.checks.reports import REPORT_CHECKED_KINDS, attribute_stats, run_derived_check
+from greenlight_ai.parsers import parser_for
+from greenlight_ai.parsers.base import ReportDocument, ReportKind
+from greenlight_ai.rules.derive import DerivedCheck
+from greenlight_ai.rules.normalize import AliasTable
 
 ALIASES = AliasTable.from_mapping(
     {

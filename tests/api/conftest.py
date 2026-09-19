@@ -15,12 +15,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from synthetic_model import FIXTURE_ALIASES, build_client
-from vigilai.api.app import API_PREFIX, create_app
-from vigilai.db import models
-from vigilai.db.session import create_all, create_engine, session_factory
-from vigilai.db.settings import DbSettings
-from vigilai.llm.settings import LLMSettings
-from vigilai.worker.app import Worker
+from greenlight_ai.api.app import API_PREFIX, create_app
+from greenlight_ai.db import models
+from greenlight_ai.db.session import create_all, create_engine, session_factory
+from greenlight_ai.db.settings import DbSettings
+from greenlight_ai.llm.settings import LLMSettings
+from greenlight_ai.worker.app import Worker
 
 
 @pytest.fixture()
@@ -60,7 +60,7 @@ def worker(
     factory: sessionmaker[Session], db_settings: DbSettings, monkeypatch: pytest.MonkeyPatch
 ) -> Worker:
     """A worker wired to the scripted stand-in model, driven inline by tests."""
-    import vigilai.worker.runner as runner
+    import greenlight_ai.worker.runner as runner
 
     def _build(settings: Any, cache: Any = None, call_log: Any = None, **_: Any) -> Any:
         return build_client(settings, cache=cache, call_log=call_log)

@@ -83,3 +83,105 @@
 .mono {
   font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
 }
+
+/* ===========================================================================
+   Palettes. The active one is set by <html data-theme="..."> from
+   GREENLIGHT_AI_UI_THEME (lib/theme.ts). Each overrides only the brand tokens; the
+   neutrals and the severity colours stay the same in every palette so a
+   finding reads the same way whichever look is chosen. Light values are scoped
+   with :not(.dark) so they never bleed into dark mode. Token values are the ones
+   compare-file/ui2 ships, so the two tools match.
+   =========================================================================== */
+
+[data-theme="light-blue-yellow"]:not(.dark) {
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 48 96% 53%;
+  --secondary-foreground: 222 47% 11%;
+  --accent: 199 89% 92%;
+  --accent-foreground: 199 89% 25%;
+  --tertiary: 48 96% 53%;
+  --tertiary-foreground: 222 47% 11%;
+  --ring: 199 89% 48%;
+}
+[data-theme="light-blue-yellow"].dark {
+  --primary: 199 89% 54%;
+  --primary-foreground: 222 47% 9%;
+  --secondary: 48 96% 55%;
+  --secondary-foreground: 222 47% 11%;
+  --accent: 205 40% 18%;
+  --accent-foreground: 199 89% 80%;
+  --tertiary: 48 96% 55%;
+  --tertiary-foreground: 222 47% 11%;
+  --ring: 199 89% 54%;
+}
+
+[data-theme="classic-teal"]:not(.dark) {
+  --primary: 200 100% 20%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 191 100% 40%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 191 100% 93%;
+  --accent-foreground: 200 100% 20%;
+  --tertiary: 51 100% 49%;
+  --tertiary-foreground: 200 100% 15%;
+  --ring: 191 100% 40%;
+}
+[data-theme="classic-teal"].dark {
+  --primary: 191 100% 45%;
+  --primary-foreground: 200 100% 9%;
+  --secondary: 51 100% 49%;
+  --secondary-foreground: 200 100% 12%;
+  --accent: 200 60% 18%;
+  --accent-foreground: 191 100% 78%;
+  --tertiary: 51 100% 52%;
+  --tertiary-foreground: 200 100% 12%;
+  --ring: 191 100% 45%;
+}
+
+/* --- classic-teal-navy: classic teal, with a navy sidebar and a yellow mark.
+   The page is identical to classic-teal. Only the sidebar changes, by redefining
+   the tokens inside .app-sidebar, so nothing outside it is touched and the other
+   palettes stay pixel-identical. Inside the rail, "primary" becomes the yellow so
+   the logo block and the active item pick it up without a second set of classes. --- */
+[data-theme="classic-teal-navy"]:not(.dark) {
+  --primary: 200 100% 20%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 191 100% 40%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 191 100% 93%;
+  --accent-foreground: 200 100% 20%;
+  --tertiary: 51 100% 49%;
+  --tertiary-foreground: 200 100% 15%;
+  --ring: 191 100% 40%;
+}
+[data-theme="classic-teal-navy"].dark {
+  --primary: 191 100% 45%;
+  --primary-foreground: 200 100% 9%;
+  --secondary: 51 100% 49%;
+  --secondary-foreground: 200 100% 12%;
+  --accent: 200 60% 18%;
+  --accent-foreground: 191 100% 78%;
+  --tertiary: 51 100% 52%;
+  --tertiary-foreground: 200 100% 12%;
+  --ring: 191 100% 45%;
+}
+[data-theme="classic-teal-navy"] .app-sidebar {
+  --card: 200 100% 13%;
+  --card-foreground: 0 0% 100%;
+  --foreground: 0 0% 100%;
+  --muted-foreground: 199 40% 78%;
+  --border: 199 70% 22%;
+  --accent: 200 70% 22%;
+  --accent-foreground: 0 0% 100%;
+  --primary: 51 100% 49%;
+  --primary-foreground: 200 100% 12%;
+  --tertiary: 51 100% 49%;
+  --tertiary-foreground: 200 100% 12%;
+}
+[data-theme="classic-teal-navy"].dark .app-sidebar {
+  --card: 200 100% 7%;
+  --border: 200 60% 14%;
+  --accent: 200 60% 16%;
+  --primary: 51 100% 52%;
+}

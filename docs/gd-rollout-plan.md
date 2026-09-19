@@ -1,4 +1,4 @@
-# vigilAI — Global Delivery rollout plan
+# Greenlight AI — Global Delivery rollout plan
 
 **Owner:** the product owner, named in section 2. **Referenced from:** `CLAUDE.md`.
 **Status:** plan; names and dates are filled in at the intake meeting (section 9).
@@ -53,7 +53,7 @@ The platform team, with the administrator.
 - [ ] Deployed on the internal network over TLS, with `docker compose up --build`
       verified on the target host (the last unverified criterion in phases 0–5).
 - [ ] Postgres, not SQLite, behind `DATABASE_URL`; the data volume on encrypted
-      storage; backups of the database, the data volume, and `VIGILAI_SECRET_KEY`
+      storage; backups of the database, the data volume, and `GREENLIGHT_AI_SECRET_KEY`
       tested by restoring them once.
 - [ ] Login on for both apps, the bootstrap password changed, two administrators
       created, and every UAT participant given an account.

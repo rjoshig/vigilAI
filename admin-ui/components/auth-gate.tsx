@@ -9,7 +9,6 @@
  * chosen its own password sees only the change screen until it has.
  */
 
-import { ShieldCheck } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -137,7 +136,7 @@ function AuthFrame({ title, children }: { title: string; children: React.ReactNo
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <ShieldCheck className="h-4 w-4" />
+              <span className="inline-block h-4 w-4 rounded-full bg-success" aria-hidden="true" />
             </span>
             {title}
           </CardTitle>
@@ -178,7 +177,7 @@ function SignInScreen({
   }
 
   return (
-    <AuthFrame title="vigilAI admin">
+    <AuthFrame title="Greenlight AI admin">
       <form
         className="grid gap-3"
         onSubmit={(event) => {

@@ -2,7 +2,7 @@
 
 pytest suite. Phase 0 has one smoke test (`test_package.py`) so the suite is green from day one.
 
-- **Layout mirrors `src/vigilai/`:** `src/vigilai/rules/normalize.py` →
+- **Layout mirrors `src/greenlight_ai/`:** `src/greenlight_ai/rules/normalize.py` →
   `tests/rules/test_normalize.py`. One test file per module.
 - **Synthetic fixtures only** (`fixtures/`), never a real customer file (ADR-003).
 - **No real LLM:** `LLM_PROVIDER=mock` or an injected fake `LLMClient`. No network.

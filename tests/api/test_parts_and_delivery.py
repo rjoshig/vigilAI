@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
+from greenlight_ai.db import models
 
 Submit = Callable[..., Any]
 

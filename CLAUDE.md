@@ -6,7 +6,7 @@ on purpose, it points at the durable context in `docs/` and `standards/`.
 
 ## Project in one paragraph
 
-vigilAI automates QC validation for a credit-data fulfillment process. It reconciles three
+Greenlight AI automates QC validation for a credit-data fulfillment process. It reconciles three
 things: the requirement spec (**OSL**, a Word document), the ETL config (JSON), and the
 output reports (Excel: DIRT, distributions, counts). **The LLM reads and judges meaning;
 code does every comparison.** Every OSL requirement is traced into the config and then into
@@ -62,6 +62,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.3 | Runtime settings in the admin console: console overrides `.env` overrides defaults (ADR-023) | `docs/phase-6.3.md` | ✅ complete |
 | 6.4 | Train AI indicator in both apps; standing notes on a configuration id, reaching the model as background and the admin queue as comments | `docs/phase-6.4.md` | ✅ complete — one test open |
 | 6.5 | Training documentation, kept current: `docs/user-training.md` and `docs/admin-training.md` | `docs/phase-6.5.md` | 🟡 recurring — re-entered after every milestone |
+| 6.6 | Themes: named themes, a step-through picker, the default and lock set from the admin console | `docs/phase-6.6.md` | ⬜ not started — specified |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
@@ -100,7 +101,7 @@ The moment a phase's last task lands, in the same commit:
 2. **The OSL is the source of truth.** Config and reports are validated against it.
 3. **Never put sample rows or PII in a prompt, log, fixture, or commit.** Fixtures are
    synthetic only. Logs carry ids and counts. `LLM_LOG_PROMPTS` stays false.
-4. **All LLM calls go through one adapter** (`src/vigilai/llm/`). Provider, base URL, and
+4. **All LLM calls go through one adapter** (`src/greenlight_ai/llm/`). Provider, base URL, and
    model come from `.env` (`openai`-style, `anthropic`-style, `mock`). No vendor SDKs.
 5. **Check the cache before every LLM call. Never send the same content twice.** Never
    regenerate a finalized report. Re-running identical inputs requires a logged reason.
@@ -116,7 +117,7 @@ The moment a phase's last task lands, in the same commit:
    Never read a setting into a module-level constant; resolve it where it is used.
 
    **No login by default** for either UI. Login is built but ships off behind
-   `VIGILAI_ADMIN_AUTH` and `VIGILAI_USER_AUTH` (ADR-022, amending ADR-008); with both
+   `GREENLIGHT_AI_ADMIN_AUTH` and `GREENLIGHT_AI_USER_AUTH` (ADR-022, amending ADR-008); with both
    off the behaviour is exactly as it was. **There is always a current user** — a
    seeded placeholder when login is off — so nothing stores a nullable author.
 
@@ -170,7 +171,7 @@ the code they describe, never in a follow-up.
 
 - Type hints on every signature, Google-style docstrings, `pathlib`, `logging` (never
   `print`), no magic numbers, pure functions where possible, `argparse` CLI.
-- `src/vigilai/` subpackages: `parsers/ rules/ pipeline/ checks/ llm/ db/ api/ worker/
+- `src/greenlight_ai/` subpackages: `parsers/ rules/ pipeline/ checks/ llm/ db/ api/ worker/
   report/ auth/ config/ training/` + `cli.py`. Dependencies point down; `api/` never imports `pipeline/`.
 - Pydantic v2 at boundaries only (LLM output schemas, API wire models, config).
 - Prompts are versioned; the version is part of every cache key.

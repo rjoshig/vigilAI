@@ -42,7 +42,7 @@ npm run build         # production build
 - **Server Components by default.** Add `"use client"` only for state, effects, refs,
   browser APIs, or event handlers, and push it to the leaf.
 - Keep `reactStrictMode: true`.
-- **Preserve the `/api/*` rewrite proxy** in `next.config.mjs` (target `VIGILAI_API_URL`,
+- **Preserve the `/api/*` rewrite proxy** in `next.config.mjs` (target `GREENLIGHT_AI_API_URL`,
   default `http://127.0.0.1:8000`) so the browser never hits CORS against FastAPI.
 - `user-ui` serves on **:3000**, `admin-ui` on **:3001**. They never import each other.
   Shared code is duplicated deliberately (two small apps) until an ADR says otherwise.

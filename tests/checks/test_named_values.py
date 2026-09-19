@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from vigilai.checks.named_values import NamedValue, resolve, resolve_all, to_number
-from vigilai.parsers import parser_for
-from vigilai.parsers.base import ReportDocument, ReportKind
+from greenlight_ai.checks.named_values import NamedValue, resolve, resolve_all, to_number
+from greenlight_ai.parsers import parser_for
+from greenlight_ai.parsers.base import ReportDocument, ReportKind
 
 
 @pytest.fixture()

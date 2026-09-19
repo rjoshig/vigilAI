@@ -29,7 +29,7 @@ The model never needs sample rows to do its job. If a stage seems to need one, t
 
 ## The adapter contract (ADR-004)
 
-- Only `src/vigilai/llm/` makes network calls to a model. Everything else calls
+- Only `src/greenlight_ai/llm/` makes network calls to a model. Everything else calls
   `LLMClient.complete(system, user, schema)` and gets an `LLMResult` (text, parsed JSON,
   token counts, latency).
 - Provider (`openai` | `anthropic` | `mock`), base URL, model, max tokens, temperature 0,

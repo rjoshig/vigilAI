@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from vigilai.rules import (
+from greenlight_ai.rules import (
     STATE_CODES,
     AliasTable,
     Interval,

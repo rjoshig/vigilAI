@@ -1,6 +1,6 @@
 # Deployment
 
-How vigilAI runs. Target: **one Linux host running docker-compose** (design.md
+How Greenlight AI runs. Target: **one Linux host running docker-compose** (design.md
 "Architecture"), behind a reverse proxy that terminates TLS. This page will fill in as the
 phases land; sections marked `TODO(human)` need in-house facts.
 
@@ -25,11 +25,11 @@ file is gitignored and never contains customer data.
 | `LLM_LOG_PROMPTS` | Log prompt text. **Never true in production** | `false` |
 | `LLM_PROMPT_VERSION` | Part of every cache key | 1 |
 | `DATABASE_URL`, `POSTGRES_*` | Postgres connection | compose defaults |
-| `VIGILAI_DATA_DIR` | The shared volume mount (uploads, reports, PDFs) | `/data` in containers |
-| `VIGILAI_RETENTION_DAYS` | Purge window | 90 |
-| `VIGILAI_MAX_UPLOAD_MB` | Upload size limit | 50 |
-| `VIGILAI_API_URL` | Where the UIs proxy `/api/*` | `http://api:8000` |
-| `VIGILAI_CORS_ORIGINS` | Allowed origins (the two UI URLs) | localhost dev origins |
+| `GREENLIGHT_AI_DATA_DIR` | The shared volume mount (uploads, reports, PDFs) | `/data` in containers |
+| `GREENLIGHT_AI_RETENTION_DAYS` | Purge window | 90 |
+| `GREENLIGHT_AI_MAX_UPLOAD_MB` | Upload size limit | 50 |
+| `GREENLIGHT_AI_API_URL` | Where the UIs proxy `/api/*` | `http://api:8000` |
+| `GREENLIGHT_AI_CORS_ORIGINS` | Allowed origins (the two UI URLs) | localhost dev origins |
 
 Environment matrix (design.md "Switching environments"):
 
@@ -90,8 +90,8 @@ confirmed with a real OSL.
 One setting decides, and nothing else in the code or the compose file changes:
 
 ```bash
-DATABASE_URL=sqlite+pysqlite:///./data/vigilai.db            # default; needs nothing
-DATABASE_URL=postgresql+psycopg://vigilai:vigilai@postgres:5432/vigilai
+DATABASE_URL=sqlite+pysqlite:///./data/greenlight-ai.db            # default; needs nothing
+DATABASE_URL=postgresql+psycopg://greenlight_ai:greenlight_ai@postgres:5432/greenlight_ai
 ```
 
 **SQLite** is right for a laptop, a demo, and a single-worker in-house pilot. It needs no
@@ -121,7 +121,7 @@ be done from a development checkout and are what Phase 6 hands to the platform t
 - [ ] `DATABASE_URL` points at the intended backend, and the startup log line confirms
       it (ADR-017). Compose sets Postgres; anything else is SQLite by default.
 - [ ] `alembic upgrade head` has run. The api container does this on start.
-- [ ] `VIGILAI_DATA_DIR` is a mounted volume, not a container-local path, or every
+- [ ] `GREENLIGHT_AI_DATA_DIR` is a mounted volume, not a container-local path, or every
       uploaded file and frozen report disappears on restart.
 - [ ] `python scripts/purge.py --dry-run` reports what you expect before the first real
       purge. The worker schedules a sweep every 24 hours by itself; no cron entry is

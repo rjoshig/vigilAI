@@ -40,7 +40,7 @@ is a shape. The row itself is not.
 `.gitignore` blocks `*.docx` and `*.xlsx` outside `tests/fixtures/` as a backstop.
 **Check it is still in force before the first file lands on that machine**, and keep the
 real files outside the working tree entirely — a sibling directory such as
-`../vigilai-real/` — so no accident can stage them.
+`../greenlight-ai-real/` — so no accident can stage them.
 
 ---
 
@@ -48,7 +48,7 @@ real files outside the working tree entirely — a sibling directory such as
 
 The intended interaction is conversational and one artifact at a time:
 
-> "Look at `../vigilai-real/osl-acme-q3.docx` and tell me what needs to change."
+> "Look at `../greenlight-ai-real/osl-acme-q3.docx` and tell me what needs to change."
 
 Claude should then do the whole loop below without further prompting, and **stop at the
 proposal**. It applies nothing until the user says so.
@@ -175,7 +175,7 @@ detail.
 - [ ] `cp .env.example .env`; leave `DATABASE_URL` on SQLite (ADR-017) unless several
       workers are needed.
 - [ ] Confirm `.gitignore` still blocks `*.docx` / `*.xlsx` outside `tests/fixtures/`.
-- [ ] Put the real files **outside** the working tree, e.g. `../vigilai-real/`.
+- [ ] Put the real files **outside** the working tree, e.g. `../greenlight-ai-real/`.
 - [ ] Point `LLM_*` at the available model and run
       `python scripts/golden_set.py --provider <provider> --out docs/benchmarks/phase-2.md`
       to get a baseline before any prompt changes. This also closes Phase 2 criterion 2.
@@ -187,7 +187,7 @@ detail.
       paste into a conversation, which is the whole point: it is how a real file gets
       discussed without being shared.
 - [ ] A `--redact-check` mode that scans its own output with
-      `vigilai/llm/tripwire.py` before printing, so the tool cannot leak through the
+      `greenlight_ai/llm/tripwire.py` before printing, so the tool cannot leak through the
       thing built to prevent leaks.
 
 **Per-artifact fit** · ⬜ not started

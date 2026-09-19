@@ -10,8 +10,8 @@ import pickle
 
 import pytest
 
-from vigilai.llm import LLMSettings, MockClient
-from vigilai.llm.tripwire import PATTERNS, PiiDetected, assert_clean, scan
+from greenlight_ai.llm import LLMSettings, MockClient
+from greenlight_ai.llm.tripwire import PATTERNS, PiiDetected, assert_clean, scan
 
 #: Text the pipeline legitimately sends: OSL prose, config blocks, aggregate values.
 LEGITIMATE = [

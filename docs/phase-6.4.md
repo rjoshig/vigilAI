@@ -38,7 +38,7 @@ observation in the queue, and the ordinary loop turns it into a rule a person ap
 
 ### 6.4a — The mode indicator · ✅ complete
 
-- [x] A small status line under the vigilAI mark in the user app's sidebar: **Train AI
+- [x] A small status line under the Greenlight AI mark in the user app's sidebar: **Train AI
       mode** with a green dot when on and a grey dot when off. Read from
       `GET /training/config`, which already exists, and updated without a reload when
       an administrator flips the switch (the config is re-read on navigation, and the

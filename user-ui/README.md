@@ -23,12 +23,12 @@ npm install
 npm run dev                 # http://localhost:3000
 ```
 
-The app talks to `/api/*`, which `next.config.mjs` rewrites to `VIGILAI_API_URL`
+The app talks to `/api/*`, which `next.config.mjs` rewrites to `GREENLIGHT_AI_API_URL`
 (default `http://127.0.0.1:8000`), so the browser never meets CORS. Start the API with:
 
 ```bash
-cd .. && uvicorn vigilai.api.app:get_app --factory --reload
-cd .. && python -m vigilai.worker.app        # in another terminal
+cd .. && uvicorn greenlight_ai.api.app:get_app --factory --reload
+cd .. && python -m greenlight_ai.worker.app        # in another terminal
 ```
 
 ## Gates

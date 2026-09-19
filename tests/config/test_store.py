@@ -12,9 +12,9 @@ import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.config import secrets
-from vigilai.config.registry import SETTINGS, SETTINGS_BY_KEY
-from vigilai.config.store import (
+from greenlight_ai.config import secrets
+from greenlight_ai.config.registry import SETTINGS, SETTINGS_BY_KEY
+from greenlight_ai.config.store import (
     clear_setting,
     effective,
     fallback,
@@ -23,9 +23,9 @@ from vigilai.config.store import (
     resolve,
     write_setting,
 )
-from vigilai.db import models
-from vigilai.db.session import create_all, create_engine, session_factory
-from vigilai.db.settings import DbSettings
+from greenlight_ai.db import models
+from greenlight_ai.db.session import create_all, create_engine, session_factory
+from greenlight_ai.db.settings import DbSettings
 
 
 @pytest.fixture()
@@ -124,7 +124,7 @@ def test_every_change_is_recorded_with_its_previous_value(session: Session) -> N
 def test_a_secret_is_never_returned_by_resolution(session: Session) -> None:
     """The console learns that one is set, and nothing more."""
     key = Fernet.generate_key().decode()
-    env = {"VIGILAI_SECRET_KEY": key}
+    env = {"GREENLIGHT_AI_SECRET_KEY": key}
     write_setting(session, "llm.api_key", "sk-secret-value-9zzz", actor="Dana", environ=env)
 
     resolved = resolve(session, "llm.api_key", env)
@@ -136,7 +136,7 @@ def test_a_secret_is_never_returned_by_resolution(session: Session) -> None:
 
 def test_a_secret_is_stored_encrypted(session: Session) -> None:
     """What is in the table is ciphertext, not the key."""
-    env = {"VIGILAI_SECRET_KEY": Fernet.generate_key().decode()}
+    env = {"GREENLIGHT_AI_SECRET_KEY": Fernet.generate_key().decode()}
     write_setting(session, "llm.api_key", "sk-plaintext-abcd", actor="Dana", environ=env)
     row = session.query(models.AppSetting).filter_by(key="llm.api_key").one()
     assert "sk-plaintext" not in str(row.value)
@@ -147,7 +147,7 @@ def test_a_secret_change_records_that_it_changed_and_nothing_else(
     session: Session,
 ) -> None:
     """The audit trail must not become the place the secret leaks."""
-    env = {"VIGILAI_SECRET_KEY": Fernet.generate_key().decode()}
+    env = {"GREENLIGHT_AI_SECRET_KEY": Fernet.generate_key().decode()}
     write_setting(session, "llm.api_key", "sk-plaintext-abcd", actor="Dana", environ=env)
     row = session.query(models.ConfigChange).filter_by(key="llm.api_key").one()
     assert row.new_value == "(secret)"
@@ -173,9 +173,13 @@ def test_a_rotated_master_key_still_decrypts(session: Session) -> None:
     """MultiFernet from the first day, so rotation is not a migration under pressure."""
     old, new = Fernet.generate_key().decode(), Fernet.generate_key().decode()
     write_setting(
-        session, "llm.api_key", "sk-rotate-me", actor="Dana", environ={"VIGILAI_SECRET_KEY": old}
+        session,
+        "llm.api_key",
+        "sk-rotate-me",
+        actor="Dana",
+        environ={"GREENLIGHT_AI_SECRET_KEY": old},
     )
-    rotated = {"VIGILAI_SECRET_KEY": f"{new},{old}"}
+    rotated = {"GREENLIGHT_AI_SECRET_KEY": f"{new},{old}"}
     assert read_secret(session, "llm.api_key", rotated) == "sk-rotate-me"
 
 
@@ -207,7 +211,7 @@ def test_every_setting_belongs_to_a_listed_group() -> None:
     GROUPS tuple did not list, and the endpoint silently dropped them while every
     other test still passed.
     """
-    from vigilai.config.registry import GROUPS
+    from greenlight_ai.config.registry import GROUPS
 
     orphans = {spec.key: spec.group for spec in SETTINGS if spec.group not in GROUPS}
     assert not orphans, f"settings in no listed group: {orphans}"
@@ -215,6 +219,6 @@ def test_every_setting_belongs_to_a_listed_group() -> None:
 
 def test_every_group_holds_at_least_one_setting() -> None:
     """An empty section is a heading with nothing under it."""
-    from vigilai.config.registry import GROUPS, group_of
+    from greenlight_ai.config.registry import GROUPS, group_of
 
     assert all(group_of(group) for group in GROUPS)

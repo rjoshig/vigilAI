@@ -1,4 +1,4 @@
-# vigilAI — User training
+# Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
 `http://<host>:3000`. **Last aligned with the code:** 2026-09-19, after Phase 6.4.
@@ -31,7 +31,11 @@ Login may be off or on, depending on how the deployment is configured.
 
 ## The sidebar
 
-Under the vigilAI mark is a status line: **Train AI mode on** with a green dot, or
+The look of the app is one of three palettes chosen by the deployment (default,
+light-blue-yellow, or classic-teal); the sun/moon button at the foot of the sidebar
+switches the current palette between its light and dark variants.
+
+Under the Greenlight AI mark is a status line: **Train AI mode on** with a green dot, or
 **Train AI mode off** with a grey dot. When it is on, some controls exist that do not
 otherwise, and each carries a small **Train AI** tag. Everything you type into a tagged
 control is recorded and reviewed by an administrator before it changes anything. See

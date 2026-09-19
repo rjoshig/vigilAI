@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from synthetic_model import FIXTURE_ALIASES, build_client
-from vigilai.cli import EXIT_FAILED, EXIT_OK, EXIT_USAGE, build_parser, main, run_command
+from greenlight_ai.cli import EXIT_FAILED, EXIT_OK, EXIT_USAGE, build_parser, main, run_command
 
 
 def _argv(root: Path, case: dict[str, Any], out: Path, *extra: str) -> list[str]:
