@@ -102,6 +102,8 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   configuration id that reach the model and the admin queue
 - [`docs/phase-6.5.md`](docs/phase-6.5.md) — **training documentation, kept current**: a
   recurring phase re-entered after every milestone
+- [`docs/phase-6.6.md`](docs/phase-6.6.md) — **themes**: named themes, a picker that
+  steps through them, and the default set from the admin console
 - [`docs/user-training.md`](docs/user-training.md) — **user training**: the user app,
   screen by screen, for associates
 - [`docs/admin-training.md`](docs/admin-training.md) — **administrator training**: the

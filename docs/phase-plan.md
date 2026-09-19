@@ -21,6 +21,7 @@ risk.
 | 6.3 | Runtime settings in the admin console — the console overrides `.env`, which overrides the defaults; model, login, throughput, uploads, retention | 1 week | ✅ **complete** | [phase-6.3.md](phase-6.3.md) |
 | 6.4 | Showing the mode, and notes that follow a configuration — a Train AI indicator in both apps; standing notes on a configuration id that reach the model as background and the admin queue as comments | 1 week | ✅ **complete** — one test open | [phase-6.4.md](phase-6.4.md) |
 | 6.5 | Training documentation, kept current — `user-training.md` and `admin-training.md`, re-read after every milestone and checked every ten commits | recurring | 🟡 **in progress** — by design, never closed | [phase-6.5.md](phase-6.5.md) |
+| 6.6 | Themes — named themes shared by both apps, a picker that steps through them, and the default and lock set from the admin console | days | ⬜ **not started** — specified | [phase-6.6.md](phase-6.6.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of

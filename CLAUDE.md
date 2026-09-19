@@ -62,6 +62,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.3 | Runtime settings in the admin console: console overrides `.env` overrides defaults (ADR-023) | `docs/phase-6.3.md` | ✅ complete |
 | 6.4 | Train AI indicator in both apps; standing notes on a configuration id, reaching the model as background and the admin queue as comments | `docs/phase-6.4.md` | ✅ complete — one test open |
 | 6.5 | Training documentation, kept current: `docs/user-training.md` and `docs/admin-training.md` | `docs/phase-6.5.md` | 🟡 recurring — re-entered after every milestone |
+| 6.6 | Themes: named themes, a step-through picker, the default and lock set from the admin console | `docs/phase-6.6.md` | ⬜ not started — specified |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
