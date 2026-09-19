@@ -164,6 +164,10 @@ class Run(Base):
     outputs_validated: Mapped[int] = mapped_column(sa.Integer, default=0)
     #: Anything else about the delivery the reviewer should know.
     delivery_notes: Mapped[str] = mapped_column(sa.Text, default="")
+    #: The configuration notes in force when the run was submitted (ADR-024), copied
+    #: here so the run page and the frozen report show what the model was told even
+    #: after the note is edited or switched off.
+    config_notes_snapshot: Mapped[Any] = mapped_column(Json, default=list)
     rules_version: Mapped[int] = mapped_column(sa.Integer, default=1)
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
@@ -635,8 +639,18 @@ class TrainingObservation(Base):
     author_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
     author: Mapped[str] = mapped_column(sa.String(200), default="")
 
-    #: reconciliation · field_constraint · correction · note
+    #: reconciliation · field_constraint · correction · note · config_note
     kind: Mapped[str] = mapped_column(sa.String(30), default="reconciliation", index=True)
+    #: For a ``config_note``: the ETL configuration it follows (ADR-024). A note is
+    #: guidance for every run of that configuration until it is switched off, and an
+    #: observation in the queue at the same time.
+    configuration_id: Mapped[str] = mapped_column(sa.String(200), default="", index=True)
+    #: Whether a config note still applies. Switched off rather than deleted, so the
+    #: record of what someone said survives.
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    #: Earlier wordings, oldest first: ``{"version", "statement", "at", "by"}``. An edit
+    #: replaces the text and keeps what it replaced.
+    revisions: Mapped[Any] = mapped_column(Json, default=list)
     #: The typed selections this points at: report cells, OSL sections, config paths.
     #: The anchor is what makes reliable synthesis possible; prose alone is a guess.
     anchors: Mapped[Any] = mapped_column(Json, default=list)

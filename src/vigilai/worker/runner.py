@@ -61,6 +61,7 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
         deliverable_count=run.deliverable_count,
         outputs_validated=run.outputs_validated,
         delivery_notes=run.delivery_notes,
+        config_notes=tuple(str(n) for n in (run.config_notes_snapshot or [])),
         artifact_context={
             artifact.key: artifact.ai_context
             for artifact in catalog.load_artifacts(session)
@@ -143,7 +144,7 @@ def build_context(
         report_parts=_parts(session, run, data_dir),
         client=client,
         customer=run.customer_name,
-        admin=repository.load_admin_config(session, run.customer_name),
+        admin=repository.load_admin_config(session, run.customer_name, run.configuration_id),
         guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
         masked_columns=repository.load_masked_columns(session),

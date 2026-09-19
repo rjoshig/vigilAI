@@ -34,7 +34,7 @@ pass or fail. If an administrator wants it to *enforce* something, the note is a
 observation in the queue, and the ordinary loop turns it into a rule a person approves
 (ADR-021). One mechanism for context, one for rules, and the note feeds both.
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
 ### 6.4a — The mode indicator · ⬜ not started
 
@@ -56,40 +56,40 @@ observation in the queue, and the ordinary loop turns it into a rule a person ap
       administrator reading the queue should see at once whether new observations can
       still arrive.
 
-### 6.4b — Notes that follow a configuration · ⬜ not started
+### 6.4b — Notes that follow a configuration · 🟡 in progress
 
 The configuration id is the order's ETL configuration number, the Solution Canvas
 config number. The new-run form says so under the field (done 2026-09-19), because a
 note that follows a configuration only makes sense to someone who knows what the
 field holds.
 
-- [ ] `config_notes`: `configuration_id`, `text`, `author`, `author_user_id`,
-      `is_active`, `version`, `created_at`, `updated_at`. Tied to the configuration
-      id, so it applies to every version of that configuration and every customer
+- [x] A note is a `training_observations` row of kind `config_note` carrying its
+      `configuration_id`, `is_active`, and `revisions`, rather than a table of its own:
+      one queue, one record (ADR-024). Tied to the configuration id, so it applies to every version of that configuration and every customer
       that runs it, until someone switches it off.
 - [ ] The note is written from two places: the new-run form, beside the configuration
       id, and the config history page, on the configuration's row. Both show any note
       already in force so a person adds to it rather than writing a second one.
-- [ ] **The note reaches the model as background on every run that uses the
+- [x] **The note reaches the model as background on every run that uses the
       configuration**, through the existing guidance preamble (`pipeline/guidance.py`),
       labelled as a configuration note. Empty means nothing is added, which keeps the
       ADR-020 rule that configuring nothing changes nothing.
-- [ ] **The note appears in the admin training queue** as a configuration-specific
+- [x] **The note appears in the admin training queue** as a configuration-specific
       comment, with its author and the configuration it belongs to. From there an
       administrator can do what they do with any observation: leave it as guidance,
       or synthesize it into a candidate rule scoped to that configuration.
-- [ ] The run page shows the note that was in force when the run was submitted, and
+- [x] The run page shows the note that was in force when the run was submitted, and
       the frozen report records it, because a reviewer reading a finding needs to
       know what context the model was given.
-- [ ] Edits are versioned and the old text kept, for the same reason observations are:
+- [x] Edits are versioned and the old text kept, for the same reason observations are:
       the record of what someone said is worth more than the row it occupies.
-- [ ] Rules scoped to a configuration: the rule scope gains `config:<id>` beside
+- [x] Rules scoped to a configuration: the rule scope gains `config:<id>` beside
       `all`, a customer name, and `programme:CODE`, so a rule learned from a
       configuration note applies only to runs of that configuration.
 
-### 6.4c — Documentation and tests · ⬜ not started
+### 6.4c — Documentation and tests · 🟡 in progress
 
-- [ ] ADR-024, written before the code: a configuration note is guidance and an
+- [x] ADR-024, written before the code: a configuration note is guidance and an
       observation at once, never a rule on its own.
 - [ ] `design.md`, `architecture.md`, `glossary.md` (configuration note), and the
       user-ui and admin-ui READMEs.

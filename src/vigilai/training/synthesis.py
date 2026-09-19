@@ -369,6 +369,11 @@ def _scope_for(observations: Sequence[models.TrainingObservation]) -> str:
         that holds for most records and not all; widening on evidence is easy, and
         narrowing after the complaints is not.
     """
+    configs = {o.configuration_id for o in observations if o.kind == "config_note"}
+    if configs and len(configs) == 1 and all(o.kind == "config_note" for o in observations):
+        # A rule learned from a configuration note applies to that configuration and
+        # no other; that is the whole point of writing the note there (ADR-024).
+        return f"config:{configs.pop()}"
     hints = {observation.scope_hint for observation in observations}
     customers = {
         observation.customer_name for observation in observations if observation.customer_name
