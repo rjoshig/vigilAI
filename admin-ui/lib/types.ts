@@ -100,6 +100,12 @@ export interface ScopeIn {
   description: string;
   /** Compliance expectations true of every run in the programme, as background. */
   standing_instructions: string;
+  /**
+   * Words that mark a delivery as this programme's. The pipeline greps the OSL, the
+   * configuration, and the report headers for them, and raises a finding when a run
+   * is declared as a programme none of whose words appear.
+   */
+  keywords: string[];
   is_active: boolean;
   sort_order: number;
 }
@@ -107,6 +113,36 @@ export interface ScopeIn {
 export interface Scope extends ScopeIn {
   id: number;
   runs_using: number;
+}
+
+/**
+ * How serious a breach of a programme rule is. The model names what a delivery
+ * breaks; code turns the strictness into the finding's severity (must is high,
+ * should medium, advisory low).
+ */
+export type Strictness = "must" | "should" | "advisory";
+
+export const STRICTNESS_LEVELS: Strictness[] = ["must", "should", "advisory"];
+
+/** What an administrator writes to create or edit a programme rule. */
+export interface ProgrammeRuleIn {
+  scope_code: string;
+  title: string;
+  text: string;
+  strictness: Strictness;
+  sort_order?: number;
+}
+
+/**
+ * One rule a programme's deliveries are read against. Its state is changed through
+ * the rules screen's action endpoint with the kind `programme_rule`, not here.
+ */
+export interface ProgrammeRule extends ProgrammeRuleIn {
+  id: number;
+  sort_order: number;
+  state: string;
+  origin: string;
+  created_by: string;
 }
 
 export interface NamedValueIn {

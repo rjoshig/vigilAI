@@ -194,7 +194,7 @@ DEFAULT_SCOPES: Final[tuple[ScopeSpec, ...]] = (
         label="Archives",
         description="Historical or archival extracts.",
         sort_order=30,
-        keywords=("archive", "archival", "historical", "as of"),
+        keywords=("archive", "archival", "historical", "snapshot"),
     ),
     ScopeSpec(
         code="OTHER",
