@@ -97,6 +97,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   review, and suggestion (ADR-022)
 - [`docs/phase-6.3.md`](docs/phase-6.3.md) — **runtime settings in the admin console**:
   the console overrides `.env`, which overrides the built-in defaults (ADR-023)
+- [`docs/phase-6.4.md`](docs/phase-6.4.md) — **showing the mode, and notes that follow a
+  configuration**: a Train AI indicator in both apps, and standing notes on a
+  configuration id that reach the model and the admin queue
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
