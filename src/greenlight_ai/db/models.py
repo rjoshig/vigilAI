@@ -521,6 +521,11 @@ class RunScope(Base):
     #: Short code shown in the UI and stored on the run, e.g. ``"AM"``.
     code: Mapped[str] = mapped_column(sa.String(20), unique=True, index=True)
     label: Mapped[str] = mapped_column(sa.String(120))
+    #: Words and phrases that mark a delivery as belonging to this programme. The
+    #: classification check scans the OSL, the configuration, and the report headers
+    #: for them; a run declared as one programme with none of its words and plenty of
+    #: another's gets a finding (ADR-026).
+    keywords: Mapped[Any] = mapped_column(Json, default=list)
     description: Mapped[str] = mapped_column(sa.Text, default="")
     #: Compliance expectations that hold for every run in this scope, in plain
     #: language. Passed to the model as context; never treated as an OSL requirement.
@@ -750,6 +755,33 @@ class FieldConstraint(Base):
     state: Mapped[str] = mapped_column(sa.String(20), default="active", index=True)
     origin: Mapped[str] = mapped_column(sa.String(20), default="admin")
     candidate_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True, index=True)
+
+
+class ProgrammeRule(Base):
+    """A rule true of every delivery in a programme, written in plain words (ADR-026).
+
+    The model reads for breaches; code sets the severity from the strictness, so the
+    model never grades. Several per programme, each with its own strictness.
+    """
+
+    __tablename__ = "programme_rules"
+
+    id: Mapped[int] = _pk()
+    scope_code: Mapped[str] = mapped_column(sa.String(20), index=True)
+    title: Mapped[str] = mapped_column(sa.String(200))
+    text: Mapped[str] = mapped_column(sa.Text, default="")
+    #: must · should · advisory. Maps to high, medium, low.
+    strictness: Mapped[str] = mapped_column(sa.String(20), default="should")
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+    #: draft · shadow · active · disabled · deleted (ADR-021).
+    state: Mapped[str] = mapped_column(sa.String(20), default="active", index=True)
+    origin: Mapped[str] = mapped_column(sa.String(20), default="admin")
+    candidate_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
+    scope: Mapped[str] = mapped_column(sa.String(200), default="all")
+    reasoning: Mapped[str] = mapped_column(sa.Text, default="")
     created_by: Mapped[str] = mapped_column(sa.String(200), default="")
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
     deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True, index=True)

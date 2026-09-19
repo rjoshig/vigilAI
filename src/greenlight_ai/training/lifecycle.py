@@ -41,7 +41,7 @@ __all__ = [
 
 _LOG: Final = logging.getLogger(__name__)
 
-RuleKind = Literal["check", "compliance_rule", "field_constraint"]
+RuleKind = Literal["check", "compliance_rule", "field_constraint", "programme_rule"]
 RuleState = Literal["draft", "shadow", "active", "disabled", "deleted"]
 
 #: Every state a rule can be in. ``draft`` and ``shadow`` exist so that "suggested"
@@ -63,6 +63,7 @@ _TABLES: Final[dict[str, Any]] = {
     "check": models.CheckDefinitionRow,
     "compliance_rule": models.ComplianceRuleRow,
     "field_constraint": models.FieldConstraint,
+    "programme_rule": models.ProgrammeRule,
 }
 
 
@@ -260,6 +261,8 @@ def purge_deleted_rules(session: Session) -> int:
                 row.requirement = {}
             if hasattr(row, "value"):
                 row.value = {}
+            if hasattr(row, "text"):
+                row.text = ""
             purged += 1
             _LOG.info("%s %d is now permanently deleted; a tombstone remains", kind, row.id)
     session.flush()

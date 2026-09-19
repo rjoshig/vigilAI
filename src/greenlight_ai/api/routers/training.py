@@ -837,6 +837,7 @@ def _rule_rows(session: Session) -> list[tuple[str, Any]]:
         ("check", models.CheckDefinitionRow),
         ("compliance_rule", models.ComplianceRuleRow),
         ("field_constraint", models.FieldConstraint),
+        ("programme_rule", models.ProgrammeRule),
     ):
         rows.extend((kind, row) for row in session.execute(sa.select(table)).scalars())
     return rows
@@ -881,6 +882,8 @@ def _summary(rule_kind: str, row: Any) -> str:
     """
     if rule_kind == "field_constraint":
         return f"{row.field} {row.constraint} {row.value}"
+    if rule_kind == "programme_rule":
+        return f"{row.scope_code} {row.strictness}: {row.text}"
     if rule_kind == "check":
         return str(row.expression or row.instruction)
     return str((row.requirement or {}).get("json_path_contains", ""))
@@ -934,7 +937,7 @@ def collect_rules(session: Session, state: str = "active", search: str = "") -> 
         if state != "all" and row.state != state:
             continue
         summary = _summary(rule_kind, row)
-        name = getattr(row, "name", "") or getattr(row, "field", "")
+        name = getattr(row, "name", "") or getattr(row, "title", "") or getattr(row, "field", "")
         if needle and needle not in f"{name} {summary} {row.reasoning}".lower():
             continue
 

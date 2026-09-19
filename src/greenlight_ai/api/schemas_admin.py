@@ -131,6 +131,9 @@ class ScopeIn(BaseModel):
     standing_instructions: str = ""
     is_active: bool = True
     sort_order: int = 100
+    #: Words that mark a delivery as this programme's; the classification check
+    #: scans the inputs for them (ADR-026).
+    keywords: list[str] = Field(default_factory=list)
 
 
 class ScopeOut(ScopeIn):
@@ -329,3 +332,25 @@ class UsageOut(BaseModel):
     false_positive_rate: float = 0.0
     findings_by_type: dict[str, int] = Field(default_factory=dict)
     decisions: dict[str, int] = Field(default_factory=dict)
+
+
+class ProgrammeRuleIn(BaseModel):
+    """A rule true of every delivery in a programme (ADR-026)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scope_code: str = Field(min_length=2, max_length=20)
+    title: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=3, max_length=4000)
+    #: must (a breach is high), should (medium), advisory (low).
+    strictness: Literal["must", "should", "advisory"] = "should"
+    sort_order: int = 100
+
+
+class ProgrammeRuleOut(ProgrammeRuleIn):
+    """A stored programme rule."""
+
+    id: int
+    state: str = "active"
+    origin: str = "admin"
+    created_by: str = ""

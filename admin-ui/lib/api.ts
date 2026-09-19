@@ -22,6 +22,8 @@ import type {
   NamedValueIn,
   NewUser,
   Observation,
+  ProgrammeRule,
+  ProgrammeRuleIn,
   ProviderTestResult,
   Rule,
   RuleActionWord,
@@ -185,6 +187,24 @@ export const api = {
   /** Delete a programme. Refused when a run already names it. */
   deleteScope: (code: string): Promise<void> =>
     request<void>(`/scopes/${code}`, { method: "DELETE" }),
+
+  /** The rules of one programme, or of every programme when no code is given. */
+  listProgrammeRules: (scopeCode = ""): Promise<ProgrammeRule[]> =>
+    request<ProgrammeRule[]>(
+      `/programme-rules${scopeCode ? `?scope_code=${encodeURIComponent(scopeCode)}` : ""}`
+    ),
+
+  /** Add a rule to a programme. 404 when the programme does not exist. */
+  createProgrammeRule: (payload: ProgrammeRuleIn): Promise<ProgrammeRule> =>
+    request<ProgrammeRule>("/programme-rules", json("POST", payload)),
+
+  /**
+   * Edit a rule's wording or strictness. Its state is not edited here: that goes
+   * through `actOnRule` with the kind `programme_rule`, so the typed confirmation
+   * and the history apply to it like any other rule.
+   */
+  updateProgrammeRule: (id: number, payload: ProgrammeRuleIn): Promise<ProgrammeRule> =>
+    request<ProgrammeRule>(`/programme-rules/${id}`, json("PATCH", payload)),
 
   /** List the named values, with what each resolves to on the samples. */
   listNamedValues: (): Promise<NamedValue[]> => request<NamedValue[]>("/named-values"),

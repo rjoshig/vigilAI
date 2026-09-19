@@ -437,7 +437,41 @@ def seed_training(session: Any) -> None:
             )
         )
         session.flush()
-    _LOG.info("seeded the training queue: 5 observations, 2 candidates, 1 shadow rule")
+    session.add_all(
+        [
+            models.ProgrammeRule(
+                scope_code="AS",
+                title="Opt-outs excluded",
+                text="Every prescreen delivery excludes accounts that opted out of firm offers.",
+                strictness="must",
+                sort_order=10,
+                scope="programme:AS",
+                created_by="Dana Admin",
+            ),
+            models.ProgrammeRule(
+                scope_code="AS",
+                title="Score bands named as in the OSL",
+                text="Score bands in the reports are named exactly as the OSL names them.",
+                strictness="should",
+                sort_order=20,
+                scope="programme:AS",
+                created_by="Dana Admin",
+            ),
+            models.ProgrammeRule(
+                scope_code="AM",
+                title="Refresh cadence stated",
+                text="A monitoring delivery states its refresh cadence somewhere in the OSL.",
+                strictness="advisory",
+                sort_order=10,
+                scope="programme:AM",
+                created_by="Dana Admin",
+            ),
+        ]
+    )
+    session.flush()
+    _LOG.info(
+        "seeded the training queue: 5 observations, 2 candidates, 1 shadow rule, 3 programme rules"
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

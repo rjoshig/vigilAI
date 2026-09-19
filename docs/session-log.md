@@ -11,7 +11,7 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**; **6 in progress**; **7 dormant** (runs only on request) |
+| Phases complete | **0–5**, **6.1–6.4**, **6.7**; **6 in progress**; **6.6 specified**; **7 dormant** (runs only on request) |
 | Branch | `chore/rename-greenlight-ai`, cut from `dev`; `main` and `dev` are one promotion apart |
 | Last updated | 2026-09-19 |
 
@@ -102,6 +102,28 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (programme rules and the programme check)
+
+**Branch:** `feature/programme-rules` · **Status:** backend complete, 886 tests;
+admin screen in progress.
+
+### What was completed
+
+- Programme rules: several per programme, each with a strictness (must, should,
+  advisory). Stage 8 has the model read the delivery against them and name breaches
+  with evidence; code sets the severity from the strictness and discards any rule id
+  the model invents. A fourth rule kind on the Rules screen, with the full lifecycle.
+- The programme check: admin-editable keywords per programme, seeded; stage 7 greps
+  the OSL, configuration, and report headers, and a run declared as one programme
+  that reads like another gets a high finding naming both.
+- ADR-026, Phase 6.7, migration `64aeccf26047` verified up and down.
+
+### Next concrete action
+
+Merge the admin screen, open the pull request against `dev`.
 
 ---
 

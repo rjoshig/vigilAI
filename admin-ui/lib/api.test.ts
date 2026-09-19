@@ -391,6 +391,65 @@ describe("the admin API client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/rules/field_constraint/9/history");
   });
 
+  it("lists every programme's rules when no programme is named", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listProgrammeRules();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/programme-rules");
+  });
+
+  it("passes the programme code through only when one is given", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listProgrammeRules("AS");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/programme-rules?scope_code=AS");
+  });
+
+  it("creates a programme rule with a POST body", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 3, state: "active" }, 201));
+    await api.createProgrammeRule({
+      scope_code: "AS",
+      title: "Opt-out honoured",
+      text: "Every delivery excludes opted-out consumers.",
+      strictness: "must",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/programme-rules");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      scope_code: "AS",
+      title: "Opt-out honoured",
+      text: "Every delivery excludes opted-out consumers.",
+      strictness: "must",
+    });
+  });
+
+  it("edits a programme rule with a PATCH on its own path", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 3, strictness: "should" }));
+    await api.updateProgrammeRule(3, {
+      scope_code: "AS",
+      title: "Opt-out honoured",
+      text: "Every delivery excludes opted-out consumers.",
+      strictness: "should",
+      sort_order: 10,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/programme-rules/3");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body)).toMatchObject({ strictness: "should", sort_order: 10 });
+  });
+
+  it("raises an unknown programme as a 404 when creating a rule", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "unknown programme" }, 404));
+    await expect(
+      api.createProgrammeRule({ scope_code: "NOPE", title: "x", text: "y", strictness: "advisory" })
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("changes a programme rule's state through the rules action endpoint", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 3, state: "disabled" }));
+    await api.actOnRule("programme_rule", 3, "disable", "disable");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/rules/programme_rule/3/action");
+  });
+
   it("reads the first message out of a validation error body", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: [{ msg: "field required" }] }, 422));
     await expect(api.testExpression("")).rejects.toMatchObject({ detail: "field required" });

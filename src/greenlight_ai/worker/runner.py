@@ -62,6 +62,19 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
         outputs_validated=run.outputs_validated,
         delivery_notes=run.delivery_notes,
         config_notes=tuple(str(n) for n in (run.config_notes_snapshot or [])),
+        scope_code=run.scope,
+        programme_rules=tuple(
+            (row.id, row.title, row.text, row.strictness)
+            for row in session.execute(
+                sa.select(models.ProgrammeRule)
+                .where(
+                    models.ProgrammeRule.scope_code == run.scope,
+                    models.ProgrammeRule.state.in_(("active", "shadow")),
+                )
+                .order_by(models.ProgrammeRule.sort_order, models.ProgrammeRule.id)
+            ).scalars()
+        ),
+        programme_keywords={s.code: tuple(s.keywords) for s in catalog.load_scopes(session)},
         artifact_context={
             artifact.key: artifact.ai_context
             for artifact in catalog.load_artifacts(session)

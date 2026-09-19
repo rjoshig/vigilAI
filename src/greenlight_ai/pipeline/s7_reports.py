@@ -87,6 +87,7 @@ def run(context: RunContext) -> None:
                     )
                 )
 
+    _check_programme(context)
     _check_deliverable_count(context)
     _run_field_constraints(context)
     _run_admin_checks(context, settings, customer)
@@ -155,6 +156,94 @@ def _run_field_constraints(context: RunContext) -> None:
                 ),
             )
         )
+
+
+#: How many hits a programme needs before the check believes the inputs are that
+#: programme's. One hit is a coincidence; two words from the list is a pattern.
+_PROGRAMME_HIT_FLOOR: Final[int] = 2
+
+
+def _programme_hits(context: RunContext, words: tuple[str, ...]) -> list[str]:
+    """Which of a programme's words appear in the inputs.
+
+    Args:
+        context: The run context, after stage 1 has parsed everything.
+        words: The programme's keywords.
+
+    Returns:
+        The words found, scanning the OSL text, the configuration's JSON paths and
+        descriptions, and the report sheet names and headers. A grep, not a judgement:
+        it is deliberately simple so it is deliberately explainable.
+    """
+    haystack_parts: list[str] = []
+    if context.osl is not None:
+        haystack_parts.extend(section.as_text() for section in context.osl.sections)
+    if context.config is not None:
+        haystack_parts.extend(block.as_text() for block in context.config.blocks)
+    for document in context.reports.values():
+        for sheet in document.sheets:
+            haystack_parts.append(sheet.name)
+            haystack_parts.extend(sheet.header)
+    haystack = " ".join(haystack_parts).lower()
+    return [word for word in words if word.lower() in haystack]
+
+
+def _check_programme(context: RunContext) -> None:
+    """Confirm the inputs read like the declared programme (ADR-026).
+
+    A user says a run is Account Solicitation; the OSL, the configuration, and the
+    reports usually say so somewhere in their own words. When none of the declared
+    programme's words appear and another programme's do, that is worth a finding
+    before anything else is checked.
+
+    Args:
+        context: The run context, whose ``findings`` this may append to.
+    """
+    guidance = context.guidance
+    keywords = guidance.programme_keywords or {}
+    declared = guidance.scope_code
+    if not declared or declared not in keywords or not keywords[declared]:
+        return
+
+    declared_hits = _programme_hits(context, keywords[declared])
+    if declared_hits:
+        return
+
+    others = {
+        code: _programme_hits(context, words)
+        for code, words in keywords.items()
+        if code != declared and words
+    }
+    strongest = max(others.items(), key=lambda item: len(item[1]), default=("", []))
+    looks_like = strongest[0] if len(strongest[1]) >= _PROGRAMME_HIT_FLOOR else ""
+
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="programme_mismatch",
+            severity="high" if looks_like else "review",
+            title=(
+                f"Declared as {guidance.scope_label or declared}, but the inputs read like "
+                f"{looks_like}"
+                if looks_like
+                else (
+                    f"Declared as {guidance.scope_label or declared}, but none of its "
+                    "words appear in the inputs"
+                )
+            ),
+            detail=(
+                f"Looked for: {', '.join(keywords[declared])}. "
+                + (
+                    f"Found instead: {', '.join(strongest[1])}."
+                    if looks_like
+                    else "Found none of them, and no other programme's words either."
+                )
+                + " Confirm the programme on the run before trusting the programme rules."
+            ),
+            leg="osl_config",
+            evidence=Evidence(osl_ref="whole OSL, configuration, and report headers"),
+        )
+    )
 
 
 def _check_deliverable_count(context: RunContext) -> None:
