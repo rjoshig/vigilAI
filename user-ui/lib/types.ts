@@ -418,3 +418,43 @@ export interface Observation extends ObservationInput {
   /** Earlier wordings of a note, oldest first. Empty until it has been edited. */
   revisions: NoteRevision[];
 }
+
+/** A finding as the drift panel refers to it (ADR-030). */
+export interface DriftFinding {
+  finding_id: string;
+  type: string;
+  severity: Severity;
+  title: string;
+  review_status: string;
+}
+
+export interface DriftRequirement {
+  rule_id: string;
+  req_type: string;
+  source_ref: string;
+  change: "added" | "removed" | "changed";
+  before: string;
+  after: string;
+}
+
+export interface DriftConfigChange {
+  path: string;
+  change: "added" | "removed" | "changed";
+  before: string;
+  after: string;
+}
+
+/** What changed since the previous finalized run of the same configuration. */
+export interface Drift {
+  previous_run_id: number | null;
+  previous_finished_at: string;
+  previous_verdict: string;
+  reason: string;
+  new: DriftFinding[];
+  resolved: DriftFinding[];
+  carried_not_ok: DriftFinding[];
+  requirements: DriftRequirement[];
+  config: DriftConfigChange[];
+  previous_config_version: number | null;
+  config_version: number | null;
+}

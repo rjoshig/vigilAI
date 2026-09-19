@@ -115,6 +115,11 @@ The run page shows the **traceability matrix** and the **findings**, worst first
 - **Configuration notes given to the model** appear above the findings when the
   configuration had any. This is what the model was told as background; it is
   shown so you can judge a finding knowing the context behind it.
+- **Since the previous run** appears when an earlier run of the same configuration
+  id was finalized for this customer. It lists Not OK items from last time that are
+  back (read these first), findings that are new and findings that went away, and
+  what changed in the requirements and the configuration. Compared by code; the
+  model is not involved. The same section is frozen into the report.
 
 ## Generating the report
 

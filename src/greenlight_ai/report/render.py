@@ -20,6 +20,7 @@ from typing import Any, Final, Sequence
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from greenlight_ai.db import models
+from greenlight_ai.db.drift import Drift
 from greenlight_ai.rules.schema import Rule
 
 __all__ = ["RenderedReport", "render_report", "verdict_for", "environment"]
@@ -189,6 +190,7 @@ def render_report(
     calls: Sequence[models.LlmCall],
     generated_by: str = "",
     now: dt.datetime | None = None,
+    drift: Drift | None = None,
 ) -> RenderedReport:
     """Render the frozen report.
 
@@ -260,6 +262,7 @@ def render_report(
             verdict=verdict_for(findings),
             generated_at=generated,
             generated_by=generated_by,
+            drift=drift,
             stats={
                 "duration": _duration(stages),
                 "calls": len(calls),

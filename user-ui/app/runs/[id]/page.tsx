@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 
+import { DriftCard } from "@/components/drift-card";
 import { EvidencePanel } from "@/components/evidence-panel";
 import { ObservationDialog, anchorOf, useTrainingEnabled } from "@/components/observation-dialog";
 import { StageProgress } from "@/components/stage-progress";
@@ -297,6 +298,8 @@ export default function ReviewPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {ready && run.configuration_id ? <DriftCard runId={runId} /> : null}
 
       {ready ? (
         <>

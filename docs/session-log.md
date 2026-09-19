@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.7**, **6.8**; **6 in progress**; **6.6 specified**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/validation-guides` (Phase 6.8), against `dev` |
+| Phases complete | **0–5**, **6.1–6.4**, **6.7–6.9**; **6 in progress**; **6.6 specified**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/delivery-drift` (Phase 6.9), against `dev` |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,23 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (Phase 6.9: delivery drift)
+
+**Branch:** `feature/delivery-drift` · **Status:** complete, 932 tests, gates green.
+
+### What was completed
+
+- `db/drift.py`, `GET /runs/{id}/drift`, the review-screen card, and the frozen
+  report section: new, resolved and carried-over Not OK findings, requirements whose
+  value changed, and the configuration diff by path, all against the previous
+  finalized run of the same configuration. ADR-030; the design-doc question ticked.
+
+### Next concrete action
+
+Phase 6.6, the theme picker; then browser tests.
 
 ---
 

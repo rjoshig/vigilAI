@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from greenlight_ai.api.deps import CurrentUser, current_user, get_data_dir, get_session
-from greenlight_ai.db import models, repository
+from greenlight_ai.db import models, repository, drift
 from greenlight_ai.report.pdf import PdfUnavailable, render_pdf, renderer_available
 from greenlight_ai.report.render import render_report, write_report
 
@@ -148,6 +148,7 @@ def finalize(
             ).scalars()
         ),
         generated_by=user.name,
+        drift=drift.compute_drift(session, run),
     )
 
     storage_key = write_report(rendered.html, data_dir, run_id)
