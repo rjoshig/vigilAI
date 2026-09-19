@@ -174,14 +174,25 @@
   --border: 199 70% 22%;
   --accent: 200 70% 22%;
   --accent-foreground: 0 0% 100%;
+  /* Inside the navy rail, primary is the brand blue (#00A6CA): the active item and
+     the admin pill read in blue on navy. The yellow (#FCD800) is reserved for the
+     logo box below, so it is the one yellow thing in the rail. */
+  --primary: 191 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --tertiary: 191 100% 40%;
+  --tertiary-foreground: 0 0% 100%;
+}
+[data-theme="classic-teal-navy"] .app-sidebar .app-logo {
   --primary: 51 100% 49%;
   --primary-foreground: 200 100% 12%;
-  --tertiary: 51 100% 49%;
-  --tertiary-foreground: 200 100% 12%;
 }
 [data-theme="classic-teal-navy"].dark .app-sidebar {
   --card: 200 100% 7%;
   --border: 200 60% 14%;
   --accent: 200 60% 16%;
+  --primary: 191 100% 45%;
+  --tertiary: 191 100% 45%;
+}
+[data-theme="classic-teal-navy"].dark .app-sidebar .app-logo {
   --primary: 51 100% 52%;
 }
