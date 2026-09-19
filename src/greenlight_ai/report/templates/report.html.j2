@@ -199,7 +199,7 @@
       <h1>QC validation · {{ run.customer_name }} · {{ run.order_number }}</h1>
       <p class="muted small">
         Configuration <span class="mono">{{ run.configuration_id }}</span>
-        {%- if run.run_date %} · run {{ run.run_date }}{% endif %}
+        {%- if run.credit_date %} · credit date {{ run.credit_date }}{% endif %}
         {%- if run.model_used %} · model <span class="mono">{{ run.model_used }}</span>{% endif %}
         {%- if run.prompt_version %} · prompts v{{ run.prompt_version }}{% endif %}
         · rules v{{ run.rules_version }}

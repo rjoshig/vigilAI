@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.7**; **6 in progress**; **6.6 specified**; **7 dormant** (runs only on request) |
-| Branch | `chore/rename-greenlight-ai`, cut from `dev`; `main` and `dev` are one promotion apart |
+| Branch | `feature/credit-date` (stacked on `feature/programme-rules`, PR 9), both against `dev`; then promote `dev` → `main` |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,40 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (credit date; first real model)
+
+**Branch:** `feature/credit-date` · **Status:** complete, 895 tests, gates green.
+
+### What was completed
+
+- Runs get their own identity; the configuration id is information and may repeat;
+  the run date becomes the **credit date**, and code checks the artifacts carry it
+  (`credit_date_missing`). Deliverable-count fields removed from the form. Every
+  form and console field says whether the model sees it. ADR-027, migration
+  `b614b77ca9d8`.
+- The golden set ran against a real model for the first time: **0 / 12**, every case
+  rejected at stage 2 for extra keys. Stages 2 and 3 now fold the answer onto the
+  schema before validating; prompts name the exact keys and read exclusions, steps,
+  counts and the input population the same way on both sides. Result **12 / 12**,
+  recorded in `docs/benchmarks/phase-2-real-model.md`. ADR-028.
+- **Benchmarking stops here** (user decision): no larger-model comparison on
+  synthetic fixtures. The real benchmark is a to-do for the target environment, with
+  real OSLs and reports and the in-house gateway; it opens Phase 7.
+
+### To-do, target environment
+
+- Run `scripts/golden_set.py` against the in-house gateway on real files, record
+  `docs/benchmarks/phase-2.md`, bump prompt versions as the fixes demand. Closes
+  Phase 2 criterion 2 and Phase 6 criterion 2.
+- Rotate the hosted API key that was used for the first run.
+
+### Next concrete action
+
+Merge PR 9 and this branch into `dev`, promote to `main`; then item 4 of the
+top-five plan: browser tests for the core flows, in CI.
 
 ---
 

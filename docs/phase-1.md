@@ -32,7 +32,7 @@ own `nav.js`, so they can be reviewed independently.
       attribute explorer, and the Generate final report button (disabled until every
       high-severity finding has a decision).
 - [x] `report.html` — the frozen one-page report: header (customer, order, configuration
-      ID, run date, model, severity counts), AI summary, Not OK items with comments,
+      ID, credit date, model, severity counts), AI summary, Not OK items with comments,
       expandable detail, Download PDF, Clone run.
 - [x] `run-stats.html` — stage timings, LLM calls, tokens, cache hits.
 - [x] `config-history.html` — captured configs by configuration ID and version with

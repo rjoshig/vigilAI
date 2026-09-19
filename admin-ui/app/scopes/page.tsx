@@ -301,7 +301,7 @@ function ScopeCard({
           <span className="text-[0.7rem] text-muted-foreground">
             Comma-separated. The tool greps the OSL, the configuration, and the report headers for
             these to confirm a run really is this programme; a run declared as this programme with
-            none of them gets a finding.
+            none of them gets a finding. A grep by code; the words are not sent to the model.
           </span>
         </div>
         <div className="flex flex-col gap-1">

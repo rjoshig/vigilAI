@@ -211,7 +211,7 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         **base.model_dump(),
         pdf_available=renderer_available(),
         notes=run.notes,
-        run_date=run.run_date,
+        credit_date=run.credit_date,
         rules_version=run.rules_version,
         model_used=run.model_used,
         prompt_version=run.prompt_version,
@@ -271,11 +271,14 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     request: Request,
     customer_name: Annotated[str, Form()],
     order_number: Annotated[str, Form()],
-    configuration_id: Annotated[str, Form()],
     osl: Annotated[UploadFile, File()],
     config: Annotated[UploadFile, File()],
+    # Informational: the order's ETL configuration number. Optional and free to
+    # repeat; the run's own id is its identity, and the config history is keyed on
+    # this only when it is given.
+    configuration_id: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
-    run_date: Annotated[Optional[str], Form()] = None,
+    credit_date: Annotated[Optional[str], Form()] = None,
     rerun_reason: Annotated[str, Form()] = "",
     scope: Annotated[str, Form()] = "",
     has_suppressions: Annotated[bool, Form()] = False,
@@ -303,7 +306,8 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         osl: The requirement spec.
         config: The ETL configuration.
         notes: Anything the reviewer should know.
-        run_date: The run date, ISO format.
+        credit_date: The credit date the delivery is cut as of, ISO format. Optional,
+            and when given the artifacts are checked for it.
         rerun_reason: Required to re-run identical inputs.
         scope: The delivery programme, e.g. ``"AM"``. Gives the model the compliance
             regime the delivery sits under (ADR-020).
@@ -395,7 +399,7 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         order_number=order_number.strip(),
         configuration_id=configuration_id.strip(),
         notes=notes,
-        run_date=_parse_date(run_date),
+        credit_date=_parse_date(credit_date),
         status="queued",
         user_id=user.id,
         scope=scope.strip().upper(),
@@ -830,7 +834,7 @@ def clone_run(
         order_number=source.order_number,
         configuration_id=source.configuration_id,
         notes=source.notes,
-        run_date=source.run_date,
+        credit_date=source.credit_date,
         status="draft",
         cloned_from_id=source.id,
         user_id=user.id,

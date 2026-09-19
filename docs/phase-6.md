@@ -42,7 +42,9 @@ weeks. Depends on Phases 3–5.
 - [ ] **in-house** Point the adapter at the model gateway, enable guided JSON decoding
       if the serving stack supports it, and run
       `python scripts/golden_set.py --provider openai --out docs/benchmarks/phase-2.md`.
-      This also closes Phase 2 criterion 2 (ADR-014).
+      This also closes Phase 2 criterion 2 (ADR-014). A first hosted model already
+      scores 12 / 12 on the synthetic set (ADR-028); the in-house run is the one that
+      counts, and it waits for the target environment.
 - [~] The alias table is editable in the admin-ui and `scripts/seed_demo.py` shows the
       mechanism. **Needs the user:** whether a data dictionary exists to seed it from.
 

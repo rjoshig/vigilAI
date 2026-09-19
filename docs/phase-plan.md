@@ -84,5 +84,7 @@ answer as an ADR when it lands.
       `suppress` against `exclusions`)? If so the step names need the alias table too.
       Raised by ADR-016; confirm against real files in Phase 6.
 - [ ] Which model and endpoint should the golden set be benchmarked against? Phase 2
-      acceptance criterion 2 is open until this is answered (ADR-014).
+      acceptance criterion 2 is open until this is answered (ADR-014). A first hosted
+      model passes the synthetic set (ADR-028); the in-house gateway on real files is
+      the answer that matters, on the target environment.
 - [ ] Confirm "last modified" means a timestamp inside the config JSON, not the upload time.

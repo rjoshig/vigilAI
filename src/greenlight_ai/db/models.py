@@ -135,7 +135,9 @@ class Run(Base):
     customer_name: Mapped[str] = mapped_column(sa.String(200), index=True)
     order_number: Mapped[str] = mapped_column(sa.String(100), index=True)
     configuration_id: Mapped[str] = mapped_column(sa.String(200), index=True)
-    run_date: Mapped[Optional[dt.date]] = mapped_column(sa.Date, nullable=True)
+    #: The credit date the delivery is cut as of. Stage 7 checks that the artifacts,
+    #: the reports above all, carry it somewhere (ADR-027).
+    credit_date: Mapped[Optional[dt.date]] = mapped_column(sa.Date, nullable=True)
     notes: Mapped[str] = mapped_column(sa.Text, default="")
 
     #: queued · running · needs_review · finalized · failed

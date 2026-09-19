@@ -88,6 +88,7 @@ def run(context: RunContext) -> None:
                 )
 
     _check_programme(context)
+    _check_credit_date(context)
     _check_deliverable_count(context)
     _run_field_constraints(context)
     _run_admin_checks(context, settings, customer)
@@ -156,6 +157,112 @@ def _run_field_constraints(context: RunContext) -> None:
                 ),
             )
         )
+
+
+def _date_spellings(iso: str) -> tuple[str, ...]:
+    """The ways a date is written in the documents we see.
+
+    Args:
+        iso: The date as ``YYYY-MM-DD``.
+
+    Returns:
+        Lowercase spellings to look for: ISO, slashed US and day-first forms with and
+        without zero padding, and the month written out. A grep needs the spellings
+        listed, because it will not infer them.
+    """
+    import datetime as dt
+
+    try:
+        day = dt.date.fromisoformat(iso)
+    except ValueError:
+        return (iso.lower(),)
+    month_name = day.strftime("%B").lower()
+    short = day.strftime("%b").lower()
+    return tuple(
+        dict.fromkeys(
+            [
+                iso,
+                day.strftime("%m/%d/%Y"),
+                day.strftime("%-m/%-d/%Y"),
+                day.strftime("%d/%m/%Y"),
+                day.strftime("%-d/%-m/%Y"),
+                day.strftime("%Y%m%d"),
+                day.strftime("%m-%d-%Y"),
+                day.strftime("%d-%m-%Y"),
+                f"{month_name} {day.day}, {day.year}",
+                f"{day.day} {month_name} {day.year}",
+                f"{short} {day.day}, {day.year}",
+                f"{day.day} {short} {day.year}",
+                f"{day.day}-{short}-{day.year}",
+            ]
+        )
+    )
+
+
+def _check_credit_date(context: RunContext) -> None:
+    """Confirm the credit date the submitter gave appears in the artifacts (ADR-027).
+
+    The reports are cut as of a credit date, and they usually say so in a cell. The
+    submitter says which date this run is for; the two should agree. A date that
+    appears nowhere is not proof of a wrong delivery, but it is exactly the thing a
+    reviewer would want pointed out before signing.
+
+    Args:
+        context: The run context, whose ``findings`` this may append to.
+    """
+    iso = context.guidance.credit_date
+    if not iso:
+        return
+    spellings = _date_spellings(iso)
+
+    def contains(text: str) -> bool:
+        lowered = text.lower()
+        return any(spelling in lowered for spelling in spellings)
+
+    in_reports = any(
+        contains(sheet.name)
+        or any(contains(header) for header in sheet.header)
+        or any(
+            contains(str(cell.value))
+            for row in sheet.rows
+            for cell in row
+            if cell.value is not None
+        )
+        for document in context.reports.values()
+        for sheet in document.sheets
+    )
+    if in_reports:
+        return
+
+    elsewhere = (
+        context.osl is not None and any(contains(s.as_text()) for s in context.osl.sections)
+    ) or (context.config is not None and any(contains(b.as_text()) for b in context.config.blocks))
+
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="credit_date_missing",
+            severity="low" if elsewhere else "medium",
+            title=(
+                f"Credit date {iso} appears in the OSL or configuration but in no report"
+                if elsewhere
+                else f"Credit date {iso} appears in none of the artifacts"
+            ),
+            detail=(
+                "Looked for the date as "
+                + ", ".join(spellings[:6])
+                + " and more, in every report cell, sheet name and header"
+                + (
+                    ", and found it only outside the reports."
+                    if elsewhere
+                    else ", the OSL, and the configuration."
+                )
+                + " Confirm the reports were cut as of this credit date."
+            ),
+            leg="osl_reports",
+            evidence=Evidence(report_name="every uploaded report"),
+        )
+    )
 
 
 #: How many hits a programme needs before the check believes the inputs are that

@@ -94,7 +94,9 @@ adapter", "LLM cost controls", and `llm-privacy.md` end to end before starting.
 1. [x] `greenlight-ai run …` on the fixtures produces a findings JSON matching an oracle
    file. The oracle travels with each fixture in `manifest.json`.
 2. [~] The golden set runs without a model in CI (12 / 12 cases, recorded in
-   `docs/benchmarks/phase-2-synthetic.md`). The Gemma run is **outstanding**.
+   `docs/benchmarks/phase-2-synthetic.md`) and 12 / 12 on a first real model
+   (`docs/benchmarks/phase-2-real-model.md`, ADR-028). The run against the in-house
+   gateway on real files is **deferred** to the target environment (ADR-028).
 3. [x] No prompt contains a sample row. Masking happens at parse time, a PII regex
    tripwire covers the parsers and the prompts, and an autouse fixture blocks the
    socket layer for the whole suite.
