@@ -162,6 +162,39 @@ Why it is built this way:
   the model as background on every future run of that configuration, and can be
   turned into a rule scoped to that configuration alone.
 
+
+### How the associates teach it
+
+Train AI mode is switched on by an administrator. While it is on, three things an
+associate can do become available, and every one of them is marked so the person
+knows what they type is being collected.
+
+- **From a finding.** Every finding on the review screen has a "What should this
+  check?" control. The associate writes, in plain words, what they expected and how
+  serious a miss is; the tool attaches what they were looking at, the finding and
+  its cell, clause, or configuration path, so the note is anchored to a fact rather
+  than floating. This is the most valuable path: a finding someone dismissed becomes
+  a lesson instead of a review note nobody reads again.
+- **From a run.** The same control on the run page, for something the tool did not
+  check at all: "the account status column is never blank for this customer", "clause
+  4.2 is what the first score band answers to".
+- **Against a configuration.** A standing note on an ETL configuration id, written
+  once from the new-run form or the config history. It reaches the model as
+  background on every future run of that configuration, and it works whether or not
+  Train AI mode is on, because it is guidance rather than training.
+
+Each note carries how far it should apply: this customer, this programme, or
+everywhere. The narrowest that fits is the default, because most false positives
+come from a rule that was true of most deliveries and not all.
+
+Nothing an associate writes runs. It goes to the administrator's queue, where the
+model drafts a rule from it, code checks the draft and looks for overlap with rules
+that already exist, a replay shows what it would have changed on past runs, and a
+person approves it into shadow. In shadow the rule runs on every delivery and its
+findings are counted but shown to nobody; the administrator activates it when the
+numbers say it has earned its place. The associate sees what became of every note
+they wrote, with the reason if it was turned down.
+
 ## 7. What an administrator controls, without engineering
 
 Everything below changes from a screen and takes effect on the next run, with no

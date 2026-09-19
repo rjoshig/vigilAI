@@ -23,6 +23,7 @@ import { usePathname } from "next/navigation";
 import * as React from "react";
 
 import { useAuth } from "@/components/auth-gate";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -83,21 +84,12 @@ function TrainingModeIndicator({ pathname }: { pathname: string }) {
     >
       <span
         aria-hidden="true"
-        className={cn("h-2 w-2 rounded-full", enabled ? "bg-success" : "bg-muted-foreground/50")}
+        className={cn(
+          "h-2 w-2 rounded-full",
+          enabled ? "train-live bg-success" : "bg-muted-foreground/50"
+        )}
       />
       <span>Train AI mode {enabled ? "on" : "off"}</span>
-    </div>
-  );
-}
-
-/**
- * The mark: a green light in the brand box. There is no logo image; the name is set
- * in text and the mark is the one thing the name promises.
- */
-function GreenLightMark() {
-  return (
-    <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary" aria-hidden="true">
-      <span className="block h-4 w-4 rounded-full bg-success shadow-[0_0_8px_hsl(var(--success))]" />
     </div>
   );
 }
@@ -162,16 +154,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="app-sidebar sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r bg-card text-card-foreground">
-        <div className="flex items-center gap-2.5 p-4">
-          <GreenLightMark />
+        {/* The box is the one theme-independent surface in the rail: the mark's dark
+            housing has to read on the navy palette as well as on white. */}
+        <Link href="/" aria-label="Greenlight AI home" className="flex items-center gap-2.5 p-4">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-tertiary">
+            <Logo size={30} />
+          </span>
           <div>
-            <div className="text-lg font-bold leading-tight tracking-tight">Greenlight AI</div>
-            <div className="text-[0.8125rem] font-medium">QC Validation</div>
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-base font-bold leading-tight tracking-tight">
+              {/* The name never breaks; the chip drops to its own line when the rail
+                  is too narrow for both. */}
+              <span className="whitespace-nowrap">Greenlight AI</span>
+              <span className="rounded-full bg-tertiary px-1.5 py-px text-[0.6rem] font-bold uppercase tracking-wider text-tertiary-foreground">
+                Admin
+              </span>
+            </div>
             <div className="text-[0.625rem] text-muted-foreground">
               Nothing ships without a green light.
             </div>
           </div>
-        </div>
+        </Link>
 
         <TrainingModeIndicator pathname={pathname} />
 

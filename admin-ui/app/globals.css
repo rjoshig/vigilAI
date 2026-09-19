@@ -185,3 +185,23 @@
   --accent: 200 60% 16%;
   --primary: 51 100% 52%;
 }
+
+/* The Train AI status dot while the mode is on: a slow breath of glow, not a blink.
+   A blink demands attention every second; a breath says "live" once and lets go. */
+@keyframes train-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--success) / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 5px hsl(var(--success) / 0);
+  }
+}
+.train-live {
+  animation: train-breathe 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .train-live {
+    animation: none;
+  }
+}

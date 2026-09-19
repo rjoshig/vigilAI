@@ -57,7 +57,15 @@ const ICONS = {
   wand: '<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/>',
 };
 
+// The brand mark keeps its own fills, so it bypasses the stroke-only line-icon wrapper.
+const LOGO_SVG =
+  '<svg viewBox="0 0 130 330" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<rect x="2" y="2" width="126" height="326" rx="20" fill="#0A1A15" stroke="#2A4A3E" stroke-width="4"/>' +
+  '<circle cx="65" cy="65" r="40" fill="#5A2525"/><circle cx="65" cy="165" r="40" fill="#5C4520"/>' +
+  '<circle cx="65" cy="265" r="40" fill="#1FA463" stroke="#7EE0AE" stroke-width="5"/></svg>';
+
 function icon(name, cls) {
+  if (name === "logo") return LOGO_SVG;
   return (
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
     'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' +
