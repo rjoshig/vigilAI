@@ -666,3 +666,43 @@ supported way to run the tool, and a deployment that never opens the settings sc
 behaves as it always did. The master key becomes something that must be backed up
 outside the database from the first day: losing it loses every secret it protects, and
 there is no recovery path by design.
+
+## ADR-024 — A configuration note is guidance and an observation at once, never a rule on its own
+
+**Status:** accepted 2026-09-19 (user decision)
+
+**Context:** A reviewer who knows that a particular ETL configuration carries special
+rules had nowhere to write that down once. It went into a run's free-text notes and
+was gone by the next run of the same configuration. The request was a note tied to
+the configuration id, the Solution Canvas config number, that reaches the model on
+every future run using it and that an administrator sees as a configuration-specific
+comment in the training queue.
+
+**Decision:** One row, two roles, and no new mechanism.
+
+1. **A note is an observation of kind `config_note`** with the configuration it
+   follows. It sits in the same table and the same admin queue as every other
+   observation, so there is one place an administrator reads what people know.
+2. **It reaches the model as background at once**, through the existing guidance
+   preamble (ADR-020), labelled as a note on the configuration and never as a
+   requirement. It changes what the model pays attention to; it cannot make anything
+   pass or fail.
+3. **Enforcement goes through the ordinary loop.** If an administrator wants the note
+   to become a rule, they synthesize it like any observation and approve the
+   candidate, which lands scoped `config:<id>` so it applies to that configuration
+   and no other (ADR-021).
+4. **It is available whatever Train AI mode says.** The mode gates what the tool
+   collects for training; a note is guidance about a configuration, which is useful
+   either way. Its field carries no Train AI tag.
+5. **Anyone may write one**, under their name. Edits keep the earlier wording, and a
+   note is switched off rather than deleted, for the same reason nothing else in the
+   training record is deleted.
+6. **A run keeps a copy of the notes in force when it was submitted**, and the frozen
+   report shows them. A reviewer reading a finding needs to know what context the
+   model was given, and that must not change after the fact.
+
+**Consequences:** No second table, no second queue, no second prompt path. The cost is
+that a note applies without review, which is acceptable precisely because it cannot
+enforce anything; the moment it should, a person is in the loop. The rule scope
+vocabulary grows by one form, `config:<id>`, beside `all`, a customer name, and
+`programme:CODE`.

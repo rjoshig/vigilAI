@@ -403,3 +403,84 @@ describe("the training endpoints", () => {
     await expect(api.updateObservation(7, body)).rejects.toMatchObject({ status: 409 });
   });
 });
+
+describe("configuration notes", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("lists only the notes in force unless asked for the switched-off ones", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listConfigNotes("CFG-100");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/configs/CFG-100/notes");
+
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listConfigNotes("CFG-100", true);
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/configs/CFG-100/notes?include_inactive=true");
+  });
+
+  it("escapes a configuration id that is not path-safe", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.listConfigNotes("a/b c");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/configs/a%2Fb%20c/notes");
+  });
+
+  it("posts a note as JSON under the configuration", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 3, kind: "config_note" }, 201));
+    await api.createConfigNote("CFG-100", {
+      statement: "the state code is two letters here",
+      severity_hint: "low",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/configs/CFG-100/notes");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      statement: "the state code is two letters here",
+      severity_hint: "low",
+    });
+  });
+
+  it("carries the server's wording when a note looks like personal data", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ detail: "this looks like it contains personal data: an account number" }, 422)
+    );
+    await expect(
+      api.createConfigNote("CFG-100", { statement: "account 1234 is special" })
+    ).rejects.toMatchObject({
+      status: 422,
+      detail: "this looks like it contains personal data: an account number",
+    });
+  });
+
+  it("rewords a note with a PATCH", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 3, version: 2 }));
+    await api.updateConfigNote(3, { statement: "a clearer sentence", severity_hint: "medium" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/config-notes/3");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body)).toEqual({
+      statement: "a clearer sentence",
+      severity_hint: "medium",
+    });
+  });
+
+  it("switches a note off and on through the query flag", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 3, is_active: false }));
+    await api.setConfigNoteActive(3, false);
+    let [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/config-notes/3/active?is_active=false");
+    expect(init.method).toBe("POST");
+
+    fetchMock.mockResolvedValue(jsonResponse({ id: 3, is_active: true }));
+    await api.setConfigNoteActive(3, true);
+    [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe("/api/v1/config-notes/3/active?is_active=true");
+  });
+});

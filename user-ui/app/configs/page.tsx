@@ -2,9 +2,10 @@
 
 /** Config history: captured configs by configuration ID and version. */
 
-import { Eye } from "lucide-react";
+import { Eye, StickyNote } from "lucide-react";
 import * as React from "react";
 
+import { ConfigNotes } from "@/components/config-notes";
 import {
   Badge,
   Button,
@@ -32,6 +33,9 @@ export default function ConfigsPage() {
   const [search, setSearch] = React.useState("");
   const [latestOnly, setLatestOnly] = React.useState(false);
   const [viewing, setViewing] = React.useState<ConfigDetail | null>(null);
+  // Notes follow the configuration id, not a captured version, so the panel is keyed
+  // on the id and one open panel serves every version row of that configuration.
+  const [notesFor, setNotesFor] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     try {
@@ -105,27 +109,54 @@ export default function ConfigsPage() {
               </thead>
               <tbody>
                 {visible.map((config) => (
-                  <TR key={config.id}>
-                    <TD className="mono">{config.configuration_id}</TD>
-                    <TD>
-                      <Badge tone="info">v{config.version}</Badge>
-                    </TD>
-                    <TD>{config.customer_name || "—"}</TD>
-                    <TD className="text-xs text-muted-foreground">{fmtTime(config.created_at)}</TD>
-                    <TD className="whitespace-nowrap text-xs">{config.created_by || "—"}</TD>
-                    <TD className="text-xs text-muted-foreground">{config.last_modified || "—"}</TD>
-                    <TD className="mono text-xs">{config.sha256.slice(0, 8)}…</TD>
-                    <TD className="text-right tabular-nums">{config.run_count}</TD>
-                    <TD className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={async () => setViewing(await api.getConfig(config.id))}
-                      >
-                        <Eye className="h-3.5 w-3.5" /> View
-                      </Button>
-                    </TD>
-                  </TR>
+                  <React.Fragment key={config.id}>
+                    <TR>
+                      <TD className="mono">{config.configuration_id}</TD>
+                      <TD>
+                        <Badge tone="info">v{config.version}</Badge>
+                      </TD>
+                      <TD>{config.customer_name || "—"}</TD>
+                      <TD className="text-xs text-muted-foreground">
+                        {fmtTime(config.created_at)}
+                      </TD>
+                      <TD className="whitespace-nowrap text-xs">{config.created_by || "—"}</TD>
+                      <TD className="text-xs text-muted-foreground">
+                        {config.last_modified || "—"}
+                      </TD>
+                      <TD className="mono text-xs">{config.sha256.slice(0, 8)}…</TD>
+                      <TD className="text-right tabular-nums">{config.run_count}</TD>
+                      <TD className="text-right">
+                        <span className="inline-flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() =>
+                              setNotesFor((open) =>
+                                open === config.configuration_id ? null : config.configuration_id
+                              )
+                            }
+                            title="Standing notes that reach the model on every run of this configuration"
+                          >
+                            <StickyNote className="h-3.5 w-3.5" /> Notes
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={async () => setViewing(await api.getConfig(config.id))}
+                          >
+                            <Eye className="h-3.5 w-3.5" /> View
+                          </Button>
+                        </span>
+                      </TD>
+                    </TR>
+                    {notesFor === config.configuration_id ? (
+                      <TR className="hover:bg-transparent">
+                        <TD colSpan={9} className="bg-muted/20">
+                          <ConfigNotes configurationId={config.configuration_id} mode="manage" />
+                        </TD>
+                      </TR>
+                    ) : null}
+                  </React.Fragment>
                 ))}
               </tbody>
             </Table>

@@ -23,6 +23,7 @@ __all__ = [
     "RuleAction",
     "RuleStateChangeOut",
     "TrainingConfigOut",
+    "ConfigNoteIn",
 ]
 
 AnchorKind = Literal["report_cell", "report_field", "osl_section", "config_path", "finding"]
@@ -55,7 +56,9 @@ class ObservationIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["reconciliation", "field_constraint", "correction", "note"] = "reconciliation"
+    kind: Literal["reconciliation", "field_constraint", "correction", "note", "config_note"] = (
+        "reconciliation"
+    )
     anchors: list[Anchor] = Field(default_factory=list)
     statement: str = Field(min_length=3, max_length=4000)
     expectation: str = ""
@@ -78,8 +81,14 @@ class ObservationOut(ObservationIn):
     customer_name: str = ""
     scope_code: str = ""
     version: int = 1
-    #: Whether the author may still edit it. False once an administrator queues it.
+    #: Whether the author may still edit it. False once an administrator queues it,
+    #: except for a configuration note, which stays editable so it can be kept true.
     editable: bool = True
+    #: For a configuration note: which configuration it follows and whether it still
+    #: applies (ADR-024).
+    configuration_id: str = ""
+    is_active: bool = True
+    revisions: list[dict[str, Any]] = Field(default_factory=list)
     created_at: dt.datetime
     synthesized_at: dt.datetime | None = None
 
@@ -185,3 +194,16 @@ class TrainingConfigOut(BaseModel):
     """What the user app needs to know about Train AI mode."""
 
     enabled: bool = False
+
+
+class ConfigNoteIn(BaseModel):
+    """A standing note on an ETL configuration (ADR-024).
+
+    Guidance for every future run of that configuration, and an observation in the
+    admin queue at the same time. It never enforces anything on its own.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    statement: str = Field(min_length=3, max_length=4000)
+    severity_hint: Literal["high", "medium", "low", "review"] = "medium"

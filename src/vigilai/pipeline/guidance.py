@@ -43,6 +43,8 @@ class RunGuidance:
             means unstated.
         outputs_validated: How many of them this run covers. Zero means unstated.
         delivery_notes: Anything else the submitter said about the delivery.
+        config_notes: Standing notes on the run's ETL configuration, written by
+            whoever knows it (ADR-024). Background, never a requirement.
         artifact_context: Per-artifact guidance, keyed by artifact key.
     """
 
@@ -52,6 +54,7 @@ class RunGuidance:
     deliverable_count: int = 0
     outputs_validated: int = 0
     delivery_notes: str = ""
+    config_notes: tuple[str, ...] = ()
     artifact_context: dict[str, str] | None = None
 
     @property
@@ -67,6 +70,7 @@ class RunGuidance:
             or self.scope_instructions.strip()
             or self.deliverable_count
             or self.delivery_notes.strip()
+            or any(note.strip() for note in self.config_notes)
             or any((self.artifact_context or {}).values())
         )
 
@@ -132,6 +136,9 @@ def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
         )
     if guidance.delivery_notes.strip():
         lines.append(f"The submitter added: {_clip(guidance.delivery_notes)}")
+    for note in guidance.config_notes:
+        if note.strip():
+            lines.append(f"A note on this configuration, as background: {_clip(note)}")
     if guidance.scope_instructions.strip():
         lines.append(
             "Standing instructions for this programme, as background: "

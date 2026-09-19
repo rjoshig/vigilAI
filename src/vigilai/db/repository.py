@@ -92,10 +92,14 @@ def fingerprint(file_hashes: Iterable[str], check_versions: Iterable[str] = ()) 
 # --------------------------------------------------------------------------------------
 
 
-def load_admin_config(session: Session, customer: str = "") -> AdminConfig:
+def load_admin_config(
+    session: Session, customer: str = "", configuration_id: str = ""
+) -> AdminConfig:
     """Load what the admin-ui contributes to a run.
 
     Args:
+        configuration_id: The run's ETL configuration, so a rule scoped
+            ``config:<id>`` applies to it and to no other (ADR-024).
         session: An open session.
         customer: The run's customer, used to scope checks and compliance rules.
 
@@ -197,7 +201,7 @@ def load_admin_config(session: Session, customer: str = "") -> AdminConfig:
             reasoning=row.reasoning,
         )
         for row in constraint_rows
-        if row.scope in ("all", customer)
+        if row.scope in ("all", customer, f"config:{configuration_id}")
     )
 
     # Shadow rules run and are counted; their findings are shown to nobody, so the
@@ -601,6 +605,31 @@ def capture_config(
     session.flush()
     _LOG.info("captured config %s v%d", configuration_id, row.version)
     return row
+
+
+def active_config_notes(session: Session, configuration_id: str) -> list[str]:
+    """The standing notes in force for a configuration (ADR-024).
+
+    Args:
+        session: An open session.
+        configuration_id: The ETL configuration.
+
+    Returns:
+        The note texts, oldest first. Empty when there are none, which is the common
+        case and adds nothing to any prompt.
+    """
+    if not configuration_id:
+        return []
+    rows = session.execute(
+        sa.select(models.TrainingObservation.statement)
+        .where(
+            models.TrainingObservation.kind == "config_note",
+            models.TrainingObservation.configuration_id == configuration_id,
+            models.TrainingObservation.is_active,
+        )
+        .order_by(models.TrainingObservation.id)
+    ).scalars()
+    return [str(text) for text in rows if str(text).strip()]
 
 
 def audit(

@@ -11,6 +11,7 @@ import { Lightbulb, Pencil } from "lucide-react";
 import * as React from "react";
 
 import { ObservationDialog, useTrainingEnabled } from "@/components/observation-dialog";
+import { TrainAiTag } from "@/components/train-ai-tag";
 import {
   Badge,
   Card,
@@ -74,7 +75,11 @@ export default function ObservationsPage() {
   return (
     <>
       <PageHeader
-        title="My observations"
+        title={
+          <>
+            My observations <TrainAiTag />
+          </>
+        }
         description="What you have told the tool it should check. Observations never run: an administrator reviews them and the model drafts a rule they approve. Raise one from a finding on any run."
       />
 

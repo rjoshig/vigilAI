@@ -33,6 +33,7 @@ import type {
   Setting,
   SettingGroup,
   TestResult,
+  TrainingConfig,
   Usage,
 } from "@/lib/types";
 
@@ -290,8 +291,33 @@ export const api = {
    * that something went wrong, so the caller shows an explanation rather than an
    * error.
    */
-  listObservations: (status = "new"): Promise<Observation[]> =>
-    request<Observation[]>(`/observations?status=${encodeURIComponent(status)}`, undefined, ROOT),
+  listObservations: (status = "new", kind = ""): Promise<Observation[]> =>
+    request<Observation[]>(
+      `/observations?status=${encodeURIComponent(status)}${
+        kind ? `&kind=${encodeURIComponent(kind)}` : ""
+      }`,
+      undefined,
+      ROOT
+    ),
+
+  /**
+   * Whether Train AI mode is on. It is read from the shared prefix, the same call the
+   * user app makes, so both sidebars say the same thing.
+   */
+  getTrainingConfig: (): Promise<TrainingConfig> =>
+    request<TrainingConfig>("/training/config", undefined, ROOT),
+
+  /**
+   * Switch a configuration note off, or back on. Off means it stops reaching the
+   * model on the next run; its text is kept, because nothing in the training record
+   * is deleted (ADR-024).
+   */
+  setConfigNoteActive: (id: number, isActive: boolean): Promise<Observation> =>
+    request<Observation>(
+      `/config-notes/${id}/active?is_active=${isActive}`,
+      { method: "POST" },
+      ROOT
+    ),
 
   /** Turn an observation down. The reason is shown to whoever wrote it. */
   rejectObservation: (id: number, reason: string): Promise<Observation> =>

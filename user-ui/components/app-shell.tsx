@@ -22,6 +22,7 @@ import * as React from "react";
 
 import { useAuth } from "@/components/auth-gate";
 import { useTrainingEnabled } from "@/components/observation-dialog";
+import { TRAIN_AI_HINT } from "@/components/train-ai-tag";
 import { Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +51,29 @@ const TRAINING_NAV: NavItem = {
   label: "My observations",
   icon: Lightbulb,
 };
+
+/**
+ * The mode indicator (6.4a). Drawn in both states, because "off" is a fact a person
+ * should be able to see and not merely the absence of a control.
+ */
+function TrainingModeLine({ enabled }: { enabled: boolean }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 px-4 pb-3 text-[0.6875rem] text-muted-foreground"
+      title={TRAIN_AI_HINT}
+      aria-label={`Train AI mode ${enabled ? "on" : "off"}. ${TRAIN_AI_HINT}`}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-block h-2 w-2 flex-shrink-0 rounded-full",
+          enabled ? "bg-success" : "bg-muted-foreground/50"
+        )}
+      />
+      <span>Train AI mode {enabled ? "on" : "off"}</span>
+    </div>
+  );
+}
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -99,6 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="text-[0.625rem] text-muted-foreground">Fulfillment QC · user-ui</div>
           </div>
         </div>
+        <TrainingModeLine enabled={trainingEnabled} />
 
         <nav className="flex flex-1 flex-col gap-0.5 px-2.5 pt-2">
           <div className="px-2 pb-1 text-[0.625rem] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -26,6 +26,22 @@ to do something that contradicts it, stop and reconcile before acting.
 every doc describing what is true at that commit, not what was planned — see
 "Doc-driven workflow".
 
+## Two standing touchpoints
+
+- **Training documents, every ~10 commits.** `docs/user-training.md` and
+  `docs/admin-training.md` teach the product as it is. Every tenth commit or so, and
+  at every phase close, open both, grep for anything the recent commits renamed or
+  removed, fix what is stale, and move the "Last aligned with the code" date. A
+  training document that describes a screen the product no longer has is worse than
+  none. Details: `docs/phase-6.5.md`.
+- **The Global Delivery rollout plan, at every milestone.** `docs/gd-rollout-plan.md`
+  is the delivery side: who owns the product, the support tiers and where a user
+  goes, escalation severities, who patches and who adds features, the acceptance
+  criteria a scope must meet, the intake questionnaire, and the four gated stages
+  (readiness, focus-group UAT with a benchmark, senior associates validating with
+  Train AI mode on, then region by region). When a phase closes, re-read it and
+  update the readiness checklist.
+
 ## Phase gating
 
 Work proceeds in sequential phases (`docs/phase-plan.md` is the master table). Do not start
@@ -44,6 +60,8 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.1 | Richer inputs (several samples per type, several files per report, type detection) and Train AI mode: observations synthesized into rules an admin approves | `docs/phase-6.1.md` | ✅ complete — two items open, listed in the doc |
 | 6.2 | Optional login and attribution: two `.env` switches (default off), admin-created accounts, sessions, who-did-what everywhere | `docs/phase-6.2.md` | ✅ complete — login ships off; one item open |
 | 6.3 | Runtime settings in the admin console: console overrides `.env` overrides defaults (ADR-023) | `docs/phase-6.3.md` | ✅ complete |
+| 6.4 | Train AI indicator in both apps; standing notes on a configuration id, reaching the model as background and the admin queue as comments | `docs/phase-6.4.md` | ✅ complete — one test open |
+| 6.5 | Training documentation, kept current: `docs/user-training.md` and `docs/admin-training.md` | `docs/phase-6.5.md` | 🟡 recurring — re-entered after every milestone |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
@@ -177,8 +195,10 @@ Docs: `bash scripts/check_docs.sh`.
 
 - Conventional Commits: `type(scope): summary` (≤72 chars); scopes in `standards/git.md`.
 - No PII, customer names, or model identifiers in commit messages.
-- `main` (PR-only, human merges) ← `dev` ← `feature/*`. Session branches (`claude/*`) are
-  feature branches. Never push to `main`, never force-push, never rewrite history.
+- `main` (PR-only, human merges) ← `dev` ← `feature/*`. Branches are `feature/<topic>`,
+  `fix/<topic>`, or `experiment/<topic>`, cut from `dev`. **A branch name never contains
+  an agent or model name**; a tool-assigned `claude/*` name is renamed before its first
+  push. Never push to `main`, never force-push, never rewrite history.
 - CI is **manual-only** (`workflow_dispatch`); the pre-push checklist is the gate.
 
 ## What "done" means for a task

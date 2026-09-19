@@ -333,10 +333,23 @@ export interface Anchor {
   value: string;
 }
 
+/** Whether Train AI mode is on. Read under `/api/v1`, because the user app reads it too. */
+export interface TrainingConfig {
+  enabled: boolean;
+}
+
+/** One earlier wording of a configuration note, kept when it is edited (ADR-024). */
+export interface ObservationRevision {
+  version: number;
+  statement: string;
+  at: string;
+  by: string;
+}
+
 /** Something a reviewer knows, in their own words, against something they selected. */
 export interface Observation {
   id: number;
-  kind: "reconciliation" | "field_constraint" | "correction" | "note";
+  kind: "reconciliation" | "field_constraint" | "correction" | "note" | "config_note";
   anchors: Anchor[];
   statement: string;
   expectation: string;
@@ -352,6 +365,13 @@ export interface Observation {
   scope_code: string;
   version: number;
   editable: boolean;
+  /**
+   * For a configuration note only: the configuration it follows, whether it still
+   * reaches the model, and the earlier wordings. Empty on every other kind (ADR-024).
+   */
+  configuration_id: string;
+  is_active: boolean;
+  revisions: ObservationRevision[];
   created_at: string;
   synthesized_at: string | null;
 }
