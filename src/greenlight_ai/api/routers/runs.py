@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+from dataclasses import asdict
 import shutil
 import tempfile
 from pathlib import Path
@@ -29,7 +30,7 @@ from greenlight_ai.api import schemas
 from greenlight_ai.api.deps import CurrentUser, current_user, get_data_dir, get_session
 from greenlight_ai.api.uploads import UploadError, store_upload
 from greenlight_ai.config.store import resolve
-from greenlight_ai.db import catalog, models, repository
+from greenlight_ai.db import catalog, models, repository, drift
 from greenlight_ai.db.queue import JobQueue
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.parsers import detect
@@ -666,6 +667,52 @@ def list_findings(
     if finding_type:
         statement = statement.where(models.Finding.type == finding_type)
     return [schemas.FindingOut.model_validate(row) for row in session.execute(statement).scalars()]
+
+
+@router.get("/{run_id}/drift", response_model=schemas.DriftOut)
+def run_drift(
+    run_id: int,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> schemas.DriftOut:
+    """What changed since the previous finalized run of this configuration (ADR-030).
+
+    Args:
+        run_id: The run.
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        New, resolved, and carried-over findings, requirements whose value changed,
+        and the configuration diff by path; or a ``reason`` when there is no earlier
+        run to compare with.
+    """
+    run = _get_run(session, run_id)
+    return drift_out(drift.compute_drift(session, run))
+
+
+def drift_out(result: drift.Drift) -> schemas.DriftOut:
+    """Turn a computed drift into its wire shape.
+
+    Args:
+        result: The comparison.
+
+    Returns:
+        The wire model.
+    """
+    return schemas.DriftOut(
+        previous_run_id=result.previous_run_id,
+        previous_finished_at=result.previous_finished_at,
+        previous_verdict=result.previous_verdict,
+        reason=result.reason,
+        new=[schemas.DriftFinding(**asdict(f)) for f in result.new],
+        resolved=[schemas.DriftFinding(**asdict(f)) for f in result.resolved],
+        carried_not_ok=[schemas.DriftFinding(**asdict(f)) for f in result.carried_not_ok],
+        requirements=[schemas.DriftRequirement(**asdict(r)) for r in result.requirements],
+        config=[schemas.DriftConfigChange(**asdict(c)) for c in result.config],
+        previous_config_version=result.previous_config_version,
+        config_version=result.config_version,
+    )
 
 
 @router.get("/{run_id}/requirements", response_model=schemas.RequirementsOut)

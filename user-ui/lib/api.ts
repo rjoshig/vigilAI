@@ -28,6 +28,7 @@ import type {
   RunSummary,
   TrainingConfig,
   TypeDetection,
+  Drift,
 } from "@/lib/types";
 
 /** Where the API lives. The Next rewrite proxies this to FastAPI, so there is no CORS. */
@@ -142,6 +143,11 @@ export const api = {
   /** Read one run. Polled every three seconds while it is queued or running. */
   getRun(runId: number): Promise<RunDetail> {
     return request<RunDetail>(`/runs/${runId}`);
+  },
+
+  /** What changed since the previous finalized run of the same configuration. */
+  getDrift(runId: number): Promise<Drift> {
+    return request<Drift>(`/runs/${runId}/drift`);
   },
 
   /**

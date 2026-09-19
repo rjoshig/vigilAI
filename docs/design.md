@@ -455,7 +455,7 @@ Effort assumes 1-2 developers and is a starting estimate.
 - [ ] Is there an attribute data dictionary to seed the alias table?
 - [ ] Should users see only their own runs, or everyone's on their team?
 - [ ] Is 90-day storage of DIRT files containing PII approved, or should those expire sooner?
-- [ ] Do you want a comparison against the same customer's previous run (drift in counts and means)? It is cheap to add once history exists.
+- [x] Do you want a comparison against the same customer's previous run (drift in counts and means)? **Built** (Phase 6.9, ADR-030): findings, requirements and configuration compared against the previous finalized run of the same configuration.
 
 * [ ] Are the fixed compliance rules a list you maintain in the admin-ui, or do they come from another source?
 * [ ] Must every high-severity finding have a decision before the final report can be generated?

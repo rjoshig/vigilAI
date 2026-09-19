@@ -24,6 +24,7 @@ risk.
 | 6.6 | Themes — named themes shared by both apps, a picker that steps through them, and the default and lock set from the admin console | days | ⬜ **not started** — specified | [phase-6.6.md](phase-6.6.md) |
 | 6.7 | Programme rules with a strictness, read by the model and graded by code, and a keyword check that a run is the programme it says it is | days | ✅ **complete** | [phase-6.7.md](phase-6.7.md) |
 | 6.8 | Compliance and checks scoped to a programme; validation guides mapping a report cell to the OSL and the configuration with examples; the last ten versions of every definition, with revert | 2 weeks | ✅ **complete** | [phase-6.8.md](phase-6.8.md) |
+| 6.9 | Delivery drift — new, resolved and carried-over findings, changed requirements, and the configuration diff against the previous finalized run of the same configuration | days | ✅ **complete** | [phase-6.9.md](phase-6.9.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of
@@ -73,7 +74,8 @@ answer as an ADR when it lands.
 - [ ] Is there an attribute data dictionary to seed the alias table?
 - [ ] Should users see only their own runs, or everyone's? (v1 has no login: everyone's.)
 - [ ] Is 90-day storage of DIRT files containing PII approved?
-- [ ] Comparison against the same customer's previous run (drift)? Cheap once history exists.
+- [x] Comparison against the same customer's previous run (drift)? **Yes**, built as
+      Phase 6.9 (ADR-030): against the previous finalized run of the same configuration.
 - [x] Phase 6.1's and 6.2's design questions — all answered 2026-09-18 and recorded in
       the "Decisions" table of each phase doc; ADR-021 and ADR-022 are accepted.
       Learned rules never expire on their own: they live in a searchable admin screen

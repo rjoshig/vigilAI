@@ -326,3 +326,49 @@ class TypeDetection(BaseModel):
     score: float = 0.0
     candidates: list[DetectedCandidate] = Field(default_factory=list)
     sheets: list[DetectedSheet] = Field(default_factory=list)
+
+
+class DriftFinding(BaseModel):
+    """A finding as the drift panel refers to it (ADR-030)."""
+
+    finding_id: str
+    type: str
+    severity: str
+    title: str
+    review_status: str = "undecided"
+
+
+class DriftRequirement(BaseModel):
+    """A requirement that appeared, vanished, or changed value since last time."""
+
+    rule_id: str
+    req_type: str
+    source_ref: str
+    change: Literal["added", "removed", "changed"]
+    before: str = ""
+    after: str = ""
+
+
+class DriftConfigChange(BaseModel):
+    """One configuration path that differs from the previous run's."""
+
+    path: str
+    change: Literal["added", "removed", "changed"]
+    before: str = ""
+    after: str = ""
+
+
+class DriftOut(BaseModel):
+    """What changed since the previous finalized run of the same configuration."""
+
+    previous_run_id: Optional[int] = None
+    previous_finished_at: str = ""
+    previous_verdict: str = ""
+    reason: str = ""
+    new: list[DriftFinding] = Field(default_factory=list)
+    resolved: list[DriftFinding] = Field(default_factory=list)
+    carried_not_ok: list[DriftFinding] = Field(default_factory=list)
+    requirements: list[DriftRequirement] = Field(default_factory=list)
+    config: list[DriftConfigChange] = Field(default_factory=list)
+    previous_config_version: Optional[int] = None
+    config_version: Optional[int] = None
