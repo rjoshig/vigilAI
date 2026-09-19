@@ -151,7 +151,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="app-sidebar sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r bg-card">
         <div className="flex items-center gap-2.5 p-4">
-          <div className="app-logo grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
