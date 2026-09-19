@@ -82,7 +82,11 @@ def resolve(
         _LOG.info("named value %s: report %s was not supplied", named.name, named.report_kind)
         return None
 
-    sheet = document.sheet(named.sheet)
+    # No sheet named means the first one: a one-sheet workbook is the common case
+    # and the guide editor offers "(first sheet)" for exactly this.
+    sheet = (
+        document.sheet(named.sheet) if named.sheet.strip() else next(iter(document.sheets), None)
+    )
     if sheet is None:
         _LOG.info("named value %s: sheet %r not found", named.name, named.sheet)
         return None
