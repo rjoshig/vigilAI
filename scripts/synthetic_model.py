@@ -6,7 +6,7 @@ returns empty payloads cannot exercise the pipeline: every stage would have noth
 work with and a passing test would mean nothing. This module answers each LLM stage by
 *reading the prompt*, the way a competent model would for the synthetic fixtures.
 
-It is deliberately not part of ``src/vigilai/``: it is evaluation tooling, and shipping
+It is deliberately not part of ``src/greenlight_ai/``: it is evaluation tooling, and shipping
 a fixture-aware responder inside the product would let a real deployment accidentally
 depend on it. It never consults a case's oracle, so a test can still catch the pipeline
 drawing a wrong conclusion from a right answer.
@@ -18,8 +18,8 @@ import json
 import re
 from typing import Any
 
-from vigilai.llm import LLMSettings, MockClient
-from vigilai.rules.normalize import AliasTable
+from greenlight_ai.llm import LLMSettings, MockClient
+from greenlight_ai.rules.normalize import AliasTable
 
 __all__ = [
     "FIXTURE_ALIASES",
@@ -337,7 +337,7 @@ def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClie
 
     Args:
         settings: Adapter settings; the mock defaults are used when omitted.
-        **kwargs: Passed to :class:`~vigilai.llm.mock.MockClient`, e.g. a shared cache.
+        **kwargs: Passed to :class:`~greenlight_ai.llm.mock.MockClient`, e.g. a shared cache.
 
     Returns:
         A client that answers every LLM stage without a network call.

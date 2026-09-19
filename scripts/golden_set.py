@@ -33,10 +33,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from synthetic_model import FIXTURE_ALIASES, build_client  # noqa: E402
 
-from vigilai.llm.factory import build_cache, build_client as build_real_client  # noqa: E402
-from vigilai.llm.settings import LLMSettings  # noqa: E402
-from vigilai.pipeline.context import STAGE_ORDER, RunContext  # noqa: E402
-from vigilai.pipeline.run import PipelineError, run_pipeline  # noqa: E402
+from greenlight_ai.llm.factory import build_cache, build_client as build_real_client  # noqa: E402
+from greenlight_ai.llm.settings import LLMSettings  # noqa: E402
+from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext  # noqa: E402
+from greenlight_ai.pipeline.run import PipelineError, run_pipeline  # noqa: E402
 
 _LOG: Final = logging.getLogger("golden_set")
 

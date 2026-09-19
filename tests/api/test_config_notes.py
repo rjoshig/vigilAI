@@ -13,9 +13,9 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.config.store import invalidate
-from vigilai.db import models
-from vigilai.pipeline.guidance import RunGuidance, preamble
+from greenlight_ai.config.store import invalidate
+from greenlight_ai.db import models
+from greenlight_ai.pipeline.guidance import RunGuidance, preamble
 
 Submit = Callable[..., Any]
 
@@ -131,8 +131,8 @@ def test_a_rule_learned_from_a_note_is_scoped_to_that_configuration(
     factory: sessionmaker[Session],
 ) -> None:
     """The point of writing the note there is that the rule stays there."""
-    from vigilai.db.repository import load_admin_config
-    from vigilai.training.synthesis import _scope_for
+    from greenlight_ai.db.repository import load_admin_config
+    from greenlight_ai.training.synthesis import _scope_for
 
     with factory() as session:
         note = models.TrainingObservation(

@@ -70,7 +70,7 @@ defense in depth.
 **Context:** Production is an air-gapped in-house model behind an OpenAI-style or
 Anthropic-style API; dev uses Ollama or the Anthropic API; tests need no model at all.
 
-**Decision:** `src/vigilai/llm/` is the only module that talks to a model, through the
+**Decision:** `src/greenlight_ai/llm/` is the only module that talks to a model, through the
 `LLMClient` Protocol. `OpenAIClient` (`/chat/completions`), `AnthropicClient`
 (`/v1/messages`), and `MockClient` are selected by `LLM_PROVIDER`; URL, key, model,
 limits, and concurrency come from the environment. Plain `httpx`, no SDKs. JSON-only
@@ -310,8 +310,8 @@ switch in `.env`.
 code or the compose file changes:
 
 ```bash
-DATABASE_URL=sqlite+pysqlite:///./data/vigilai.db            # default
-DATABASE_URL=postgresql+psycopg://vigilai:vigilai@postgres:5432/vigilai
+DATABASE_URL=sqlite+pysqlite:///./data/greenlight-ai.db            # default
+DATABASE_URL=postgresql+psycopg://greenlight_ai:greenlight_ai@postgres:5432/greenlight_ai
 ```
 
 Three consequences follow, and each is handled rather than papered over:
@@ -348,7 +348,7 @@ stage that assembles its own text, a fixture that leaks, or a parser change that
 masking a column would all defeat it silently. Phase 6 asks for a tripwire on every
 assembled prompt.
 
-**Decision:** `vigilai/llm/tripwire.py` scans every assembled prompt inside the adapter,
+**Decision:** `greenlight_ai/llm/tripwire.py` scans every assembled prompt inside the adapter,
 before the cache lookup and therefore before any path to the network. It matches
 formats, not meanings: SSN, card number, email, phone, street address, and a labelled
 date of birth. On a match it **raises**, and the prompt is not sent.
@@ -570,7 +570,7 @@ it small.
    account; with login on it is whoever signed in. No nullable authors, no branch in
    any handler, no code path that exists in only one mode. This is the decision that
    makes the rest of the phase a week rather than a month.
-2. **Two independent switches**, `VIGILAI_ADMIN_AUTH` and `VIGILAI_USER_AUTH`, both
+2. **Two independent switches**, `GREENLIGHT_AI_ADMIN_AUTH` and `GREENLIGHT_AI_USER_AUTH`, both
    false by default. Off means no prompt, no cookie, and today's behaviour exactly.
 3. **No self-registration.** An administrator creates every account, for both roles,
    capturing a name and an email. Every account sets its own password at first
@@ -706,3 +706,42 @@ that a note applies without review, which is acceptable precisely because it can
 enforce anything; the moment it should, a person is in the loop. The rule scope
 vocabulary grows by one form, `config:<id>`, beside `all`, a customer name, and
 `programme:CODE`.
+
+
+## ADR-025 — The product is Greenlight AI
+
+**Status:** accepted 2026-09-19 (user decision)
+
+**Context:** The tool was built under the working name vigilAI. Before it reaches the
+delivery teams it takes its product name, Greenlight AI, with the tagline *Nothing
+ships without a green light.* Behaviour does not change; the name does, everywhere a
+person or a machine reads it.
+
+**Decision:** One rename, applied in every casing at once, with no compatibility layer.
+
+- Display **Greenlight AI**; kebab `greenlight-ai` for packages, folders, images, and
+  file names; snake `greenlight_ai` for the Python package, database objects, and the
+  Postgres role and database; `GREENLIGHT_AI_` for every environment variable and
+  constant; `greenlight` where a single word is needed, such as the container user.
+- **Persistent identifiers were renamed too**: the compose project (so its volumes are
+  `greenlight-ai_pgdata` and `greenlight-ai_files`), the Postgres defaults, and the
+  SQLite default `data/greenlight-ai.db`. Nothing had shipped, so the old local
+  volumes and files are left behind rather than migrated.
+- **The old environment names stopped working.** A hard cutover was chosen over a
+  shim that reads both, because there was nobody to protect and a shim has to be
+  removed later.
+- **The session cookie is `greenlight_ai_session`**, which signed every session out
+  once.
+- **Applied migrations keep their revision ids and DDL.** Only the module path of the
+  custom column type they import changed, which is required for them to load at all.
+- **History was rewritten** at the user's direction: ADR bodies, session-log entries,
+  and checked criteria read the new name. This ADR is the record that the name was
+  once different.
+- **The mark** is a green light in the brand box; there was never a logo image. The
+  wordmark is text.
+
+**Consequences:** The GitHub repository and the git remote still carry the old name
+until the user renames them, and two documentation URLs point at the current
+repository until then. Anyone with a local `.env` or shell exports under the old
+prefix must update them. `compare-file` references are untouched: that is a sibling
+project, not this one.

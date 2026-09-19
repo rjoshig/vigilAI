@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from vigilai.checks.expressions import (
+from greenlight_ai.checks.expressions import (
     ExpressionError,
     UnresolvedValue,
     evaluate,
@@ -203,7 +203,7 @@ def test_referenced_names_rejects_a_malformed_expression() -> None:
 
 
 def test_validate_returns_the_names_a_good_expression_uses() -> None:
-    from vigilai.checks.expressions import validate
+    from greenlight_ai.checks.expressions import validate
 
     assert validate("billing_count <= delivered_count") == {"billing_count", "delivered_count"}
 
@@ -214,21 +214,21 @@ def test_validate_returns_the_names_a_good_expression_uses() -> None:
 )
 def test_validate_refuses_what_evaluate_would_refuse(expression: str) -> None:
     """Saving a dangerous check must fail now, not on the next run."""
-    from vigilai.checks.expressions import validate
+    from greenlight_ai.checks.expressions import validate
 
     with pytest.raises(ExpressionError):
         validate(expression)
 
 
 def test_validate_catches_a_syntax_error() -> None:
-    from vigilai.checks.expressions import validate
+    from greenlight_ai.checks.expressions import validate
 
     with pytest.raises(ExpressionError, match="not valid Python"):
         validate("1 +")
 
 
 def test_validate_catches_division_by_zero() -> None:
-    from vigilai.checks.expressions import validate
+    from greenlight_ai.checks.expressions import validate
 
     with pytest.raises(ExpressionError, match="division by zero"):
         validate("a / 0")

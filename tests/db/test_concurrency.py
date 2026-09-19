@@ -14,12 +14,12 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.db.cache import DbCache
-from vigilai.db.queue import JobQueue
-from vigilai.db.session import create_all, create_engine, session_factory
-from vigilai.db.settings import DbSettings
-from vigilai.llm.cache import CacheEntry, LLMCache
+from greenlight_ai.db import models
+from greenlight_ai.db.cache import DbCache
+from greenlight_ai.db.queue import JobQueue
+from greenlight_ai.db.session import create_all, create_engine, session_factory
+from greenlight_ai.db.settings import DbSettings
+from greenlight_ai.llm.cache import CacheEntry, LLMCache
 
 
 @pytest.fixture()
@@ -125,7 +125,7 @@ def test_the_per_order_cap_holds_under_concurrent_submission(
     factory: sessionmaker[Session],
 ) -> None:
     """Phase 6: the per-order-number queue cap verified."""
-    from vigilai.api.routers.runs import MAX_QUEUED_PER_ORDER
+    from greenlight_ai.api.routers.runs import MAX_QUEUED_PER_ORDER
 
     with factory() as session:
         for _ in range(MAX_QUEUED_PER_ORDER):

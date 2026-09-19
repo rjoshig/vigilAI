@@ -12,7 +12,7 @@ no prompt, no session, no password. With a switch on, people sign in, and every 
 review, observation, and approval carries a name that a person chose rather than a
 name a form accepted. ADR-008 kept the seam for this; this phase uses it.
 
-Effort 1–1.5 weeks. Read ADR-008 and ADR-022, and `src/vigilai/api/deps.py`, which is
+Effort 1–1.5 weeks. Read ADR-008 and ADR-022, and `src/greenlight_ai/api/deps.py`, which is
 the one function that changes.
 
 ## The design in one idea
@@ -40,8 +40,8 @@ Two independent switches, because the admin console and the user app are separat
 deployments with different exposure:
 
 ```
-VIGILAI_ADMIN_AUTH=false     # admin-ui and /api/v1/admin/*
-VIGILAI_USER_AUTH=false      # user-ui and the rest of the API
+GREENLIGHT_AI_ADMIN_AUTH=false     # admin-ui and /api/v1/admin/*
+GREENLIGHT_AI_USER_AUTH=false      # user-ui and the rest of the API
 ```
 
 Turning on user auth without admin auth is allowed but odd, and the API logs a warning

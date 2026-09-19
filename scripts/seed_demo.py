@@ -8,7 +8,7 @@ the lifecycle — queued, needs review, finalized OK, finalized Not OK, and fail
 Everything is synthetic (ADR-003). Point it at a scratch database, not a real one.
 
 Usage:
-    DATABASE_URL=sqlite+pysqlite:///./data/demo.db VIGILAI_DATA_DIR=./data \\
+    DATABASE_URL=sqlite+pysqlite:///./data/demo.db GREENLIGHT_AI_DATA_DIR=./data \\
         python scripts/seed_demo.py
 """
 
@@ -28,15 +28,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from synthetic_model import FIXTURE_ALIASES, build_client  # noqa: E402
 
-import vigilai.worker.runner as runner  # noqa: E402
-from vigilai.auth import accounts  # noqa: E402
-from vigilai.auth.passwords import hash_password  # noqa: E402
-from vigilai.db import catalog, models  # noqa: E402
-from vigilai.db.session import create_all, create_engine, session_factory  # noqa: E402
-from vigilai.config.store import write_setting  # noqa: E402
-from vigilai.db.settings import DbSettings  # noqa: E402
-from vigilai.db.types import utcnow  # noqa: E402
-from vigilai.llm.settings import LLMSettings  # noqa: E402
+import greenlight_ai.worker.runner as runner  # noqa: E402
+from greenlight_ai.auth import accounts  # noqa: E402
+from greenlight_ai.auth.passwords import hash_password  # noqa: E402
+from greenlight_ai.db import catalog, models  # noqa: E402
+from greenlight_ai.db.session import create_all, create_engine, session_factory  # noqa: E402
+from greenlight_ai.config.store import write_setting  # noqa: E402
+from greenlight_ai.db.settings import DbSettings  # noqa: E402
+from greenlight_ai.db.types import utcnow  # noqa: E402
+from greenlight_ai.llm.settings import LLMSettings  # noqa: E402
 
 _LOG: Final = logging.getLogger("seed_demo")
 
@@ -457,8 +457,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from fastapi.testclient import TestClient
 
-    from vigilai.api.app import create_app
-    from vigilai.worker.app import Worker
+    from greenlight_ai.api.app import create_app
+    from greenlight_ai.worker.app import Worker
 
     runner.build_client = (  # type: ignore[assignment]
         lambda settings, cache=None, call_log=None, **kwargs: build_client(
@@ -559,7 +559,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             .where(models.Job.run_id == run_id)
                             .values(
                                 run_after=__import__(
-                                    "vigilai.db.types", fromlist=["utcnow"]
+                                    "greenlight_ai.db.types", fromlist=["utcnow"]
                                 ).utcnow()
                             )
                         )
@@ -616,8 +616,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"  VR-{run_id:04d}  {state:16}  {note}")
     print("")
     print("Start the services:")
-    print("  uvicorn vigilai.api.app:get_app --factory --reload")
-    print("  python -m vigilai.worker.app")
+    print("  uvicorn greenlight_ai.api.app:get_app --factory --reload")
+    print("  python -m greenlight_ai.worker.app")
     print("  cd user-ui && npm run dev      # :3000")
     print("  cd admin-ui && npm run dev     # :3001")
     return 0

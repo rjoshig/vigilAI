@@ -15,9 +15,9 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.report.pdf import PdfUnavailable
-from vigilai.worker.app import Worker
+from greenlight_ai.db import models
+from greenlight_ai.report.pdf import PdfUnavailable
+from greenlight_ai.worker.app import Worker
 
 Submit = Callable[..., Any]
 
@@ -408,5 +408,5 @@ def test_a_successful_download_is_a_pdf_with_a_filename(
     response = client.get(f"{api}/runs/{reviewed}/report.pdf")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert f"vigilai-run-{reviewed}.pdf" in response.headers["content-disposition"]
+    assert f"greenlight-ai-run-{reviewed}.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")

@@ -32,9 +32,9 @@ Two consequences worth stating plainly, because both have bitten other projects:
 | Setting | Why not |
 | --- | --- |
 | `DATABASE_URL` | The override lives in the database. A value that gates access to its own store cannot live in it. |
-| `VIGILAI_DATA_DIR` | Changing it at runtime orphans every stored file. |
-| `VIGILAI_BIND_HOST` | It decides whether the bootstrap-password refusal applies, so it is not something the console may soften. |
-| `VIGILAI_SECRET_KEY` | It decrypts the secrets in the table. Storing it there protects nothing. |
+| `GREENLIGHT_AI_DATA_DIR` | Changing it at runtime orphans every stored file. |
+| `GREENLIGHT_AI_BIND_HOST` | It decides whether the bootstrap-password refusal applies, so it is not something the console may soften. |
+| `GREENLIGHT_AI_SECRET_KEY` | It decrypts the secrets in the table. Storing it there protects nothing. |
 
 They appear in the console read-only, with the reason, because "you cannot change this
 here" is more useful than not showing it at all.

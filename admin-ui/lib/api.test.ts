@@ -240,7 +240,7 @@ describe("the admin API client", () => {
 
   it("raises the missing-master-key refusal as a 409", async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse({ detail: "VIGILAI_SECRET_KEY is not set on the server" }, 409)
+      jsonResponse({ detail: "GREENLIGHT_AI_SECRET_KEY is not set on the server" }, 409)
     );
     await expect(api.saveSetting("llm.api_key", "sk-x")).rejects.toMatchObject({ status: 409 });
   });

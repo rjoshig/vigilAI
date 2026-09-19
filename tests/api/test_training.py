@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.config.store import invalidate
-from vigilai.db import models
+from greenlight_ai.config.store import invalidate
+from greenlight_ai.db import models
 
 Submit = Callable[..., Any]
 
@@ -137,7 +137,7 @@ def test_a_rejection_carries_its_reason_and_keeps_the_row(
 @pytest.fixture()
 def scripted_model(monkeypatch: pytest.MonkeyPatch) -> None:
     """Point the synthesis endpoint at the scripted stand-in rather than a network."""
-    import vigilai.api.routers.training as training_router
+    import greenlight_ai.api.routers.training as training_router
     from synthetic_model import build_client
 
     monkeypatch.setattr(

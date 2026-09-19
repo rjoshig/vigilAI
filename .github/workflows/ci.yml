@@ -1,4 +1,4 @@
-# CI for vigilAI. Manual-only (workflow_dispatch) by owner decision (ADR-012): GitHub
+# CI for Greenlight AI. Manual-only (workflow_dispatch) by owner decision (ADR-012): GitHub
 # Actions credit is limited, so the gates run locally per standards/git.md §3 and this
 # workflow is dispatched by hand before a merge to main. Restore
 # `pull_request` + `push: branches: [main]` when the owner says so.
@@ -30,16 +30,16 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: vigilai
-          POSTGRES_PASSWORD: vigilai
-          POSTGRES_DB: vigilai_test
+          POSTGRES_USER: greenlight_ai
+          POSTGRES_PASSWORD: greenlight_ai
+          POSTGRES_DB: greenlight_ai_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U vigilai" --health-interval 5s --health-timeout 5s
+          --health-cmd "pg_isready -U greenlight_ai" --health-interval 5s --health-timeout 5s
           --health-retries 10
     env:
       LLM_PROVIDER: mock
-      DATABASE_URL: postgresql+psycopg://vigilai:vigilai@127.0.0.1:5432/vigilai_test
+      DATABASE_URL: postgresql+psycopg://greenlight_ai:greenlight_ai@127.0.0.1:5432/greenlight_ai_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@v5 # TODO(human): pin by commit SHA (the other actions are pinned)

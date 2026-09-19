@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from vigilai.rules import (
+from greenlight_ai.rules import (
     LOW_CONFIDENCE,
     Condition,
     ConfigElement,

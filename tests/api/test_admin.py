@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.worker.app import Worker
+from greenlight_ai.db import models
+from greenlight_ai.worker.app import Worker
 
 Submit = Callable[..., Any]
 
@@ -336,8 +336,8 @@ def test_drafting_proposes_named_values_and_an_expression(
     client: TestClient, api: str, templates: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The one LLM call in the admin flow."""
-    import vigilai.api.routers.admin as admin_module
-    from vigilai.llm import MockClient
+    import greenlight_ai.api.routers.admin as admin_module
+    from greenlight_ai.llm import MockClient
 
     proposal = json.dumps(
         {
@@ -379,8 +379,8 @@ def test_drafting_proposes_named_values_and_an_expression(
 def test_a_draft_that_uses_an_undefined_value_is_flagged(
     client: TestClient, api: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import vigilai.api.routers.admin as admin_module
-    from vigilai.llm import MockClient
+    import greenlight_ai.api.routers.admin as admin_module
+    from greenlight_ai.llm import MockClient
 
     def build(settings: Any, **kwargs: Any) -> Any:
         client_ = MockClient(settings, **kwargs)
@@ -400,8 +400,8 @@ def test_a_draft_that_uses_an_undefined_value_is_flagged(
 def test_a_draft_naming_an_unknown_report_is_flagged(
     client: TestClient, api: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import vigilai.api.routers.admin as admin_module
-    from vigilai.llm import MockClient
+    import greenlight_ai.api.routers.admin as admin_module
+    from greenlight_ai.llm import MockClient
 
     def build(settings: Any, **kwargs: Any) -> Any:
         client_ = MockClient(settings, **kwargs)

@@ -18,8 +18,8 @@ from synthetic_model import (  # noqa: F401 - re-exported for tests that import 
     extract_responder,
     trace_responder,
 )
-from vigilai.llm import MockClient
-from vigilai.pipeline.context import RunContext
+from greenlight_ai.llm import MockClient
+from greenlight_ai.pipeline.context import RunContext
 
 
 @pytest.fixture()

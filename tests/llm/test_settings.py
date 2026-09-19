@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from vigilai.llm import ConfigError, LLMSettings
+from greenlight_ai.llm import ConfigError, LLMSettings
 
 
 def test_defaults_are_the_mock_provider() -> None:

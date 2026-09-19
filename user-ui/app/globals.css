@@ -86,7 +86,7 @@
 
 /* ===========================================================================
    Palettes. The active one is set by <html data-theme="..."> from
-   VIGILAI_UI_THEME (lib/theme.ts). Each overrides only the brand tokens; the
+   GREENLIGHT_AI_UI_THEME (lib/theme.ts). Each overrides only the brand tokens; the
    neutrals and the severity colours stay the same in every palette so a
    finding reads the same way whichever look is chosen. Light values are scoped
    with :not(.dark) so they never bleed into dark mode. Token values are the ones

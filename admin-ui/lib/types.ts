@@ -1,5 +1,5 @@
 /**
- * Domain types for the admin surface, mirroring `src/vigilai/api/schemas_admin.py`.
+ * Domain types for the admin surface, mirroring `src/greenlight_ai/api/schemas_admin.py`.
  */
 
 export const REPORT_KINDS = [

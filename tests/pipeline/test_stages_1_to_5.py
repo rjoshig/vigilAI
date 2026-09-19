@@ -11,11 +11,11 @@ from typing import Callable
 
 import pytest
 
-from vigilai.llm import LLMSettings, MockClient
-from vigilai.pipeline.context import STAGE_ORDER, RunContext
-from vigilai.pipeline.run import PipelineError, recheck, run_pipeline
-from vigilai.pipeline.s4_trace import describe_rule, exact_match, shortlist
-from vigilai.rules.schema import Condition, ConfigElement, Rule
+from greenlight_ai.llm import LLMSettings, MockClient
+from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext
+from greenlight_ai.pipeline.run import PipelineError, recheck, run_pipeline
+from greenlight_ai.pipeline.s4_trace import describe_rule, exact_match, shortlist
+from greenlight_ai.rules.schema import Condition, ConfigElement, Rule
 
 CORE = ("s1_parse", "s2_extract", "s3_describe", "s4_trace", "s5_compare")
 

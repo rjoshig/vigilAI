@@ -1,4 +1,4 @@
-# vigilAI
+# Greenlight AI
 
 Automated QC validation for a credit-data fulfillment process.
 
@@ -34,8 +34,8 @@ broker, no object store. No login in v1 (internal network only).
 | --- | --- | --- | --- |
 | user-ui | `user-ui/` | Next.js, TypeScript, Tailwind | New run, run history, review screen, report viewer, config history |
 | admin-ui | `admin-ui/` | Next.js, same theme, own URL | Artifact types and their meaning, delivery programmes, check definitions, compliance rules, aliases, usage |
-| api | `src/vigilai/api/` | FastAPI, SQLAlchemy, Alembic, Pydantic | Uploads, run CRUD, enqueue, reviews, serve reports |
-| worker | `src/vigilai/worker/` + `pipeline/` | Python, Procrastinate, python-docx, openpyxl, pandas, Jinja2, Playwright | The nine-stage pipeline and PDF rendering |
+| api | `src/greenlight_ai/api/` | FastAPI, SQLAlchemy, Alembic, Pydantic | Uploads, run CRUD, enqueue, reviews, serve reports |
+| worker | `src/greenlight_ai/worker/` + `pipeline/` | Python, Procrastinate, python-docx, openpyxl, pandas, Jinja2, Playwright | The nine-stage pipeline and PDF rendering |
 | postgres | — | Postgres 16 | Metadata, rules, findings, checks, stats, LLM cache, job queue |
 
 Details: [`docs/architecture.md`](docs/architecture.md).
@@ -43,7 +43,7 @@ Details: [`docs/architecture.md`](docs/architecture.md).
 ## Repository layout
 
 ```
-vigilAI/
+greenlight-ai/
 ├── CLAUDE.md              # how to work on this repo (read first)
 ├── README.md              # you are here
 ├── pyproject.toml         # package + black / mypy / pytest config
@@ -54,7 +54,7 @@ vigilAI/
 ├── standards/             # canonical coding standards: python, frontend, git
 ├── docs/                  # design doc, architecture, phase docs, ADRs, session log
 ├── scripts/               # developer tooling (docs check; fixture generator from Phase 2)
-├── src/vigilai/           # the Python package: api + worker + pipeline
+├── src/greenlight_ai/           # the Python package: api + worker + pipeline
 ├── tests/                 # pytest suite; synthetic fixtures only
 ├── mock/                  # static clickable mock: shared/, user-ui/, admin-ui/ (Phase 1)
 ├── user-ui/               # associate-facing Next.js app (Phase 3)
@@ -124,7 +124,7 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`standards/`](standards/README.md) — coding standards and git rules
 - [`docs/benchmarks/README.md`](docs/benchmarks/README.md) — golden-set accuracy numbers.
 - [`mock/README.md`](mock/README.md), [`user-ui/README.md`](user-ui/README.md),
-  [`admin-ui/README.md`](admin-ui/README.md), [`src/vigilai/README.md`](src/vigilai/README.md),
+  [`admin-ui/README.md`](admin-ui/README.md), [`src/greenlight_ai/README.md`](src/greenlight_ai/README.md),
   [`tests/README.md`](tests/README.md), [`scripts/README.md`](scripts/README.md)
 
 ## License

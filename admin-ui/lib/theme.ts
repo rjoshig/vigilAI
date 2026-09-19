@@ -1,7 +1,7 @@
 /**
  * The colour theme, chosen by the deployment.
  *
- * Read from `VIGILAI_UI_THEME` on the server at request time, so a change in `.env`
+ * Read from `GREENLIGHT_AI_UI_THEME` on the server at request time, so a change in `.env`
  * shows up on the next page load with no rebuild. It is deliberately not a
  * `NEXT_PUBLIC_*` variable: those are inlined into the client bundle at build time,
  * which would make the theme a build decision rather than a configuration one.
@@ -32,5 +32,5 @@ export function pickPalette(value: string | undefined): Palette {
 
 /** The palette this process was configured with. */
 export function configuredPalette(): Palette {
-  return pickPalette(process.env.VIGILAI_UI_THEME);
+  return pickPalette(process.env.GREENLIGHT_AI_UI_THEME);
 }

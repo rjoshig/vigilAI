@@ -12,9 +12,9 @@ from string import Template
 
 import pytest
 
-from vigilai.llm import MockClient, extract_json
-from vigilai.llm.prompts import PROMPTS, Prompt, get_prompt, prompt_versions
-from vigilai.llm.prompts.registry import register
+from greenlight_ai.llm import MockClient, extract_json
+from greenlight_ai.llm.prompts import PROMPTS, Prompt, get_prompt, prompt_versions
+from greenlight_ai.llm.prompts.registry import register
 
 #: The pipeline stages that call a model (``docs/architecture.md`` "The pipeline").
 PIPELINE_STAGES = {"s2_extract", "s3_describe", "s4_trace", "s8_verify", "s9_summarize"}

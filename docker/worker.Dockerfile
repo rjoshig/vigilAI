@@ -17,11 +17,11 @@ RUN pip install --no-cache-dir -e ".[pdf]" \
 
 COPY scripts/ ./scripts/
 
-RUN mkdir -p /data && useradd --create-home --uid 10001 vigilai && chown -R vigilai /data /app
-USER vigilai
+RUN mkdir -p /data && useradd --create-home --uid 10001 greenlight && chown -R greenlight /data /app
+USER greenlight
 
-ENV VIGILAI_DATA_DIR=/data
+ENV GREENLIGHT_AI_DATA_DIR=/data
 
 # No migrations here: the api applies them, and several workers racing to migrate the
 # same database is a way to corrupt it.
-CMD ["python", "-m", "vigilai.worker.app"]
+CMD ["python", "-m", "greenlight_ai.worker.app"]

@@ -12,7 +12,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from vigilai.config.store import invalidate
+from greenlight_ai.config.store import invalidate
 
 Submit = Callable[..., Any]
 
@@ -95,12 +95,12 @@ def test_a_secret_needs_a_master_key_and_never_comes_back(
     client: TestClient, api: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Refusing to store it is better than pretending it is protected."""
-    monkeypatch.delenv("VIGILAI_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GREENLIGHT_AI_SECRET_KEY", raising=False)
     refused = client.post(f"{api}/admin/settings", json={"key": "llm.api_key", "value": "sk-nope"})
     assert refused.status_code == 409
-    assert "VIGILAI_SECRET_KEY" in refused.json()["detail"]
+    assert "GREENLIGHT_AI_SECRET_KEY" in refused.json()["detail"]
 
-    monkeypatch.setenv("VIGILAI_SECRET_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("GREENLIGHT_AI_SECRET_KEY", Fernet.generate_key().decode())
     invalidate()
     stored = client.post(
         f"{api}/admin/settings", json={"key": "llm.api_key", "value": "sk-live-key-4321"}

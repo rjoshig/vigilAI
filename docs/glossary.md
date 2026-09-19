@@ -93,6 +93,6 @@ uses these yet.
 | Term | Meaning |
 | --- | --- |
 | **Placeholder user** | The seeded account every action is attributed to while login is off (John Doe, jdoe@jdoe.com). It cannot be signed in as or deleted, so "placeholder" always reads as "no login was enabled". |
-| **Auth switch** | `VIGILAI_ADMIN_AUTH` and `VIGILAI_USER_AUTH`, independent and both false by default. Off means no prompt, no cookie, today's behaviour. |
+| **Auth switch** | `GREENLIGHT_AI_ADMIN_AUTH` and `GREENLIGHT_AI_USER_AUTH`, independent and both false by default. Off means no prompt, no cookie, today's behaviour. |
 | **Bootstrap admin** | The `admin` account created on first startup with admin auth on. Must change its password before it can do anything else. |
 | **Attribution** | The actor recorded on a run, a finding decision, a config capture, an observation, and an approval. Always present, because there is always a current user. |
