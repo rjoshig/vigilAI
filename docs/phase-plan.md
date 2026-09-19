@@ -19,7 +19,7 @@ risk.
 | 6.1 | Richer inputs and a trainable rule loop — several samples per type, several files per report, type detection, and Train AI mode: reviewer observations synthesized into rules an administrator approves | 3–4 weeks | ✅ **complete** — two items open, listed in the doc | [phase-6.1.md](phase-6.1.md) |
 | 6.2 | Optional login and attribution — two `.env` switches, admin-created accounts, sessions, and who-did-what on runs, reviews, and suggestions | 1–1.5 weeks | ✅ **complete** — login ships off; one item open | [phase-6.2.md](phase-6.2.md) |
 | 6.3 | Runtime settings in the admin console — the console overrides `.env`, which overrides the defaults; model, login, throughput, uploads, retention | 1 week | ✅ **complete** | [phase-6.3.md](phase-6.3.md) |
-| 6.4 | Showing the mode, and notes that follow a configuration — a Train AI indicator in both apps; standing notes on a configuration id that reach the model as background and the admin queue as comments | 1 week | ⬜ **not started** — specified, questions open | [phase-6.4.md](phase-6.4.md) |
+| 6.4 | Showing the mode, and notes that follow a configuration — a Train AI indicator in both apps; standing notes on a configuration id that reach the model as background and the admin queue as comments | 1 week | ⬜ **not started** — specified and decided; next to build | [phase-6.4.md](phase-6.4.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of

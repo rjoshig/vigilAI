@@ -1,7 +1,7 @@
 # Phase 6.4 — Showing the mode, and notes that follow a configuration
 
-**Status:** ⬜ **not started** — specified 2026-09-19 at the user's request. Open
-questions at the foot of this doc are being answered before the build.
+**Status:** ⬜ **not started** — specified 2026-09-19 at the user's request, design
+questions answered the same day (see "Decisions"). Ready to build.
 
 **Goal:** two things a person using the tool cannot see today.
 
@@ -44,8 +44,9 @@ observation in the queue, and the ordinary loop turns it into a rule a person ap
       an administrator flips the switch (the config is re-read on navigation, and the
       five-second settings cache means it lags at most that long).
 - [ ] Every control that exists only because the mode is on carries the same mark: the
-      "What should this check?" buttons, the observation dialog, the My observations
-      page, and the configuration-note field. A short tag, "Train AI", beside each, so
+      "What should this check?" buttons, the observation dialog, and the My
+      observations page. The configuration-note field is **not** tagged, because
+      notes are available whatever the mode. A short tag, "Train AI", beside each, so
       a person can tell at a glance which parts of the screen are collecting what they
       type.
 - [ ] One sentence on hover or beside the indicator saying what the mode does: what
@@ -107,17 +108,13 @@ field holds.
    comment and can be synthesized into a candidate scoped to that configuration.
 5. [ ] Switching a note off stops it applying to the next run; the old text is kept.
 
-## Open questions for the user
+## Decisions (2026-09-19)
 
-- [ ] **Does a configuration note need an administrator before it applies?** As
-      specified, it applies as background at once and appears in the queue for an
-      administrator to turn into a rule if they choose. The alternative is that
-      nothing reaches the model until an administrator approves the note. Faster
-      versus safer.
-- [ ] **Does the note depend on Train AI mode?** It could be available always, since
-      it is guidance rather than training; or only when the mode is on, since that is
-      the mode under which the tool collects what people write.
-- [ ] **Who may write one?** Anyone, as with observations, or only the person who
-      submitted a run with that configuration?
-- [ ] **Where should the indicator live in the admin console?** The sidebar mirrors
-      the user app; the Settings screen already shows the switch itself.
+Answered by the user.
+
+| Question | Decision |
+| --- | --- |
+| Does a note need an administrator before it applies | **No.** It reaches the model as background on the next run at once, labelled as background, and lands in the admin queue where an administrator may promote it to a rule. |
+| Does a note depend on Train AI mode | **No, always available.** A note is guidance about a configuration; the mode gates observations and synthesis, not context. Its field carries no Train AI tag. |
+| Who may write one | **Anyone**, with their name recorded and every edit versioned. |
+| Where the indicator sits in the admin console | **The sidebar**, mirroring the user app. |
