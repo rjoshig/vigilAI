@@ -28,7 +28,8 @@ apps and is the first candidate for a named theme here.
 
 - [x] A theme is a named set of colour tokens, declared in each app's `globals.css`
       and kept identical between them. Shipped: `default`, `light-blue-yellow`, and
-      `classic-teal` from compare-file, each in light and dark. Adding a theme is one
+      `classic-teal` from compare-file, plus `classic-teal-navy`, the teal page with
+      a navy sidebar and a yellow mark, each in light and dark. Adding a theme is one
       block of tokens and one entry in `lib/theme.ts`.
 - [ ] Every theme must pass the same contrast check for text, badges, and the
       severity colours, because a finding's severity is carried by colour and a theme

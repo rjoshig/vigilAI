@@ -12,7 +12,12 @@
  * the two tools read the same way.
  */
 
-export const PALETTES = ["default", "light-blue-yellow", "classic-teal"] as const;
+export const PALETTES = [
+  "default",
+  "light-blue-yellow",
+  "classic-teal",
+  "classic-teal-navy",
+] as const;
 
 export type Palette = (typeof PALETTES)[number];
 
