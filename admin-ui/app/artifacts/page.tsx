@@ -32,6 +32,8 @@ import {
   Table,
   Textarea,
 } from "@/components/ui/primitives";
+import { GuideEditor } from "@/components/guide-editor";
+import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
 import type { ArtifactType, NamedValue, Sample, SamplePreview } from "@/lib/types";
 
@@ -63,6 +65,8 @@ export default function ArtifactsPage() {
   const [values, setValues] = React.useState<NamedValue[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<string | null>(null);
+  const [versions, setVersions] = React.useState<string | null>(null);
+  const [guide, setGuide] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [newType, setNewType] = React.useState({ ...NEW_TYPE });
   const [draft, setDraft] = React.useState({ ...EMPTY_POINTER });
@@ -242,6 +246,24 @@ export default function ArtifactsPage() {
                       >
                         {editing === type.key ? "Close" : "Define"}
                       </Button>
+                      {type.kind === "report" ? (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          aria-label={`Guide for ${type.label}`}
+                          onClick={() => setGuide(guide === type.key ? null : type.key)}
+                        >
+                          {guide === type.key ? "Hide guide" : `Guide (${type.guide.length})`}
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        aria-label={`Versions of ${type.label}`}
+                        onClick={() => setVersions(versions === type.key ? null : type.key)}
+                      >
+                        {versions === type.key ? "Hide versions" : "Versions"}
+                      </Button>
                       {type.is_builtin ? null : (
                         <Button
                           variant="ghost"
@@ -267,6 +289,24 @@ export default function ArtifactsPage() {
                       />
                     </TD>
                   </TR>
+                  {guide === type.key ? (
+                    <TR className="hover:bg-transparent">
+                      <TD colSpan={4} className="bg-muted/20">
+                        <GuideEditor type={type} busy={busy} onSaved={() => void load()} />
+                      </TD>
+                    </TR>
+                  ) : null}
+                  {versions === type.key ? (
+                    <TR className="hover:bg-transparent">
+                      <TD colSpan={4} className="bg-muted/20">
+                        <VersionsPanel
+                          kind="artifact-type"
+                          objectKey={type.key}
+                          onReverted={() => void load()}
+                        />
+                      </TD>
+                    </TR>
+                  ) : null}
                   {editing === type.key ? (
                     <TR className="hover:bg-transparent">
                       <TD colSpan={4} className="bg-muted/30">

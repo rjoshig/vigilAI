@@ -31,6 +31,7 @@ import {
   Skeleton,
   Textarea,
 } from "@/components/ui/primitives";
+import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
 import type {
   ProgrammeRule,
@@ -206,6 +207,7 @@ export default function ScopesPage() {
                 void act("save the programme", () => api.saveScope({ ...scope, ...changes }))
               }
               onDelete={() => void act("delete the programme", () => api.deleteScope(scope.code))}
+              onChanged={() => void load()}
               onAct={act}
             />
           ))}
@@ -226,6 +228,7 @@ function ScopeCard({
   onSave,
   onDelete,
   onAct,
+  onChanged,
 }: {
   scope: Scope;
   rules: ProgrammeRule[];
@@ -233,11 +236,13 @@ function ScopeCard({
   onSave: (changes: Partial<Scope>) => void;
   onDelete: () => void;
   onAct: Act;
+  onChanged: () => void;
 }) {
   const [label, setLabel] = React.useState(scope.label);
   const [description, setDescription] = React.useState(scope.description);
   const [instructions, setInstructions] = React.useState(scope.standing_instructions);
   const [keywords, setKeywords] = React.useState(scope.keywords.join(", "));
+  const [showVersions, setShowVersions] = React.useState(false);
 
   return (
     <Card>
@@ -250,6 +255,14 @@ function ScopeCard({
           {scope.runs_using > 0 ? <Badge tone="muted">{scope.runs_using} run(s)</Badge> : null}
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-label={`Versions of ${scope.label} rules`}
+            onClick={() => setShowVersions(!showVersions)}
+          >
+            {showVersions ? "Hide versions" : "Rule versions"}
+          </Button>
           <label className="flex items-center gap-1.5 text-xs">
             <input
               type="checkbox"
@@ -272,6 +285,9 @@ function ScopeCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 pt-3">
+        {showVersions ? (
+          <VersionsPanel kind="programme" objectKey={scope.code} onReverted={onChanged} />
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1">
             <Label htmlFor={`sl-${scope.code}`}>Label</Label>

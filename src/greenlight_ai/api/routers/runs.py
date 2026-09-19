@@ -82,8 +82,10 @@ def _severity_counts(session: Session, run_id: int) -> dict[str, int]:
     """
     rows = session.execute(
         sa.select(models.Finding.severity, sa.func.count())
-        .where(models.Finding.run_id == run_id)
-        .group_by(models.Finding.severity)
+        # Shadow findings are counted for the Rules screen, never here (ADR-021).
+        .where(models.Finding.run_id == run_id, models.Finding.shadow.is_(False)).group_by(
+            models.Finding.severity
+        )
     ).all()
     counts = {"high": 0, "medium": 0, "low": 0, "review": 0}
     for severity, count in rows:
@@ -108,6 +110,7 @@ def _can_finalize(session: Session, run_id: int) -> bool:
             models.Finding.run_id == run_id,
             models.Finding.severity == "high",
             models.Finding.review_status == "undecided",
+            models.Finding.shadow.is_(False),
         )
     ).scalar_one()
     return int(undecided) == 0
@@ -653,8 +656,10 @@ def list_findings(
     )
     statement = (
         sa.select(models.Finding)
-        .where(models.Finding.run_id == run_id)
-        .order_by(order, models.Finding.id)
+        # A shadow rule's findings are stored and counted and shown to nobody (ADR-021).
+        .where(models.Finding.run_id == run_id, models.Finding.shadow.is_(False)).order_by(
+            order, models.Finding.id
+        )
     )
     if severity:
         statement = statement.where(models.Finding.severity == severity)

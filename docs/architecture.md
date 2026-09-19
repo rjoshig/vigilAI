@@ -94,7 +94,9 @@ imports `pipeline`.
    results.
 4. **The catalog as data** — which artifacts the tool accepts, what each means, and
    which delivery programme a run belongs to are rows an administrator edits, not code
-   (ADR-020). `db/catalog.py` holds the shipped defaults and seeds them;
+   (ADR-020). `db/versions.py` snapshots every save of an artifact type or a
+   programme's rule set, lists the last ten, reverts one as a new version, and
+   prunes the rest on the retention sweep (ADR-029). `db/catalog.py` holds the shipped defaults and seeds them;
    `pipeline/guidance.py` turns what is configured into a prompt preamble and returns
    nothing when nothing is configured.
 5. **Check definitions as data** — admin-defined named values + expressions, versioned;

@@ -110,6 +110,8 @@ def load_admin_config(
     """
     checks = tuple(
         CheckDefinition(
+            id=row.id,
+            state=row.state,
             name=row.name,
             version=row.version,
             kind=row.kind,  # type: ignore[arg-type]

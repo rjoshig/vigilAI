@@ -75,7 +75,9 @@ def format_findings(context: RunContext) -> str:
         ``"(none)"`` when the run found nothing, which the prompt has a worked example
         for.
     """
-    if not context.findings:
+    # A shadow rule's findings are for the administrator watching it, not the summary.
+    visible = [f for f in context.findings if not f.shadow]
+    if not visible:
         return "(none)"
-    ordered = sorted(context.findings, key=lambda f: (_ORDER.get(f.severity, 9), f.finding_id))
+    ordered = sorted(visible, key=lambda f: (_ORDER.get(f.severity, 9), f.finding_id))
     return "\n".join(f"- {f.severity} | {f.type} | {f.title}" for f in ordered)

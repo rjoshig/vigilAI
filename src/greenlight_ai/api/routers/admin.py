@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Sequence, cast
 
@@ -44,8 +45,9 @@ from greenlight_ai.checks.expressions import (
     referenced_names,
     validate,
 )
+from greenlight_ai.checks import guides
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
-from greenlight_ai.db import catalog, models, repository
+from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.llm.cache import LLMCache
 from greenlight_ai.llm.client import LLMError
 from greenlight_ai.llm.factory import build_client
@@ -225,6 +227,7 @@ def _artifact_out(
         samples=samples,
         sheets=sheets,
         runs_using=in_use,
+        guide=[guides.GuideEntry.model_validate(entry) for entry in row.guide_entries or []],
     )
 
 
@@ -321,6 +324,7 @@ def save_artifact_type(
     session.flush()
 
     repository.audit(session, "admin.artifact_type_saved", detail=key)
+    versions.record_artifact_version(session, row, user.name)
     return _artifact_out(row, data_dir)
 
 
@@ -378,7 +382,9 @@ def upload_sample(
             file.content_type or "",
             key,
             data_dir,
-            TEMPLATE_DIR,
+            # One directory per sample: three samples of one type must not share a
+            # path, and an old version's workbook must outlive the sample row (ADR-029).
+            f"{TEMPLATE_DIR}/{uuid.uuid4().hex[:12]}",
         )
     except UploadError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
@@ -401,6 +407,60 @@ def upload_sample(
     session.flush()
     session.refresh(row)
     repository.audit(session, "admin.sample_uploaded", detail=key, user_id=user.id, actor=user.name)
+    versions.record_artifact_version(session, row, user.name, "sample added")
+    return _artifact_out(row, data_dir)
+
+
+@router.put("/artifact-types/{key}/guide", response_model=wire.ArtifactTypeOut)
+def save_guide(
+    key: str,
+    payload: wire.GuideIn,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ArtifactTypeOut:
+    """Replace an artifact type's validation guide (Phase 6.8b, ADR-029).
+
+    Examples are filled by resolving each locator on the stored samples. An entry
+    with an example and a config path compiles into a shadow check with origin
+    ``guide``; the rest is background for the model. The save is a version.
+
+    Args:
+        key: The artifact key.
+        payload: The entries, in order.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Returns:
+        The type, with the guide's examples filled.
+
+    Raises:
+        HTTPException: 404 when the type does not exist, 422 when two entries share
+            an id.
+    """
+    catalog.seed_defaults(session)
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+    ids = [entry.id for entry in payload.entries]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(HTTP_422, "every guide entry needs its own id")
+
+    entries = guides.fill_examples(key, payload.entries, row.samples, data_dir)
+    row.guide_entries = [entry.model_dump(by_alias=True) for entry in entries]
+    compiled = guides.compile_checks(session, key, entries, user.name)
+    session.flush()
+    repository.audit(
+        session,
+        "admin.guide_saved",
+        detail=f"{key}:{len(entries)} entries, {compiled} checks",
+        user_id=user.id,
+        actor=user.name,
+    )
+    versions.record_artifact_version(session, row, user.name, "guide edited")
     return _artifact_out(row, data_dir)
 
 
@@ -517,10 +577,9 @@ def delete_sample(
         HTTPException: 404 when it does not exist.
     """
     sample = _get_sample(session, key, sample_id)
-    path = data_dir / sample.storage_path
+    row = sample.artifact_type
     session.delete(sample)
-    if path.exists():
-        path.unlink()
+    session.flush()
     repository.audit(
         session,
         "admin.sample_deleted",
@@ -528,6 +587,9 @@ def delete_sample(
         user_id=user.id,
         actor=user.name,
     )
+    versions.record_artifact_version(session, row, user.name, "sample removed")
+    # The workbook stays on disk while any retained version still names it, so a
+    # revert can bring it back; the retention sweep removes it once none does.
 
 
 @router.delete("/artifact-types/{key}", status_code=status.HTTP_204_NO_CONTENT)
@@ -574,6 +636,12 @@ def delete_artifact_type(
         )
 
     session.delete(row)
+    session.execute(
+        sa.delete(models.DefinitionVersion).where(
+            models.DefinitionVersion.kind == "artifact_type",
+            models.DefinitionVersion.object_key == key,
+        )
+    )
     repository.audit(session, "admin.artifact_type_deleted", detail=key)
 
 
@@ -1813,6 +1881,7 @@ def create_programme_rule(
         user_id=user.id,
         actor=user.name,
     )
+    versions.record_programme_version(session, code, user.name, f"rule added: {row.title}")
     return _programme_rule_out(row)
 
 
@@ -1853,4 +1922,104 @@ def edit_programme_rule(
         user_id=user.id,
         actor=user.name,
     )
+    versions.record_programme_version(
+        session, row.scope_code, user.name, f"rule edited: {row.title}"
+    )
     return _programme_rule_out(row)
+
+
+# ------------------------------------------------------------------- versions
+
+
+_VERSION_KINDS: Final[dict[str, versions.VersionKind]] = {
+    "artifact-type": "artifact_type",
+    "programme": "programme_rules",
+}
+
+
+def _version_kind(kind: str) -> versions.VersionKind:
+    try:
+        return _VERSION_KINDS[kind]
+    except KeyError:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"no versioned definition kind {kind!r}"
+        ) from None
+
+
+def _version_out(row: models.DefinitionVersion) -> wire.VersionOut:
+    return wire.VersionOut(
+        version=row.version,
+        summary=row.summary,
+        reverted_from=row.reverted_from,
+        created_by=row.created_by,
+        created_at=row.created_at,
+        snapshot=row.snapshot or {},
+    )
+
+
+@router.get("/versions/{kind}/{key}", response_model=list[wire.VersionOut])
+def list_definition_versions(
+    kind: str,
+    key: str,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+) -> list[wire.VersionOut]:
+    """The last ten versions of an artifact type or a programme's rules, newest first.
+
+    Args:
+        kind: ``artifact-type`` or ``programme``.
+        key: The artifact key or the programme code.
+        session: The request's session.
+        _user: The calling administrator.
+
+    Returns:
+        The versions, each with who, when, a one-line summary, and the snapshot.
+    """
+    return [_version_out(row) for row in versions.list_versions(session, _version_kind(kind), key)]
+
+
+@router.post("/versions/{kind}/{key}/{version}/revert", response_model=wire.VersionOut)
+def revert_definition_version(
+    kind: str,
+    key: str,
+    version: int,
+    payload: wire.RevertIn,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.VersionOut:
+    """Put an old version back, as a new version (ADR-029).
+
+    Args:
+        kind: ``artifact-type`` or ``programme``.
+        key: The artifact key or the programme code.
+        version: The version to restore.
+        payload: The typed confirmation.
+        session: The request's session.
+        data_dir: The shared volume, where sample workbooks live.
+        user: The calling administrator.
+
+    Returns:
+        The new version carrying the restored state.
+
+    Raises:
+        HTTPException: 400 when the word was not typed, 404 when the version does not
+            exist.
+    """
+    if payload.confirm.strip().lower() != "revert":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "type 'revert' to confirm; this applies to every future run",
+        )
+    try:
+        row = versions.revert(session, _version_kind(kind), key, version, data_dir, user.name)
+    except versions.VersionError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    repository.audit(
+        session,
+        "admin.definition_reverted",
+        detail=f"{kind}:{key}:{version}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _version_out(row)

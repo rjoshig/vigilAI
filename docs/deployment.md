@@ -65,7 +65,9 @@ docker compose up --scale worker=4   # more pipeline throughput (LLM-bound)
 
 A nightly worker task deletes runs past `runs.expires_at` (created + 90 days), their files
 on the volume, and their rules / findings / stats. Aggregated usage stats are kept.
-`scripts/purge.py --dry-run` (Phase 6) reports what would go.
+`scripts/purge.py --dry-run` (Phase 6) reports what would go. The same sweep prunes
+definition versions beyond the ten listed (keeping any a live run names) and removes
+sample workbooks no version references (ADR-029).
 
 ## 6. Scaling notes
 

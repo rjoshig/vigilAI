@@ -15,7 +15,8 @@ from typing import Final
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from greenlight_ai.db import catalog, models, repository
+from greenlight_ai.checks.guides import GuideEntry, guide_lines
+from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.db.cache import DbCache, record_calls
 from greenlight_ai.db.session import session_scope
 from greenlight_ai.db.types import utcnow
@@ -81,6 +82,14 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
             for artifact in catalog.load_artifacts(session)
             if artifact.ai_context.strip()
         },
+        validation_guides=tuple(
+            guide_lines(
+                artifact.label,
+                [GuideEntry.model_validate(entry) for entry in artifact.guide_entries],
+            )
+            for artifact in catalog.load_artifacts(session)
+            if artifact.guide_entries
+        ),
     )
 
 
@@ -214,6 +223,7 @@ def execute_run(
         run.error = ""
         run.model_used = settings.model
         run.prompt_version = settings.prompt_version
+        run.definition_versions = versions.current_versions(session)
         context = build_context(session, run, data_dir, settings, factory, call_log)
         resume_from = context.resume_from()
 
