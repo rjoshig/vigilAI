@@ -27,6 +27,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3001
 
-# VIGILAI_API_URL is read at runtime by the /api/* rewrite, so one image works in any
+# GREENLIGHT_AI_API_URL is read at runtime by the /api/* rewrite, so one image works in any
 # environment (standards/frontend.md).
 CMD ["node", "server.js"]

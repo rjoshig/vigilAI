@@ -1,27 +1,27 @@
-# vigilAI — five containers on one host (docs/design.md "Architecture", ADR-007).
+# Greenlight AI — five containers on one host (docs/design.md "Architecture", ADR-007).
 # Postgres is both the data store and the job queue; files live on one shared volume.
 # No Redis, no broker, no object store.
 #
 # Compose runs Postgres, because SQLite takes one writer at a time and this file starts
 # several workers (ADR-017). Outside Docker the default is SQLite and nothing else is
-# needed: `pip install -e .` then `vigilai run` or `uvicorn`.
+# needed: `pip install -e .` then `greenlight-ai run` or `uvicorn`.
 #
 # Usage:         cp .env.example .env && docker compose up --build
 # Scale workers: docker compose up --scale worker=4
 
-name: vigilai
+name: greenlight-ai
 
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-vigilai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vigilai}
-      POSTGRES_DB: ${POSTGRES_DB:-vigilai}
+      POSTGRES_USER: ${POSTGRES_USER:-greenlight_ai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-greenlight_ai}
+      POSTGRES_DB: ${POSTGRES_DB:-greenlight_ai}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vigilai}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-greenlight_ai}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -36,11 +36,11 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-vigilai}:${POSTGRES_PASSWORD:-vigilai}@postgres:5432/${POSTGRES_DB:-vigilai}
-      VIGILAI_DATA_DIR: /data
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-greenlight_ai}:${POSTGRES_PASSWORD:-greenlight_ai}@postgres:5432/${POSTGRES_DB:-greenlight_ai}
+      GREENLIGHT_AI_DATA_DIR: /data
       # The container binds to every interface, so with admin login on the api will
       # refuse to serve until the bootstrap password is changed (ADR-022).
-      VIGILAI_BIND_HOST: "0.0.0.0"
+      GREENLIGHT_AI_BIND_HOST: "0.0.0.0"
     volumes:
       - files:/data # the shared volume (uploads, reports, PDFs)
     depends_on:
@@ -57,8 +57,8 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-vigilai}:${POSTGRES_PASSWORD:-vigilai}@postgres:5432/${POSTGRES_DB:-vigilai}
-      VIGILAI_DATA_DIR: /data
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-greenlight_ai}:${POSTGRES_PASSWORD:-greenlight_ai}@postgres:5432/${POSTGRES_DB:-greenlight_ai}
+      GREENLIGHT_AI_DATA_DIR: /data
     volumes:
       - files:/data
     depends_on:
@@ -67,23 +67,23 @@ services:
     deploy:
       replicas: 2 # start with 2-4; tune to what the in-house LLM can serve
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import vigilai.worker' || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import greenlight_ai.worker' || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
 
-  # Login is off by default (ADR-022). To turn it on, set VIGILAI_ADMIN_AUTH and
-  # VIGILAI_USER_AUTH in .env; the api then refuses to serve until the bootstrap
+  # Login is off by default (ADR-022). To turn it on, set GREENLIGHT_AI_ADMIN_AUTH and
+  # GREENLIGHT_AI_USER_AUTH in .env; the api then refuses to serve until the bootstrap
   # password is changed, because it binds to 0.0.0.0 here.
   user-ui:
     build:
       context: ./user-ui
     environment:
-      VIGILAI_API_URL: http://api:8000
+      GREENLIGHT_AI_API_URL: http://api:8000
       # The sidebar's admin launcher. A browser URL, not a container one, because the
       # link is followed by the person rather than by the container.
       NEXT_PUBLIC_ADMIN_URL: "http://localhost:${ADMIN_UI_PORT:-3001}"
-      VIGILAI_UI_THEME: ${VIGILAI_UI_THEME:-classic-teal-navy}
+      GREENLIGHT_AI_UI_THEME: ${GREENLIGHT_AI_UI_THEME:-classic-teal-navy}
     depends_on:
       - api
     ports:
@@ -93,8 +93,8 @@ services:
     build:
       context: ./admin-ui
     environment:
-      VIGILAI_API_URL: http://api:8000
-      VIGILAI_UI_THEME: ${VIGILAI_UI_THEME:-classic-teal-navy}
+      GREENLIGHT_AI_API_URL: http://api:8000
+      GREENLIGHT_AI_UI_THEME: ${GREENLIGHT_AI_UI_THEME:-classic-teal-navy}
     depends_on:
       - api
     ports:
