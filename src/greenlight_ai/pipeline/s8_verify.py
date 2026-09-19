@@ -16,7 +16,7 @@ from greenlight_ai.llm.prompts.s8_programme import PROGRAMME_PROMPT
 from greenlight_ai.llm.prompts import VERIFY_PROMPT
 from greenlight_ai.llm.prompts.schemas import ProgrammeRulesResponse, VerifyResponse
 from greenlight_ai.pipeline.context import RunContext
-from greenlight_ai.pipeline.guidance import preamble
+from greenlight_ai.pipeline.guidance import guide_block, preamble
 from greenlight_ai.rules.schema import Evidence, Finding, Severity
 
 __all__ = ["run", "format_evidence"]
@@ -178,7 +178,8 @@ def _read_programme_rules(context: RunContext) -> None:
     try:
         result = context.client.complete(
             PROGRAMME_PROMPT.system,
-            PROGRAMME_PROMPT.render(
+            guide_block(context.guidance)
+            + PROGRAMME_PROMPT.render(
                 programme=guidance.scope_label or guidance.scope_code,
                 rules=rules_text,
                 delivery=_delivery_summary(context),

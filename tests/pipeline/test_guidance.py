@@ -55,3 +55,15 @@ def test_long_guidance_is_clipped_at_a_word_boundary() -> None:
     text = preamble(RunGuidance(scope_label="Other", scope_instructions="word " * 1000))
     assert "…" in text
     assert len(text) < MAX_CONTEXT_CHARS + 400
+
+
+def test_no_guide_means_no_block_and_a_guide_is_labelled_background() -> None:
+    """Phase 6.8 acceptance 3: with no guide, prompts are exactly what they were."""
+    from greenlight_ai.pipeline.guidance import guide_block
+
+    assert guide_block(None) == ""
+    assert guide_block(RunGuidance()) == ""
+    block = guide_block(RunGuidance(validation_guides=(("Validation guide for Counts:", "- x"),)))
+    assert block.startswith("Background from the administrator.")
+    assert "do not compare values" in block
+    assert block.endswith("- x\n\n")

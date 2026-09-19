@@ -62,11 +62,16 @@ class CheckDefinition:
         reasoning: The plain-English reason shown to users on a failure.
         severity: How serious a failure is.
         scope: ``"all"``, a customer name, or ``programme:CODE``.
-        is_active: Whether the check runs.
+        is_active: Whether the check's findings count.
+        id: The stored row, so a finding can name the rule behind it.
+        state: The lifecycle state (ADR-021). A ``shadow`` check runs and its
+            findings are recorded and shown to nobody.
     """
 
     name: str
     version: int = 1
+    id: int | None = None
+    state: str = "active"
     kind: CheckKind = "expression"
     expression: str = ""
     instruction: str = ""
@@ -83,9 +88,10 @@ class CheckDefinition:
             programme_code: The run's delivery programme code.
 
         Returns:
-            ``True`` when the check is active and in scope.
+            ``True`` when the check is active or in shadow, and in scope.
         """
-        return self.is_active and in_scope(self.scope, customer, programme_code)
+        runs = self.is_active or self.state == "shadow"
+        return runs and in_scope(self.scope, customer, programme_code)
 
 
 @dataclass(frozen=True, slots=True)

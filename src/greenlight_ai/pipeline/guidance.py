@@ -21,7 +21,7 @@ import logging
 from dataclasses import dataclass
 from typing import Final
 
-__all__ = ["RunGuidance", "preamble", "MAX_CONTEXT_CHARS"]
+__all__ = ["guide_block", "RunGuidance", "preamble", "MAX_CONTEXT_CHARS"]
 
 _LOG: Final = logging.getLogger(__name__)
 
@@ -49,6 +49,8 @@ class RunGuidance:
         programme_rules: The programme's rules, each with its strictness.
         programme_keywords: Every programme's keywords, for the classification check.
         artifact_context: Per-artifact guidance, keyed by artifact key.
+        validation_guides: One rendered guide per report type, each a tuple of lines
+            (Phase 6.8b). Read by stages 4 and 8 as background.
     """
 
     scope_label: str = ""
@@ -67,6 +69,7 @@ class RunGuidance:
     programme_rules: tuple[tuple[int, str, str, str], ...] = ()
     #: Every programme's keywords, for the classification check: code to words.
     programme_keywords: dict[str, tuple[str, ...]] | None = None
+    validation_guides: tuple[tuple[str, ...], ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -167,3 +170,22 @@ def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
         "Context, which is background rather than a requirement. Requirements come only "
         "from the document itself.\n" + "\n".join(f"- {line}" for line in lines) + "\n\n"
     )
+
+
+def guide_block(guidance: RunGuidance | None) -> str:
+    """The validation guides as one block for a prompt, or nothing.
+
+    Args:
+        guidance: What was configured.
+
+    Returns:
+        The guides, one per report type, labelled as background, followed by a blank
+        line; the empty string when no guide exists, so the prompt is byte-for-byte
+        what it was before guides existed.
+    """
+    if guidance is None or not guidance.validation_guides:
+        return ""
+    lines = ["Background from the administrator. Read it for meaning; do not compare values."]
+    for guide in guidance.validation_guides:
+        lines.extend(guide)
+    return "\n".join(lines) + "\n\n"

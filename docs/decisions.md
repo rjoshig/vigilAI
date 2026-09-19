@@ -884,3 +884,6 @@ it answers to. And nothing an administrator edits kept its history.
 **Consequences:** The pipeline's scope check is a pure function with a test per
 form. A guide can be written entirely from the sample preview. The definitions an
 administrator edits are as safe to change as the configurations already were.
+Proving the compiled check exposed that a shadow check never ran and that shadow
+findings were visible everywhere; both are fixed, so ADR-021 now holds for checks
+as it did for learned rules.

@@ -33,3 +33,11 @@ def test_definitions_delegate_to_in_scope_and_honour_is_active() -> None:
     assert not CheckDefinition(name="c", scope="all", is_active=False).applies_to("Acme", "AM")
     # The old one-argument call still works: no programme means programme scopes never match.
     assert ComplianceRule(name="r", json_path_contains="x").applies_to("Acme")
+
+
+def test_a_shadow_check_runs_and_a_disabled_one_does_not() -> None:
+    """ADR-021: shadow rules run and are counted; their findings are shown to nobody."""
+    shadow = CheckDefinition(name="c", expression="1 == 1", is_active=False, state="shadow")
+    disabled = CheckDefinition(name="c", expression="1 == 1", is_active=False, state="disabled")
+    assert shadow.applies_to("Acme")
+    assert not disabled.applies_to("Acme")

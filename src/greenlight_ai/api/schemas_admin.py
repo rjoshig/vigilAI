@@ -10,6 +10,7 @@ import datetime as dt
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+from greenlight_ai.checks.guides import GuideEntry
 
 __all__ = [
     "ArtifactTypeIn",
@@ -37,7 +38,7 @@ __all__ = [
 ]
 
 Severity = Literal["high", "medium", "low", "review"]
-LocatorKind = Literal["cell", "label"]
+LocatorKind = Literal["cell", "label", "config"]
 
 
 class ArtifactTypeIn(BaseModel):
@@ -116,6 +117,8 @@ class ArtifactTypeOut(ArtifactTypeIn):
     sheets: list[str] = Field(default_factory=list)
     #: How many runs have uploaded this type. A type in use cannot be deleted.
     runs_using: int = 0
+    #: The validation guide (Phase 6.8b), with examples filled from the samples.
+    guide: list[GuideEntry] = Field(default_factory=list)
 
 
 class ScopeIn(BaseModel):
@@ -373,3 +376,11 @@ class RevertIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirm: str = ""
+
+
+class GuideIn(BaseModel):
+    """A validation guide, as the admin-ui submits it (Phase 6.8b)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entries: list[GuideEntry] = Field(default_factory=list)

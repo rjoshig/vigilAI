@@ -105,6 +105,7 @@ def finalize(
                 models.Finding.run_id == run_id,
                 models.Finding.severity == "high",
                 models.Finding.review_status == "undecided",
+                models.Finding.shadow.is_(False),
             )
         ).scalar_one()
     )
@@ -118,8 +119,8 @@ def finalize(
     findings = list(
         session.execute(
             sa.select(models.Finding)
-            .where(models.Finding.run_id == run_id)
-            .order_by(
+            # Never on the frozen record: a shadow finding is shown to nobody (ADR-021).
+            .where(models.Finding.run_id == run_id, models.Finding.shadow.is_(False)).order_by(
                 sa.case(
                     {"high": 0, "medium": 1, "low": 2, "review": 3},
                     value=models.Finding.severity,

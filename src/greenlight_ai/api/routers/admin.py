@@ -45,6 +45,7 @@ from greenlight_ai.checks.expressions import (
     referenced_names,
     validate,
 )
+from greenlight_ai.checks import guides
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
 from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.llm.cache import LLMCache
@@ -226,6 +227,7 @@ def _artifact_out(
         samples=samples,
         sheets=sheets,
         runs_using=in_use,
+        guide=[guides.GuideEntry.model_validate(entry) for entry in row.guide_entries or []],
     )
 
 
@@ -406,6 +408,59 @@ def upload_sample(
     session.refresh(row)
     repository.audit(session, "admin.sample_uploaded", detail=key, user_id=user.id, actor=user.name)
     versions.record_artifact_version(session, row, user.name, "sample added")
+    return _artifact_out(row, data_dir)
+
+
+@router.put("/artifact-types/{key}/guide", response_model=wire.ArtifactTypeOut)
+def save_guide(
+    key: str,
+    payload: wire.GuideIn,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ArtifactTypeOut:
+    """Replace an artifact type's validation guide (Phase 6.8b, ADR-029).
+
+    Examples are filled by resolving each locator on the stored samples. An entry
+    with an example and a config path compiles into a shadow check with origin
+    ``guide``; the rest is background for the model. The save is a version.
+
+    Args:
+        key: The artifact key.
+        payload: The entries, in order.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Returns:
+        The type, with the guide's examples filled.
+
+    Raises:
+        HTTPException: 404 when the type does not exist, 422 when two entries share
+            an id.
+    """
+    catalog.seed_defaults(session)
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+    ids = [entry.id for entry in payload.entries]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(HTTP_422, "every guide entry needs its own id")
+
+    entries = guides.fill_examples(key, payload.entries, row.samples, data_dir)
+    row.guide_entries = [entry.model_dump(by_alias=True) for entry in entries]
+    compiled = guides.compile_checks(session, key, entries, user.name)
+    session.flush()
+    repository.audit(
+        session,
+        "admin.guide_saved",
+        detail=f"{key}:{len(entries)} entries, {compiled} checks",
+        user_id=user.id,
+        actor=user.name,
+    )
+    versions.record_artifact_version(session, row, user.name, "guide edited")
     return _artifact_out(row, data_dir)
 
 

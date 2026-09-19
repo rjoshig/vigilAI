@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -55,6 +55,7 @@ class ArtifactSpec:
             deleted, because the fixed report checks look for its key.
         sort_order: Display order on the form.
         has_sample: Whether at least one sample workbook has been uploaded.
+        guide_entries: The validation guide, as stored (Phase 6.8b).
     """
 
     key: str
@@ -67,6 +68,7 @@ class ArtifactSpec:
     is_builtin: bool = False
     sort_order: int = 100
     has_sample: bool = False
+    guide_entries: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,6 +297,7 @@ def load_artifacts(session: Session, active_only: bool = False) -> list[Artifact
             is_builtin=row.is_builtin,
             sort_order=row.sort_order,
             has_sample=bool(row.samples),
+            guide_entries=tuple(row.guide_entries or ()),
         )
         for row in rows
     ]

@@ -38,6 +38,7 @@ import type {
   TrainingConfig,
   Usage,
   DefinitionVersion,
+  GuideEntry,
   VersionKind,
 } from "@/lib/types";
 
@@ -171,6 +172,10 @@ export const api = {
   /** What a sample contains, already masked. */
   previewSample: (key: string, sampleId: number): Promise<SamplePreview> =>
     request<SamplePreview>(`/artifact-types/${key}/samples/${sampleId}/preview`),
+
+  /** Replace a type's validation guide; the answer carries the examples filled in. */
+  saveGuide: (key: string, entries: GuideEntry[]): Promise<ArtifactType> =>
+    request<ArtifactType>(`/artifact-types/${key}/guide`, json("PUT", { entries })),
 
   /** Remove one sample. */
   deleteSample: (key: string, sampleId: number): Promise<void> =>

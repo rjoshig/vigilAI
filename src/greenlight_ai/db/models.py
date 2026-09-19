@@ -461,6 +461,11 @@ class ArtifactType(Base):
     #: pipeline behaves exactly as it did before this existed.
     ai_context: Mapped[str] = mapped_column(sa.Text, default="")
 
+    #: The validation guide: ordered entries saying what a cell means and where it
+    #: answers to (Phase 6.8b). Empty means the model reads the report as it always
+    #: did; a concrete entry also compiles into a shadow check.
+    guide_entries: Mapped[Any] = mapped_column(Json, default=list)
+
     #: Whether the upload slot appears on the new-run form.
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
     #: Whether a run may be submitted without it.
