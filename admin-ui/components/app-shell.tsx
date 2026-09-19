@@ -24,6 +24,7 @@ import * as React from "react";
 
 import { useAuth } from "@/components/auth-gate";
 import { Button } from "@/components/ui/primitives";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -44,6 +45,50 @@ const NAV: NavItem[] = [
   { href: "/users", label: "Users", icon: UserCog },
   { href: "/settings", label: "Settings", icon: SlidersHorizontal },
 ];
+
+const TRAINING_MODE_HINT =
+  "Reviewers can record observations while this is on; nothing they write changes anything until it is approved here.";
+
+/**
+ * Whether Train AI mode is on, shown in both states so "off" is a visible state and not
+ * an absence. It is re-read on every route change, because the switch lives on the
+ * Settings page and an administrator who flips it expects the sidebar to follow when
+ * they navigate away.
+ */
+function TrainingModeIndicator({ pathname }: { pathname: string }) {
+  const [enabled, setEnabled] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    api
+      .getTrainingConfig()
+      .then((config) => {
+        if (!cancelled) setEnabled(config.enabled);
+      })
+      .catch(() => {
+        // An unreachable API says nothing about the mode, so the line is left as it was.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  if (enabled === null) return null;
+
+  return (
+    <div
+      className="mx-4 mb-2 flex items-center gap-1.5 text-[0.7rem] text-muted-foreground"
+      title={TRAINING_MODE_HINT}
+      data-testid="training-mode-indicator"
+    >
+      <span
+        aria-hidden="true"
+        className={cn("h-2 w-2 rounded-full", enabled ? "bg-success" : "bg-muted-foreground/50")}
+      />
+      <span>Train AI mode {enabled ? "on" : "off"}</span>
+    </div>
+  );
+}
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -115,6 +160,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="text-[0.625rem] text-muted-foreground">Fulfillment QC · admin-ui</div>
           </div>
         </div>
+
+        <TrainingModeIndicator pathname={pathname} />
 
         <span className="mx-4 mb-2 w-fit rounded-full bg-tertiary px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-tertiary-foreground">
           admin · :3001

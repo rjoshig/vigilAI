@@ -10,8 +10,10 @@
  */
 
 import { Lightbulb } from "lucide-react";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 
+import { TrainAiTag } from "@/components/train-ai-tag";
 import {
   Button,
   Card,
@@ -72,10 +74,13 @@ export function anchorOf(kind: Anchor["kind"], fields: Partial<Anchor> = {}): An
  * Whether Train AI mode is on.
  *
  * Returns false until the answer arrives, so nothing about training is drawn while the
- * switch is unknown and no other training endpoint is called when it is off.
+ * switch is unknown and no other training endpoint is called when it is off. The
+ * switch is re-read on every navigation, so an administrator flipping it is reflected
+ * without a full reload; the server's settings cache means it lags a few seconds at most.
  */
 export function useTrainingEnabled(): boolean {
   const [enabled, setEnabled] = React.useState(false);
+  const pathname = usePathname();
 
   React.useEffect(() => {
     let live = true;
@@ -90,7 +95,7 @@ export function useTrainingEnabled(): boolean {
     return () => {
       live = false;
     };
-  }, []);
+  }, [pathname]);
 
   return enabled;
 }
@@ -170,6 +175,7 @@ export function ObservationDialog({
           <CardTitle id="observation-title" className="flex items-center gap-1.5">
             <Lightbulb className="h-4 w-4 text-primary" />
             {existing ? "Edit your observation" : "What should this check?"}
+            <TrainAiTag />
           </CardTitle>
         </CardHeader>
 

@@ -215,7 +215,8 @@ export function TR({ className, ...props }: React.HTMLAttributes<HTMLTableRowEle
 /* ------------------------------------------------------------------- Page header */
 
 export interface PageHeaderProps {
-  title: string;
+  /** A node rather than a string so a page can put a tag beside its name. */
+  title: React.ReactNode;
   description?: string;
   action?: React.ReactNode;
   breadcrumb?: React.ReactNode;
@@ -226,7 +227,9 @@ export function PageHeader({ title, description, action, breadcrumb }: PageHeade
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div>
         {breadcrumb ? <div className="mb-1 text-xs text-muted-foreground">{breadcrumb}</div> : null}
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight">
+          {title}
+        </h1>
         {description ? (
           <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">{description}</p>
         ) : null}

@@ -33,7 +33,9 @@ from vigilai.auth import accounts  # noqa: E402
 from vigilai.auth.passwords import hash_password  # noqa: E402
 from vigilai.db import catalog, models  # noqa: E402
 from vigilai.db.session import create_all, create_engine, session_factory  # noqa: E402
+from vigilai.config.store import write_setting  # noqa: E402
 from vigilai.db.settings import DbSettings  # noqa: E402
+from vigilai.db.types import utcnow  # noqa: E402
 from vigilai.llm.settings import LLMSettings  # noqa: E402
 
 _LOG: Final = logging.getLogger("seed_demo")
@@ -246,6 +248,198 @@ def seed_admin(session: Any, data_dir: Path, fixtures: Path, manifest: dict[str,
     )
 
 
+def seed_training(session: Any) -> None:
+    """Show what Train AI mode looks like once people have used it (ADR-021).
+
+    Turns the mode on and seeds the queue in every state an administrator will meet:
+    observations waiting, one already synthesized into a draft candidate, one
+    rejected with its reason, and one approved rule running in shadow. The mock model
+    answers every stage with an empty shape on purpose, so a live "synthesize" in the
+    demo produces nothing; the data here is what a real model would have produced.
+
+    Args:
+        session: An open session, after the runs exist.
+    """
+    write_setting(session, "training.enabled", True, actor="Dana Admin")
+
+    runs = list(session.execute(sa.select(models.Run).order_by(models.Run.id)).scalars())
+    first = runs[0] if runs else None
+    run_id = first.id if first else None
+    customer = first.customer_name if first else ""
+
+    waiting = [
+        models.TrainingObservation(
+            run_id=run_id,
+            author="John Doe",
+            kind="field_constraint",
+            anchors=[{"kind": "report_field", "artifact": "dirt", "field": "account_status"}],
+            statement="Account status is never blank in the DIRT. A blank means the extract "
+            "dropped it.",
+            expectation="Every row has a value.",
+            severity_hint="high",
+            scope_hint="customer",
+            customer_name=customer,
+        ),
+        models.TrainingObservation(
+            run_id=run_id,
+            author="John Doe",
+            kind="reconciliation",
+            anchors=[
+                {"kind": "osl_section", "reference": "OSL section 4 Score"},
+                {
+                    "kind": "report_cell",
+                    "artifact": "score_distribution",
+                    "sheet": "Bands",
+                    "cell": "B3",
+                },
+            ],
+            statement="Clause 4.2 of the OSL is what the first score band in the score "
+            "distribution answers to; the two should agree.",
+            severity_hint="medium",
+            scope_hint="global",
+            customer_name=customer,
+        ),
+    ]
+    session.add_all(waiting)
+
+    synthesized = models.TrainingObservation(
+        run_id=run_id,
+        author="John Doe",
+        kind="field_constraint",
+        anchors=[{"kind": "report_field", "artifact": "dirt", "field": "score"}],
+        statement="For account review the score is never below 300 or above 850.",
+        severity_hint="medium",
+        scope_hint="programme",
+        customer_name=customer,
+        scope_code="AM",
+        status="synthesized",
+    )
+    session.add(synthesized)
+    session.flush()
+
+    draft = models.RuleCandidate(
+        name="score_within_band",
+        target_kind="field_constraint",
+        body={
+            "field": "score",
+            "constraint": "range",
+            "value": {"min": 300, "max": 850},
+            "report_kinds": ["dirt"],
+        },
+        reasoning="Scores outside 300 to 850 are not valid for account review.",
+        severity="medium",
+        scope="programme:AM",
+        source_observation_ids=[synthesized.id],
+        status="draft",
+        model_draft={"name": "score_within_band", "target_kind": "field_constraint"},
+        model_used="demo",
+        prompt_version="1",
+        replay={
+            "runs_examined": len(runs),
+            "related_findings": 2,
+            "previously_dismissed": 0,
+            "note": "Counts related findings on recent finalized runs.",
+        },
+        created_by="Dana Admin",
+    )
+    session.add(draft)
+    session.flush()
+    synthesized.candidate_id = draft.id
+    synthesized.synthesized_at = utcnow()
+
+    rejected = models.TrainingObservation(
+        run_id=run_id,
+        author="John Doe",
+        kind="note",
+        statement="The billing report is always late on Fridays.",
+        severity_hint="low",
+        scope_hint="customer",
+        customer_name=customer,
+        status="rejected",
+        status_note="This is about delivery timing, not the content of a delivery; the tool "
+        "cannot check it.",
+    )
+    session.add(rejected)
+
+    approved_obs = models.TrainingObservation(
+        run_id=run_id,
+        author="John Doe",
+        kind="field_constraint",
+        anchors=[{"kind": "report_field", "artifact": "dirt", "field": "state"}],
+        statement="State is never blank.",
+        severity_hint="high",
+        scope_hint="customer",
+        customer_name=customer,
+        status="synthesized",
+    )
+    session.add(approved_obs)
+    session.flush()
+    approved = models.RuleCandidate(
+        name="state_not_blank",
+        target_kind="field_constraint",
+        body={"field": "state", "constraint": "not_blank", "value": {}, "report_kinds": ["dirt"]},
+        reasoning="State is never blank in a correct delivery.",
+        severity="high",
+        scope=customer or "all",
+        source_observation_ids=[approved_obs.id],
+        status="approved",
+        model_used="demo",
+        prompt_version="1",
+        created_by="Dana Admin",
+        decided_by="Dana Admin",
+        decided_at=utcnow(),
+    )
+    session.add(approved)
+    session.flush()
+    approved_obs.candidate_id = approved.id
+    approved_obs.synthesized_at = utcnow()
+
+    rule = models.FieldConstraint(
+        field="state",
+        constraint="not_blank",
+        value={},
+        report_kinds=["dirt"],
+        severity="high",
+        reasoning="State is never blank in a correct delivery.",
+        scope=customer or "all",
+        state="shadow",
+        origin="learned",
+        candidate_id=approved.id,
+        created_by="Dana Admin",
+    )
+    session.add(rule)
+    session.flush()
+    session.add(
+        models.RuleStateChange(
+            rule_kind="field_constraint",
+            rule_id=rule.id,
+            from_state="draft",
+            to_state="shadow",
+            note=f"approved from candidate {approved.id}",
+            actor="Dana Admin",
+        )
+    )
+    session.flush()
+    # A standing note on the first run's configuration, so the queue shows a
+    # configuration-specific comment and the next run of it carries the note (ADR-024).
+    if first is not None:
+        session.add(
+            models.TrainingObservation(
+                author="John Doe",
+                kind="config_note",
+                configuration_id=first.configuration_id,
+                anchors=[{"kind": "config_path", "reference": first.configuration_id}],
+                statement="This configuration excludes closed accounts by design; a missing "
+                "closed-account count is not a gap.",
+                severity_hint="medium",
+                scope_hint="customer",
+                customer_name=customer,
+            )
+        )
+        session.flush()
+    _LOG.info("seeded the training queue: 5 observations, 2 candidates, 1 shadow rule")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point.
 
@@ -412,6 +606,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 created.append((run_id, "needs review", note))
 
     print("")
+    with factory() as session:
+        seed_training(session)
+        session.commit()
+
     print(f"Seeded {len(created)} run(s) into {settings.url}")
     print("")
     for run_id, state, note in created:

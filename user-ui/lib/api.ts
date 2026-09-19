@@ -11,6 +11,7 @@ import type {
   AuthConfig,
   CloneResult,
   ConfigDetail,
+  ConfigNoteInput,
   ConfigSummary,
   CreateRunResult,
   CurrentUser,
@@ -318,5 +319,43 @@ export const api = {
   /** Read one captured config with its content. */
   getConfig(configId: number): Promise<ConfigDetail> {
     return request<ConfigDetail>(`/configs/${configId}`);
+  },
+
+  /**
+   * The standing notes on an ETL configuration (ADR-024). Only the notes in force
+   * unless asked otherwise, because a switched-off note is history rather than
+   * guidance. Available whether or not Train AI mode is on.
+   */
+  listConfigNotes(configurationId: string, includeInactive = false): Promise<Observation[]> {
+    const suffix = includeInactive ? "?include_inactive=true" : "";
+    return request<Observation[]>(`/configs/${encodeURIComponent(configurationId)}/notes${suffix}`);
+  },
+
+  /**
+   * Write a note against a configuration. 422 means the text looks like personal
+   * data; the detail is written for the person, so a caller shows it verbatim.
+   */
+  createConfigNote(configurationId: string, body: ConfigNoteInput): Promise<Observation> {
+    return request<Observation>(`/configs/${encodeURIComponent(configurationId)}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Reword a note. Always allowed; the server keeps the earlier wording in `revisions`. */
+  updateConfigNote(noteId: number, body: ConfigNoteInput): Promise<Observation> {
+    return request<Observation>(`/config-notes/${noteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Switch a note off or back on. Off stops it reaching the model on the next run. */
+  setConfigNoteActive(noteId: number, isActive: boolean): Promise<Observation> {
+    return request<Observation>(`/config-notes/${noteId}/active?is_active=${isActive}`, {
+      method: "POST",
+    });
   },
 };

@@ -220,6 +220,7 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         rerun_reason=run.rerun_reason,
         input_fingerprint=run.input_fingerprint,
         has_suppressions=run.has_suppressions,
+        config_notes=[str(n) for n in (run.config_notes_snapshot or [])],
         can_finalize=_can_finalize(session, run.id),
         finalized=finalized,
         stages=stages,
@@ -402,6 +403,9 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         deliverable_count=max(0, deliverable_count),
         outputs_validated=max(0, outputs_validated),
         delivery_notes=delivery_notes.strip(),
+        # Copied at submission so the run page and the frozen report show what the
+        # model was told even after the note is edited or switched off (ADR-024).
+        config_notes_snapshot=repository.active_config_notes(session, configuration_id.strip()),
     )
     session.add(run)
     session.flush()

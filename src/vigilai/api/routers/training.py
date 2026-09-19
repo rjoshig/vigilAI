@@ -22,6 +22,7 @@ from vigilai.api.deps import CurrentUser, current_user, get_session, require_adm
 from vigilai.api.schemas_training import (
     CandidateDecision,
     CandidateOut,
+    ConfigNoteIn,
     ObservationDecision,
     ObservationIn,
     ObservationOut,
@@ -103,7 +104,12 @@ def _observation_out(row: models.TrainingObservation) -> ObservationOut:
         customer_name=row.customer_name,
         scope_code=row.scope_code,
         version=row.version,
-        editable=row.status == "new",
+        # A configuration note stays editable for life, because its job is to stay
+        # true about a configuration that keeps being run (ADR-024).
+        editable=row.status == "new" or row.kind == "config_note",
+        configuration_id=row.configuration_id,
+        is_active=row.is_active,
+        revisions=list(row.revisions or []),
         created_at=row.created_at,
         synthesized_at=row.synthesized_at,
     )
@@ -225,6 +231,7 @@ def list_observations(
     user: CurrentUser = Depends(current_user),
     mine: bool = Query(default=False),
     obs_status: str | None = Query(default=None, alias="status"),
+    kind: str | None = Query(default=None),
 ) -> list[ObservationOut]:
     """List observations, newest first.
 
@@ -234,6 +241,7 @@ def list_observations(
         mine: Only the caller's own, which is how an author follows what became of
             what they wrote. Participation stops without that.
         obs_status: Filter by status.
+        kind: Filter by kind, e.g. ``config_note`` for the configuration comments.
 
     Returns:
         The observations.
@@ -246,6 +254,8 @@ def list_observations(
         statement = statement.where(models.TrainingObservation.author_user_id == user.id)
     if obs_status:
         statement = statement.where(models.TrainingObservation.status == obs_status)
+    if kind:
+        statement = statement.where(models.TrainingObservation.kind == kind)
     return [_observation_out(row) for row in session.execute(statement).scalars()]
 
 
@@ -334,6 +344,197 @@ def reject_observation(
         session,
         "training.observation_rejected",
         detail=str(row.id),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _observation_out(row)
+
+
+# ------------------------------------------------------------ configuration notes
+
+
+@router.get("/configs/{configuration_id}/notes", response_model=list[ObservationOut])
+def list_config_notes(
+    configuration_id: str,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+    include_inactive: bool = Query(default=False),
+) -> list[ObservationOut]:
+    """The standing notes on one configuration (ADR-024).
+
+    Available whatever Train AI mode says: a note is guidance about a configuration,
+    which is useful whether or not the tool is collecting training input.
+
+    Args:
+        configuration_id: The ETL configuration.
+        session: The request's session.
+        _user: The caller.
+        include_inactive: Also return notes that have been switched off.
+
+    Returns:
+        The notes, oldest first.
+    """
+    statement = (
+        sa.select(models.TrainingObservation)
+        .where(
+            models.TrainingObservation.kind == "config_note",
+            models.TrainingObservation.configuration_id == configuration_id,
+        )
+        .order_by(models.TrainingObservation.id)
+    )
+    if not include_inactive:
+        statement = statement.where(models.TrainingObservation.is_active)
+    return [_observation_out(row) for row in session.execute(statement).scalars()]
+
+
+@router.post("/configs/{configuration_id}/notes", response_model=ObservationOut, status_code=201)
+def create_config_note(
+    configuration_id: str,
+    payload: ConfigNoteIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> ObservationOut:
+    """Write a standing note on a configuration.
+
+    It reaches the model as background on the next run of that configuration, and it
+    lands in the admin queue as a configuration-specific comment an administrator may
+    promote to a rule. On its own it never makes anything pass or fail.
+
+    Args:
+        configuration_id: The ETL configuration.
+        payload: The note.
+        session: The request's session.
+        user: The author.
+
+    Returns:
+        The stored note.
+
+    Raises:
+        HTTPException: 422 when the text looks like it contains personal data, for the
+            same reason as an observation: this is the moment it can still be fixed.
+    """
+    configuration_id = configuration_id.strip()
+    if not configuration_id:
+        raise HTTPException(HTTP_422, "a note needs a configuration id")
+    try:
+        assert_clean(payload.statement)
+    except PiiDetected as exc:
+        raise HTTPException(
+            HTTP_422, f"this looks like it contains personal data, so it was not saved: {exc}"
+        ) from exc
+
+    row = models.TrainingObservation(
+        author_user_id=user.id,
+        author=user.name,
+        kind="config_note",
+        configuration_id=configuration_id,
+        anchors=[{"kind": "config_path", "reference": configuration_id}],
+        statement=payload.statement.strip(),
+        severity_hint=payload.severity_hint,
+        scope_hint="customer",
+    )
+    session.add(row)
+    session.flush()
+    repository.audit(
+        session,
+        "training.config_note_created",
+        detail=configuration_id,
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _observation_out(row)
+
+
+@router.patch("/config-notes/{note_id}", response_model=ObservationOut)
+def edit_config_note(
+    note_id: int,
+    payload: ConfigNoteIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> ObservationOut:
+    """Reword a note, keeping what it said before.
+
+    Always allowed, unlike an ordinary observation: a note's job is to stay true about
+    a configuration that keeps being run. The earlier wording is kept in ``revisions``.
+
+    Args:
+        note_id: The note.
+        payload: The new wording.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The updated note.
+
+    Raises:
+        HTTPException: 404 when it is not a configuration note, 422 on personal data.
+    """
+    row = session.get(models.TrainingObservation, note_id)
+    if row is None or row.kind != "config_note":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such configuration note")
+    try:
+        assert_clean(payload.statement)
+    except PiiDetected as exc:
+        raise HTTPException(HTTP_422, f"this looks like it contains personal data: {exc}") from exc
+
+    revisions = list(row.revisions or [])
+    revisions.append(
+        {
+            "version": row.version,
+            "statement": row.statement,
+            "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "by": row.author,
+        }
+    )
+    row.revisions = revisions
+    row.statement = payload.statement.strip()
+    row.severity_hint = payload.severity_hint
+    row.version += 1
+    row.author = user.name
+    row.author_user_id = user.id
+    session.flush()
+    repository.audit(
+        session,
+        "training.config_note_edited",
+        detail=str(note_id),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _observation_out(row)
+
+
+@router.post("/config-notes/{note_id}/active", response_model=ObservationOut)
+def set_config_note_active(
+    note_id: int,
+    is_active: bool,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> ObservationOut:
+    """Switch a note off, or back on.
+
+    Off means it stops reaching the model on the next run. The text stays.
+
+    Args:
+        note_id: The note.
+        is_active: Whether it should apply.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The note.
+
+    Raises:
+        HTTPException: 404 when it is not a configuration note.
+    """
+    row = session.get(models.TrainingObservation, note_id)
+    if row is None or row.kind != "config_note":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such configuration note")
+    row.is_active = is_active
+    session.flush()
+    repository.audit(
+        session,
+        "training.config_note_enabled" if is_active else "training.config_note_disabled",
+        detail=str(note_id),
         user_id=user.id,
         actor=user.name,
     )

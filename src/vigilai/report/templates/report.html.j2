@@ -376,6 +376,11 @@
             <dt>Pipeline duration</dt><dd>{{ stats.duration }}</dd>
             <dt>Model calls / tokens</dt><dd>{{ stats.calls }} calls · {{ stats.tokens }} tokens · {{ stats.cache_hits }} cache hits</dd>
             <dt>Input fingerprint</dt><dd class="mono">{{ run.input_fingerprint[:16] }}…</dd>
+            {% if run.config_notes_snapshot %}
+            {# What the model was told about this configuration, as it stood at
+               submission (ADR-024). A reviewer reading a finding needs that context. #}
+            <dt>Configuration notes</dt><dd>{% for note in run.config_notes_snapshot %}{{ note }}{% if not loop.last %} · {% endif %}{% endfor %}</dd>
+            {% endif %}
             <dt>Generated</dt><dd>{{ generated_at }}{% if generated_by %} by {{ generated_by }}{% endif %}</dd>
           </dl>
         </div>

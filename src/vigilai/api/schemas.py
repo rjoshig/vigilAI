@@ -90,6 +90,8 @@ class RunDetail(RunSummary):
     input_fingerprint: str = ""
     #: Whether the submitter said suppressions were applied to this delivery.
     has_suppressions: bool = False
+    #: The configuration notes in force when the run was submitted (ADR-024).
+    config_notes: list[str] = Field(default_factory=list)
     can_finalize: bool = False
     finalized: bool = False
     #: Whether this deployment can render a PDF at all. False when the optional [pdf]

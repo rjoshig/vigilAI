@@ -82,6 +82,7 @@ uses them yet.
 | **Disabled** | A rule an administrator switched off. Reversible at any time, and where a noisy rule goes rather than being deleted. |
 | **Soft delete** | A deleted rule stops running and leaves the default view, and can be restored whole for six months. After that the deletion is permanent. |
 | **Tombstone** | What survives a permanent deletion: identity, version, provenance, and reasoning, so findings on old runs that cite the rule still explain themselves. |
+| **Configuration note** | A standing note on an ETL configuration id, written by anyone. Guidance for every future run of that configuration and an observation in the admin queue at once; never a rule on its own (ADR-024). |
 | **Field constraint** | A rule about one attribute — never blank, allowed values, a range, a format — stored as structured data and evaluated by code, though it was written in plain words. |
 
 ## Identity vocabulary (Phase 6.2, specified but not built)

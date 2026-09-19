@@ -112,6 +112,11 @@ export interface RunDetail extends RunSummary {
   pdf_available: boolean;
   stages: StageInfo[];
   files: Record<string, string>;
+  /**
+   * The configuration notes in force when the run was submitted (ADR-024). Copied
+   * onto the run so that what the model was told cannot change after the fact.
+   */
+  config_notes: string[];
 }
 
 export interface Evidence {
@@ -352,7 +357,8 @@ export interface Anchor {
 }
 
 /** What kind of thing the reviewer is telling the tool. */
-export type ObservationKind = "reconciliation" | "field_constraint" | "correction" | "note";
+export type ObservationKind =
+  "reconciliation" | "field_constraint" | "correction" | "note" | "config_note";
 
 /** How wide a rule drawn from this observation should apply. */
 export type ObservationScope = "global" | "customer" | "programme";
@@ -372,6 +378,23 @@ export interface ObservationInput {
   finding_id?: number | null;
 }
 
+/** One earlier wording of a configuration note, kept when the note is edited. */
+export interface NoteRevision {
+  version: number;
+  statement: string;
+  at: string;
+  by: string;
+}
+
+/**
+ * The body `POST /configs/{configuration_id}/notes` and `PATCH /config-notes/{id}`
+ * both take. A note is guidance, so it carries no anchor and no expectation.
+ */
+export interface ConfigNoteInput {
+  statement: string;
+  severity_hint?: Severity;
+}
+
 /** A stored observation, as its author sees it. */
 export interface Observation extends ObservationInput {
   id: number;
@@ -387,4 +410,10 @@ export interface Observation extends ObservationInput {
   editable: boolean;
   created_at: string;
   synthesized_at: string | null;
+  /** Set on a `config_note`: the ETL configuration the note follows (ADR-024). */
+  configuration_id: string;
+  /** A note is switched off rather than deleted, so the record of it survives. */
+  is_active: boolean;
+  /** Earlier wordings of a note, oldest first. Empty until it has been edited. */
+  revisions: NoteRevision[];
 }
