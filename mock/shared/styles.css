@@ -138,7 +138,7 @@ a.link:hover { text-decoration: underline; }
 .brand { display: flex; align-items: center; gap: 0.625rem; padding: 1rem 0.75rem; }
 .brand-mark {
   width: 2.25rem; height: 2.25rem; flex-shrink: 0; display: grid; place-items: center;
-  border-radius: 0.6rem; background: #FCD800; color: hsl(var(--primary-foreground));
+  border-radius: 0.6rem; background: hsl(var(--tertiary)); color: hsl(var(--primary-foreground));
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 }
 .brand-mark svg { width: auto; height: 1.75rem; }
@@ -481,7 +481,7 @@ details.acc .acc-body { padding: 0 0.9rem 0.9rem; font-size: 0.82rem; }
 .report-wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem 3rem; }
 .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.65rem 1.25rem; margin-bottom: 1.25rem; background: hsl(var(--card)); border-bottom: 1px solid hsl(var(--border)); }
 .rb { display: flex; align-items: center; gap: 0.7rem; }
-.rb-mark { width: 34px; height: 34px; display: grid; place-items: center; color: #fff; background: #FCD800; border-radius: 9px; }
+.rb-mark { width: 34px; height: 34px; display: grid; place-items: center; color: #fff; background: hsl(var(--tertiary)); border-radius: 9px; }
 .rb-mark svg { width: auto; height: 26px; }
 .rb-name { font-weight: 600; }
 .rb-sub { font-size: 0.78rem; color: hsl(var(--muted-foreground)); }

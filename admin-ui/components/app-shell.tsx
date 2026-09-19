@@ -157,7 +157,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* The box is the one theme-independent surface in the rail: the mark's dark
             housing has to read on the navy palette as well as on white. */}
         <Link href="/" aria-label="Greenlight AI home" className="flex items-center gap-2.5 p-4">
-          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-[#FCD800]">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-tertiary">
             <Logo size={30} />
           </span>
           <div>
@@ -169,7 +169,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 Admin
               </span>
             </div>
-            <div className="text-[0.8125rem] font-medium">QC Validation</div>
             <div className="text-[0.625rem] text-muted-foreground">
               Nothing ships without a green light.
             </div>

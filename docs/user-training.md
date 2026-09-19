@@ -32,7 +32,7 @@ Login may be off or on, depending on how the deployment is configured.
 ## The sidebar
 
 At the top-left is the Greenlight AI logo, a traffic signal with the green lit,
-beside the name. Clicking either takes you home. The same mark is the browser tab
+beside the name and a small **User** chip; the admin console shows **Admin**. Clicking either takes you home. The same mark is the browser tab
 icon.
 
 The look of the app is one of three palettes chosen by the deployment (default,

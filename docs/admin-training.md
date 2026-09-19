@@ -35,8 +35,8 @@ person did stays attributed to them. You cannot deactivate the last administrato
 
 ## The sidebar
 
-The logo and the name sit at the top-left, with a small **Admin** label so the console
-is never mistaken for the user app. Clicking them goes home.
+The logo and the name sit at the top-left, with a small **Admin** chip, where the user app
+shows **User**, so the two are never mistaken. Clicking them goes home.
 
 ## The sidebar indicator
 

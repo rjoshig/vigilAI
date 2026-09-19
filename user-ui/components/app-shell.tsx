@@ -117,12 +117,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* The box is the one theme-independent surface in the rail: the mark's dark
             housing has to read on the navy palette as well as on white. */}
         <Link href="/" aria-label="Greenlight AI home" className="flex items-center gap-2.5 p-4">
-          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-[#FCD800]">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-tertiary">
             <Logo size={30} />
           </span>
           <div>
-            <div className="text-base font-bold leading-tight tracking-tight">Greenlight AI</div>
-            <div className="text-[0.8125rem] font-medium">User Console</div>
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-base font-bold leading-tight tracking-tight">
+              {/* The name never breaks; the chip drops to its own line when the rail
+                  is too narrow for both. */}
+              <span className="whitespace-nowrap">Greenlight AI</span>
+              <span className="rounded-full bg-tertiary px-1.5 py-px text-[0.6rem] font-bold uppercase tracking-wider text-tertiary-foreground">
+                User
+              </span>
+            </div>
             <div className="text-[0.625rem] text-muted-foreground">
               Nothing ships without a green light.
             </div>

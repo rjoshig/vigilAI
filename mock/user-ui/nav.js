@@ -1,7 +1,7 @@
 /* user-ui nav — brand + menu for the user app mock. Synthetic only. */
 window.MOCK_APP = {
   kind: "user",
-  brand: { name: "Greenlight AI", tagline: "User Console", subtitle: "Nothing ships without a green light." },
+  brand: { name: "Greenlight AI", tagline: "USER", subtitle: "Nothing ships without a green light." },
   nav: [
     { page: "runs", label: "Runs", href: "index.html", icon: "runs" },
     { page: "new-run", label: "New run", href: "new-run.html", icon: "plus" },

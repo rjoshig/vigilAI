@@ -137,7 +137,7 @@ function AuthFrame({ title, children }: { title: string; children: React.ReactNo
       <Card className="w-full max-w-sm">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#FCD800]">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-tertiary">
               <Logo size={22} />
             </span>
             {title}
