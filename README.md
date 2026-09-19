@@ -106,6 +106,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   screen by screen, for associates
 - [`docs/admin-training.md`](docs/admin-training.md) — **administrator training**: the
   admin console, the training queue, the rules, and a weekly routine
+- [`docs/presentation-brief.md`](docs/presentation-brief.md) — **design brief** for slide
+  decks and management documents: the design, its reasons, the diagrams, and what it
+  changes for an associate, at a general-audience level
 - [`docs/gd-rollout-plan.md`](docs/gd-rollout-plan.md) — **Global Delivery rollout**:
   ownership, support tiers, escalation, change and release, acceptance criteria, the
   intake questionnaire, and the four gated stages from readiness to region by region
