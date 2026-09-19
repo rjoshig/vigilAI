@@ -31,6 +31,10 @@ Login may be off or on, depending on how the deployment is configured.
 
 ## The sidebar
 
+The look of the app is one of three palettes chosen by the deployment (default,
+light-blue-yellow, or classic-teal); the sun/moon button at the foot of the sidebar
+switches the current palette between its light and dark variants.
+
 Under the vigilAI mark is a status line: **Train AI mode on** with a green dot, or
 **Train AI mode off** with a grey dot. When it is on, some controls exist that do not
 otherwise, and each carries a small **Train AI** tag. Everything you type into a tagged
