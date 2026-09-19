@@ -21,10 +21,13 @@ export const PALETTES = [
 
 export type Palette = (typeof PALETTES)[number];
 
-/** Narrow an environment value to a known palette, falling back to the default. */
+/** The palette a deployment gets when it says nothing: the brand one, chosen 2026-09-19. */
+export const DEFAULT_PALETTE: Palette = "classic-teal-navy";
+
+/** Narrow an environment value to a known palette, falling back to the brand one. */
 export function pickPalette(value: string | undefined): Palette {
   const trimmed = (value ?? "").trim().toLowerCase();
-  return (PALETTES as readonly string[]).includes(trimmed) ? (trimmed as Palette) : "default";
+  return (PALETTES as readonly string[]).includes(trimmed) ? (trimmed as Palette) : DEFAULT_PALETTE;
 }
 
 /** The palette this process was configured with. */
