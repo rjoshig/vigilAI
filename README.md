@@ -100,6 +100,15 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.4.md`](docs/phase-6.4.md) — **showing the mode, and notes that follow a
   configuration**: a Train AI indicator in both apps, and standing notes on a
   configuration id that reach the model and the admin queue
+- [`docs/phase-6.5.md`](docs/phase-6.5.md) — **training documentation, kept current**: a
+  recurring phase re-entered after every milestone
+- [`docs/user-training.md`](docs/user-training.md) — **user training**: the user app,
+  screen by screen, for associates
+- [`docs/admin-training.md`](docs/admin-training.md) — **administrator training**: the
+  admin console, the training queue, the rules, and a weekly routine
+- [`docs/rollout-plan.md`](docs/rollout-plan.md) — **global delivery rollout**: readiness,
+  focus-group UAT with a benchmark, senior-associate validation with Train AI mode on,
+  then region by region
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)

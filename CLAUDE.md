@@ -26,6 +26,20 @@ to do something that contradicts it, stop and reconcile before acting.
 every doc describing what is true at that commit, not what was planned — see
 "Doc-driven workflow".
 
+## Two standing touchpoints
+
+- **Training documents, every ~10 commits.** `docs/user-training.md` and
+  `docs/admin-training.md` teach the product as it is. Every tenth commit or so, and
+  at every phase close, open both, grep for anything the recent commits renamed or
+  removed, fix what is stale, and move the "Last aligned with the code" date. A
+  training document that describes a screen the product no longer has is worse than
+  none. Details: `docs/phase-6.5.md`.
+- **The rollout plan, at every milestone.** `docs/rollout-plan.md` is how the tool
+  reaches the delivery teams: readiness, a focus-group UAT with a benchmark against
+  the manual check, senior associates validating with Train AI mode on so the rules
+  are theirs, then region by region. When a phase closes, re-read it and update the
+  readiness checklist.
+
 ## Phase gating
 
 Work proceeds in sequential phases (`docs/phase-plan.md` is the master table). Do not start
@@ -45,6 +59,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.2 | Optional login and attribution: two `.env` switches (default off), admin-created accounts, sessions, who-did-what everywhere | `docs/phase-6.2.md` | ✅ complete — login ships off; one item open |
 | 6.3 | Runtime settings in the admin console: console overrides `.env` overrides defaults (ADR-023) | `docs/phase-6.3.md` | ✅ complete |
 | 6.4 | Train AI indicator in both apps; standing notes on a configuration id, reaching the model as background and the admin queue as comments | `docs/phase-6.4.md` | ✅ complete — one test open |
+| 6.5 | Training documentation, kept current: `docs/user-training.md` and `docs/admin-training.md` | `docs/phase-6.5.md` | 🟡 recurring — re-entered after every milestone |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
