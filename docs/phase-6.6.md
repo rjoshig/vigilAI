@@ -6,22 +6,30 @@ built later. Numbered 6.6 because 6.5 is the recurring training-documentation ph
 **Goal:** more than two looks, a way to step through them one at a time and pick one,
 and an administrator's control over what every user sees.
 
-## What exists today
+## Done ahead of the phase (2026-09-19)
 
-Both apps ship **two themes**: light (the default) and dark, switched by the sun/moon
+The three palettes from `compare-file/ui2` (`default`, `light-blue-yellow`,
+`classic-teal`), each with a light and a dark variant, are in both apps, chosen by
+`VIGILAI_UI_THEME` in `.env` and read at request time so a change shows on the next
+page load. That covers 6.6a's palettes and the environment layer of 6.6c; the picker
+and the console setting remain.
+
+## What existed before
+
+Both apps shipped **two themes**: light (the default) and dark, switched by the sun/moon
 button at the foot of the sidebar and remembered per browser. The colour tokens are
 CSS variables on `:root` and `.dark`. The Phase 1 mock carried a **third palette**,
 `light-blue-yellow`, in both a light and a dark variant; it was never brought into the
 apps and is the first candidate for a named theme here.
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.6a — Named themes · ⬜ not started
+### 6.6a — Named themes · 🟡 in progress
 
-- [ ] A theme is a named set of colour tokens, declared once and shared by both apps
-      so they always read the same way. Ship with: `light`, `dark`, and
-      `light-blue-yellow` in its light and dark forms from the mock. Adding a theme is
-      adding one block of tokens, no code.
+- [x] A theme is a named set of colour tokens, declared in each app's `globals.css`
+      and kept identical between them. Shipped: `default`, `light-blue-yellow`, and
+      `classic-teal` from compare-file, each in light and dark. Adding a theme is one
+      block of tokens and one entry in `lib/theme.ts`.
 - [ ] Every theme must pass the same contrast check for text, badges, and the
       severity colours, because a finding's severity is carried by colour and a theme
       that flattens it is a defect, not a preference.
