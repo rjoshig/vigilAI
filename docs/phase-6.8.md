@@ -1,7 +1,6 @@
 # Phase 6.8 — Scoped compliance, validation guides, and versioned definitions
 
-**Status:** ⬜ **not started** — proposed 2026-09-19 at the user's request, questions
-open at the foot of this doc.
+**Status:** ⬜ **not started** — proposed and decided 2026-09-19. Ready to build.
 
 **Goal:** three things an administrator cannot express today, and a safety net for
 the definitions they edit.
@@ -100,19 +99,13 @@ additive context and additive checks, never a precondition (ADR-020's rule, kept
 4. [ ] After eleven edits to an artifact type, ten versions are listed; reverting to
    the third restores its fields, samples, and guide, and appears as version twelve.
 
-## Open questions for the user
+## Decisions (2026-09-19)
 
-- [ ] **Should a guide entry with a config path become a check automatically**, in
-      shadow, or only when the administrator ticks "enforce"? Automatic gets the
-      benefit without a second step; opt-in keeps the guide purely explanatory unless
-      asked.
-- [ ] **How should OSL references in a guide be expressed?** A section number is
-      exact but brittle across customers; a phrase ("the billing paragraph") is what
-      the model matches on. The proposal is both fields, either optional.
-- [ ] **Which objects get versions?** Artifact types with their samples and guides,
-      and programme rules, are in the proposal. Compliance rules, checks, and scopes
-      could join at the same cost. The Rules screen already keeps every rule's state
-      history, which is a different thing from its wording history.
-- [ ] **Ten versions, or ten plus anything a run still references?** A run parsed
-      under version 3 should be able to name version 3 even after ten more edits; the
-      proposal keeps a referenced version's snapshot but not its rank in the list.
+Answered by the user.
+
+| Question | Decision |
+| --- | --- |
+| A guide entry with a cell and a config path | **Becomes a check automatically, born in shadow.** Activated from the Rules screen when the numbers say so. |
+| Pointing a guide at the OSL | **Both a section reference and a phrase, either optional.** |
+| What keeps ten versions with revert | **Artifact types with their samples and guides, and programme rules.** |
+| Retention of versions | **Ten in the list, plus any version a run inside the retention window still references.** |
