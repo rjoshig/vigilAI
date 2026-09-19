@@ -1,5 +1,5 @@
 /**
- * Domain types, mirroring the FastAPI wire models in `src/vigilai/api/schemas.py`.
+ * Domain types, mirroring the FastAPI wire models in `src/greenlight_ai/api/schemas.py`.
  * Defined once here and imported everywhere, so a field only ever has one shape.
  */
 
