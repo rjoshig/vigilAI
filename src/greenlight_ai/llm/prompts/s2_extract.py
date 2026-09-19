@@ -15,7 +15,7 @@ from greenlight_ai.llm.prompts.schemas import ExtractResponse
 __all__ = ["EXTRACT_PROMPT", "VERSION"]
 
 #: Bump on any wording change: the version is part of the cache key (ADR-005).
-VERSION: Final[str] = "1"
+VERSION: Final[str] = "3"
 
 _SYSTEM: Final = """\
 You read one section of an Order Specification Letter (OSL) and report the requirements \
@@ -36,13 +36,38 @@ Requirement types:
 - value_set: which values of some attribute are allowed or excluded.
 - attributes: which fields must be delivered.
 - waterfall: the order in which processing steps run.
-- quantity: a count of records to deliver.
+- quantity: how many records must be delivered. The size of the input population, \
+the pull date, and other background about where the data comes from are context, \
+not requirements: do not report them.
 - other: an instruction that fits none of the above.
+
+An exclusion of records that carry a flag or appear on a list (deceased, OFAC, \
+bankruptcy, opt-out) is criteria: one condition on that flag, operator "=", value \
+"true", action "reject". Use value_set only when the text lists the specific values \
+of an attribute that are allowed or excluded.
 
 For criteria, express the condition exactly as written: "at least 755" is \
 operator ">=" with value 755; "below 60 percent" is operator "<" with value 0.6; \
 "reject if age under 21" is operator "<" with value 21 and action "reject".
 For geography and value_set, set mode to "include" or "exclude" and list the values.
+
+The answer has exactly this shape and no other keys anywhere:
+{"requirements": [ {requirement}, ... ]}
+A requirement has only these keys:
+- req_type: one of criteria, geography, value_set, attributes, waterfall, quantity, other
+- conditions: a list of {"field_name": str, "operator": str, "value": number or string \
+or list}; the operator is one of <, <=, >, >=, =, !=, in, not_in, between, is_null, not_null
+- values: a list of strings (the states, allowed values, or delivered field names)
+- mode: "include" or "exclude", or omit it
+- steps: a list of strings, in order (waterfall only)
+- quantity: a number, or omit it
+- action: one of accept, reject, tag, pass
+- applies_to: one of all, accepts, rejects
+- source_text: a string
+- confidence: a number between 0 and 1
+Do not add description, name, field, fields, id, or any other key. A field the \
+requirement is about goes inside a condition as field_name; delivered field names go in \
+values. A section with no requirements answers {"requirements": []}.
 """
 
 _EXAMPLES: Final = """\
@@ -80,6 +105,37 @@ Answer:
 "exclusions", "dedupe"], "action": "pass", "applies_to": "all", \
 "source_text": "Process in this order: geography, then score, then age, then exclusions, \
 then dedupe.", "confidence": 0.94}]}
+
+Example 4
+Section:
+5 Output attributes
+Deliver the following fields for every accepted record: account_id, score, state.
+Answer:
+{"requirements": [{"req_type": "attributes", "values": ["account_id", "score", "state"], \
+"action": "accept", "applies_to": "accepts", \
+"source_text": "Deliver the following fields for every accepted record: account_id, \
+score, state.", "confidence": 0.95}]}
+
+Example 5
+Section:
+7 Exclusions
+Exclude any consumer recorded as deceased. Exclude any account whose type is C or D.
+Answer:
+{"requirements": [{"req_type": "criteria", "conditions": [{"field_name": "deceased", \
+"operator": "=", "value": "true"}], "action": "reject", "applies_to": "all", \
+"source_text": "Exclude any consumer recorded as deceased.", "confidence": 0.95}, \
+{"req_type": "value_set", "conditions": [{"field_name": "account type", \
+"operator": "in", "value": ["C", "D"]}], "values": ["C", "D"], "mode": "exclude", \
+"action": "reject", "applies_to": "all", \
+"source_text": "Exclude any account whose type is C or D.", "confidence": 0.95}]}
+
+Example 6
+Section:
+2 Population
+The input population is 250,000 consumer records drawn from the prescreen universe as \
+of the pull date.
+Answer:
+{"requirements": []}
 """
 
 _TEMPLATE: Final = """\

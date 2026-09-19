@@ -55,7 +55,8 @@ where a term maps to code, the subpackage is named.
 
 | Term | Meaning |
 | --- | --- |
-| **Run** | One submission: customer name, order number, configuration ID, run date, notes, files. Status `queued` → `running` → `needs_review` → `finalized`, or `failed`. |
+| **Run** | One submission: customer name, order number, configuration ID (informational; duplicates allowed), credit date, programme, notes, files. Each run has its own id. Status `queued` → `running` → `needs_review` → `finalized`, or `failed`. |
+| **Credit date** | The as-of date of the credit data in a delivery, entered on the run. Code looks for it in the OSL, the configuration, and the reports and raises `credit_date_missing` when the reports do not carry it (ADR-027). |
 | **Input fingerprint** | Hash of all input files + active check versions. A match shows the existing report; re-running needs a logged **rerun reason**. |
 | **Stage** | One of the nine pipeline steps; each writes status, duration, and token use to `run_stages` so a failed run resumes. |
 | **Stage cache / LLM cache** | `llm_cache`: results keyed by content hash + model + prompt version, so identical content is never sent twice. |

@@ -19,7 +19,7 @@ from greenlight_ai.parsers.base import CONFIG_KIND
 from greenlight_ai.parsers.config_json import is_technical
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.pipeline.guidance import preamble
-from greenlight_ai.pipeline.s2_extract import to_rule
+from greenlight_ai.pipeline.s2_extract import normalize_elements, to_rule
 from greenlight_ai.rules.schema import ConfigElement
 
 __all__ = ["run"]
@@ -62,7 +62,7 @@ def run(context: RunContext) -> None:
             stage="s3_describe",
             prompt_version=DESCRIBE_PROMPT.version,
         )
-        response = result.parsed(DescribeResponse)
+        response = DescribeResponse.model_validate(normalize_elements(result.data))
         described = _for_path(response, block.json_path)
         if described is None:
             elements.append(

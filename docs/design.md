@@ -349,7 +349,7 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 
 There are two outputs. The review screen in the app is the detailed working view. The final report is one self-contained HTML page in the compare-file report format, generated after review, and it also opens offline. Both draw on the same findings data. The elements below appear in the review screen; the final report carries the header, the summary, the Not OK items with comments, and expandable detail.
 
-- Header: customer, order, configuration ID, run date, model used, and severity counts.
+- Header: customer, order, configuration ID, credit date, model used, and severity counts.
 - AI summary: a short paragraph plus the top issues.
 - Findings list: filter by severity and type. Click a finding to open a side panel with the OSL text, the config path and value, the report cell, and matching sample rows.
 - Waterfall view: counts at each step, with breaks highlighted in red.

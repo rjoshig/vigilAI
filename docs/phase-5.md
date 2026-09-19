@@ -12,7 +12,7 @@ and final report" and "UI and report".
 
 - [x] `report/templates/`: Jinja2 one-page self-contained HTML (inline CSS/JS, opens
       offline) with the compare-file report look: brand topbar, header (customer, order,
-      configuration ID, run date, model used, severity counts), AI summary + top issues,
+      configuration ID, credit date, model used, severity counts), AI summary + top issues,
       verdict and counts, the **Not OK items with comments**, expandable detail (evidence:
       OSL text, config path + value, report cell, masked sample rows), waterfall view,
       traceability matrix, attribute explorer. Light/dark.
