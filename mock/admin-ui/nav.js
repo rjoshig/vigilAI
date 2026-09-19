@@ -1,7 +1,7 @@
 /* admin-ui nav — brand + menu for the admin app mock. Synthetic only. */
 window.MOCK_APP = {
   kind: "admin",
-  brand: { name: "vigilAI", tagline: "QC Validation", subtitle: "Fulfillment QC · admin-ui" },
+  brand: { name: "Greenlight AI", tagline: "QC Validation", subtitle: "Nothing ships without a green light." },
   nav: [
     { page: "templates", label: "Report templates", href: "index.html", icon: "template" },
     { page: "checks", label: "Checks", href: "checks.html", icon: "check" },

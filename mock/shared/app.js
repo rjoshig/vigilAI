@@ -2,7 +2,7 @@
    light/dark toggle, toast, tabs, modal, and drawer helpers. No real logic.
    Each app sets window.MOCK_APP (brand + nav) in its own nav.js before this file. */
 
-const APP = window.MOCK_APP || { kind: "user", brand: { name: "vigilAI" }, nav: [] };
+const APP = window.MOCK_APP || { kind: "user", brand: { name: "Greenlight AI" }, nav: [] };
 
 const ICONS = {
   logo: '<path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/><path d="m9 12 2 2 4-4"/>',
@@ -108,7 +108,7 @@ function renderSidebar() {
 /* ---- theme ---- */
 function applyTheme(dark) {
   document.documentElement.classList.toggle("dark", dark);
-  try { localStorage.setItem("vigilai-mock-theme", dark ? "dark" : "light"); } catch (e) { /* file:// */ }
+  try { localStorage.setItem("greenlight-ai-mock-theme", dark ? "dark" : "light"); } catch (e) { /* file:// */ }
   syncThemeIcon();
 }
 function toggleTheme() { applyTheme(!document.documentElement.classList.contains("dark")); }
@@ -119,7 +119,7 @@ function syncThemeIcon() {
 }
 function initTheme() {
   let dark = false;
-  try { dark = localStorage.getItem("vigilai-mock-theme") === "dark"; } catch (e) { /* ignore */ }
+  try { dark = localStorage.getItem("greenlight-ai-mock-theme") === "dark"; } catch (e) { /* ignore */ }
   if (dark) document.documentElement.classList.add("dark");
 }
 window.toggleTheme = toggleTheme;

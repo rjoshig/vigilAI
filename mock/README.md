@@ -1,6 +1,6 @@
 # mock — clickable UI mock (Phase 1)
 
-A **non-functional, self-contained visual prototype** of vigilAI for engineer and
+A **non-functional, self-contained visual prototype** of Greenlight AI for engineer and
 stakeholder review before anything is built. Plain HTML + one shared `styles.css` + one
 shared `app.js`, **opens from `file://`**, no build, no server, no backend. Every button
 shows a toast or navigates. All data is invented (synthetic customers, orders, values).
