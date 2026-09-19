@@ -178,8 +178,10 @@ Docs: `bash scripts/check_docs.sh`.
 
 - Conventional Commits: `type(scope): summary` (≤72 chars); scopes in `standards/git.md`.
 - No PII, customer names, or model identifiers in commit messages.
-- `main` (PR-only, human merges) ← `dev` ← `feature/*`. Session branches (`claude/*`) are
-  feature branches. Never push to `main`, never force-push, never rewrite history.
+- `main` (PR-only, human merges) ← `dev` ← `feature/*`. Branches are `feature/<topic>`,
+  `fix/<topic>`, or `experiment/<topic>`, cut from `dev`. **A branch name never contains
+  an agent or model name**; a tool-assigned `claude/*` name is renamed before its first
+  push. Never push to `main`, never force-push, never rewrite history.
 - CI is **manual-only** (`workflow_dispatch`); the pre-push checklist is the gate.
 
 ## What "done" means for a task

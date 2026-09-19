@@ -21,10 +21,11 @@ so the local **pre-push checklist (§3) is the gate** — mandatory, not advisor
   PR. Example: `feature/osl-parser`.
 - **`fix/<short-desc>`** — an isolated bug fix too big for direct-to-dev.
 - **`experiment/<short-desc>`** — exploratory only; **never merges**. Delete when concluded.
-- **Session branches** created by the remote tooling (`claude/<slug>`) are **treated as
-  feature branches** and merged through a PR like any other. (Deviation from compare-file,
-  which bans agent-prefixed names: the hosted tooling assigns them. Don't create such names
-  by hand.)
+- **A branch name never contains an agent or model name.** `claude/…`, `ai/…`, and the
+  like are not branch names here: a branch is named for the work, not for who typed it.
+  The hosted tooling sometimes assigns a `claude/<slug>` name to a session; that branch is
+  **renamed to `feature/<topic>` before its first push**, and never created by hand.
+  (The one merged `claude/*` branch predates this rule.)
 
 **Promotion flow:** `feature/*` → `dev` → `main`. Every merge is a PR, squash-merged.
 Claude Code never pushes to `main` and never merges.
