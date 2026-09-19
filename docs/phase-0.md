@@ -19,7 +19,7 @@ rules, tooling and Docker/CI stubs. **No application code.**
 - [x] `docker-compose.yml`, `docker/api.Dockerfile`, `docker/worker.Dockerfile` (stubs that parse).
 - [x] `.github/PULL_REQUEST_TEMPLATE.md`, `.github/workflows/ci.yml` (manual-only) + README.
 - [x] `scripts/check_docs.sh`, `scripts/README.md`.
-- [x] `src/vigilai/` package skeleton (`__init__.py` with version, `py.typed`, subpackage READMEs — no code).
+- [x] `src/greenlight_ai/` package skeleton (`__init__.py` with version, `py.typed`, subpackage READMEs — no code).
 - [x] `tests/README.md`, `tests/fixtures/README.md`.
 - [x] `mock/` (was `ui-mock/`, ADR-013), `user-ui/`, `admin-ui/` READMEs describing what lands there and when.
 
@@ -42,7 +42,7 @@ Dockerfile logic beyond `pip install -e .`.
 
 ## Choices settled during setup
 
-| Topic | vigilAI |
+| Topic | Greenlight AI |
 | --- | --- |
 | Branch names | Session branches (`claude/*`) are feature branches; `standards/git.md` §1 |
 | CI | GitHub Actions, manual-only (ADR-012) |

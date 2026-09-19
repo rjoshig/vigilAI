@@ -1,6 +1,6 @@
 # Python Standards
 
-Applies to everything under `src/vigilai/` (parsers, rules, pipeline, checks, llm, db,
+Applies to everything under `src/greenlight_ai/` (parsers, rules, pipeline, checks, llm, db,
 api, worker, report, cli) and the `tests/` suite. The tooling config (`pyproject.toml`,
 `.flake8`) is authoritative for exact settings; this doc explains intent.
 
@@ -61,7 +61,7 @@ mypy src/          # type-check   (strict mode)
   operators, counts, or sequences is deterministic Python in `rules/`, `pipeline/`, or
   `checks/`. Never ask the model to compare numbers or do arithmetic. If a stage needs a
   judgment, it asks one narrow question and validates the JSON answer with a Pydantic schema.
-- **One LLM entry point (ADR-004).** Only `vigilai.llm` talks to a model. Everything else
+- **One LLM entry point (ADR-004).** Only `greenlight_ai.llm` talks to a model. Everything else
   calls `LLMClient.complete(system, user, schema)`. Provider, base URL, model, and limits
   come from the environment. No vendor SDKs; plain `httpx`.
 - **Cache before every call (ADR-005).** The adapter looks up `llm_cache` by
@@ -96,7 +96,7 @@ mypy src/          # type-check   (strict mode)
 - A check that cannot be evaluated (a named value not found) is a **finding**, never a
   silent skip (`docs/design.md` "Configurable checks").
 
-## Package structure (`src/vigilai/`)
+## Package structure (`src/greenlight_ai/`)
 
 | Subpackage | Holds | Depends on |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ mypy src/          # type-check   (strict mode)
 | `api/` | FastAPI app, routers, Pydantic wire models, the single auth dependency (ADR-008) | `db/`, `worker/` (enqueue only) |
 | `worker/` | Procrastinate app, task that runs the pipeline for a run id, retention purge | `pipeline/`, `db/` |
 | `report/` | Jinja2 one-page HTML report, freeze, PDF via Playwright | `db/` |
-| `cli.py` | Command-line entry point (`vigilai run …`) | `pipeline/` |
+| `cli.py` | Command-line entry point (`greenlight-ai run …`) | `pipeline/` |
 
 Keep the arrows pointing down: `api/` never imports `pipeline/`; `pipeline/` never imports
 `api/`. `__init__.py` is for re-exports only.
@@ -117,7 +117,7 @@ Keep the arrows pointing down: `api/` never imports `pipeline/`; `pipeline/` nev
 ## Testing
 
 - **Write tests as you write code**, not at the end of a phase.
-- **One test file per module:** `src/vigilai/rules/normalize.py` →
+- **One test file per module:** `src/greenlight_ai/rules/normalize.py` →
   `tests/rules/test_normalize.py`. Tests mirror the package layout.
 - pytest with `--strict-markers --strict-config`; **`filterwarnings = ["error"]`** — a new
   warning fails the suite, so fix the cause.
@@ -128,5 +128,5 @@ Keep the arrows pointing down: `api/` never imports `pipeline/`; `pipeline/` nev
   version; a test that needs a specific answer injects a fake `LLMClient`.
 - **The golden set** (10–20 synthetic OSLs with known-correct rules) lives under
   `tests/fixtures/golden/` from Phase 2 and runs whenever a prompt or the model changes.
-- Branch coverage is on (`pytest-cov`, source = `vigilai`). New code comes with meaningful
+- Branch coverage is on (`pytest-cov`, source = `greenlight-ai`). New code comes with meaningful
   coverage, not just line-hitting tests.

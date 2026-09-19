@@ -10,7 +10,7 @@ and an administrator's control over what every user sees.
 
 The three palettes from `compare-file/ui2` (`default`, `light-blue-yellow`,
 `classic-teal`), each with a light and a dark variant, are in both apps, chosen by
-`VIGILAI_UI_THEME` in `.env` and read at request time so a change shows on the next
+`GREENLIGHT_AI_UI_THEME` in `.env` and read at request time so a change shows on the next
 page load. That covers 6.6a's palettes and the environment layer of 6.6c; the picker
 and the console setting remain.
 

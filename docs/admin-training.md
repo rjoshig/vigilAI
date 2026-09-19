@@ -1,4 +1,4 @@
-# vigilAI — Administrator training
+# Greenlight AI — Administrator training
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at

@@ -28,7 +28,7 @@ to deliver it. Keep the two in sync: a change here that alters behaviour needs a
 - Both UIs proxy `/api/*` to the api so the browser never meets CORS. Progress is polled
   every 3 s; no WebSockets.
 
-## The Python package — `src/vigilai/`
+## The Python package — `src/greenlight_ai/`
 
 One installable package; api and worker are two entry points over the same code.
 
@@ -46,7 +46,7 @@ One installable package; api and worker are two entry points over the same code.
 | `api/` | FastAPI app under `/api/v1`: runs (create with fingerprint check + `rerun_reason`, list, get, requirements, recheck, findings, finalize, report, report.pdf, clone, stats), configs, admin (artifact types and their AI context, delivery programmes, named values, checks + draft + test, compliance rules, aliases, usage). Pydantic wire models. **One auth dependency** every router uses, a no-op in v1 (ADR-008). Upload validation: `.docx`/`.json`/`.xlsx` only, size limit, content-type check, macros ignored. Audit log writes. |
 | `worker/` | The polling loop, the `run_pipeline` / `recheck` / `purge` tasks with backoff (3 retries, then the run is `failed` with the error shown in the UI), stale-claim recovery so a killed worker's job is picked up, and the retention purge. |
 | `report/` | `render.py` builds the **one-page self-contained HTML report** from a Jinja2 template and returns it with its sha256; `finalize` stores it and marks the run `finalized` (frozen — never regenerated, ADR-005). `pdf.py` renders the **stored file** with headless Chromium behind a Protocol, so the api depends on the capability rather than on Playwright and a test can inject a fake. Playwright is the optional `[pdf]` extra, installed in the worker image. |
-| `cli.py` | `vigilai run --osl … --config … --report kind=path …` → findings JSON. The first entry point (Phase 2) and the tool for the golden set. |
+| `cli.py` | `greenlight-ai run --osl … --config … --report kind=path …` → findings JSON. The first entry point (Phase 2) and the tool for the golden set. |
 
 Dependencies point down: `api → db, worker(enqueue)`; `worker → pipeline, db`;
 `pipeline → parsers, rules, llm, checks`; `checks → rules`; `llm → db`. `api` never

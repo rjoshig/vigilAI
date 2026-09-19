@@ -1,4 +1,4 @@
-# vigilAI: Design Doc
+# Greenlight AI: Design Doc
 
 2026-09-17 · @Someone
 
@@ -428,7 +428,7 @@ Set up the repo and a UI mock first, so engineers can see the target. Then build
 
 | Phase | Deliverable | Rough effort |
 | --- | --- | --- |
-| 0. Repo setup | vigilAI repo structured like compare-file: CLAUDE.md, docs, phase docs, standards, git rules | Days |
+| 0. Repo setup | Greenlight AI repo structured like compare-file: CLAUDE.md, docs, phase docs, standards, git rules | Days |
 | 1. UI mock | Static ui-mock of user-ui, admin-ui, and the final report, for engineer review | 1 week |
 | 2. Pipeline core | CLI: files in, findings JSON out. Parsers, requirement schema, LLM adapter, cache, golden set on synthetic fixtures | 4-5 weeks |
 | 3. Web app | docker-compose, new run, queue, history, review screen, stats | 3 weeks |

@@ -1,6 +1,6 @@
-# vigilAI — Design brief for presentations and documents
+# Greenlight AI — Design brief for presentations and documents
 
-**Purpose of this file.** A self-contained description of what vigilAI is, how it
+**Purpose of this file.** A self-contained description of what Greenlight AI is, how it
 works, why it was built the way it was, and what it changes for the people who use
 it. Written to be pasted into a chat or a document tool to produce slide decks,
 design documents, and management briefings. Everything here is at the level a user or
@@ -25,7 +25,7 @@ all three, holds them in their head, and looks for disagreements. It takes about
 to five hours per order, it depends on who is doing it, and a miss reaches the
 customer.
 
-## 2. What vigilAI does
+## 2. What Greenlight AI does
 
 It reads the OSL, works out what it requires, traces every requirement into the
 configuration and then into the reports, and shows the associate a list of
@@ -35,7 +35,7 @@ stays with the person; the reading and the comparing move to the tool.
 
 ```mermaid
 flowchart LR
-    OSL[OSL<br/>what the customer asked for] --> V((vigilAI))
+    OSL[OSL<br/>what the customer asked for] --> V((Greenlight AI))
     CFG[ETL configuration<br/>what the extract was set to do] --> V
     REP[Output reports<br/>what actually came out] --> V
     V --> F[Findings<br/>where the three disagree]
@@ -182,11 +182,11 @@ release cycles, and the people who understand the deliveries are the ones shapin
 ## 8. What changes for the associate: time and effort
 
 Today's manual check is about three to five hours per order. The expected shape with
-vigilAI is below. These are design targets, to be confirmed by the UAT benchmark in
+Greenlight AI is below. These are design targets, to be confirmed by the UAT benchmark in
 the rollout plan; the honest claim before UAT is the shape of the change, not the
 exact numbers.
 
-| Step | Today | With vigilAI | Who is busy |
+| Step | Today | With Greenlight AI | Who is busy |
 | --- | --- | --- | --- |
 | Gather the three files and read them | 1–2 hours | 5 minutes to fill the form and drop the files | Associate, briefly |
 | Reconcile OSL, configuration, and reports | 2–3 hours, by eye | 5–15 minutes, unattended | The tool |
@@ -203,7 +203,7 @@ gantt
     Read and gather           :a1, 0, 90
     Reconcile by eye          :a2, 90, 240
     Write up and report       :a3, 240, 270
-    section With vigilAI
+    section With Greenlight AI
     Submit                    :b1, 0, 5
     Tool runs (unattended)    :b2, 5, 20
     Review findings           :b3, 20, 55

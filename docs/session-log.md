@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**; **6 in progress**; **7 dormant** (runs only on request) |
-| Branch | `feature/train-ai-visibility`, cut from `dev`; `main` and `dev` hold phases 0–6.3 |
+| Branch | `chore/rename-greenlight-ai`, cut from `dev`; `main` and `dev` are one promotion apart |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -23,10 +23,10 @@ one-page report is generated once and never regenerated.
 
 ```bash
 source .venv/bin/activate
-export DATABASE_URL="sqlite+pysqlite:///$PWD/data/demo.db" VIGILAI_DATA_DIR="$PWD/data"
+export DATABASE_URL="sqlite+pysqlite:///$PWD/data/demo.db" GREENLIGHT_AI_DATA_DIR="$PWD/data"
 python scripts/seed_demo.py          # 8 runs in every lifecycle state + admin data
-uvicorn vigilai.api.app:get_app --factory --reload   # :8000
-python -m vigilai.worker.app                          # another terminal
+uvicorn greenlight_ai.api.app:get_app --factory --reload   # :8000
+python -m greenlight_ai.worker.app                          # another terminal
 cd user-ui && npm run dev                             # :3000
 cd admin-ui && npm run dev                            # :3001
 ```
@@ -102,6 +102,32 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (renamed to Greenlight AI)
+
+**Branch:** `chore/rename-greenlight-ai` · **Status:** complete, gates green.
+
+### What was completed
+
+- The product is **Greenlight AI** everywhere (ADR-025): the Python package
+  `greenlight_ai`, the distribution and console script `greenlight-ai`, every
+  `GREENLIGHT_AI_*` setting, the compose project and Postgres defaults, both apps,
+  the mock, the frozen report, and every document. Eight commits, one per area.
+- The mark is a green light in the brand box; the tagline sits under the wordmark
+  in both sidebars, on the sign-in screens, in the mock, and on the report.
+- 871 Python tests, 63 user-ui, 50 admin-ui; every migration loads on a fresh
+  database; compose validated as YAML because Docker is not installed here.
+
+### Pending
+
+- The user renames the GitHub repository and the remote, then the two documentation
+  URLs. A local `.env` or shell exports under the old prefix need the new names.
+
+### Next concrete action
+
+Open the pull request "Rename vigilAI to Greenlight AI" against `dev`.
 
 ---
 
@@ -432,7 +458,7 @@ PR opened.
   ADR, and session-log conventions, the static mock, and the `ui2` frontend toolchain.
 - Agreed with the user: branching main/dev/feature; CI manual-only; Python 3.10 floor +
   pin; ui2 stack + Vitest; compare-file docs layout + "Resume here" + glossary;
-  `src/vigilai/` layout; `docker/` dir + root compose; one phase doc per design phase.
+  `src/greenlight_ai/` layout; `docker/` dir + root compose; one phase doc per design phase.
 - Created the whole Phase 0 tree (see `docs/phase-0.md` scope). `docs/design.md` is the
   design doc verbatim.
 
@@ -682,7 +708,7 @@ deferred real-model benchmark.
 
 ### What was completed
 
-- `src/vigilai/cli.py`: `vigilai run` with `--osl`, `--config`, repeatable `--report
+- `src/greenlight_ai/cli.py`: `greenlight-ai run` with `--osl`, `--config`, repeatable `--report
   KIND=PATH`, `--out`, `--provider`, `--cache`, `--stage`, and `--log-level`. Writes a
   findings document carrying the summary, per-severity counts, per-stage statistics,
   the finalize-gate state, and every finding with its evidence.
@@ -705,7 +731,7 @@ deferred real-model benchmark.
 - A failed run still writes its document, carrying the stages that completed and the
   error, so a caller can see how far it got.
 - `run_command` takes an optional client, which is the seam the golden set injects the
-  scripted stand-in through. No fixture-aware code lives in `src/vigilai/`.
+  scripted stand-in through. No fixture-aware code lives in `src/greenlight_ai/`.
 - The scripted model could not read a filter whose threshold is stored in `value`
   rather than `min`, which cost one golden-set case. Fixed in the responder, since a
   real model would read both spellings.
