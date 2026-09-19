@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# Node / Next.js (user-ui, admin-ui)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.eslintcache
+coverage/
+test-results/
+playwright-report/
+
+# Secrets — never committed (see standards/git.md, docs/llm-privacy.md)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime data — the shared volume, uploads, reports, DB dumps, logs
+data/
+*.log
+*.db
+*.db-wal
+*.db-shm
+
+# Real customer files never enter the repo. Fixtures are synthetic only.
+tests/fixtures/real/
+*.docx
+*.xlsx
+!tests/fixtures/**/*.docx
+!tests/fixtures/**/*.xlsx
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local database and data volume (ADR-017: SQLite is the default backend)
+/data/
+*.db
+*.db-wal
+*.db-shm

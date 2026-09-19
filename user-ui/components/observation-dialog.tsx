@@ -1,0 +1,279 @@
+"use client";
+
+/**
+ * Train AI mode: the form a reviewer writes an observation in (ADR-021, 6.1e).
+ *
+ * An observation never runs. It is a sentence plus the thing it points at; an
+ * administrator reviews it and the model drafts a rule they approve. The anchor is
+ * prefilled from whatever the person was looking at, because a rule the model can
+ * synthesize reliably needs a selection and not only prose.
+ */
+
+import { Lightbulb } from "lucide-react";
+import * as React from "react";
+
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  ErrorState,
+  Input,
+  Label,
+  Select,
+  Textarea,
+} from "@/components/ui/primitives";
+import { api, ApiError } from "@/lib/api";
+import type {
+  Anchor,
+  Observation,
+  ObservationInput,
+  ObservationKind,
+  ObservationScope,
+  Severity,
+} from "@/lib/types";
+
+const KINDS: { value: ObservationKind; label: string }[] = [
+  { value: "reconciliation", label: "Two things should agree" },
+  { value: "field_constraint", label: "A field should always look like this" },
+  { value: "correction", label: "The tool got something wrong" },
+  { value: "note", label: "Something worth knowing" },
+];
+
+const SEVERITIES: { value: Severity; label: string }[] = [
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+  { value: "review", label: "Needs a person to look" },
+];
+
+const SCOPES: { value: ObservationScope; label: string }[] = [
+  { value: "customer", label: "This customer" },
+  { value: "programme", label: "This delivery programme" },
+  { value: "global", label: "Every run" },
+];
+
+/** An empty anchor of a given kind, so the form always sends a complete shape. */
+export function anchorOf(kind: Anchor["kind"], fields: Partial<Anchor> = {}): Anchor {
+  return {
+    kind,
+    artifact: "",
+    sheet: "",
+    cell: "",
+    field: "",
+    reference: "",
+    value: "",
+    ...fields,
+  };
+}
+
+/**
+ * Whether Train AI mode is on.
+ *
+ * Returns false until the answer arrives, so nothing about training is drawn while the
+ * switch is unknown and no other training endpoint is called when it is off.
+ */
+export function useTrainingEnabled(): boolean {
+  const [enabled, setEnabled] = React.useState(false);
+
+  React.useEffect(() => {
+    let live = true;
+    api
+      .getTrainingConfig()
+      .then((config) => {
+        if (live) setEnabled(config.enabled);
+      })
+      .catch(() => {
+        // A deployment without the training endpoint behaves as one with it switched off.
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return enabled;
+}
+
+export interface ObservationDialogProps {
+  /** What the person was looking at when they pressed the button. */
+  anchors: Anchor[];
+  runId?: number | null;
+  findingId?: number | null;
+  /** What the anchor refers to, in one line, so the person can see what they selected. */
+  context?: string;
+  /** Set when the form is correcting an observation rather than writing a new one. */
+  existing?: Observation;
+  onClose: () => void;
+  onSaved?: (observation: Observation) => void;
+}
+
+export function ObservationDialog({
+  anchors,
+  runId,
+  findingId,
+  context,
+  existing,
+  onClose,
+  onSaved,
+}: ObservationDialogProps) {
+  const [kind, setKind] = React.useState<ObservationKind>(existing?.kind ?? "reconciliation");
+  const [statement, setStatement] = React.useState(existing?.statement ?? "");
+  const [expectation, setExpectation] = React.useState(existing?.expectation ?? "");
+  const [severity, setSeverity] = React.useState<Severity>(existing?.severity_hint ?? "medium");
+  // The narrowest scope that fits is the safe default: the usual cause of a noisy rule
+  // is an assumption that holds for most records and not all.
+  const [scope, setScope] = React.useState<ObservationScope>(existing?.scope_hint ?? "customer");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [saved, setSaved] = React.useState(false);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const body: ObservationInput = {
+      kind,
+      anchors: existing ? existing.anchors : anchors,
+      statement: statement.trim(),
+      expectation: expectation.trim(),
+      severity_hint: severity,
+      scope_hint: scope,
+      run_id: existing ? existing.run_id : (runId ?? null),
+      finding_id: existing ? existing.finding_id : (findingId ?? null),
+    };
+    try {
+      const stored = existing
+        ? await api.updateObservation(existing.id, body)
+        : await api.createObservation(body);
+      setSaved(true);
+      onSaved?.(stored);
+    } catch (caught) {
+      // The 422 text names what to take out before saving, so it is shown as written.
+      setError(caught instanceof ApiError ? caught.detail : "Could not save that.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="observation-title"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      <Card className="w-full max-w-2xl">
+        <CardHeader className="border-b">
+          <CardTitle id="observation-title" className="flex items-center gap-1.5">
+            <Lightbulb className="h-4 w-4 text-primary" />
+            {existing ? "Edit your observation" : "What should this check?"}
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="flex flex-col gap-3 pt-4">
+          <p className="text-xs text-muted-foreground">
+            This never runs on its own. An administrator reviews what you write and the model drafts
+            a rule they approve.
+          </p>
+
+          {context ? (
+            <div className="rounded-md border bg-muted/40 px-2.5 py-2 text-[0.7rem]">
+              <span className="font-semibold">Pointing at:</span> {context}
+            </div>
+          ) : null}
+
+          {error ? <ErrorState message={error} /> : null}
+
+          {saved ? (
+            <p className="rounded-md border border-success/40 bg-success/10 px-2.5 py-2 text-xs">
+              Saved. You can follow what becomes of it on the Observations page.
+            </p>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="observation-kind">What kind of thing is this?</Label>
+              <Select
+                id="observation-kind"
+                value={kind}
+                onChange={(event) => setKind(event.target.value as ObservationKind)}
+              >
+                {KINDS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="observation-severity">How serious is a breach?</Label>
+              <Select
+                id="observation-severity"
+                value={severity}
+                onChange={(event) => setSeverity(event.target.value as Severity)}
+              >
+                {SEVERITIES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="observation-scope">Where should it apply?</Label>
+              <Select
+                id="observation-scope"
+                value={scope}
+                onChange={(event) => setScope(event.target.value as ObservationScope)}
+              >
+                {SCOPES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="observation-statement">
+              What should the tool check?<span className="text-destructive"> *</span>
+            </Label>
+            <Textarea
+              id="observation-statement"
+              value={statement}
+              onChange={(event) => setStatement(event.target.value)}
+              placeholder="In your own words. For example: this column is what clause 4.2 is actually asking for."
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="observation-expectation">What do you expect to see?</Label>
+            <Input
+              id="observation-expectation"
+              value={expectation}
+              onChange={(event) => setExpectation(event.target.value)}
+              placeholder="For example: never blank for account review."
+            />
+            <span className="text-[0.7rem] text-muted-foreground">
+              Write no account numbers, names, or other personal data. Saving is refused when the
+              text looks like it carries any.
+            </span>
+          </div>
+        </CardContent>
+
+        <div className="flex justify-end gap-2 border-t p-4">
+          <Button variant="ghost" onClick={onClose}>
+            {saved ? "Close" : "Cancel"}
+          </Button>
+          <Button disabled={statement.trim().length < 3 || saving} onClick={() => void save()}>
+            <Lightbulb className="h-4 w-4" /> {saving ? "Saving…" : "Save observation"}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}

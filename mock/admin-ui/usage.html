@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Usage · vigilAI admin mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="usage">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container">
+          <div class="page-header">
+            <div><h1>Usage</h1><p>Tool health and cost over time. All numbers come from run_stages, llm_calls, and findings review decisions. No prompts or content are stored.</p></div>
+            <div class="page-actions"><div class="seg"><button>7d</button><button class="on">30d</button><button>90d</button></div><button class="btn btn-outline btn-sm" onclick="mock('Export CSV')"><span data-icon="download"></span> Export CSV</button></div>
+          </div>
+
+          <div class="grid grid-4 mb">
+            <div class="card"><div class="card-pad"><div class="stat-label">Runs (30d)</div><div class="stat-value">47</div><div class="stat-hint">1.6 / day · peak 6</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Duration p50 / p95</div><div class="stat-value">4m 05s / 7m 40s</div><div class="stat-hint">excluding queue wait</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Failure rate</div><div class="stat-value tone-destructive">4.3%</div><div class="stat-hint">2 of 47 · both LLM timeouts</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Tokens (30d)</div><div class="stat-value">3.1M</div><div class="stat-hint">~66k per run</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Cache hit rate</div><div class="stat-value tone-success">34%</div><div class="stat-hint">rising as configs repeat</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">JSON-validation failures</div><div class="stat-value">0.8%</div><div class="stat-hint">17 of 2,140 calls · all recovered on retry</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">False-positive rate</div><div class="stat-value tone-warn">11%</div><div class="stat-hint">findings marked "false positive" by reviewers</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Reviewer decisions</div><div class="stat-value">412</div><div class="stat-hint">341 OK · 52 Not OK · 19 accepted risk</div></div></div>
+          </div>
+
+          <div class="grid grid-2 mb">
+            <div class="card"><div class="card-header"><div class="card-title"><span data-icon="stats"></span> Runs per day</div><span class="small muted">last 30 days</span></div><div class="card-content"><div class="spark" id="runsSpark"></div></div></div>
+            <div class="card"><div class="card-header"><div class="card-title"><span data-icon="zap"></span> Tokens per day</div><span class="small muted">k tokens</span></div><div class="card-content"><div class="spark" id="tokSpark"></div></div></div>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="card"><div class="card-header"><div class="card-title">Findings by type (30d)</div></div><div class="card-content"><div class="bars">
+              <div class="bar-row"><span>Value mismatch</span><span class="bar-track"><span class="bar-fill bf-destructive" style="width: 100%"></span></span><span class="bar-val">84</span></div>
+              <div class="bar-row"><span>Report violates rule</span><span class="bar-track"><span class="bar-fill bf-destructive" style="width: 71%"></span></span><span class="bar-val">60</span></div>
+              <div class="bar-row"><span>Extra rule in config</span><span class="bar-track"><span class="bar-fill bf-warn" style="width: 58%"></span></span><span class="bar-val">49</span></div>
+              <div class="bar-row"><span>Profile anomaly</span><span class="bar-track"><span class="bar-fill" style="width: 55%"></span></span><span class="bar-val">46</span></div>
+              <div class="bar-row"><span>Low-confidence extraction</span><span class="bar-track"><span class="bar-fill" style="width: 40%"></span></span><span class="bar-val">34</span></div>
+              <div class="bar-row"><span>Rule missing in config</span><span class="bar-track"><span class="bar-fill bf-destructive" style="width: 26%"></span></span><span class="bar-val">22</span></div>
+              <div class="bar-row"><span>Count does not reconcile</span><span class="bar-track"><span class="bar-fill bf-destructive" style="width: 14%"></span></span><span class="bar-val">12</span></div>
+            </div></div></div>
+            <div class="card"><div class="card-header"><div class="card-title">Model &amp; prompt versions</div></div><div class="card-content">
+              <table class="table compact">
+                <thead><tr><th>Model</th><th>Prompts</th><th class="right">Runs</th><th class="right">p50</th><th class="right">JSON fail</th><th class="right">FP rate</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">local-gemma-27b</td><td>v3</td><td class="right tabular">31</td><td class="right tabular">4m 01s</td><td class="right tabular">0.6%</td><td class="right tabular">9%</td></tr>
+                  <tr><td class="mono">local-gemma-27b</td><td>v2</td><td class="right tabular">12</td><td class="right tabular">4m 20s</td><td class="right tabular">1.4%</td><td class="right tabular">16%</td></tr>
+                  <tr><td class="mono">api-model-a</td><td>v3</td><td class="right tabular">4</td><td class="right tabular">2m 48s</td><td class="right tabular">0.0%</td><td class="right tabular">7%</td></tr>
+                </tbody>
+              </table>
+              <p class="hint mt-s">Golden set (synthetic OSLs) is re-run whenever a prompt or the model changes; last pass 18 / 18.</p>
+            </div></div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+    <script>
+      function spark(id, vals, hiAt) {
+        const max = Math.max(...vals);
+        document.getElementById(id).innerHTML = vals.map((v, i) => '<i style="height:' + Math.max(4, (v / max) * 100) + '%" title="' + v + '"' + (hiAt === i ? ' class="hi"' : v === 0 ? ' class="lo"' : "") + "></i>").join("");
+      }
+      spark("runsSpark", [1,2,0,3,1,2,2,0,0,4,1,3,2,1,0,0,2,6,3,1,2,0,0,1,2,3,1,2,1,3], 17);
+      spark("tokSpark", [60,130,0,190,70,140,120,0,0,260,60,200,130,70,0,0,120,410,190,60,130,0,0,70,120,200,70,130,60,190], 17);
+    </script>
+  </body>
+</html>

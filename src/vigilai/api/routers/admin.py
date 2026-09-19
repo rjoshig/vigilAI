@@ -1,0 +1,1707 @@
+"""Admin endpoints: templates, named values, checks, compliance, reference data, usage.
+
+Checks are defined as data, not code. The model helps write one *once*
+(``POST /admin/checks/draft``); after that the check runs as code on every request at no
+token cost (``docs/design.md`` "Configurable checks"). Testing a check never calls the
+model.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from pathlib import Path
+from typing import Annotated, Any, Final, Literal, Sequence, cast
+
+import sqlalchemy as sa
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+
+from vigilai.api import schemas_admin as wire
+from vigilai.api.deps import (
+    CurrentUser,
+    current_user,
+    get_data_dir,
+    get_session,
+    require_admin,
+)
+from vigilai.api.uploads import UploadError, store_upload
+from vigilai.checks.expressions import (
+    ExpressionError,
+    UnresolvedValue,
+    evaluate,
+    referenced_names,
+    validate,
+)
+from vigilai.checks.named_values import NamedValue, resolve, to_number
+from vigilai.db import catalog, models, repository
+from vigilai.llm.cache import LLMCache
+from vigilai.llm.client import LLMError
+from vigilai.llm.factory import build_client
+from vigilai.llm.prompts import DRAFT_CHECK_PROMPT
+from vigilai.llm.prompts.schemas import DraftCheckResponse
+from vigilai.parsers.base import ParseError, ReportKind
+from vigilai.parsers.masking import DEFAULT_MASKED_COLUMNS
+from vigilai.parsers.reports.xlsx import PARSERS, parser_for
+
+__all__ = ["router"]
+
+_LOG: Final = logging.getLogger(__name__)
+
+# Every route here needs an administrator, the read-only ones included: a listing
+# tells a caller what the tool checks and who its customers are.
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+#: Where uploaded sample workbooks live on the shared volume.
+TEMPLATE_DIR: Final[str] = "templates"
+
+#: An artifact key is used as a multipart field name and a filename, so it is kept to
+#: characters that are safe in both.
+_KEY_RE: Final = re.compile(r"^[a-z][a-z0-9_]{1,59}$")
+
+#: A scope code is short and appears in the UI and on the run row.
+_CODE_RE: Final = re.compile(r"^[A-Z0-9_]{2,20}$")
+
+#: Starlette renamed its 422 constant; the number is stable.
+HTTP_422: Final[int] = 422
+
+
+# ---------------------------------------------------------------- artifact types
+
+
+def _sheets(path: Path, key: str) -> list[str]:
+    """List a sample workbook's sheets, for the admin-ui's locator pickers.
+
+    Args:
+        path: The stored workbook.
+        key: The artifact key, which selects the parser.
+
+    Returns:
+        The sheet names, or an empty list when the file cannot be read.
+    """
+    if not path.exists():
+        return []
+    try:
+        return [sheet.name for sheet in parser_for(key).parse(path).sheets]
+    except ParseError:
+        return []
+
+
+#: The most samples one artifact type may hold. Enough to show how a layout varies
+#: between customers, few enough that an administrator reads them all (ADR-021).
+MAX_SAMPLES: Final[int] = 3
+
+#: How many populated cells a preview returns per sheet. A person scanning for where
+#: a value lives reads the top of a sheet, not four thousand rows of it.
+PREVIEW_CELLS: Final[int] = 400
+
+
+def _get_sample(session: Session, key: str, sample_id: int) -> models.ArtifactSample:
+    """Fetch one sample, checking it belongs to the type in the path.
+
+    Args:
+        session: The request's session.
+        key: The artifact key.
+        sample_id: The sample.
+
+    Returns:
+        The sample.
+
+    Raises:
+        HTTPException: 404 when it does not exist or belongs to another type.
+    """
+    sample = session.get(models.ArtifactSample, sample_id)
+    if sample is None or sample.artifact_type.key != key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"sample {sample_id} not found for {key!r}")
+    return sample
+
+
+def _sheet_preview(sheet: Any, masked: tuple[str, ...]) -> wire.SheetPreview:
+    """Render one sheet's populated cells for the console.
+
+    Args:
+        sheet: The parsed sheet.
+        masked: The masked-column patterns, applied at parse time already; the names
+            are reported so the console can say why a column reads as ``[masked]``.
+
+    Returns:
+        The preview, truncated to the first few hundred populated cells. The label to
+        a cell's left is included because that is how a named value should point at
+        it: a label survives an inserted row and a cell address does not.
+    """
+    cells: list[wire.CellPreview] = []
+    for row_index, row in enumerate(sheet.rows, start=1):
+        first_text = ""
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.strip():
+                first_text = cell.value.strip()
+                break
+        for column_index, cell in enumerate(row, start=1):
+            if cell.value is None or str(cell.value).strip() == "":
+                continue
+            if len(cells) >= PREVIEW_CELLS:
+                break
+            text = str(cell.value)
+            cells.append(
+                wire.CellPreview(
+                    cell=cell.address,
+                    value=text[:200],
+                    label=first_text[:200] if text != first_text else "",
+                    row=row_index,
+                    column=column_index,
+                )
+            )
+        if len(cells) >= PREVIEW_CELLS:
+            break
+
+    del masked  # applied at parse time; kept in the signature so the reason is visible
+    return wire.SheetPreview(
+        name=sheet.name,
+        rows=len(sheet.rows),
+        columns=len(sheet.header) if sheet.header else 0,
+        cells=cells,
+    )
+
+
+def _artifact_out(
+    row: models.ArtifactType, data_dir: Path, in_use: int = 0
+) -> wire.ArtifactTypeOut:
+    """Build the wire model for one artifact type.
+
+    Args:
+        row: The stored type.
+        data_dir: The shared volume.
+        in_use: How many runs have uploaded this type.
+
+    Returns:
+        The wire model, including the sample's sheets when there is one.
+    """
+    samples = [
+        wire.SampleOut(
+            id=sample.id,
+            label=sample.label,
+            filename=sample.filename,
+            sheets=list(sample.sheets or []),
+            size_bytes=sample.size_bytes,
+            notes=sample.notes,
+            uploaded_by=sample.uploaded_by,
+            created_at=sample.created_at,
+        )
+        for sample in row.samples
+    ]
+    # Every sheet across every sample, de-duplicated but in first-seen order: a named
+    # value's sheet may exist in one customer's layout and not another's, and the
+    # picker has to offer both.
+    sheets: list[str] = []
+    for sample in samples:
+        for name in sample.sheets:
+            if name not in sheets:
+                sheets.append(name)
+    # The column is a plain string so a future kind needs no migration; the wire model
+    # narrows it, and an unrecognised value would be a bug in whatever wrote the row.
+    kind = cast(Literal["osl", "config", "report"], row.kind)
+    return wire.ArtifactTypeOut(
+        id=row.id,
+        key=row.key,
+        label=row.label,
+        kind=kind,
+        description=row.description,
+        ai_context=row.ai_context,
+        is_active=row.is_active,
+        is_required=row.is_required,
+        is_builtin=row.is_builtin,
+        sort_order=row.sort_order,
+        samples=samples,
+        sheets=sheets,
+        runs_using=in_use,
+    )
+
+
+@router.get("/artifact-types", response_model=list[wire.ArtifactTypeOut])
+def list_artifact_types(
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.ArtifactTypeOut]:
+    """List every input the tool accepts, active or not.
+
+    Args:
+        session: The request's session.
+        data_dir: The shared volume.
+        _user: The caller.
+
+    Returns:
+        The artifact types in display order, seeding the shipped defaults into an
+        empty database first so a fresh install is configurable rather than blank.
+    """
+    catalog.seed_defaults(session)
+    rows = list(
+        session.execute(
+            sa.select(models.ArtifactType).order_by(
+                models.ArtifactType.sort_order, models.ArtifactType.key
+            )
+        ).scalars()
+    )
+    counts: dict[str, int] = {
+        str(kind): int(count)
+        for kind, count in session.execute(
+            sa.select(models.RunFile.kind, sa.func.count()).group_by(models.RunFile.kind)
+        ).all()
+    }
+    return [_artifact_out(row, data_dir, counts.get(row.key, 0)) for row in rows]
+
+
+@router.post(
+    "/artifact-types", response_model=wire.ArtifactTypeOut, status_code=status.HTTP_201_CREATED
+)
+def save_artifact_type(
+    payload: wire.ArtifactTypeIn,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ArtifactTypeOut:
+    """Create a report type, or edit any type's description, guidance, or state.
+
+    Args:
+        payload: The type.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller.
+
+    Returns:
+        The stored type.
+
+    Raises:
+        HTTPException: 422 when the key is malformed, or when a built-in's key or kind
+            is being changed — those are referenced by the fixed report checks.
+    """
+    require_admin(user)
+    catalog.seed_defaults(session)
+
+    key = payload.key.strip().lower()
+    if not _KEY_RE.match(key):
+        raise HTTPException(
+            HTTP_422,
+            f"{key!r} is not a valid key: use lowercase letters, digits, and underscores",
+        )
+
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+
+    if row is None:
+        row = models.ArtifactType(key=key, kind="report", is_builtin=False)
+        session.add(row)
+    elif row.is_builtin and payload.kind and payload.kind != row.kind:
+        raise HTTPException(
+            HTTP_422,
+            f"{key!r} is a built-in type; its kind cannot be changed because the fixed "
+            "report checks look for it by key",
+        )
+
+    row.label = payload.label.strip() or key
+    if not row.is_builtin and payload.kind:
+        row.kind = payload.kind
+    row.description = payload.description
+    row.ai_context = payload.ai_context
+    row.is_active = payload.is_active
+    row.is_required = payload.is_required
+    row.sort_order = payload.sort_order
+    session.flush()
+
+    repository.audit(session, "admin.artifact_type_saved", detail=key)
+    return _artifact_out(row, data_dir)
+
+
+@router.post(
+    "/artifact-types/{key}/samples",
+    response_model=wire.ArtifactTypeOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_sample(
+    key: str,
+    file: Annotated[UploadFile, File()],
+    label: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ArtifactTypeOut:
+    """Add a sample to an artifact type, up to three.
+
+    Args:
+        key: The artifact key.
+        label: What distinguishes this sample from the others, such as the customer
+            or the year.
+        notes: Anything worth saying about it.
+        file: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Returns:
+        The updated type with all of its samples.
+
+    Raises:
+        HTTPException: 404 when the type does not exist, 400 when the upload is
+            rejected, and 409 when three samples are already stored. Three is enough
+            to show how a layout varies and few enough that an administrator reads
+            them all; the fourth is refused rather than silently dropping one.
+    """
+    catalog.seed_defaults(session)
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+    if len(row.samples) >= MAX_SAMPLES:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{key!r} already has {MAX_SAMPLES} samples; remove one before adding another",
+        )
+
+    try:
+        stored = store_upload(
+            file.file,
+            file.filename or f"{key}.xlsx",
+            file.content_type or "",
+            key,
+            data_dir,
+            TEMPLATE_DIR,
+        )
+    except UploadError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    sample = models.ArtifactSample(
+        artifact_type_id=row.id,
+        label=label.strip(),
+        notes=notes.strip(),
+        filename=stored.filename,
+        storage_path=stored.storage_key,
+        sha256=stored.sha256,
+        size_bytes=stored.size_bytes,
+        # Read once here so the console and the type detector never have to open the
+        # workbook again, which is the slow part of both.
+        sheets=_sheets(data_dir / stored.storage_key, key),
+        uploaded_by_user_id=user.id,
+        uploaded_by=user.name,
+    )
+    session.add(sample)
+    session.flush()
+    session.refresh(row)
+    repository.audit(session, "admin.sample_uploaded", detail=key, user_id=user.id, actor=user.name)
+    return _artifact_out(row, data_dir)
+
+
+@router.get("/artifact-types/{key}/samples/{sample_id}/download")
+def download_sample(
+    key: str,
+    sample_id: int,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> FileResponse:
+    """Download a stored sample.
+
+    An administrator has to be able to see the sample in use; describing it is not
+    the same as opening it.
+
+    Args:
+        key: The artifact key.
+        sample_id: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Returns:
+        The file, under the name it was uploaded with.
+
+    Raises:
+        HTTPException: 404 when the sample or its file is missing.
+    """
+    sample = _get_sample(session, key, sample_id)
+    path = data_dir / sample.storage_path
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "the stored file is missing")
+    repository.audit(
+        session,
+        "admin.sample_downloaded",
+        detail=f"{key}/{sample_id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return FileResponse(
+        path,
+        filename=sample.filename or f"{key}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.get(
+    "/artifact-types/{key}/samples/{sample_id}/preview",
+    response_model=wire.SamplePreviewOut,
+)
+def preview_sample(
+    key: str,
+    sample_id: int,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    _user: CurrentUser = Depends(require_admin),
+) -> wire.SamplePreviewOut:
+    """Show what a sample contains, cell by cell.
+
+    This is what someone reads while deciding what a report means and where a named
+    value should point. Values pass through the same masking as a real upload,
+    because a sample is a file that may hold customer data (ADR-003).
+
+    Args:
+        key: The artifact key.
+        sample_id: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        _user: The calling administrator.
+
+    Returns:
+        Each sheet with its populated cells, their addresses, and the label to the
+        left of each one where there is one.
+
+    Raises:
+        HTTPException: 404 when the sample is missing, 422 when it cannot be parsed.
+    """
+    sample = _get_sample(session, key, sample_id)
+    path = data_dir / sample.storage_path
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "the stored file is missing")
+    try:
+        document = parser_for(key).parse(path)
+    except ParseError as exc:
+        raise HTTPException(HTTP_422, f"the sample could not be read: {exc}") from exc
+
+    masked = repository.load_masked_columns(session)
+    return wire.SamplePreviewOut(
+        sample_id=sample.id,
+        filename=sample.filename,
+        sheets=[_sheet_preview(sheet, masked) for sheet in document.sheets],
+    )
+
+
+@router.delete("/artifact-types/{key}/samples/{sample_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sample(
+    key: str,
+    sample_id: int,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> None:
+    """Remove one sample.
+
+    Args:
+        key: The artifact key.
+        sample_id: The sample.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    sample = _get_sample(session, key, sample_id)
+    path = data_dir / sample.storage_path
+    session.delete(sample)
+    if path.exists():
+        path.unlink()
+    repository.audit(
+        session,
+        "admin.sample_deleted",
+        detail=f"{key}/{sample_id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+
+
+@router.delete("/artifact-types/{key}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_artifact_type(
+    key: str,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Delete an admin-defined report type.
+
+    Args:
+        key: The artifact key.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist; 409 when it is a built-in, or when
+            a run has already used it. Deleting either would leave stored runs
+            referring to a type nothing can describe — disabling it is the right move,
+            and it keeps the history readable.
+    """
+    require_admin(user)
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+    if row.is_builtin:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{key!r} is a built-in type and cannot be deleted; switch it off instead",
+        )
+
+    used = int(
+        session.execute(
+            sa.select(sa.func.count()).select_from(models.RunFile).where(models.RunFile.kind == key)
+        ).scalar_one()
+    )
+    if used:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{used} run(s) have uploaded {key!r}; switch it off instead so their history "
+            "stays readable",
+        )
+
+    session.delete(row)
+    repository.audit(session, "admin.artifact_type_deleted", detail=key)
+
+
+# ------------------------------------------------------------------------- scopes
+
+
+@router.get("/scopes", response_model=list[wire.ScopeOut])
+def list_scopes(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.ScopeOut]:
+    """List the delivery programmes and their standing instructions.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The scopes in display order.
+    """
+    catalog.seed_defaults(session)
+    counts: dict[str, int] = {
+        str(scope): int(count)
+        for scope, count in session.execute(
+            sa.select(models.Run.scope, sa.func.count()).group_by(models.Run.scope)
+        ).all()
+    }
+    rows = session.execute(
+        sa.select(models.RunScope).order_by(models.RunScope.sort_order, models.RunScope.code)
+    ).scalars()
+    return [
+        wire.ScopeOut(
+            id=row.id,
+            code=row.code,
+            label=row.label,
+            description=row.description,
+            standing_instructions=row.standing_instructions,
+            is_active=row.is_active,
+            sort_order=row.sort_order,
+            runs_using=counts.get(row.code, 0),
+        )
+        for row in rows
+    ]
+
+
+@router.post("/scopes", response_model=wire.ScopeOut, status_code=status.HTTP_201_CREATED)
+def save_scope(
+    payload: wire.ScopeIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ScopeOut:
+    """Create or edit a delivery programme.
+
+    Standing instructions are passed to the model as background, never as an OSL
+    requirement (ADR-020), so this is where a compliance regime that the OSL does not
+    restate gets written down once.
+
+    Args:
+        payload: The scope.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The stored scope.
+
+    Raises:
+        HTTPException: 422 when the code is malformed.
+    """
+    require_admin(user)
+    catalog.seed_defaults(session)
+
+    code = payload.code.strip().upper()
+    if not _CODE_RE.match(code):
+        raise HTTPException(
+            HTTP_422, f"{code!r} is not a valid code: use 2 to 20 letters, digits, or underscores"
+        )
+
+    row = session.execute(
+        sa.select(models.RunScope).where(models.RunScope.code == code)
+    ).scalar_one_or_none()
+    if row is None:
+        row = models.RunScope(code=code)
+        session.add(row)
+
+    row.label = payload.label.strip() or code
+    row.description = payload.description
+    row.standing_instructions = payload.standing_instructions
+    row.is_active = payload.is_active
+    row.sort_order = payload.sort_order
+    session.flush()
+
+    repository.audit(session, "admin.scope_saved", detail=code)
+    return wire.ScopeOut(
+        id=row.id,
+        code=row.code,
+        label=row.label,
+        description=row.description,
+        standing_instructions=row.standing_instructions,
+        is_active=row.is_active,
+        sort_order=row.sort_order,
+    )
+
+
+@router.delete("/scopes/{code}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scope(
+    code: str,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Delete a delivery programme.
+
+    Args:
+        code: The scope code.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when runs already reference it.
+    """
+    require_admin(user)
+    row = session.execute(
+        sa.select(models.RunScope).where(models.RunScope.code == code.upper())
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"scope {code!r} not found")
+
+    used = int(
+        session.execute(
+            sa.select(sa.func.count()).select_from(models.Run).where(models.Run.scope == row.code)
+        ).scalar_one()
+    )
+    if used:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{used} run(s) are in {row.code!r}; switch it off instead so their history "
+            "stays readable",
+        )
+    session.delete(row)
+    repository.audit(session, "admin.scope_deleted", detail=row.code)
+
+
+def _load_templates(session: Session, data_dir: Path) -> dict[ReportKind, Any]:
+    """Parse every uploaded sample workbook.
+
+    Args:
+        session: An open session.
+        data_dir: The shared volume.
+
+    Returns:
+        Report kind to parsed document, skipping any that cannot be read. A check
+        tested against a missing sample reports "could not resolve", which is the same
+        answer the run would give.
+    """
+    documents: dict[ReportKind, Any] = {}
+    rows = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.kind == "report")
+    ).scalars()
+    for row in rows:
+        for sample in row.samples:
+            path = data_dir / sample.storage_path
+            if not path.exists():
+                continue
+            try:
+                # The first readable sample is the one a check is tested against. The
+                # others exist so a named value's resolution can be shown against each
+                # layout, which is where a pointer that only works on one shows up.
+                documents[row.key] = parser_for(row.key).parse(path)
+                break
+            except ParseError as exc:
+                _LOG.info("sample for %s could not be parsed: %s", row.key, exc)
+    return documents
+
+
+# ------------------------------------------------------------------- named values
+
+
+def _to_named_value(row: models.NamedValueRow) -> NamedValue:
+    """Convert a stored row into the resolver's value object.
+
+    Args:
+        row: The stored pointer.
+
+    Returns:
+        The named value.
+    """
+    locator = row.locator or {}
+    return NamedValue(
+        name=row.name,
+        report_kind=row.report_type,
+        sheet=row.sheet,
+        kind=locator.get("kind", "label"),
+        cell=locator.get("cell", ""),
+        label=locator.get("label", ""),
+        label_column=locator.get("label_column", 0),
+        value_column=locator.get("value_column", 1),
+        description=row.description,
+    )
+
+
+@router.get("/named-values", response_model=list[wire.NamedValueOut])
+def list_named_values(
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.NamedValueOut]:
+    """List the named values, with what each resolves to on the samples.
+
+    Showing the resolved value is the point: a pointer that no longer finds anything is
+    the failure mode this screen exists to catch.
+
+    Args:
+        session: The request's session.
+        data_dir: The shared volume.
+        _user: The caller.
+
+    Returns:
+        The named values.
+    """
+    documents = _load_templates(session, data_dir)
+    checks = list(session.execute(sa.select(models.CheckDefinitionRow)).scalars())
+
+    out: list[wire.NamedValueOut] = []
+    for row in session.execute(
+        sa.select(models.NamedValueRow).order_by(models.NamedValueRow.name)
+    ).scalars():
+        named = _to_named_value(row)
+        value = resolve(named, documents)
+        used_by = [
+            check.name
+            for check in checks
+            if check.expression and row.name in _safe_references(check.expression)
+        ]
+        locator = row.locator or {}
+        out.append(
+            wire.NamedValueOut(
+                id=row.id,
+                name=row.name,
+                report_type=row.report_type,
+                sheet=row.sheet,
+                kind=locator.get("kind", "label"),
+                cell=locator.get("cell", ""),
+                label=locator.get("label", ""),
+                label_column=locator.get("label_column", 0),
+                value_column=locator.get("value_column", 1),
+                description=row.description,
+                resolved=None if value is None else str(value),
+                used_by=used_by,
+            )
+        )
+    return out
+
+
+def _safe_references(expression: str) -> frozenset[str]:
+    """Names an expression uses, treating a malformed one as using nothing.
+
+    Args:
+        expression: The check expression.
+
+    Returns:
+        The referenced names, empty when the expression does not parse.
+    """
+    try:
+        return referenced_names(expression)
+    except ExpressionError:
+        return frozenset()
+
+
+def _locator(payload: wire.NamedValueIn) -> dict[str, Any]:
+    """Build the stored locator from a submitted pointer.
+
+    Args:
+        payload: The submitted pointer.
+
+    Returns:
+        The locator as it is stored.
+    """
+    return {
+        "kind": payload.kind,
+        "cell": payload.cell,
+        "label": payload.label,
+        "label_column": payload.label_column,
+        "value_column": payload.value_column,
+    }
+
+
+@router.post(
+    "/named-values", response_model=wire.NamedValueOut, status_code=status.HTTP_201_CREATED
+)
+def create_named_value(
+    payload: wire.NamedValueIn,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(current_user),
+) -> wire.NamedValueOut:
+    """Create or replace a named value.
+
+    Args:
+        payload: The pointer.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller.
+
+    Returns:
+        The stored pointer with what it resolves to.
+    """
+    require_admin(user)
+    row = session.execute(
+        sa.select(models.NamedValueRow).where(models.NamedValueRow.name == payload.name)
+    ).scalar_one_or_none()
+    if row is None:
+        row = models.NamedValueRow(name=payload.name)
+        session.add(row)
+    row.report_type = payload.report_type
+    row.sheet = payload.sheet
+    row.locator = _locator(payload)
+    row.description = payload.description
+    session.flush()
+
+    value = resolve(_to_named_value(row), _load_templates(session, data_dir))
+    repository.audit(session, "admin.named_value_saved", detail=payload.name)
+    return wire.NamedValueOut(
+        id=row.id, **payload.model_dump(), resolved=None if value is None else str(value)
+    )
+
+
+@router.delete("/named-values/{value_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_named_value(
+    value_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Delete a named value.
+
+    Args:
+        value_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when a check still refers to it.
+            Deleting it anyway would turn a working check into "could not evaluate" on
+            the next run, with nothing to point at.
+    """
+    require_admin(user)
+    row = session.get(models.NamedValueRow, value_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"named value {value_id} not found")
+
+    users = [
+        check.name
+        for check in session.execute(sa.select(models.CheckDefinitionRow)).scalars()
+        if row.name in _safe_references(check.expression)
+    ]
+    if users:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{row.name} is used by {', '.join(users)}; edit or remove those checks first",
+        )
+    session.delete(row)
+    repository.audit(session, "admin.named_value_deleted", detail=row.name)
+
+
+# -------------------------------------------------------------------------- checks
+
+
+@router.get("/checks", response_model=list[wire.CheckOut])
+def list_checks(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.CheckOut]:
+    """List every check, active or not.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The checks, newest first.
+    """
+    rows = session.execute(
+        sa.select(models.CheckDefinitionRow).order_by(models.CheckDefinitionRow.id.desc())
+    ).scalars()
+    return [
+        wire.CheckOut(
+            id=row.id,
+            name=row.name,
+            version=row.version,
+            kind=row.kind,  # type: ignore[arg-type]
+            expression=row.expression,
+            instruction=row.instruction,
+            reasoning=row.reasoning,
+            severity=row.severity,  # type: ignore[arg-type]
+            scope=row.scope,
+            is_active=row.is_active,
+            created_at=row.created_at,
+            references=sorted(_safe_references(row.expression)),
+        )
+        for row in rows
+    ]
+
+
+@router.post("/checks", response_model=wire.CheckOut, status_code=status.HTTP_201_CREATED)
+def save_check(
+    payload: wire.CheckIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.CheckOut:
+    """Create a check, or save a new version of an existing one.
+
+    Editing bumps the version rather than overwriting, so a finding can always say which
+    version of which check produced it (``docs/design.md`` "Configurable checks").
+
+    Args:
+        payload: The check.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The stored check.
+
+    Raises:
+        HTTPException: 422 when an expression check has no valid expression, or a
+            judgment check has no instruction.
+    """
+    require_admin(user)
+
+    if payload.kind == "expression":
+        if not payload.expression.strip():
+            raise HTTPException(HTTP_422, "an expression check needs an expression")
+        try:
+            validate(payload.expression)
+        except ExpressionError as exc:
+            raise HTTPException(HTTP_422, str(exc)) from exc
+    elif not payload.instruction.strip():
+        raise HTTPException(HTTP_422, "a judgment check needs an instruction")
+
+    existing = session.execute(
+        sa.select(models.CheckDefinitionRow)
+        .where(models.CheckDefinitionRow.name == payload.name)
+        .order_by(models.CheckDefinitionRow.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    row = models.CheckDefinitionRow(
+        name=payload.name,
+        version=(existing.version + 1) if existing else 1,
+        kind=payload.kind,
+        expression=payload.expression,
+        instruction=payload.instruction,
+        reasoning=payload.reasoning,
+        severity=payload.severity,
+        scope=payload.scope,
+        is_active=payload.is_active,
+    )
+    if existing is not None:
+        # Only one version of a check is active at a time; the older rows stay for
+        # provenance.
+        existing.is_active = False
+    session.add(row)
+    session.flush()
+
+    repository.audit(session, "admin.check_saved", detail=f"{payload.name} v{row.version}")
+    return wire.CheckOut(
+        id=row.id,
+        version=row.version,
+        created_at=row.created_at,
+        references=sorted(_safe_references(row.expression)),
+        **payload.model_dump(),
+    )
+
+
+@router.patch("/checks/{check_id}/active", response_model=wire.CheckOut)
+def set_check_active(
+    check_id: int,
+    is_active: bool,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.CheckOut:
+    """Enable or disable a check without touching old findings.
+
+    Disabling removes it from new runs. Findings it already produced keep their check
+    version, so an earlier report still explains itself.
+
+    Args:
+        check_id: The row id.
+        is_active: Whether the check should run.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The updated check.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.CheckDefinitionRow, check_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"check {check_id} not found")
+    row.is_active = is_active
+    repository.audit(
+        session, "admin.check_toggled", detail=f"{row.name} {'on' if is_active else 'off'}"
+    )
+    return wire.CheckOut(
+        id=row.id,
+        name=row.name,
+        version=row.version,
+        kind=row.kind,  # type: ignore[arg-type]
+        expression=row.expression,
+        instruction=row.instruction,
+        reasoning=row.reasoning,
+        severity=row.severity,  # type: ignore[arg-type]
+        scope=row.scope,
+        is_active=row.is_active,
+        created_at=row.created_at,
+        references=sorted(_safe_references(row.expression)),
+    )
+
+
+@router.post("/checks/draft", response_model=wire.DraftResponse)
+def draft_check(
+    payload: wire.DraftRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.DraftResponse:
+    """Propose named values and an expression from a plain-English description.
+
+    **The only LLM call in the admin flow**, and it happens once per check. The result
+    is cached like every other call (ADR-005), so re-opening the dialog with the same
+    description costs nothing.
+
+    Args:
+        payload: The description and the report types available.
+        request: The incoming request.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The proposal, with warnings for anything an admin should look at.
+
+    Raises:
+        HTTPException: 502 when the model cannot be reached or its answer does not
+            validate after the single retry.
+    """
+    require_admin(user)
+
+    available = payload.report_types or catalog.active_report_keys(session) or sorted(PARSERS)
+
+    settings = request.app.state.llm_settings
+    client = build_client(
+        settings,
+        cache=LLMCache(
+            backend=request.app.state.llm_cache_backend,
+            model=settings.model,
+            prompt_version=settings.prompt_version,
+        ),
+    )
+
+    try:
+        result = client.complete(
+            DRAFT_CHECK_PROMPT.system,
+            DRAFT_CHECK_PROMPT.render(
+                description=payload.description, report_types=", ".join(available)
+            ),
+            DRAFT_CHECK_PROMPT.schema,
+            stage="admin_draft_check",
+            prompt_version=DRAFT_CHECK_PROMPT.version,
+        )
+        drafted = result.parsed(DraftCheckResponse)
+    except LLMError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"the model could not draft this check: {exc}"
+        ) from exc
+
+    warnings: list[str] = []
+    try:
+        referenced = validate(drafted.expression)
+    except ExpressionError as exc:
+        referenced = frozenset()
+        warnings.append(f"The proposed expression is not valid: {exc}")
+
+    proposed = {value.name for value in drafted.named_values}
+    for name in sorted(referenced - proposed):
+        warnings.append(f"The expression uses {name!r}, which the proposal does not define.")
+    known = set(catalog.active_report_keys(session)) | set(PARSERS)
+    for value in drafted.named_values:
+        if value.report_type not in known:
+            warnings.append(f"{value.name}: {value.report_type!r} is not a known report type.")
+
+    # A model that invents a severity outside the set gets the safe default rather than
+    # failing the whole draft; the admin sees and corrects it either way.
+    severity: Any = drafted.severity if drafted.severity in ("high", "medium", "low") else "medium"
+
+    repository.audit(session, "admin.check_drafted", detail=payload.description[:120])
+    return wire.DraftResponse(
+        named_values=[
+            wire.NamedValueIn(
+                name=value.name,
+                report_type=value.report_type,
+                sheet=value.sheet,
+                kind="cell" if value.kind == "cell" else "label",
+                cell=value.cell,
+                label=value.label,
+                label_column=value.label_column,
+                value_column=value.value_column,
+                description=value.description,
+            )
+            for value in drafted.named_values
+        ],
+        expression=drafted.expression,
+        reasoning=drafted.reasoning,
+        severity=severity,
+        cached=result.cached,
+        warnings=warnings,
+    )
+
+
+@router.post("/checks/test", response_model=wire.TestResult)
+def test_expression(
+    payload: wire.TestRequest,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(current_user),
+) -> wire.TestResult:
+    """Evaluate an expression against the uploaded sample workbooks.
+
+    No LLM call: this is the same evaluator the worker uses, so a check that passes here
+    behaves the same way on a real run.
+
+    Args:
+        payload: The expression.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller.
+
+    Returns:
+        The outcome, naming any value that could not be resolved.
+    """
+    require_admin(user)
+    documents = _load_templates(session, data_dir)
+    rows = list(session.execute(sa.select(models.NamedValueRow)).scalars())
+
+    values: dict[str, Any] = {}
+    unresolved: list[str] = []
+    for row in rows:
+        raw = resolve(_to_named_value(row), documents)
+        number = to_number(raw)
+        values[row.name] = number if number is not None else raw
+        if raw is None:
+            unresolved.append(row.name)
+
+    try:
+        outcome = evaluate(payload.expression, values)
+    except UnresolvedValue as exc:
+        return wire.TestResult(
+            passed=None,
+            detail=(
+                f"{exc.name!r} could not be resolved against the uploaded samples. "
+                "On a real run this becomes a 'could not evaluate' finding, never a "
+                "silent skip."
+            ),
+            resolved={k: v for k, v in values.items() if v is not None},
+            unresolved=sorted({*unresolved, exc.name}),
+        )
+    except ExpressionError as exc:
+        return wire.TestResult(passed=None, detail=str(exc), unresolved=unresolved)
+
+    inputs = ", ".join(f"{name} = {value}" for name, value in sorted(outcome.resolved.items()))
+    return wire.TestResult(
+        passed=outcome.passed,
+        detail=f"{payload.expression} → {outcome.passed} with {inputs}",
+        resolved=dict(outcome.resolved),
+        unresolved=unresolved,
+    )
+
+
+# ------------------------------------------------------- compliance and scope
+
+
+@router.get("/compliance-rules", response_model=list[wire.ComplianceRuleOut])
+def list_compliance_rules(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.ComplianceRuleOut]:
+    """List the must-have compliance rules.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The rules.
+    """
+    rows = session.execute(
+        sa.select(models.ComplianceRuleRow).order_by(models.ComplianceRuleRow.name)
+    ).scalars()
+    return [
+        wire.ComplianceRuleOut(
+            id=row.id,
+            name=row.name,
+            json_path_contains=str((row.requirement or {}).get("json_path_contains", "")),
+            expected_value=(row.requirement or {}).get("expected_value", True),
+            scope=row.scope,
+            reasoning=row.reasoning,
+            is_active=row.is_active,
+        )
+        for row in rows
+    ]
+
+
+@router.post(
+    "/compliance-rules", response_model=wire.ComplianceRuleOut, status_code=status.HTTP_201_CREATED
+)
+def save_compliance_rule(
+    payload: wire.ComplianceRuleIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ComplianceRuleOut:
+    """Create or replace a compliance rule.
+
+    Args:
+        payload: The rule.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The stored rule.
+    """
+    require_admin(user)
+    row = session.execute(
+        sa.select(models.ComplianceRuleRow).where(models.ComplianceRuleRow.name == payload.name)
+    ).scalar_one_or_none()
+    if row is None:
+        row = models.ComplianceRuleRow(name=payload.name)
+        session.add(row)
+    row.requirement = {
+        "json_path_contains": payload.json_path_contains,
+        "expected_value": payload.expected_value,
+    }
+    row.scope = payload.scope
+    row.reasoning = payload.reasoning
+    row.is_active = payload.is_active
+    session.flush()
+    repository.audit(session, "admin.compliance_saved", detail=payload.name)
+    return wire.ComplianceRuleOut(id=row.id, **payload.model_dump())
+
+
+@router.delete("/compliance-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_compliance_rule(
+    rule_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Delete a compliance rule.
+
+    Args:
+        rule_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.ComplianceRuleRow, rule_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"compliance rule {rule_id} not found")
+    session.delete(row)
+    repository.audit(session, "admin.compliance_deleted", detail=row.name)
+
+
+@router.get("/categories", response_model=list[wire.CategoryOut])
+def list_categories(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.CategoryOut]:
+    """List the reverse-pass categories.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The stored categories, or the shipped defaults when none are configured. An
+        empty table must not silently mean "check nothing".
+    """
+    rows = list(session.execute(sa.select(models.ReversePassCategoryRow)).scalars())
+    if rows:
+        return [
+            wire.CategoryOut(
+                id=row.id, name=row.name, kinds=list(row.kinds or []), checked=row.checked
+            )
+            for row in rows
+        ]
+    from vigilai.checks.definitions import DEFAULT_CATEGORIES
+
+    return [
+        wire.CategoryOut(
+            id=0, name=category.name, kinds=list(category.kinds), checked=category.checked
+        )
+        for category in DEFAULT_CATEGORIES
+    ]
+
+
+@router.post("/categories", response_model=wire.CategoryOut, status_code=status.HTTP_201_CREATED)
+def save_category(
+    payload: wire.CategoryIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.CategoryOut:
+    """Create or replace a reverse-pass category.
+
+    Saving the first one takes the defaults out of play, so the shipped list is seeded
+    into the table first. Otherwise switching one category off would silently enable
+    every other default.
+
+    Args:
+        payload: The category.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The stored category.
+    """
+    require_admin(user)
+    existing = list(session.execute(sa.select(models.ReversePassCategoryRow)).scalars())
+    if not existing:
+        from vigilai.checks.definitions import DEFAULT_CATEGORIES
+
+        for default in DEFAULT_CATEGORIES:
+            session.add(
+                models.ReversePassCategoryRow(
+                    name=default.name, kinds=list(default.kinds), checked=default.checked
+                )
+            )
+        session.flush()
+
+    row = session.execute(
+        sa.select(models.ReversePassCategoryRow).where(
+            models.ReversePassCategoryRow.name == payload.name
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        row = models.ReversePassCategoryRow(name=payload.name)
+        session.add(row)
+    row.kinds = list(payload.kinds)
+    row.checked = payload.checked
+    session.flush()
+    repository.audit(session, "admin.category_saved", detail=payload.name)
+    return wire.CategoryOut(id=row.id, **payload.model_dump())
+
+
+# ------------------------------------------------------------------ reference data
+
+
+@router.get("/aliases", response_model=list[wire.AliasOut])
+def list_aliases(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.AliasOut]:
+    """List the attribute aliases.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The aliases, grouped by canonical name in the UI.
+    """
+    rows = session.execute(
+        sa.select(models.AttributeAlias).order_by(
+            models.AttributeAlias.canonical_name, models.AttributeAlias.alias
+        )
+    ).scalars()
+    return [
+        wire.AliasOut(
+            id=row.id,
+            canonical_name=row.canonical_name,
+            alias=row.alias,
+            customer_name=row.customer_name,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/aliases", response_model=wire.AliasOut, status_code=status.HTTP_201_CREATED)
+def create_alias(
+    payload: wire.AliasIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.AliasOut:
+    """Add an attribute alias.
+
+    Args:
+        payload: The alias.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The stored alias.
+    """
+    require_admin(user)
+    row = models.AttributeAlias(
+        canonical_name=payload.canonical_name.strip(),
+        alias=payload.alias.strip(),
+        customer_name=payload.customer_name,
+    )
+    session.add(row)
+    session.flush()
+    repository.audit(
+        session, "admin.alias_added", detail=f"{payload.alias}→{payload.canonical_name}"
+    )
+    return wire.AliasOut(id=row.id, **payload.model_dump())
+
+
+@router.delete("/aliases/{alias_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_alias(
+    alias_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Delete an attribute alias.
+
+    Args:
+        alias_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.AttributeAlias, alias_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"alias {alias_id} not found")
+    session.delete(row)
+    repository.audit(session, "admin.alias_deleted", detail=row.alias)
+
+
+@router.get("/masked-columns", response_model=list[wire.MaskedColumnOut])
+def list_masked_columns(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.MaskedColumnOut]:
+    """List the masked-column patterns.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The configured patterns, or the shipped defaults when none are configured. An
+        empty table must never mean "mask nothing" (ADR-003), so the defaults are shown
+        as such rather than as an empty list.
+    """
+    rows = list(
+        session.execute(
+            sa.select(models.MaskedColumn).order_by(models.MaskedColumn.pattern)
+        ).scalars()
+    )
+    if rows:
+        return [
+            wire.MaskedColumnOut(id=row.id, pattern=row.pattern, description=row.description)
+            for row in rows
+        ]
+    return [
+        wire.MaskedColumnOut(id=0, pattern=pattern, description="Shipped default", is_default=True)
+        for pattern in DEFAULT_MASKED_COLUMNS
+    ]
+
+
+@router.post(
+    "/masked-columns", response_model=wire.MaskedColumnOut, status_code=status.HTTP_201_CREATED
+)
+def create_masked_column(
+    payload: wire.MaskedColumnIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.MaskedColumnOut:
+    """Add a masked-column pattern.
+
+    The first one added seeds the shipped defaults alongside it, so adding one pattern
+    can never accidentally unmask everything else (ADR-003).
+
+    Args:
+        payload: The pattern.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The stored pattern.
+    """
+    require_admin(user)
+    if not session.execute(sa.select(models.MaskedColumn).limit(1)).scalar_one_or_none():
+        for default in DEFAULT_MASKED_COLUMNS:
+            session.add(models.MaskedColumn(pattern=default, description="Shipped default"))
+        session.flush()
+
+    existing = session.execute(
+        sa.select(models.MaskedColumn).where(models.MaskedColumn.pattern == payload.pattern)
+    ).scalar_one_or_none()
+    if existing is not None:
+        return wire.MaskedColumnOut(
+            id=existing.id, pattern=existing.pattern, description=existing.description
+        )
+
+    row = models.MaskedColumn(pattern=payload.pattern, description=payload.description)
+    session.add(row)
+    session.flush()
+    repository.audit(session, "admin.masked_column_added", detail=payload.pattern)
+    return wire.MaskedColumnOut(id=row.id, **payload.model_dump())
+
+
+@router.delete("/masked-columns/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_masked_column(
+    column_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Remove a masked-column pattern.
+
+    Args:
+        column_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.MaskedColumn, column_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"masked column {column_id} not found")
+    session.delete(row)
+    repository.audit(session, "admin.masked_column_deleted", detail=row.pattern)
+
+
+# --------------------------------------------------------------------------- usage
+
+
+def _percentile(values: Sequence[int], fraction: float) -> int:
+    """Return a percentile without pulling in a statistics dependency.
+
+    Args:
+        values: The samples.
+        fraction: The percentile, 0 to 1.
+
+    Returns:
+        The value at that percentile, or 0 when there are no samples.
+    """
+    if not values:
+        return 0
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, int(round(fraction * (len(ordered) - 1))))
+    return ordered[index]
+
+
+@router.get("/usage", response_model=wire.UsageOut)
+def usage(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.UsageOut:
+    """Report the numbers on the admin dashboard.
+
+    Plain SQL over `runs`, `run_stages`, `llm_calls`, and `findings`
+    (``docs/phase-4.md``). No LLM call and no derived tables to keep in step.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The usage numbers.
+    """
+    runs = list(session.execute(sa.select(models.Run)).scalars())
+    finished = [r for r in runs if r.status in ("needs_review", "finalized")]
+    failed = [r for r in runs if r.status == "failed"]
+
+    durations = [
+        int(
+            session.execute(
+                sa.select(sa.func.coalesce(sa.func.sum(models.RunStage.duration_ms), 0)).where(
+                    models.RunStage.run_id == run.id
+                )
+            ).scalar_one()
+        )
+        for run in finished
+    ]
+
+    runs_per_day: dict[str, int] = {}
+    for run in runs:
+        runs_per_day[run.created_at.date().isoformat()] = (
+            runs_per_day.get(run.created_at.date().isoformat(), 0) + 1
+        )
+
+    calls = list(session.execute(sa.select(models.LlmCall)).scalars())
+    tokens_per_day: dict[str, int] = {}
+    for call in calls:
+        key = call.created_at.date().isoformat()
+        tokens_per_day[key] = (
+            tokens_per_day.get(key, 0) + call.prompt_tokens + call.completion_tokens
+        )
+
+    findings = list(session.execute(sa.select(models.Finding)).scalars())
+    by_type: dict[str, int] = {}
+    for finding in findings:
+        by_type[finding.type] = by_type.get(finding.type, 0) + 1
+
+    decisions: dict[str, int] = {}
+    for finding in findings:
+        decisions[finding.review_status] = decisions.get(finding.review_status, 0) + 1
+
+    decided = sum(count for status_, count in decisions.items() if status_ != "undecided")
+    false_positives = decisions.get("false_positive", 0)
+
+    return wire.UsageOut(
+        runs_total=len(runs),
+        runs_per_day=[wire.DayCount(day=d, count=c) for d, c in sorted(runs_per_day.items())],
+        duration_p50_ms=_percentile(durations, 0.5),
+        duration_p95_ms=_percentile(durations, 0.95),
+        failure_rate=round(len(failed) / len(runs), 4) if runs else 0.0,
+        tokens_total=sum(c.prompt_tokens + c.completion_tokens for c in calls),
+        tokens_per_day=[wire.DayCount(day=d, count=c) for d, c in sorted(tokens_per_day.items())],
+        cache_hit_rate=round(sum(1 for c in calls if c.cached) / len(calls), 4) if calls else 0.0,
+        json_failure_rate=(
+            round(sum(1 for c in calls if not c.ok) / len(calls), 4) if calls else 0.0
+        ),
+        false_positive_rate=round(false_positives / decided, 4) if decided else 0.0,
+        findings_by_type=by_type,
+        decisions=decisions,
+    )

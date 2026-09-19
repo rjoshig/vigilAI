@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Run stats · vigilAI mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="stats">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container">
+          <div class="page-header">
+            <div>
+              <div class="flex small muted mb-s"><a class="link" href="index.html">Runs</a> › <span class="mono">VR-0428</span></div>
+              <h1>Run stats · VR-0428</h1>
+              <p>Stage timings, LLM calls, tokens, and cache hits. Every stage writes status and duration so a failed run resumes from the last good stage.</p>
+            </div>
+            <div class="page-actions"><select class="select"><option>VR-0428 · Acme · today</option><option>VR-0429 · Acme · running</option><option>VR-0426 · Pinecrest</option></select><a class="btn btn-outline btn-sm" href="review.html"><span data-icon="review"></span> Open review</a></div>
+          </div>
+
+          <div class="grid grid-5 mb">
+            <div class="card"><div class="card-pad"><div class="stat-label">Total duration</div><div class="stat-value">4m 12s</div><div class="stat-hint">queued 1m 08s before start</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">LLM calls</div><div class="stat-value">47</div><div class="stat-hint">0 failed · 2 retried</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Tokens</div><div class="stat-value">71.4k</div><div class="stat-hint">58.1k prompt · 13.3k completion</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Cache hits</div><div class="stat-value tone-success">22</div><div class="stat-hint">32% of would-be calls skipped</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">JSON validation</div><div class="stat-value tone-success">100%</div><div class="stat-hint">0 schema failures</div></div></div>
+          </div>
+
+          <div class="card mb">
+            <div class="card-header bordered"><div class="card-title"><span data-icon="layers"></span> Stages</div><span class="small muted">LLM stages are cached by content hash + model + prompt version</span></div>
+            <table class="table">
+              <thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Status</th><th class="right">Duration</th><th class="right">LLM calls</th><th class="right">Cache hits</th><th class="right">Tokens</th><th class="right">p50 latency</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>Parse files</td><td><span class="badge badge-muted">code</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">3.1s</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="small muted">OSL 6 sections, 4 tables · config 27 blocks · 4 reports</td></tr>
+                <tr><td>2</td><td>Extract OSL requirements</td><td><span class="badge badge-info">LLM</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">48.2s</td><td class="right tabular">10</td><td class="right tabular tone-success">4</td><td class="right tabular">21,900</td><td class="right tabular">4.6s</td><td class="small muted">18 requirements · 2 below 0.7 confidence</td></tr>
+                <tr><td>3</td><td>Describe config elements</td><td><span class="badge badge-info">LLM</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">61.0s</td><td class="right tabular">18</td><td class="right tabular tone-success">9</td><td class="right tabular">24,100</td><td class="right tabular">3.3s</td><td class="small muted">9 of 27 blocks unchanged since v2 (cache)</td></tr>
+                <tr><td>4</td><td>Trace requirement → config</td><td><span class="badge badge-info">LLM judge</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">52.7s</td><td class="right tabular">14</td><td class="right tabular tone-success">7</td><td class="right tabular">18,600</td><td class="right tabular">3.7s</td><td class="small muted">6 exact matches skipped the judge</td></tr>
+                <tr><td>5</td><td>Compare values</td><td><span class="badge badge-muted">code</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">0.4s</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="small muted">sets, intervals, lists, order</td></tr>
+                <tr><td>6</td><td>Reverse pass</td><td><span class="badge badge-muted">code</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">0.2s</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="small muted">3 categories · 1 extra element · 2 compliance rules present</td></tr>
+                <tr><td>7</td><td>Check reports + admin checks</td><td><span class="badge badge-muted">code</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">1.9s</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="small muted">4 fixed checks · 3 admin checks (1 failed)</td></tr>
+                <tr><td>8</td><td>Verify high-severity</td><td><span class="badge badge-info">LLM</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">19.8s</td><td class="right tabular">4</td><td class="right tabular">2</td><td class="right tabular">5,200</td><td class="right tabular">4.9s</td><td class="small muted">4 agreed · 0 downgraded to Review</td></tr>
+                <tr><td>9</td><td>Summarize</td><td><span class="badge badge-info">LLM</span></td><td><span class="badge st-match">done</span></td><td class="right tabular">5.1s</td><td class="right tabular">1</td><td class="right tabular">0</td><td class="right tabular">1,600</td><td class="right tabular">5.1s</td><td class="small muted">findings list only</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="card"><div class="card-header"><div class="card-title">Time per stage</div></div><div class="card-content"><div class="bars">
+              <div class="bar-row"><span>3 Describe config</span><span class="bar-track"><span class="bar-fill" style="width: 100%"></span></span><span class="bar-val">61.0s</span></div>
+              <div class="bar-row"><span>4 Trace</span><span class="bar-track"><span class="bar-fill" style="width: 86%"></span></span><span class="bar-val">52.7s</span></div>
+              <div class="bar-row"><span>2 Extract OSL</span><span class="bar-track"><span class="bar-fill" style="width: 79%"></span></span><span class="bar-val">48.2s</span></div>
+              <div class="bar-row"><span>8 Verify</span><span class="bar-track"><span class="bar-fill" style="width: 32%"></span></span><span class="bar-val">19.8s</span></div>
+              <div class="bar-row"><span>9 Summarize</span><span class="bar-track"><span class="bar-fill" style="width: 8%"></span></span><span class="bar-val">5.1s</span></div>
+              <div class="bar-row"><span>1, 5, 6, 7 (code)</span><span class="bar-track"><span class="bar-fill bf-success" style="width: 9%"></span></span><span class="bar-val">5.6s</span></div>
+            </div></div></div>
+            <div class="card"><div class="card-header"><div class="card-title">Tokens by stage</div></div><div class="card-content"><div class="bars">
+              <div class="bar-row"><span>3 Describe config</span><span class="bar-track"><span class="bar-fill bf-tertiary" style="width: 100%"></span></span><span class="bar-val">24.1k</span></div>
+              <div class="bar-row"><span>2 Extract OSL</span><span class="bar-track"><span class="bar-fill bf-tertiary" style="width: 91%"></span></span><span class="bar-val">21.9k</span></div>
+              <div class="bar-row"><span>4 Trace</span><span class="bar-track"><span class="bar-fill bf-tertiary" style="width: 77%"></span></span><span class="bar-val">18.6k</span></div>
+              <div class="bar-row"><span>8 Verify</span><span class="bar-track"><span class="bar-fill bf-tertiary" style="width: 22%"></span></span><span class="bar-val">5.2k</span></div>
+              <div class="bar-row"><span>9 Summarize</span><span class="bar-track"><span class="bar-fill bf-tertiary" style="width: 7%"></span></span><span class="bar-val">1.6k</span></div>
+            </div><p class="small muted" style="margin: 0.8rem 0 0">Prompts and raw responses are not stored (PII). Counts and ids only.</p></div></div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+  </body>
+</html>

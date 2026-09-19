@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Checks · vigilAI admin mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="checks">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container">
+          <div class="page-header">
+            <div><h1>Checks</h1><p>Cross-report checks defined as data. The LLM helps write a check once; code runs it on every run at no token cost. Versioned, can be disabled, scoped to all customers or one.</p></div>
+            <div class="page-actions"><button class="btn" onclick="openModal('newCheck')"><span data-icon="plus"></span> New check</button></div>
+          </div>
+          <div class="toolbar">
+            <input class="input search" placeholder="Search checks…" />
+            <div class="seg"><button class="on">All 7</button><button>Expression 6</button><button>Judgment 1</button></div>
+            <select class="select sm"><option>All scopes</option><option>All customers</option><option>Acme Card Services</option></select>
+            <label class="checkbox"><input type="checkbox" checked /> Show disabled</label>
+          </div>
+          <div class="card card-flush">
+            <table class="table">
+              <thead><tr><th>Name</th><th>Ver</th><th>Kind</th><th>Expression / instruction</th><th>Severity</th><th>Scope</th><th>Last run</th><th>Active</th><th class="right">Actions</th></tr></thead>
+              <tbody>
+                <tr><td><b>billing_not_above_delivered</b><div class="small muted">Billing count must not be more than records delivered in the number flow report</div></td><td class="tabular">v2</td><td><span class="badge badge-muted">expression</span></td><td class="mono small">billing_count &lt;= delivered_count</td><td><span class="badge sev-high">High</span></td><td class="small">All customers</td><td><span class="badge st-match">pass</span> <span class="small muted">VR-0428</span></td><td><button class="switch on" data-label="billing_not_above_delivered"></button></td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="mock('Test')"><span data-icon="flask"></span></button><button class="btn btn-ghost btn-xs" onclick="openModal('newCheck')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Version history')"><span data-icon="history"></span></button></td></tr>
+                <tr><td><b>billing_not_below_accepts</b><div class="small muted">Billing count must not be less than the accepts count</div></td><td class="tabular">v1</td><td><span class="badge badge-muted">expression</span></td><td class="mono small">billing_count &gt;= accepts_count</td><td><span class="badge sev-high">High</span></td><td class="small">All customers</td><td><span class="badge st-match">pass</span> <span class="small muted">VR-0428</span></td><td><button class="switch on" data-label="billing_not_below_accepts"></button></td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="mock('Test')"><span data-icon="flask"></span></button><button class="btn btn-ghost btn-xs" onclick="openModal('newCheck')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Version history')"><span data-icon="history"></span></button></td></tr>
+                <tr><td><b>counts_add_up</b><div class="small muted">Every input record ends as an accept or a reject</div></td><td class="tabular">v3</td><td><span class="badge badge-muted">expression</span></td><td class="mono small">accepts_count + rejects_count == input_count</td><td><span class="badge sev-high">High</span></td><td class="small">All customers</td><td><span class="badge st-mismatch">fail</span> <span class="small muted">VR-0428 · −588</span></td><td><button class="switch on" data-label="counts_add_up"></button></td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="mock('Test')"><span data-icon="flask"></span></button><button class="btn btn-ghost btn-xs" onclick="openModal('newCheck')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Version history')"><span data-icon="history"></span></button></td></tr>
+                <tr><td><b>counts_agree_dirt_flow</b><div class="small muted">DIRT row count equals accepts in the number flow</div></td><td class="tabular">v2</td><td><span class="badge badge-muted">expression</span></td><td class="mono small">dirt_row_count == accepts_count</td><td><span class="badge sev-medium">Medium</span></td><td class="small">All customers</td><td><span class="badge st-mismatch">fail</span> <span class="small muted">VR-0428 · +4</span></td><td><button class="switch on" data-label="counts_agree_dirt_flow"></button></td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="mock('Test')"><span data-icon="flask"></span></button><button class="btn btn-ghost btn-xs" onclick="openModal('newCheck')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Version history')"><span data-icon="history"></span></button></td></tr>
+                <tr><td><b>field_count_matches_osl</b><div class="small muted">DIRT attribute rows equal the requested attribute count</div></td><td class="tabular">v1</td><td><span class="badge badge-muted">expression</span></td><td class="mono small">dirt_field_count == osl.attributes.count</td><td><span class="badge sev-medium">Medium</span></td><td class="small">All customers</td><td><span class="badge st-mismatch">fail</span> <span class="small muted">VR-0428 · 13 ≠ 14</span></td><td><button class="switch on" data-label="field_count_matches_osl"></button></td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="mock('Test')"><span data-icon="flask"></span></button><button class="btn btn-ghost btn-xs" onclick="openModal('newCheck')"><span data-icon="edit"></span></button><button class="btn btn-ghost btn-xs" onclick="mock('Version history')"><span data-icon="history"></span></button></td></tr>
+                <tr><td><b>acme_min_delivery</b><div class="small muted">Acme contracts guarantee at least 150k delivered records</div></td><td class="tabular">v1</td><td><span class="badge badge-muted">expression</span></td><td class="mono small">delivered_count &gt;= 150000</td><td><span class="badge sev-low">Low</span></td><td class="small">Acme Card Services</td><td><span class="badge st-match">pass</span></td><td><button class="switch on" data-label="acme_min_delivery"></button></td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="mock('Test')"><span data-icon="flask"></span></button><button class="btn btn-ghost btn-xs" onclick="openModal('newCheck')"><span data-icon="edit"></span></button></td></tr>
+                <tr style="opacity: 0.75"><td><b>state_mix_plausible</b> <span class="badge badge-warn"><span data-icon="alert"></span> judgment · use sparingly</span><div class="small muted">Is the state mix plausible for a two-state campaign?</div></td><td class="tabular">v1</td><td><span class="badge badge-info">judgment</span></td><td class="small">LLM receives state_counts + reasoning only; returns pass / fail / review</td><td><span class="badge sev-low">Low</span></td><td class="small">All customers</td><td class="small muted">—</td><td><button class="switch" data-label="state_mix_plausible"></button></td><td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="mock('Test')"><span data-icon="flask"></span></button><button class="btn btn-ghost btn-xs" onclick="openModal('newCheck')"><span data-icon="edit"></span></button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal" id="newCheck">
+      <div class="modal-box lg">
+        <div class="modal-head"><h3>New check</h3><button class="icon-btn" onclick="closeModal('newCheck')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <div class="grid grid-2">
+            <div>
+              <div class="field mb"><label class="label">1 · Describe the rule in plain English (include the cells)</label><textarea class="textarea" style="min-height: 7rem">Compare the billing count in the billing report (Summary, row "Billing count") with the delivered count in the number flow report (Flow, cell B8). Billing must not be more than delivered.</textarea></div>
+              <button class="btn btn-secondary" onclick="document.getElementById('proposal').classList.remove('hidden'); toast('Proposal generated · the only LLM call for this check')"><span data-icon="wand"></span> Propose named values + expression</button>
+              <p class="hint mt-s">One LLM call, once. After activation the check runs as code on every run.</p>
+            </div>
+            <div id="proposal" class="hidden">
+              <div class="label mb-s">2 · Proposal (edit as needed)</div>
+              <table class="table compact mb-s"><thead><tr><th>Named value</th><th>Report</th><th>Locator</th><th></th></tr></thead><tbody>
+                <tr><td class="mono">billing_count</td><td>Billing</td><td class="small">label "Billing count" → col B</td><td><span class="badge st-match">exists</span></td></tr>
+                <tr><td class="mono">delivered_count</td><td>Number flow</td><td class="small mono">Flow!B8</td><td><span class="badge badge-warn">new</span></td></tr>
+              </tbody></table>
+              <div class="field mb-s"><label class="label">Expression</label><input class="input mono" value="billing_count <= delivered_count" /></div>
+              <div class="form-grid">
+                <div class="field"><label class="label">Name</label><input class="input mono" value="billing_not_above_delivered" /></div>
+                <div class="field"><label class="label">Severity</label><select class="select"><option>High</option><option>Medium</option><option>Low</option></select></div>
+                <div class="field span2"><label class="label">Reasoning shown to users</label><input class="input" value="Billing count must not be more than records delivered in the number flow report" /></div>
+                <div class="field"><label class="label">Scope</label><select class="select"><option>All customers</option><option>Acme Card Services</option><option>Northwind Lending</option></select></div>
+                <div class="field"><label class="label">Kind</label><select class="select"><option>Expression</option><option>Judgment (use sparingly)</option></select></div>
+              </div>
+              <div class="mt"><button class="btn btn-outline btn-sm" onclick="document.getElementById('testRes').classList.remove('hidden')"><span data-icon="flask"></span> 3 · Test against sample files</button></div>
+              <div id="testRes" class="banner banner-success mt-s hidden" style="margin-bottom: 0"><span data-icon="checkcircle"></span><div class="body"><b>Pass on samples</b>billing_count = 178,636 · delivered_count = 178,636 · expression → true</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('newCheck')">Cancel</button><button class="btn btn-outline" onclick="closeModal('newCheck'); toast('Saved as draft v1 (inactive)')">Save draft</button><button class="btn" onclick="closeModal('newCheck'); toast('Check activated · v1 (mock)')"><span data-icon="zap"></span> 4 · Activate</button></div>
+      </div>
+    </div>
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+  </body>
+</html>

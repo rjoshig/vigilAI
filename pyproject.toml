@@ -1,0 +1,125 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vigilai"
+version = "0.0.1"
+description = "QC validation of a credit-data fulfillment process: OSL spec vs ETL config vs output reports."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "vigilAI Maintainers" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+# Dependencies arrive with the phase that needs them (docs/phase-plan.md).
+dependencies = [
+    "pydantic>=2.6",          # boundary models only: LLM output schemas, API wire, config
+    "httpx>=0.27",            # the only HTTP client; no vendor SDKs (ADR-004)
+    "python-docx>=1.1",       # OSL parser
+    "openpyxl>=3.1",          # report parsers, read-only mode
+    "fastapi>=0.110",         # the API (Phase 3)
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",  # multipart uploads on POST /runs
+    "sqlalchemy>=2.0",        # data model (ADR-007)
+    "alembic>=1.13",          # additive migrations
+    "psycopg[binary]>=3.1",   # Postgres driver; SQLite needs none (ADR-017)
+    "jinja2>=3.1",            # the frozen one-page report (Phase 5)
+    # Envelope encryption for the one secret an administrator can set through the
+    # console, the LLM API key (ADR-023). Fernet only; nothing here rolls its own
+    # cryptography, and without a master key the secret is not stored at all.
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+# PDF rendering lives in the worker image only (docs/design.md "Review and final
+# report"). The api never renders one, and a deployment that does not want PDFs can
+# skip both the package and its ~150 MB browser download; the HTML report is always
+# available and `renderer_available()` reports which is the case.
+pdf = ["playwright>=1.44"]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    # Starlette's TestClient requires httpx2; the runtime adapter stays on httpx
+    # (ADR-004), and the two coexist as separate packages.
+    "httpx2>=2.13",
+    "pytest-cov>=4.1",
+    "black>=24.0",
+    "flake8>=7.0",
+    "flake8-bugbear>=24.0",
+    "mypy>=1.8",
+]
+
+[project.scripts]
+vigilai = "vigilai.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+vigilai = ["py.typed", "report/templates/*.j2"]
+
+# ---------------------------------------------------------------------------
+# Tooling (standards/python.md explains intent; this file is authoritative)
+# ---------------------------------------------------------------------------
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+extend-exclude = "/(user-ui|admin-ui|mock|node_modules)/"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# Neither python-docx nor openpyxl ships type stubs, and the third-party stub packages
+# lag their releases. The parsers wrap both behind our own typed Protocols (ADR-006), so
+# the untyped surface stops at the parser boundary.
+[[tool.mypy.overrides]]
+module = ["docx.*", "openpyxl.*"]
+ignore_missing_imports = true
+
+# Playwright is an optional extra installed in the worker image, so it is absent from a
+# plain dev install (pyproject "[project.optional-dependencies] pdf").
+[[tool.mypy.overrides]]
+module = ["playwright.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.4"
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+pythonpath = ["src"]
+# A new warning from our own code fails the suite. The exceptions below are raised
+# inside Starlette's TestClient and its anyio dependency, not by anything we control;
+# each is pinned to its message so a different warning from the same module still fails.
+filterwarnings = [
+    "error",
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:",
+]
+
+[tool.coverage.run]
+source = ["vigilai"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

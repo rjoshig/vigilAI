@@ -1,0 +1,418 @@
+{#
+  The frozen one-page report.
+
+  Self-contained on purpose: all CSS and the tiny bit of JS are inline, there is no
+  network request, and it opens from file:// years later. It is rendered once and
+  stored; it is never regenerated (ADR-005).
+
+  Every value here is already masked (ADR-003). There is no unmask control in v1.
+#}<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QC validation · {{ run.customer_name }} · {{ run.order_number }}</title>
+    <style>
+      :root {
+        --background: 210 40% 98%; --foreground: 222 47% 11%;
+        --card: 0 0% 100%; --muted: 210 40% 96%; --muted-foreground: 215 16% 47%;
+        --primary: 221 83% 53%; --border: 214 32% 91%;
+        --destructive: 0 72% 51%; --success: 142 71% 45%;
+        --warn: 38 92% 50%; --info: 199 89% 48%; --tertiary: 48 96% 53%;
+        --radius: 0.5rem;
+      }
+      html[data-theme="dark"] {
+        --background: 222 47% 7%; --foreground: 210 40% 96%;
+        --card: 222 44% 10%; --muted: 217 33% 15%; --muted-foreground: 215 20% 65%;
+        --primary: 217 91% 60%; --border: 217 33% 20%;
+        --destructive: 0 63% 50%; --success: 142 69% 48%;
+        --warn: 38 92% 55%; --info: 199 89% 54%;
+      }
+      * { box-sizing: border-box; border-color: hsl(var(--border)); }
+      html { font-size: 14px; }
+      body {
+        margin: 0; background: hsl(var(--background)); color: hsl(var(--foreground));
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-size: 0.9375rem; -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82em; }
+      .muted { color: hsl(var(--muted-foreground)); }
+      .small { font-size: 0.78rem; }
+      .right { text-align: right; }
+      .topbar {
+        position: sticky; top: 0; z-index: 5; display: flex; align-items: center;
+        justify-content: space-between; gap: 1rem; padding: 0.65rem 1.25rem;
+        margin-bottom: 1.25rem; background: hsl(var(--card));
+        border-bottom: 1px solid hsl(var(--border));
+      }
+      .brand { display: flex; align-items: center; gap: 0.7rem; }
+      .mark {
+        width: 34px; height: 34px; display: grid; place-items: center; color: #fff;
+        background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--tertiary)) 100%);
+        border-radius: 9px; font-weight: 700;
+      }
+      .name { font-weight: 600; }
+      .sub { font-size: 0.78rem; color: hsl(var(--muted-foreground)); }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+      h1 { font-size: 1.5rem; margin: 0.4rem 0 0.2rem; }
+      h2 { font-size: 1.05rem; margin: 1.6rem 0 0.6rem; }
+      .card {
+        background: hsl(var(--card)); border: 1px solid hsl(var(--border));
+        border-radius: 0.6rem; padding: 0.8rem 1rem;
+      }
+      .verdict {
+        display: flex; align-items: center; gap: 0.8rem; padding: 0.9rem 1.1rem;
+        border-radius: 0.7rem; border: 1px solid; margin: 1rem 0;
+      }
+      .verdict b { font-size: 1.05rem; display: block; }
+      .verdict-notok {
+        border-color: hsl(var(--destructive) / 0.5);
+        background: hsl(var(--destructive) / 0.08); color: hsl(var(--destructive));
+      }
+      .verdict-ok {
+        border-color: hsl(var(--success) / 0.5);
+        background: hsl(var(--success) / 0.08); color: hsl(var(--success));
+      }
+      .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; }
+      @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+      .kpi {
+        background: hsl(var(--muted)); border: 1px solid hsl(var(--border));
+        border-left: 3px solid hsl(var(--muted-foreground)); border-radius: 0.4rem;
+        padding: 0.6rem 0.8rem;
+      }
+      .kpi.k-ok { border-left-color: hsl(var(--success)); }
+      .kpi.k-high { border-left-color: hsl(var(--destructive)); }
+      .kpi.k-med { border-left-color: hsl(var(--warn)); }
+      .kpi.k-low { border-left-color: hsl(var(--info)); }
+      .kpi .v { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .kpi .l { font-size: 0.7rem; color: hsl(var(--muted-foreground)); margin-top: 0.15rem; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+      th {
+        text-align: left; padding: 0.4rem 0.55rem; font-size: 0.68rem;
+        text-transform: uppercase; letter-spacing: 0.05em;
+        color: hsl(var(--muted-foreground)); border-bottom: 1px solid hsl(var(--border));
+      }
+      td { padding: 0.45rem 0.55rem; border-bottom: 1px solid hsl(var(--border)); vertical-align: top; }
+      tr:last-child td { border-bottom: none; }
+      .badge {
+        display: inline-flex; align-items: center; gap: 0.25rem; border-radius: 999px;
+        padding: 0.1rem 0.5rem; font-size: 0.6875rem; font-weight: 600; white-space: nowrap;
+      }
+      .b-high { background: hsl(var(--destructive) / 0.14); color: hsl(var(--destructive)); }
+      .b-medium { background: hsl(var(--warn) / 0.18); color: hsl(var(--warn)); }
+      .b-low { background: hsl(var(--info) / 0.15); color: hsl(var(--info)); }
+      .b-review { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+      .b-ok { background: hsl(var(--success)); color: #fff; }
+      .b-notok { background: hsl(var(--destructive)); color: #fff; }
+      .b-match { background: hsl(var(--success) / 0.15); color: hsl(var(--success)); }
+      .b-mismatch, .b-missing { background: hsl(var(--destructive) / 0.14); color: hsl(var(--destructive)); }
+      .b-partial { background: hsl(var(--warn) / 0.18); color: hsl(var(--warn)); }
+      .b-extra { background: hsl(var(--info) / 0.15); color: hsl(var(--info)); }
+      details {
+        border: 1px solid hsl(var(--border)); border-radius: 0.6rem;
+        background: hsl(var(--card)); margin-bottom: 0.5rem;
+      }
+      summary {
+        cursor: pointer; padding: 0.7rem 0.9rem; font-weight: 600; font-size: 0.86rem;
+        list-style: none; display: flex; align-items: center; gap: 0.5rem;
+      }
+      summary::-webkit-details-marker { display: none; }
+      summary::before { content: "▸"; color: hsl(var(--muted-foreground)); font-size: 0.8rem; }
+      details[open] summary::before { content: "▾"; }
+      .body { padding: 0 0.9rem 0.9rem; font-size: 0.82rem; }
+      blockquote {
+        margin: 0.4rem 0; border-left: 3px solid hsl(var(--primary));
+        padding: 0.4rem 0.7rem; background: hsl(var(--muted) / 0.5);
+        border-radius: 0 0.4rem 0.4rem 0; font-size: 0.82rem; line-height: 1.5;
+      }
+      pre {
+        font-family: ui-monospace, Menlo, monospace; font-size: 0.74rem;
+        background: hsl(var(--muted)); border: 1px solid hsl(var(--border));
+        border-radius: 0.4rem; padding: 0.55rem 0.7rem; white-space: pre-wrap;
+        overflow-x: auto; margin: 0.4rem 0;
+      }
+      .frozen {
+        font-size: 0.72rem; color: hsl(var(--muted-foreground));
+        display: inline-flex; align-items: center; gap: 0.3rem;
+      }
+      button.theme {
+        border: 1px solid hsl(var(--border)); background: hsl(var(--card));
+        color: hsl(var(--muted-foreground)); border-radius: var(--radius);
+        height: 2rem; padding: 0 0.7rem; cursor: pointer; font: inherit; font-size: 0.8rem;
+      }
+      dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; font-size: 0.82rem; }
+      dl.kv dt { color: hsl(var(--muted-foreground)); margin: 0; }
+      dl.kv dd { margin: 0; }
+      .flow-break td { background: hsl(var(--destructive) / 0.08); }
+
+      @media print {
+        .no-print { display: none !important; }
+        body { background: #fff; }
+        /* Every finding is expanded on paper: a collapsed section is invisible there,
+           and the PDF is the artifact people file. CSS alone cannot do this — a closed
+           <details> hides its children through the browser's own mechanism, which
+           `display` on the child does not override — so the script below sets the open
+           attribute before printing. These rules handle the rest of the appearance. */
+        details { break-inside: avoid; border: 1px solid #ddd; }
+        /* The disclosure arrow is interaction, not information. It has to beat the
+           details[open] rule above, which is more specific than a bare summary. */
+        details summary::before,
+        details[open] summary::before { content: none !important; }
+        /* Identifiers must not wrap: "R-001" split across two lines is unreadable and
+           breaks a search of the PDF. */
+        td .mono, td.mono { white-space: nowrap; }
+        details > .body { display: block !important; }
+        h2 { break-after: avoid; }
+        table { break-inside: auto; }
+        tr { break-inside: avoid; }
+        thead { display: table-header-group; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar no-print">
+      <div class="brand">
+        <div class="mark">V</div>
+        <div>
+          <div class="name">vigilAI · QC Validation report</div>
+          <div class="sub">
+            Run <span class="mono">VR-{{ "%04d"|format(run.id) }}</span> ·
+            {{ run.customer_name }} · {{ run.order_number }} ·
+            <span class="frozen">frozen {{ generated_at }} · stored once, never regenerated</span>
+          </div>
+        </div>
+      </div>
+      <button class="theme" onclick="
+        document.documentElement.dataset.theme =
+          document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">
+        Toggle theme
+      </button>
+    </header>
+
+    <div class="wrap">
+      <h1>QC validation · {{ run.customer_name }} · {{ run.order_number }}</h1>
+      <p class="muted small">
+        Configuration <span class="mono">{{ run.configuration_id }}</span>
+        {%- if run.run_date %} · run {{ run.run_date }}{% endif %}
+        {%- if run.model_used %} · model <span class="mono">{{ run.model_used }}</span>{% endif %}
+        {%- if run.prompt_version %} · prompts v{{ run.prompt_version }}{% endif %}
+        · rules v{{ run.rules_version }}
+        {%- if run.rerun_reason %} · re-run: {{ run.rerun_reason }}{% endif %}
+      </p>
+
+      <div class="verdict {{ 'verdict-notok' if verdict == 'not_ok' else 'verdict-ok' }}">
+        <div>
+          <b>Verdict: {{ "Not OK" if verdict == "not_ok" else "OK" }}</b>
+          <span class="small">
+            {%- if verdict == "not_ok" -%}
+              {{ not_ok|length }} finding{{ "" if not_ok|length == 1 else "s" }} marked Not OK by
+              the reviewer. The config and the reports do not fully implement the OSL.
+            {%- else -%}
+              Every finding was reviewed and accepted. The delivery matches the specification
+              as reviewed.
+            {%- endif -%}
+          </span>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi k-ok"><div class="v">{{ rules|length }}</div><div class="l">Requirements traced</div></div>
+        <div class="kpi k-high"><div class="v">{{ counts.high }}</div><div class="l">High</div></div>
+        <div class="kpi k-med"><div class="v">{{ counts.medium }}</div><div class="l">Medium</div></div>
+        <div class="kpi k-low"><div class="v">{{ counts.low }}</div><div class="l">Low</div></div>
+        <div class="kpi"><div class="v">{{ matched }} / {{ rules|length }}</div><div class="l">Requirements matching</div></div>
+      </div>
+
+      {% if run.summary %}
+      <h2>AI summary</h2>
+      <div class="card small" style="line-height: 1.6">{{ run.summary }}</div>
+      {% if top_issues %}
+      <ul class="small" style="margin-top: 0.6rem">
+        {% for issue in top_issues %}<li>{{ issue }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% endif %}
+
+      <h2>Not OK items</h2>
+      {% if not_ok %}
+      <div class="card" style="padding: 0">
+        <table>
+          <thead>
+            <tr>
+              <th>Finding</th><th>Severity</th><th>Type</th><th>Issue</th><th>Reviewer comment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for finding in not_ok %}
+            <tr>
+              <td class="mono">{{ finding.finding_id }}</td>
+              <td><span class="badge b-{{ finding.severity }}">{{ finding.severity }}</span></td>
+              <td class="small">{{ finding.type|replace("_", " ") }}</td>
+              <td class="small">{{ finding.title }}</td>
+              <td class="small">{{ finding.review_note or "—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card small muted">Nothing was marked Not OK.</div>
+      {% endif %}
+
+      <h2>Detail</h2>
+
+      <details>
+        <summary>Traceability matrix · {{ rules|length }} requirements</summary>
+        <div class="body">
+          <table>
+            <thead>
+              <tr><th>Req</th><th>Type</th><th>OSL</th><th>Config</th><th>Status</th><th>Decision</th></tr>
+            </thead>
+            <tbody>
+              {% for row in matrix %}
+              <tr>
+                <td class="mono">{{ row.rule_id }}</td>
+                <td class="small">{{ row.req_type }}</td>
+                <td class="small">{{ row.osl }}</td>
+                <td class="small">{{ row.config }}</td>
+                <td><span class="badge b-{{ row.status }}">{{ row.status }}</span></td>
+                <td class="small">
+                  {%- if row.decision == "not_ok" -%}<span class="badge b-notok">Not OK</span>
+                  {%- elif row.decision == "ok" -%}<span class="badge b-ok">OK</span>
+                  {%- else -%}<span class="muted">—</span>{%- endif -%}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <details>
+        <summary>All findings with decisions · {{ findings|length }}</summary>
+        <div class="body">
+          <table>
+            <thead>
+              <tr><th>Finding</th><th>Severity</th><th>Title</th><th>Decision</th><th>Comment</th></tr>
+            </thead>
+            <tbody>
+              {% for finding in findings %}
+              <tr>
+                <td class="mono">{{ finding.finding_id }}</td>
+                <td><span class="badge b-{{ finding.severity }}">{{ finding.severity }}</span></td>
+                <td class="small">{{ finding.title }}</td>
+                <td>
+                  {%- if finding.review_status == "confirmed" -%}<span class="badge b-notok">Not OK</span>
+                  {%- elif finding.review_status in ("false_positive", "accepted_risk") -%}
+                    <span class="badge b-ok">OK</span>
+                    <span class="muted small">{{ finding.review_status|replace("_", " ") }}</span>
+                  {%- else -%}<span class="badge b-review">undecided</span>{%- endif -%}
+                </td>
+                <td class="small">{{ finding.review_note or "—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      {% if evidence %}
+      <details>
+        <summary>Evidence for the Not OK items</summary>
+        <div class="body">
+          {% for item in evidence %}
+          <div style="margin-bottom: 1rem">
+            <div class="small"><b>{{ item.finding_id }}</b> · {{ item.title }}</div>
+            {% if item.osl_text %}
+            <blockquote>{{ item.osl_ref }}: “{{ item.osl_text }}”</blockquote>
+            {% endif %}
+            {% if item.config_path %}
+            <pre>{{ item.config_path }}{% if item.config_value %} = {{ item.config_value }}{% endif %}</pre>
+            {% endif %}
+            {% if item.report_name %}
+            <div class="small muted">
+              {{ item.report_name }}{% if item.report_sheet %} · {{ item.report_sheet }}{% endif %}
+              {%- if item.report_cell %}!{{ item.report_cell }}{% endif %}
+              {%- if item.report_value %} → {{ item.report_value }}{% endif %}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+          <p class="small muted">Sample values are masked. There is no unmask control.</p>
+        </div>
+      </details>
+      {% endif %}
+
+      {% if waterfall %}
+      <details>
+        <summary>Waterfall</summary>
+        <div class="body">
+          <table>
+            <thead><tr><th>Step</th><th class="right">Records in</th><th class="right">Removed</th><th class="right">Records out</th></tr></thead>
+            <tbody>
+              {% for step in waterfall %}
+              <tr{% if step.broken %} class="flow-break"{% endif %}>
+                <td>{{ step.step }}</td>
+                <td class="right mono">{{ step.records_in }}</td>
+                <td class="right mono">{{ step.removed }}</td>
+                <td class="right mono">{{ step.records_out }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+
+      <details>
+        <summary>Run metadata</summary>
+        <div class="body">
+          <dl class="kv">
+            <dt>Run</dt><dd class="mono">VR-{{ "%04d"|format(run.id) }}</dd>
+            <dt>Customer</dt><dd>{{ run.customer_name }}</dd>
+            <dt>Order</dt><dd class="mono">{{ run.order_number }}</dd>
+            <dt>Configuration</dt><dd class="mono">{{ run.configuration_id }}</dd>
+            <dt>Rules version</dt><dd>{{ run.rules_version }}</dd>
+            <dt>Pipeline duration</dt><dd>{{ stats.duration }}</dd>
+            <dt>Model calls / tokens</dt><dd>{{ stats.calls }} calls · {{ stats.tokens }} tokens · {{ stats.cache_hits }} cache hits</dd>
+            <dt>Input fingerprint</dt><dd class="mono">{{ run.input_fingerprint[:16] }}…</dd>
+            <dt>Generated</dt><dd>{{ generated_at }}{% if generated_by %} by {{ generated_by }}{% endif %}</dd>
+          </dl>
+        </div>
+      </details>
+
+      <p class="small muted" style="margin-top: 1.5rem">
+        This report is self-contained and opens offline. It was generated once from the
+        reviewed findings and is never regenerated. Sample values are masked; views and
+        downloads are recorded in the audit log.
+      </p>
+    </div>
+
+    <script>
+      // Expand every section before printing, and leave it expanded: a collapsed
+      // <details> prints as a heading with nothing under it, and the printed copy is
+      // the one people file. CSS cannot do this on its own, because a closed
+      // <details> hides its children through the browser's own mechanism rather than
+      // through a style the print sheet could override.
+      (function () {
+        function expandAll() {
+          document.querySelectorAll("details").forEach(function (section) {
+            section.open = true;
+          });
+        }
+        window.addEventListener("beforeprint", expandAll);
+        // Headless renderers print without firing beforeprint, so honour the print
+        // media query directly as well.
+        var printing = window.matchMedia && window.matchMedia("print");
+        if (printing) {
+          if (printing.matches) expandAll();
+          if (printing.addEventListener) {
+            printing.addEventListener("change", function (event) {
+              if (event.matches) expandAll();
+            });
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

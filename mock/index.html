@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vigilAI mock · launcher</title>
+    <link rel="stylesheet" href="shared/styles.css" />
+  </head>
+  <body>
+    <div class="container" style="max-width: 60rem; padding-top: 3rem">
+      <div class="flex between mb">
+        <div class="rb"><div class="rb-mark"><span data-icon="logo"></span></div><div><div class="rb-name">vigilAI · UI mock</div><div class="rb-sub">Static, clickable, synthetic data only. Opens from file://. Nothing is wired to a backend.</div></div></div>
+        <button class="icon-btn" data-theme-btn onclick="toggleTheme()" title="Toggle theme"></button>
+      </div>
+      <div class="tiles mb">
+        <a class="tile" href="user-ui/index.html"><div class="tile-icon"><span data-icon="user"></span></div><h3>user-ui <span class="muted small">:3000</span></h3><p>Runs · New run (duplicate-inputs dialog) · Review (traceability matrix, findings, evidence, OK / Not OK, waterfall, attribute explorer) · Final report · Run stats · Config history.</p></a>
+        <a class="tile" href="admin-ui/index.html"><div class="tile-icon"><span data-icon="admin"></span></div><h3>admin-ui <span class="muted small">:3001</span></h3><p>Report templates + named values · Checks (plain-English → proposal → test → activate) · Compliance &amp; reverse-pass scope · Reference data · Usage.</p></a>
+        <a class="tile" href="user-ui/report.html"><div class="tile-icon"><span data-icon="report"></span></div><h3>Final report sample</h3><p>The frozen one-page HTML report as a reviewer would receive it: verdict, counts, AI summary, Not OK items with comments, expandable detail, PDF.</p></a>
+      </div>
+      <div class="card card-pad small muted">
+        <b>Suggested walkthrough:</b> Runs → New run → Submit (duplicate dialog) → Review: click a matrix row for evidence, go to Findings, decide the 4 High findings, "Mark all low OK", Generate final report → Report → Clone. Then admin-ui: Checks → New check → Propose → Test → Activate.
+      </div>
+    </div>
+    <script src="shared/app.js"></script>
+  </body>
+</html>

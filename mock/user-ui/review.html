@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en" data-theme="light-blue-yellow">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Review VR-0428 · vigilAI mock</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+  </head>
+  <body data-page="review">
+    <div class="app">
+      <aside id="sidebar"></aside>
+      <main class="main">
+        <div class="container wide">
+          <div class="page-header">
+            <div>
+              <div class="flex small muted mb-s"><a class="link" href="index.html">Runs</a> › <span class="mono">VR-0428</span></div>
+              <h1 class="flex">Review · Acme Card Services · ORD-24177 <span class="badge badge-warn">Needs review</span></h1>
+              <p>Configuration <span class="mono">CFG-ACME-PRESCREEN-07 v3</span> · OSL <span class="mono">ACME_Prescreen_OSL_v2.3.docx</span> · run today 09:12 · model <span class="mono">local-gemma-27b</span> · prompts v3 · pipeline 4m 12s</p>
+            </div>
+            <div class="page-actions">
+              <a class="btn btn-outline btn-sm" href="run-stats.html"><span data-icon="stats"></span> Run stats</a>
+              <button class="btn btn-outline btn-sm" onclick="mock('Re-check (stages 5–7, no LLM call)')"><span data-icon="refresh"></span> Re-check</button>
+              <span title="" id="genWrap"><button class="btn" id="genBtn" disabled onclick="generateReport()"><span data-icon="lock"></span> Generate final report</button></span>
+            </div>
+          </div>
+
+          <div class="banner banner-info" id="gateBanner"><span data-icon="info"></span><div class="body"><b>Gate: every high-severity finding needs a decision before the report can be generated.</b><span id="gateText">4 high-severity findings, 0 decided.</span> Low-severity findings can be marked OK in bulk. Review decisions never call the LLM.</div></div>
+
+          <div class="grid grid-6 mb">
+            <div class="card"><div class="card-pad"><div class="stat-label">Requirements</div><div class="stat-value">18</div><div class="stat-hint">from 6 OSL sections</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Config elements</div><div class="stat-value">27</div><div class="stat-hint">9 technical, ignored</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">High</div><div class="stat-value tone-destructive">4</div><div class="stat-hint" id="hDec">0 decided</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Medium</div><div class="stat-value tone-warn">3</div><div class="stat-hint" id="mDec">0 decided</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Low</div><div class="stat-value tone-info">5</div><div class="stat-hint" id="lDec">0 decided</div></div></div>
+            <div class="card"><div class="card-pad"><div class="stat-label">Review (low confidence)</div><div class="stat-value tone-muted">2</div><div class="stat-hint">rule confidence &lt; 0.7</div></div></div>
+          </div>
+
+          <div class="card mb">
+            <div class="card-header"><div class="card-title"><span data-icon="sparkle"></span> AI summary <span class="badge badge-muted">stage 9 · findings list only</span></div></div>
+            <div class="card-content small" style="line-height: 1.6">
+              The config implements 15 of 18 OSL requirements exactly. Three issues need attention: the geography filter includes <b>TX</b>, which the OSL does not allow, and the state distribution report additionally shows <b>NV</b>; the minimum score threshold is <b>750</b> in the config where the OSL says <b>755</b>; and the waterfall in the counts report does not reconcile (input 1,000,000 vs accepts + rejects 999,412). One OSL exclusion (bankruptcy in last 24 months) has no matching config rule. Everything else matches, including attribute lists and the age operator.
+            </div>
+          </div>
+
+          <div class="tabs">
+            <button class="tab on" data-tab="matrix"><span data-icon="git"></span> Traceability matrix</button>
+            <button class="tab" data-tab="findings"><span data-icon="alert"></span> Findings <span class="badge badge-destructive">12</span></button>
+            <button class="tab" data-tab="waterfall"><span data-icon="layers"></span> Waterfall</button>
+            <button class="tab" data-tab="explorer"><span data-icon="search"></span> Attribute explorer</button>
+          </div>
+
+          <!-- ================= MATRIX ================= -->
+          <div class="tab-panel on" data-panel="matrix">
+            <div class="toolbar">
+              <div class="seg"><button class="on">All 18</button><button>Mismatch 3</button><button>Partial 1</button><button>Missing 1</button><button>Extra 2</button><button>Match 11</button></div>
+              <select class="select sm"><option>All types</option><option>geography</option><option>criteria</option><option>attributes</option><option>waterfall</option><option>exclusion</option><option>compliance</option></select>
+              <span class="grow"></span>
+              <span class="small muted">One row per OSL requirement · code compared every value · click a row for evidence</span>
+            </div>
+            <div class="card card-flush">
+              <table class="table">
+                <thead><tr><th>Req</th><th>Type</th><th style="min-width: 16rem">OSL (source of truth)</th><th style="min-width: 14rem">Config</th><th style="min-width: 14rem">Reports</th><th>Status</th><th>Conf.</th><th class="right">Actions</th></tr></thead>
+                <tbody>
+                  <tr class="clickable" onclick="showEvidence('F-01')">
+                    <td class="mono">R-03</td><td><span class="badge badge-outline">geography</span></td>
+                    <td>Include only consumers in <span class="set-pill">IL</span><span class="set-pill">AZ</span></td>
+                    <td><span class="mono muted small">filters[2].state_in</span><br /><span class="set-pill">IL</span><span class="set-pill">AZ</span><span class="set-pill extra">TX +extra</span></td>
+                    <td><span class="muted small">state_dist · States!A2:A5</span><br /><span class="set-pill">IL</span><span class="set-pill">AZ</span><span class="set-pill extra">TX</span><span class="set-pill extra">NV</span></td>
+                    <td><span class="badge st-mismatch">mismatch</span></td><td class="tabular small">0.96</td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editReq')"><span data-icon="edit"></span> Req</button><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editLink')"><span data-icon="link"></span> Link</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-02')">
+                    <td class="mono">R-05</td><td><span class="badge badge-outline">criteria</span></td>
+                    <td>Score must be at least <b>755</b></td>
+                    <td><span class="mono muted small">rules.score.min</span><br /><span class="set-pill bad">750</span> &nbsp;<span class="mono small">>=</span></td>
+                    <td><span class="muted small">DIRT · Attributes!D14 (min)</span><br /><span class="set-pill bad">750</span></td>
+                    <td><span class="badge st-mismatch">mismatch</span></td><td class="tabular small">0.99</td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editReq')"><span data-icon="edit"></span> Req</button><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editLink')"><span data-icon="link"></span> Link</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-03')">
+                    <td class="mono">R-06</td><td><span class="badge badge-outline">criteria</span></td>
+                    <td>Age must be <b>21 or older</b></td>
+                    <td><span class="mono muted small">rules.age</span><br /><span class="set-pill">21</span> &nbsp;<span class="mono small">>=</span> <span class="small muted">(OSL "reject &lt; 21" ≡ config "accept &gt;= 21")</span></td>
+                    <td><span class="muted small">DIRT · Attributes!D9 (min)</span><br /><span class="set-pill">21</span></td>
+                    <td><span class="badge st-match">match</span></td><td class="tabular small">0.98</td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editReq')"><span data-icon="edit"></span> Req</button><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editLink')"><span data-icon="link"></span> Link</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-04')">
+                    <td class="mono">R-08</td><td><span class="badge badge-outline">exclusion</span></td>
+                    <td>Exclude bankruptcy in the last <b>24 months</b></td>
+                    <td><span class="tone-destructive small"><b>No matching config rule</b></span><br /><span class="muted small">3 candidates shortlisted, judge: not related</span></td>
+                    <td><span class="muted small">—</span></td>
+                    <td><span class="badge st-missing">missing</span></td><td class="tabular small">0.91</td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editReq')"><span data-icon="edit"></span> Req</button><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editLink')"><span data-icon="link"></span> Link</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-05')">
+                    <td class="mono">R-11</td><td><span class="badge badge-outline">attributes</span></td>
+                    <td>Deliver <b>14</b> attributes (list in §4.2)</td>
+                    <td><span class="mono muted small">output.fields[]</span><br />14 fields · <span class="tone-success small">all present</span></td>
+                    <td><span class="muted small">DIRT · Attributes, field_dist</span><br />13 present · <span class="set-pill missing">DOB_YEAR</span></td>
+                    <td><span class="badge st-partial">partial</span></td><td class="tabular small">0.94</td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editReq')"><span data-icon="edit"></span> Req</button><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editLink')"><span data-icon="link"></span> Link</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-06')">
+                    <td class="mono">R-13</td><td><span class="badge badge-outline">waterfall</span></td>
+                    <td>Steps: input → geography → score → age → exclusions → dedupe</td>
+                    <td><span class="mono muted small">pipeline.steps[]</span><br />same 6 steps, same order</td>
+                    <td><span class="muted small">number_flow · Flow!B3:B9</span><br /><span class="tone-destructive small"><b>accepts + rejects ≠ input</b> (−588)</span></td>
+                    <td><span class="badge st-mismatch">mismatch</span></td><td class="tabular small">0.97</td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editReq')"><span data-icon="edit"></span> Req</button><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editLink')"><span data-icon="link"></span> Link</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-07')">
+                    <td class="mono">C-19</td><td><span class="badge badge-outline">filter</span> <span class="badge badge-muted">reverse pass</span></td>
+                    <td><span class="muted small">Not in OSL</span></td>
+                    <td><span class="mono muted small">filters[4].income_min</span><br /><span class="set-pill">40000</span></td>
+                    <td><span class="muted small">DIRT · Attributes!D22 (min)</span><br /><span class="set-pill">40,000</span></td>
+                    <td><span class="badge st-extra">extra</span></td><td class="tabular small">0.88</td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editLink')"><span data-icon="link"></span> Link</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-08')">
+                    <td class="mono">CR-02</td><td><span class="badge badge-outline">compliance</span> <span class="badge badge-tertiary">must-have</span></td>
+                    <td><span class="muted small">Admin compliance rule: OFAC suppression</span></td>
+                    <td><span class="mono muted small">suppressions.ofac</span><br /><span class="set-pill">true</span></td>
+                    <td><span class="muted small">number_flow · Flow!B7</span><br /><span class="set-pill">1,204 suppressed</span></td>
+                    <td><span class="badge st-match">match</span></td><td class="tabular small">1.00</td>
+                    <td class="right"></td>
+                  </tr>
+                  <tr class="clickable" onclick="showEvidence('F-09')">
+                    <td class="mono">R-15</td><td><span class="badge badge-outline">criteria</span></td>
+                    <td>Revolving utilization below <b>60%</b></td>
+                    <td><span class="mono muted small">rules.util.max</span><br /><span class="set-pill">0.60</span> <span class="mono small">&lt;</span></td>
+                    <td><span class="muted small">DIRT · Attributes!E31 (max)</span><br /><span class="set-pill">0.599</span></td>
+                    <td><span class="badge st-match">match</span></td><td class="tabular small">0.62 <span class="badge sev-review">review</span></td>
+                    <td class="right nowrap"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); openModal('editReq')"><span data-icon="edit"></span> Req</button></td>
+                  </tr>
+                  <tr class="clickable" onclick="toast('Evidence panel for R-01 (mock)')"><td class="mono">R-01</td><td><span class="badge badge-outline">population</span></td><td>Consumer prescreen population, 1,000,000 records</td><td><span class="mono muted small">input.count</span><br /><span class="set-pill">1000000</span></td><td><span class="muted small">number_flow · Flow!B3</span><br /><span class="set-pill">1,000,000</span></td><td><span class="badge st-match">match</span></td><td class="tabular small">0.99</td><td class="right"></td></tr>
+                  <tr class="clickable" onclick="toast('Evidence panel for R-02 (mock)')"><td class="mono">R-02</td><td><span class="badge badge-outline">criteria</span></td><td>Open trades ≥ 2</td><td><span class="mono muted small">rules.trades.min</span><br /><span class="set-pill">2</span> <span class="mono small">>=</span></td><td><span class="muted small">DIRT · Attributes!D17</span><br /><span class="set-pill">2</span></td><td><span class="badge st-match">match</span></td><td class="tabular small">0.97</td><td class="right"></td></tr>
+                  <tr><td colspan="8" class="center small muted" style="padding: 0.8rem">… 7 more matching rows (R-04, R-07, R-09, R-10, R-12, R-14, R-16) · <a class="link" onclick="mock('Show all')">show all</a></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ================= FINDINGS ================= -->
+          <div class="tab-panel" data-panel="findings">
+            <div class="toolbar">
+              <div class="seg" id="sevSeg"><button class="on" data-sev="all">All 12</button><button data-sev="high">High 4</button><button data-sev="medium">Medium 3</button><button data-sev="low">Low 5</button></div>
+              <select class="select sm" id="typeSel"><option value="all">All types</option><option>Rule missing in config</option><option>Extra rule in config</option><option>Value mismatch</option><option>Operator mismatch</option><option>Report violates rule</option><option>Count does not reconcile</option><option>Cross-report disagreement</option><option>Profile anomaly</option><option>Low-confidence extraction</option></select>
+              <div class="seg"><button class="on">All legs</button><button>OSL ↔ config</button><button>config ↔ reports</button><button>OSL ↔ reports</button></div>
+              <span class="grow"></span>
+              <button class="btn btn-outline btn-sm" onclick="bulkOkLow()"><span data-icon="checkcircle"></span> Mark all low OK</button>
+            </div>
+            <div id="findingList"></div>
+          </div>
+
+          <!-- ================= WATERFALL ================= -->
+          <div class="tab-panel" data-panel="waterfall">
+            <div class="grid grid-side">
+              <div class="card card-flush">
+                <div class="card-header"><div><div class="card-title"><span data-icon="layers"></span> Waterfall · counts at each step</div><p class="card-desc">OSL step order vs config step order vs the number-flow report. Breaks in red. Code reconciles; no LLM.</p></div></div>
+                <table class="table">
+                  <thead><tr><th>#</th><th>OSL step</th><th>Config step</th><th class="right">In</th><th class="right">Removed</th><th class="right">Out</th><th class="right">Report says</th><th>Δ</th></tr></thead>
+                  <tbody>
+                    <tr><td>1</td><td>Input population</td><td class="mono small">input</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">1,000,000</td><td class="right tabular">1,000,000</td><td class="cell-ok">0</td></tr>
+                    <tr><td>2</td><td>Geography (IL, AZ)</td><td class="mono small">filters.state_in</td><td class="right tabular">1,000,000</td><td class="right tabular">612,440</td><td class="right tabular">387,560</td><td class="right tabular">387,560</td><td class="cell-ok">0</td></tr>
+                    <tr><td>3</td><td>Score ≥ 755</td><td class="mono small">rules.score</td><td class="right tabular">387,560</td><td class="right tabular">201,118</td><td class="right tabular">186,442</td><td class="right tabular">186,442</td><td class="cell-ok">0</td></tr>
+                    <tr><td>4</td><td>Age ≥ 21</td><td class="mono small">rules.age</td><td class="right tabular">186,442</td><td class="right tabular">3,905</td><td class="right tabular">182,537</td><td class="right tabular">182,537</td><td class="cell-ok">0</td></tr>
+                    <tr class="broken"><td>5</td><td>Exclusions (bankruptcy, OFAC)</td><td class="mono small">suppressions.*</td><td class="right tabular">182,537</td><td class="right tabular">1,204</td><td class="right tabular">181,333</td><td class="right tabular cell-mismatch">180,745</td><td class="cell-mismatch">−588</td></tr>
+                    <tr><td>6</td><td>Dedupe</td><td class="mono small">dedupe.key</td><td class="right tabular">180,745</td><td class="right tabular">2,109</td><td class="right tabular">178,636</td><td class="right tabular">178,636</td><td class="cell-ok">0</td></tr>
+                    <tr class="broken"><td colspan="3"><b>Reconciliation</b> · accepts + rejects vs input</td><td class="right tabular">1,000,000</td><td class="right tabular">821,364 rejects</td><td class="right tabular">178,636 accepts</td><td class="right tabular cell-mismatch">999,412 ≠ 1,000,000</td><td class="cell-mismatch">−588</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <div class="card mb"><div class="card-header"><div class="card-title">Step order</div></div><div class="card-content small">
+                  <div class="flex"><span class="badge st-match">OSL = config</span><span class="muted">6 steps, same sequence</span></div>
+                  <div class="flex mt-s"><span class="badge st-mismatch">report break at step 5</span></div>
+                  <p class="muted" style="margin: 0.6rem 0 0">588 records leave the flow between "Exclusions" and "Dedupe" with no step accounting for them. Likely an unlisted suppression. See finding F-06.</p>
+                </div></div>
+                <div class="card"><div class="card-header"><div class="card-title">Removed per step</div></div><div class="card-content">
+                  <div class="bars">
+                    <div class="bar-row"><span>Geography</span><span class="bar-track"><span class="bar-fill" style="width: 100%"></span></span><span class="bar-val">612,440</span></div>
+                    <div class="bar-row"><span>Score</span><span class="bar-track"><span class="bar-fill" style="width: 33%"></span></span><span class="bar-val">201,118</span></div>
+                    <div class="bar-row"><span>Age</span><span class="bar-track"><span class="bar-fill" style="width: 1%"></span></span><span class="bar-val">3,905</span></div>
+                    <div class="bar-row"><span>Exclusions</span><span class="bar-track"><span class="bar-fill" style="width: 0.5%"></span></span><span class="bar-val">1,204</span></div>
+                    <div class="bar-row"><span class="tone-destructive">Unexplained</span><span class="bar-track"><span class="bar-fill bf-destructive" style="width: 0.4%"></span></span><span class="bar-val tone-destructive">588</span></div>
+                    <div class="bar-row"><span>Dedupe</span><span class="bar-track"><span class="bar-fill" style="width: 0.8%"></span></span><span class="bar-val">2,109</span></div>
+                  </div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= EXPLORER ================= -->
+          <div class="tab-panel" data-panel="explorer">
+            <div class="toolbar">
+              <input class="input search" placeholder="Search attribute…" oninput="filterAttrs(this.value)" />
+              <div class="seg"><button class="on">All 14</button><button>Fail 3</button><button>Pass 11</button></div>
+              <span class="grow"></span>
+              <span class="small muted">DIRT · Attributes sheet · pass / fail per linked rule · replaces scrolling thousands of rows</span>
+            </div>
+            <div class="card card-flush">
+              <table class="table compact" id="attrTable">
+                <thead><tr><th>Attribute</th><th>Alias in OSL</th><th>Type</th><th class="right">Min</th><th class="right">Max</th><th class="right">Mean</th><th class="right">Nulls</th><th>Rule</th><th>Result</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">SCORE_V3</td><td>score</td><td class="muted small">int</td><td class="right tabular cell-mismatch">750</td><td class="right tabular">850</td><td class="right tabular">781.4</td><td class="right tabular">0</td><td class="small">≥ 755 (R-05)</td><td><span class="badge st-mismatch">fail</span></td></tr>
+                  <tr><td class="mono">AGE</td><td>age</td><td class="muted small">int</td><td class="right tabular">21</td><td class="right tabular">94</td><td class="right tabular">47.2</td><td class="right tabular">0</td><td class="small">≥ 21 (R-06)</td><td><span class="badge st-match">pass</span></td></tr>
+                  <tr><td class="mono">ST</td><td>state</td><td class="muted small">str</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">—</td><td class="right tabular">0</td><td class="small">in {IL, AZ} (R-03)</td><td><span class="badge st-mismatch">fail</span> <span class="small muted">TX, NV seen</span></td></tr>
+                  <tr><td class="mono">REV_UTIL</td><td>revolving utilization</td><td class="muted small">float</td><td class="right tabular">0.00</td><td class="right tabular">0.599</td><td class="right tabular">0.31</td><td class="right tabular">0</td><td class="small">&lt; 0.60 (R-15)</td><td><span class="badge st-match">pass</span></td></tr>
+                  <tr><td class="mono">OPEN_TRADES</td><td>open trades</td><td class="muted small">int</td><td class="right tabular">2</td><td class="right tabular">41</td><td class="right tabular">6.8</td><td class="right tabular">0</td><td class="small">≥ 2 (R-02)</td><td><span class="badge st-match">pass</span></td></tr>
+                  <tr><td class="mono">INCOME_EST</td><td>—</td><td class="muted small">int</td><td class="right tabular">40,000</td><td class="right tabular">412,000</td><td class="right tabular">78,120</td><td class="right tabular">0</td><td class="small">extra (C-19)</td><td><span class="badge st-extra">extra</span></td></tr>
+                  <tr><td class="mono">DOB_YEAR</td><td>birth year</td><td class="muted small">int</td><td class="right tabular muted">—</td><td class="right tabular muted">—</td><td class="right tabular muted">—</td><td class="right tabular muted">—</td><td class="small">requested (R-11)</td><td><span class="badge st-missing">missing</span></td></tr>
+                  <tr><td class="mono">MORT_BAL</td><td>mortgage balance</td><td class="muted small">int</td><td class="right tabular">0</td><td class="right tabular">1,980,000</td><td class="right tabular">142,300</td><td class="right tabular cell-mismatch">18.2%</td><td class="small">profile prior: 4% nulls</td><td><span class="badge sev-low">anomaly</span></td></tr>
+                  <tr><td class="mono">INQ_6M</td><td>inquiries 6 months</td><td class="muted small">int</td><td class="right tabular">0</td><td class="right tabular">12</td><td class="right tabular">1.1</td><td class="right tabular">0</td><td class="small">—</td><td><span class="badge st-match">pass</span></td></tr>
+                  <tr><td class="mono">BK_24M</td><td>bankruptcy 24 months</td><td class="muted small">flag</td><td class="right tabular">0</td><td class="right tabular">1</td><td class="right tabular">0.02</td><td class="right tabular">0</td><td class="small">exclude = 1 (R-08)</td><td><span class="badge st-mismatch">fail</span> <span class="small muted">3,014 rows = 1</span></td></tr>
+                  <tr><td class="mono">SSN_LAST4</td><td>—</td><td class="muted small">str</td><td class="right tabular muted">masked</td><td class="right tabular muted">masked</td><td class="right tabular muted">—</td><td class="right tabular">0</td><td class="small">—</td><td><span class="badge badge-muted"><span data-icon="eyeoff"></span> masked</span></td></tr>
+                  <tr><td class="mono">FIRST_NAME</td><td>—</td><td class="muted small">str</td><td class="right tabular muted">masked</td><td class="right tabular muted">masked</td><td class="right tabular muted">—</td><td class="right tabular">0</td><td class="small">—</td><td><span class="badge badge-muted"><span data-icon="eyeoff"></span> masked</span></td></tr>
+                  <tr><td class="mono">TOT_BAL</td><td>total balance</td><td class="muted small">int</td><td class="right tabular">0</td><td class="right tabular">2,410,000</td><td class="right tabular">161,900</td><td class="right tabular">0</td><td class="small">—</td><td><span class="badge st-match">pass</span></td></tr>
+                  <tr><td class="mono">DELQ_30</td><td>30-day delinquencies</td><td class="muted small">int</td><td class="right tabular">0</td><td class="right tabular">9</td><td class="right tabular">0.4</td><td class="right tabular">0</td><td class="small">—</td><td><span class="badge st-match">pass</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Evidence drawer -->
+    <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+    <aside class="drawer" id="drawer">
+      <div class="drawer-head"><h3 id="dTitle">Evidence</h3><button class="icon-btn" onclick="closeDrawer()"><span data-icon="x"></span></button></div>
+      <div class="drawer-body" id="dBody"></div>
+    </aside>
+
+    <!-- Edit requirement modal -->
+    <div class="modal" id="editReq">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Edit requirement R-05</h3><button class="icon-btn" onclick="closeModal('editReq')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <div class="banner banner-info" style="margin: 0"><span data-icon="info"></span><div class="body">Editing creates rules <b>version 2</b>. Re-check reruns stages 5–7 in seconds with no LLM call. Findings keep the version that produced them.</div></div>
+          <div class="evidence"><h4>OSL source text (read-only)</h4><div class="quote">"Applicants must have a <mark class="hl">score of at least 755</mark> on the V3 model as of the pull date."</div></div>
+          <div class="form-grid">
+            <div class="field"><label class="label">Type</label><select class="select"><option>criteria</option><option>geography</option><option>attributes</option><option>exclusion</option><option>waterfall</option></select></div>
+            <div class="field"><label class="label">Field (canonical)</label><input class="input mono" value="score" /></div>
+            <div class="field"><label class="label">Operator</label><select class="select"><option>>=</option><option>></option><option>&lt;=</option><option>&lt;</option><option>==</option><option>in</option></select></div>
+            <div class="field"><label class="label">Value</label><input class="input mono" value="755" /></div>
+            <div class="field span2"><label class="label">Reason for edit <span class="req">*</span></label><input class="input" placeholder="Why the extracted rule was wrong" /></div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('editReq')">Cancel</button><button class="btn" onclick="closeModal('editReq'); toast('Rules v2 saved · re-check queued (stages 5–7, mock)')"><span data-icon="refresh"></span> Save &amp; re-check</button></div>
+      </div>
+    </div>
+
+    <!-- Edit link modal -->
+    <div class="modal" id="editLink">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Edit trace link · R-08</h3><button class="icon-btn" onclick="closeModal('editLink')"><span data-icon="x"></span></button></div>
+        <div class="modal-body">
+          <p class="small muted" style="margin: 0">The judge said no config element implements this requirement. Pick the right element if it was missed, then re-check.</p>
+          <table class="table compact">
+            <thead><tr><th></th><th>Config element</th><th>Described as</th><th>Judge</th></tr></thead>
+            <tbody>
+              <tr><td><input type="radio" name="lnk" /></td><td class="mono small">suppressions.bk_flag</td><td class="small">exclusion · BK_24M == 1 · <span class="muted">is_technical: false</span></td><td><span class="badge badge-muted">not related · 0.41</span></td></tr>
+              <tr><td><input type="radio" name="lnk" /></td><td class="mono small">suppressions.ofac</td><td class="small">compliance · OFAC list</td><td><span class="badge badge-muted">not related · 0.12</span></td></tr>
+              <tr><td><input type="radio" name="lnk" /></td><td class="mono small">filters[5].public_records</td><td class="small">exclusion · public records any</td><td><span class="badge badge-warn">partial · 0.58</span></td></tr>
+              <tr><td><input type="radio" name="lnk" checked /></td><td colspan="3" class="small">Keep "no matching element" (finding stands)</td></tr>
+            </tbody>
+          </table>
+          <div class="field"><label class="label">Reason <span class="req">*</span></label><input class="input" placeholder="Why the link is being changed" /></div>
+        </div>
+        <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('editLink')">Cancel</button><button class="btn" onclick="closeModal('editLink'); toast('Link saved · re-check queued (mock)')"><span data-icon="refresh"></span> Save &amp; re-check</button></div>
+      </div>
+    </div>
+
+    <script src="nav.js"></script>
+    <script src="../shared/app.js"></script>
+    <script>
+      // ---- synthetic findings ----
+      const FINDINGS = [
+        { id: "F-01", sev: "high", type: "Report violates rule", leg: "OSL ↔ reports", req: "R-03", title: "State distribution contains TX and NV; OSL allows only IL, AZ",
+          detail: "Config filter includes TX (extra vs OSL). The state distribution report shows TX (18,402 rows) and NV (211 rows). NV is in neither the OSL nor the config, so it points at an upstream data issue as well as the config drift.",
+          osl: { loc: "§3.1 Geography, para 2", text: "Include only consumers whose current address is in <mark class=\"hl\">Illinois or Arizona</mark>. No other states are in scope for this campaign." },
+          cfg: { path: "filters[2].state_in", code: '"filters": [\n  …,\n  { "field": "ST", "op": "in", "value": ["IL", "AZ", <span class="hl">"TX"</span>] }\n]' },
+          rep: { name: "state_dist_ORD-24177.xlsx", sheet: "States", cell: "A2:B5", rows: [["IL","201,880"],["AZ","167,067"],["TX","18,402"],["NV","211"]], bad: [2,3] },
+          sample: [["1,204","IL","7**","4*","***-**-1***"],["18,377","TX","7**","3*","***-**-8***"],["18,378","TX","8**","5*","***-**-2***"],["19,001","NV","7**","2*","***-**-6***"]],
+          verify: "Verified · second-opinion LLM agreed (0.95)" },
+        { id: "F-02", sev: "high", type: "Value mismatch", leg: "OSL ↔ config", req: "R-05", title: "Score threshold: OSL says 755, config says 750",
+          detail: "Config rules.score.min = 750 with operator >=. OSL requires at least 755. DIRT confirms the delivered minimum is 750, so 5 score points of out-of-spec records were delivered.",
+          osl: { loc: "§3.2 Credit criteria, table row 1", text: "Applicants must have a <mark class=\"hl\">score of at least 755</mark> on the V3 model as of the pull date." },
+          cfg: { path: "rules.score.min", code: '"rules": {\n  "score": { "model": "V3", "op": ">=", "min": <span class="hl">750</span> },\n  …' },
+          rep: { name: "DIRT_ORD-24177.xlsx", sheet: "Attributes", cell: "D14", rows: [["SCORE_V3 · min","750"],["SCORE_V3 · max","850"],["SCORE_V3 · mean","781.4"]], bad: [0] },
+          sample: [["3","IL","750","4*","***-**-3***"],["57","AZ","751","5*","***-**-9***"],["212","IL","753","3*","***-**-0***"]],
+          verify: "Verified · second-opinion LLM agreed (0.99)" },
+        { id: "F-04", sev: "high", type: "Rule missing in config", leg: "OSL ↔ config", req: "R-08", title: "No config rule excludes bankruptcy in the last 24 months",
+          detail: "Three candidate elements were shortlisted by type and alias; the judge marked all as not related. DIRT shows 3,014 delivered rows with BK_24M = 1.",
+          osl: { loc: "§3.4 Exclusions, bullet 3", text: "Exclude any consumer with a <mark class=\"hl\">bankruptcy filed within the last 24 months</mark>, regardless of disposition." },
+          cfg: { path: "(none)", code: '"suppressions": {\n  "ofac": true,\n  "deceased": true\n  <span class="hl">// no bankruptcy rule</span>\n}' },
+          rep: { name: "DIRT_ORD-24177.xlsx", sheet: "Attributes", cell: "row BK_24M", rows: [["BK_24M = 1","3,014"],["BK_24M = 0","175,622"]], bad: [0] },
+          sample: [["8,811","AZ","7**","3*","***-**-4***"],["8,902","IL","7**","6*","***-**-7***"]],
+          verify: "Verified · second-opinion LLM agreed (0.91)" },
+        { id: "F-06", sev: "high", type: "Count does not reconcile", leg: "config ↔ reports", req: "R-13", title: "Waterfall: accepts + rejects = 999,412, input = 1,000,000 (−588)",
+          detail: "588 records leave the flow between step 5 (exclusions) and step 6 (dedupe) with no step accounting for them. All other steps reconcile exactly.",
+          osl: { loc: "§5 Processing order", text: "Process in this order: geography, score, age, exclusions, then <mark class=\"hl\">de-duplicate on SSN</mark>. All input records must be accounted for as accepted or rejected." },
+          cfg: { path: "pipeline.steps[4..5]", code: '"steps": [ "input", "geo", "score", "age", "suppress", <span class="hl-ok">"dedupe"</span> ]' },
+          rep: { name: "number_flow_ORD-24177.xlsx", sheet: "Flow", cell: "B7:B9", rows: [["After exclusions","181,333"],["Into dedupe","180,745"],["Accepts","178,636"],["Rejects","821,364"]], bad: [1] },
+          sample: null,
+          verify: "Verified · second-opinion LLM agreed (0.97)" },
+        { id: "F-05", sev: "medium", type: "Report violates rule", leg: "OSL ↔ reports", req: "R-11", title: "Requested attribute DOB_YEAR missing from DIRT and field distribution",
+          detail: "OSL §4.2 lists 14 attributes; config output.fields has all 14; the reports carry 13. DOB_YEAR was not delivered.",
+          osl: { loc: "§4.2 Output attributes, table", text: "… 12. Total balance, 13. <mark class=\"hl\">Birth year</mark>, 14. Inquiries (6 months)." },
+          cfg: { path: "output.fields[12]", code: '"fields": [ …, "TOT_BAL", <span class="hl-ok">"DOB_YEAR"</span>, "INQ_6M" ]' },
+          rep: { name: "field_dist_ORD-24177.xlsx", sheet: "Fields", cell: "A2:A14", rows: [["Fields present","13"],["Expected","14"],["Missing","DOB_YEAR"]], bad: [2] }, sample: null, verify: "Not re-verified (medium)" },
+        { id: "F-07", sev: "medium", type: "Extra rule in config", leg: "OSL ↔ config", req: "C-19", title: "Config filters on estimated income ≥ 40,000; OSL does not mention income",
+          detail: "Reverse pass (category: filters and select criteria). Income filter removes an unknown number of otherwise eligible records.",
+          osl: { loc: "—", text: "<span class=\"muted\">No OSL text mentions income.</span>" },
+          cfg: { path: "filters[4].income_min", code: '{ "field": "INCOME_EST", "op": ">=", "value": <span class="hl">40000</span> }' },
+          rep: { name: "DIRT_ORD-24177.xlsx", sheet: "Attributes", cell: "D22", rows: [["INCOME_EST · min","40,000"]], bad: [] }, sample: null, verify: "Not re-verified (medium)" },
+        { id: "F-08", sev: "medium", type: "Cross-report disagreement", leg: "config ↔ reports", req: "—", title: "DIRT row count 178,640 vs number-flow accepts 178,636",
+          detail: "Admin check counts_agree_dirt_flow (v2): dirt_row_count == accepts_count. Difference of 4 rows.",
+          osl: { loc: "—", text: "<span class=\"muted\">Admin-defined check; no OSL text.</span>" },
+          cfg: { path: "(admin check)", code: 'dirt_row_count == accepts_count\n// 178640 == 178636 → <span class="hl">false</span>' },
+          rep: { name: "DIRT / number_flow", sheet: "Summary / Flow", cell: "B2 / B8", rows: [["dirt_row_count","178,640"],["accepts_count","178,636"]], bad: [0,1] }, sample: null, verify: "Not re-verified (medium)" },
+        { id: "F-09", sev: "low", type: "Low-confidence extraction", leg: "OSL ↔ config", req: "R-15", title: "Utilization rule extracted with confidence 0.62",
+          detail: "OSL wording is ambiguous ('below 60%' vs 'up to 60%'). Config uses < 0.60 and the report max is 0.599, so the values agree under the stricter reading.",
+          osl: { loc: "§3.2, table row 5", text: "Revolving utilization <mark class=\"hl\">below 60 percent</mark> (utilization up to and including 60 is acceptable per the 2025 addendum)." },
+          cfg: { path: "rules.util", code: '"util": { "op": "<", "max": 0.60 }' },
+          rep: { name: "DIRT_ORD-24177.xlsx", sheet: "Attributes", cell: "E31", rows: [["REV_UTIL · max","0.599"]], bad: [] }, sample: null, verify: "—" },
+        { id: "F-10", sev: "low", type: "Profile anomaly", leg: "config ↔ reports", req: "—", title: "MORT_BAL nulls 18.2% vs prior runs ~4%",
+          detail: "Field distribution shows a null rate far above the last 5 runs for this configuration ID.",
+          osl: { loc: "—", text: "<span class=\"muted\">No OSL text.</span>" }, cfg: { path: "—", code: "—" },
+          rep: { name: "field_dist_ORD-24177.xlsx", sheet: "Fields", cell: "F19", rows: [["MORT_BAL · null %","18.2%"],["prior median","4.1%"]], bad: [0] }, sample: null, verify: "—" },
+        { id: "F-11", sev: "low", type: "Profile anomaly", leg: "config ↔ reports", req: "—", title: "INQ_6M mean 1.1 vs prior 1.9", detail: "Within tolerance band but flagged for trend.", osl: { loc: "—", text: "<span class=\"muted\">No OSL text.</span>" }, cfg: { path: "—", code: "—" }, rep: { name: "field_dist_ORD-24177.xlsx", sheet: "Fields", cell: "E27", rows: [["INQ_6M · mean","1.1"]], bad: [] }, sample: null, verify: "—" },
+        { id: "F-12", sev: "low", type: "Low-confidence extraction", leg: "OSL ↔ config", req: "R-17", title: "Dedupe key phrase extracted with confidence 0.66", detail: "OSL says 'de-duplicate on SSN'; config dedupe.key = ['SSN','ZIP']. Judge: implemented (composite key is stricter).", osl: { loc: "§5", text: "…then <mark class=\"hl\">de-duplicate on SSN</mark>." }, cfg: { path: "dedupe.key", code: '"dedupe": { "key": ["SSN", "ZIP"] }' }, rep: { name: "number_flow", sheet: "Flow", cell: "B9", rows: [["Dedupe removed","2,109"]], bad: [] }, sample: null, verify: "—" },
+        { id: "F-13", sev: "low", type: "Cross-report disagreement", leg: "config ↔ reports", req: "—", title: "Billing count 178,636 equals delivered (check passed, informational)", detail: "Admin check billing_not_above_delivered passed; shown because scope = report-on-pass.", osl: { loc: "—", text: "<span class=\"muted\">Admin check.</span>" }, cfg: { path: "(admin check)", code: "billing_count <= delivered_count → true" }, rep: { name: "billing / number_flow", sheet: "—", cell: "H9 / B8", rows: [["billing_count","178,636"],["delivered_count","178,636"]], bad: [] }, sample: null, verify: "—" },
+      ];
+      const SEV_LABEL = { high: "High", medium: "Medium", low: "Low" };
+      const decisions = {}; // id -> { d: 'ok'|'notok', note }
+      let sevFilter = "all", typeFilter = "all";
+
+      function renderFindings() {
+        const list = document.getElementById("findingList");
+        list.innerHTML = FINDINGS.filter((f) => (sevFilter === "all" || f.sev === sevFilter) && (typeFilter === "all" || f.type === typeFilter)).map((f) => {
+          const d = decisions[f.id];
+          return '<div class="finding' + (d ? (d.d === "ok" ? " decided-ok" : " decided-notok") : "") + '" id="card-' + f.id + '" onclick="showEvidence(\'' + f.id + '\')">' +
+            '<div class="finding-head"><span class="mono small muted">' + f.id + '</span><span class="badge sev-' + f.sev + '">' + SEV_LABEL[f.sev] + '</span>' +
+            '<span class="badge badge-outline">' + f.type + '</span><span class="leg">' + f.leg + '</span>' +
+            (f.req !== "—" ? '<span class="mono small muted">' + f.req + '</span>' : "") +
+            '<span class="finding-title">' + f.title + '</span>' +
+            (d ? '<span class="badge ' + (d.d === "ok" ? "badge-solid-success" : "badge-solid-destructive") + '">' + (d.d === "ok" ? "OK" : "Not OK") + '</span>' : '<span class="badge badge-muted">undecided</span>') +
+            '</div><div class="finding-detail">' + f.detail + '</div>' +
+            '<div class="finding-actions" onclick="event.stopPropagation()">' +
+            '<button class="btn btn-sm ' + (d && d.d === "ok" ? "btn-success" : "btn-outline") + '" onclick="decide(\'' + f.id + '\',\'ok\')">' + icon("checkcircle") + ' OK</button>' +
+            '<button class="btn btn-sm ' + (d && d.d === "notok" ? "btn-destructive" : "btn-outline") + '" onclick="decide(\'' + f.id + '\',\'notok\')">' + icon("xcircle") + ' Not OK</button>' +
+            '<input class="input sm" placeholder="Comment (shown in the final report for Not OK items)" value="' + (d && d.note ? d.note : "") + '" onchange="note(\'' + f.id + '\', this.value)" />' +
+            '<span class="small muted nowrap">' + f.verify + '</span></div></div>';
+        }).join("");
+        updateGate();
+      }
+      function decide(id, d) { decisions[id] = Object.assign(decisions[id] || {}, { d }); renderFindings(); }
+      function note(id, v) { decisions[id] = Object.assign(decisions[id] || {}, { note: v }); }
+      function bulkOkLow() { FINDINGS.filter((f) => f.sev === "low").forEach((f) => { decisions[f.id] = Object.assign(decisions[f.id] || {}, { d: "ok" }); }); renderFindings(); toast("5 low-severity findings marked OK"); }
+      function updateGate() {
+        const count = (sev) => FINDINGS.filter((f) => f.sev === sev).length;
+        const dec = (sev) => FINDINGS.filter((f) => f.sev === sev && decisions[f.id] && decisions[f.id].d).length;
+        document.getElementById("hDec").textContent = dec("high") + " decided"; document.getElementById("mDec").textContent = dec("medium") + " decided"; document.getElementById("lDec").textContent = dec("low") + " decided";
+        const ready = dec("high") === count("high");
+        const btn = document.getElementById("genBtn"); btn.disabled = !ready;
+        btn.innerHTML = (ready ? icon("report") : icon("lock")) + " Generate final report";
+        const b = document.getElementById("gateBanner");
+        document.getElementById("gateText").textContent = count("high") + " high-severity findings, " + dec("high") + " decided." + (ready ? " Gate satisfied — the report can be generated and will be frozen." : "");
+        b.className = "banner " + (ready ? "banner-success" : "banner-info");
+        document.getElementById("genWrap").title = ready ? "" : (count("high") - dec("high")) + " high-severity finding(s) still need a decision";
+      }
+      function generateReport() { toast("Generating frozen report… (never regenerated)"); setTimeout(() => (window.location.href = "report.html"), 900); }
+
+      function showEvidence(id) {
+        const f = FINDINGS.find((x) => x.id === id); if (!f) return;
+        document.querySelectorAll(".finding.open").forEach((c) => c.classList.remove("open"));
+        const card = document.getElementById("card-" + id); if (card) card.classList.add("open");
+        document.getElementById("dTitle").innerHTML = '<span class="mono muted">' + f.id + '</span> · ' + f.title;
+        const rows = (f.rep.rows || []).map((r, i) => '<tr' + (f.rep.bad.includes(i) ? ' class="broken"' : "") + '><td>' + r[0] + '</td><td class="right tabular">' + r[1] + "</td></tr>").join("");
+        const sample = f.sample
+          ? '<div class="evidence"><h4>' + icon("eyeoff") + ' Matching sample rows · DIRT "Sample" tab · masked</h4><table class="table compact"><thead><tr><th>Row</th><th>ST</th><th>SCORE</th><th>AGE</th><th>SSN</th></tr></thead><tbody>' +
+            f.sample.map((r) => "<tr>" + r.map((c) => '<td class="mono">' + c + "</td>").join("") + "</tr>").join("") + '</tbody></table><div class="hint mt-s">Masked columns come from admin-ui Reference data. No unmask option in v1 (no login).</div></div>'
+          : "";
+        document.getElementById("dBody").innerHTML =
+          '<div class="flex wrap"><span class="badge sev-' + f.sev + '">' + SEV_LABEL[f.sev] + '</span><span class="badge badge-outline">' + f.type + '</span><span class="leg">' + f.leg + '</span><span class="small muted">' + f.verify + '</span></div>' +
+          '<div class="evidence"><h4>' + icon("doc") + ' OSL · ' + f.osl.loc + '</h4><div class="quote">' + f.osl.text + '</div></div>' +
+          '<div class="evidence"><h4>' + icon("json") + ' Config · <span class="mono">' + f.cfg.path + '</span></h4><pre class="code">' + f.cfg.code + '</pre></div>' +
+          '<div class="evidence"><h4>' + icon("sheet") + ' Report · ' + f.rep.name + ' · ' + f.rep.sheet + '!' + f.rep.cell + '</h4><table class="table compact"><tbody>' + rows + '</tbody></table></div>' +
+          sample +
+          '<div class="evidence"><h4>' + icon("review") + ' Decision</h4><div class="flex wrap"><button class="btn btn-sm btn-outline" onclick="decide(\'' + f.id + '\',\'ok\'); showEvidence(\'' + f.id + '\')">' + icon("checkcircle") + ' OK</button><button class="btn btn-sm btn-outline" onclick="decide(\'' + f.id + '\',\'notok\'); showEvidence(\'' + f.id + '\')">' + icon("xcircle") + ' Not OK</button>' +
+          (decisions[f.id] && decisions[f.id].d ? '<span class="badge ' + (decisions[f.id].d === "ok" ? "badge-solid-success" : "badge-solid-destructive") + '">' + (decisions[f.id].d === "ok" ? "Marked OK" : "Marked Not OK") + '</span>' : '<span class="badge badge-muted">undecided</span>') +
+          '</div><div class="flex mt-s"><button class="btn btn-xs btn-ghost" onclick="openModal(\'editReq\')">' + icon("edit") + ' Edit requirement</button><button class="btn btn-xs btn-ghost" onclick="openModal(\'editLink\')">' + icon("link") + ' Edit link</button><button class="btn btn-xs btn-ghost" onclick="mock(\'Re-check\')">' + icon("refresh") + ' Re-check</button></div></div>';
+        openDrawer();
+      }
+      function filterAttrs(q) { q = q.toLowerCase(); document.querySelectorAll("#attrTable tbody tr").forEach((r) => { r.style.display = r.textContent.toLowerCase().includes(q) ? "" : "none"; }); }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        renderFindings();
+        document.querySelectorAll("#sevSeg button").forEach((b) => b.addEventListener("click", () => { document.querySelectorAll("#sevSeg button").forEach((x) => x.classList.remove("on")); b.classList.add("on"); sevFilter = b.dataset.sev; renderFindings(); }));
+        document.getElementById("typeSel").addEventListener("change", (e) => { typeFilter = e.target.value === "All types" ? "all" : e.target.value; renderFindings(); });
+        if (location.hash === "#findings") showTab("findings");
+      });
+    </script>
+  </body>
+</html>
