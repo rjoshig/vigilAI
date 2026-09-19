@@ -13,6 +13,7 @@ from typing import Final, Sequence
 from greenlight_ai.llm.prompts import TRACE_PROMPT
 from greenlight_ai.llm.prompts.schemas import TraceResponse
 from greenlight_ai.pipeline.context import RunContext
+from greenlight_ai.pipeline.guidance import guide_block
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.schema import SET_TYPES, ConfigElement, Rule, Trace
 
@@ -201,7 +202,8 @@ def _judge(context: RunContext, rule: Rule, candidates: Sequence[ConfigElement])
     for element in candidates:
         result = context.client.complete(
             TRACE_PROMPT.system,
-            TRACE_PROMPT.render(
+            guide_block(context.guidance)
+            + TRACE_PROMPT.render(
                 requirement=describe_rule(rule),
                 element=_describe_element(element),
             ),

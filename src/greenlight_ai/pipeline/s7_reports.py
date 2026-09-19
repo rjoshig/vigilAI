@@ -456,11 +456,13 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
     named = tuple(v for v in admin.named_values if isinstance(v, NamedValue))
     if not admin.checks:
         return
-    values = resolve_all(named, context.reports)
+    values = resolve_all(named, context.reports, context.config)
 
     for check in admin.checks:
-        if not check.applies_to(customer):
+        if not check.applies_to(customer, context.guidance.scope_code):
             continue
+        ref = f"check:{check.id}" if check.id is not None else ""
+        shadow = bool(ref) and ref in admin.shadow_rule_refs
         if check.kind == "judgment":
             # Judgment checks are answered by the model in stage 8's style, and are out
             # of scope for Phase 2 (``docs/design.md``: "use sparingly").
@@ -481,6 +483,8 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
                         f"reports supplied. {check.reasoning}"
                     ),
                     leg="config_reports",
+                    rule_ref=ref,
+                    shadow=shadow,
                     evidence=Evidence(report_value=exc.name),
                 )
             )
@@ -494,6 +498,8 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
                     title=f"Check {check.name!r} is not a valid expression",
                     detail=f"{exc} Expression: {check.expression}",
                     leg="config_reports",
+                    rule_ref=ref,
+                    shadow=shadow,
                 )
             )
             continue
@@ -509,6 +515,8 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
                 title=f"Check {check.name!r} failed",
                 detail=f"{check.reasoning} Expression {check.expression} was false with {inputs}.",
                 leg="config_reports",
+                rule_ref=ref,
+                shadow=shadow,
                 evidence=Evidence(report_value=inputs),
             )
         )

@@ -30,24 +30,33 @@ import {
   TR,
   Table,
 } from "@/components/ui/primitives";
+import { ScopePicker, scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
-import type { Category, ComplianceRule } from "@/lib/types";
+import type { Category, ComplianceRule, Scope } from "@/lib/types";
 
 export default function CompliancePage() {
   const [rules, setRules] = React.useState<ComplianceRule[] | null>(null);
   const [categories, setCategories] = React.useState<Category[] | null>(null);
+  const [programmes, setProgrammes] = React.useState<Scope[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
-  const [draft, setDraft] = React.useState({ name: "", json_path_contains: "", reasoning: "" });
+  const [draft, setDraft] = React.useState({
+    name: "",
+    json_path_contains: "",
+    reasoning: "",
+    scope: "all",
+  });
 
   const load = React.useCallback(async () => {
     try {
-      const [nextRules, nextCategories] = await Promise.all([
+      const [nextRules, nextCategories, nextProgrammes] = await Promise.all([
         api.listComplianceRules(),
         api.listCategories(),
+        api.listScopes(),
       ]);
       setRules(nextRules);
       setCategories(nextCategories);
+      setProgrammes(nextProgrammes);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
@@ -65,11 +74,11 @@ export default function CompliancePage() {
         name: draft.name.trim(),
         json_path_contains: draft.json_path_contains.trim(),
         expected_value: true,
-        scope: "all",
+        scope: draft.scope.trim() || "all",
         reasoning: draft.reasoning,
         is_active: true,
       });
-      setDraft({ name: "", json_path_contains: "", reasoning: "" });
+      setDraft({ name: "", json_path_contains: "", reasoning: "", scope: "all" });
       await load();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not save the rule.");
@@ -132,7 +141,7 @@ export default function CompliancePage() {
                 <TR key={rule.id}>
                   <TD className="font-semibold">{rule.name}</TD>
                   <TD className="mono text-xs">{rule.json_path_contains}</TD>
-                  <TD className="text-xs">{rule.scope}</TD>
+                  <TD className="text-xs">{scopeLabel(rule.scope, programmes)}</TD>
                   <TD className="text-xs text-muted-foreground">{rule.reasoning || "—"}</TD>
                   <TD className="text-right">
                     <Button
@@ -182,9 +191,27 @@ export default function CompliancePage() {
               onChange={(event) => setDraft({ ...draft, reasoning: event.target.value })}
             />
           </div>
+          <div className="sm:col-span-3">
+            <ScopePicker
+              idPrefix="cr"
+              value={draft.scope}
+              programmes={programmes}
+              disabled={busy}
+              onChange={(scope) => setDraft({ ...draft, scope })}
+            />
+            <p className="mt-1 text-[0.7rem] text-muted-foreground">
+              A rule scoped to a programme is checked only on runs of that programme; one scoped to
+              a customer only on that customer&apos;s runs.
+            </p>
+          </div>
           <div className="flex items-end">
             <Button
-              disabled={!draft.name.trim() || !draft.json_path_contains.trim() || busy}
+              disabled={
+                !draft.name.trim() ||
+                !draft.json_path_contains.trim() ||
+                (draft.scope !== "all" && !draft.scope.trim()) ||
+                busy
+              }
               onClick={() => void addRule()}
             >
               Add rule

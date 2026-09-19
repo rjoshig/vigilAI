@@ -91,6 +91,8 @@ export interface ArtifactType extends ArtifactTypeIn {
   /** Every sheet name across all of the samples, merged. */
   sheets: string[];
   runs_using: number;
+  /** The validation guide, examples filled from the samples. */
+  guide: GuideEntry[];
 }
 
 /** A delivery programme: AM, AS, Archives, or the catch-all. */
@@ -495,4 +497,54 @@ export interface RuleStateChange {
   note: string;
   actor: string;
   at: string;
+}
+
+/** Which definitions keep ten versions with revert (ADR-029). */
+export type VersionKind = "artifact-type" | "programme";
+
+/** One retained version of an artifact type or a programme's rule set. */
+export interface DefinitionVersion {
+  version: number;
+  summary: string;
+  reverted_from: number | null;
+  created_by: string;
+  created_at: string;
+  snapshot: Record<string, unknown>;
+}
+
+/** Where a validation-guide entry points in the report (Phase 6.8b). */
+export interface GuideLocator {
+  kind: "cell" | "label";
+  sheet: string;
+  cell: string;
+  label: string;
+  label_column: number;
+  value_column: number;
+}
+
+/** The entry's value in one stored sample, filled by the server. */
+export interface GuideExample {
+  sample_id: number;
+  label: string;
+  value: string;
+}
+
+export type GuideComparison = "" | "equals" | "reconciles";
+
+/**
+ * One line of a validation guide: what a cell means and where it answers to. An
+ * entry with a config path and a comparison that resolves on a sample also becomes a
+ * shadow check (ADR-029).
+ */
+export interface GuideEntry {
+  id: string;
+  locator: GuideLocator;
+  meaning: string;
+  osl_section: string;
+  osl_phrase: string;
+  config_path: string;
+  validate: string;
+  comparison: GuideComparison;
+  tolerance: number;
+  examples: GuideExample[];
 }

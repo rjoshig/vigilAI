@@ -138,3 +138,18 @@ def test_report_cells_coerce_to_numbers(value: object, expected: float) -> None:
 def test_non_numeric_cells_coerce_to_none(value: object) -> None:
     """A label or a flag is not a number; treating it as one would fabricate a result."""
     assert to_number(value) is None
+
+
+def test_an_empty_sheet_name_means_the_first_sheet(tmp_path: Path) -> None:
+    """The guide editor offers "(first sheet)"; a pointer with no sheet reads it."""
+    from greenlight_ai.checks.named_values import NamedValue, resolve
+    from greenlight_ai.parsers.base import ReportCell, ReportDocument, ReportSheet
+
+    sheet = ReportSheet(
+        name="Flow",
+        header=(),
+        rows=((ReportCell(address="A1", value="Accepts"), ReportCell(address="B1", value=7)),),
+    )
+    document = ReportDocument(path=tmp_path / "x.xlsx", kind="counts", sheets=(sheet,))
+    pointer = NamedValue(name="n", report_kind="counts", sheet="", label="Accepts")
+    assert resolve(pointer, {"counts": document}) == 7

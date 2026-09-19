@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.7**; **6 in progress**; **6.6 specified**; **7 dormant** (runs only on request) |
-| Branch | `feature/credit-date` (stacked on `feature/programme-rules`, PR 9), both against `dev`; then promote `dev` → `main` |
+| Phases complete | **0–5**, **6.1–6.4**, **6.7**, **6.8**; **6 in progress**; **6.6 specified**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/validation-guides` (Phase 6.8), against `dev` |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,37 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (Phase 6.8: scoped compliance, versions, validation guides)
+
+**Branch:** `feature/validation-guides` · **Status:** complete, 924 tests, gates green.
+
+### What was completed
+
+- **6.8a** Checks and compliance rules scoped to a programme (`programme:CODE`);
+  scope picker on both screens.
+- **6.8c** Ten versions of every artifact type (fields, samples, guide) and every
+  programme's rule set; revert with the typed word; runs record the versions they
+  were processed under; the sweep prunes beyond ten but keeps what a live run names.
+  Fixed on the way: samples of one type shared one path on disk and overwrote.
+- **6.8b** Validation guides: a guide editor per report type, examples filled from
+  the samples, entries read by stages 4 and 8 as background, concrete entries
+  compiled into shadow checks with origin `guide`; config-path named values.
+- Two ADR-021 gaps closed: shadow checks never ran; shadow findings were visible to
+  reviewers, counted, gated finalization, and reached the report and the summary.
+- ADR-029. Migrations `d7a1c2e4f6b8`, `e8b2d4f6a1c3`.
+
+### Build order agreed with the user
+
+Delivery drift → Phase 6.6 theme picker → browser tests. Skipped for now:
+ownership/notifications. **On the target PC only:** Phase 7, the real benchmark
+against the in-house gateway, `docker compose` verification, the Postgres load test.
+
+### Next concrete action
+
+Open the PR for `feature/validation-guides` against `dev`; then delivery drift.
 
 ---
 

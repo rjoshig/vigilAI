@@ -44,6 +44,7 @@ const ORIGIN_LABELS: Record<string, string> = {
   shipped: "shipped",
   admin: "written here",
   learned: "learned",
+  guide: "from a validation guide",
 };
 
 /**

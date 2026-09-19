@@ -96,6 +96,34 @@ def test_compliance_rules_out_of_scope_are_skipped(make_context: MakeContext) ->
     assert not [f for f in context.findings if "Harbor" in f.title]
 
 
+def test_a_programme_scoped_compliance_rule_fires_only_on_its_programme(
+    make_context: MakeContext,
+) -> None:
+    """Phase 6.8a: a rule for Account Solicitation never runs on Account Monitoring."""
+    from greenlight_ai.pipeline.guidance import RunGuidance
+
+    rule = ComplianceRule(
+        name="AS firm offer", json_path_contains="firm_offer", scope="programme:AS"
+    )
+    everywhere = ComplianceRule(name="Everywhere", json_path_contains="never_there")
+
+    solicitation = make_context("baseline_match")
+    solicitation.guidance = RunGuidance(scope_code="AS")
+    solicitation.admin = AdminConfig(compliance_rules=(rule, everywhere))
+    run_pipeline(solicitation, stages=STAGE_ORDER[:6])
+    titles = [f.title for f in solicitation.findings]
+    assert any("AS firm offer" in t for t in titles)
+    assert any("Everywhere" in t for t in titles)
+
+    monitoring = make_context("baseline_match")
+    monitoring.guidance = RunGuidance(scope_code="AM")
+    monitoring.admin = AdminConfig(compliance_rules=(rule, everywhere))
+    run_pipeline(monitoring, stages=STAGE_ORDER[:6])
+    titles = [f.title for f in monitoring.findings]
+    assert not any("AS firm offer" in t for t in titles)
+    assert any("Everywhere" in t for t in titles)
+
+
 def test_stage_6_makes_no_llm_call(make_context: MakeContext) -> None:
     context = make_context("baseline_match")
     run_pipeline(context, stages=STAGE_ORDER[:5])

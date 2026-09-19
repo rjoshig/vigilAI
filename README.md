@@ -117,6 +117,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.7.md`](docs/phase-6.7.md) — **programme rules and the programme check**:
   several rules per programme with a strictness the model never grades, and a grep
   that confirms a run is the programme it says it is (ADR-026)
+- [`docs/phase-6.8.md`](docs/phase-6.8.md) — **scoped compliance, validation guides, and
+  versioned definitions**: checks and compliance scoped to a programme,
+  a guide per report type that the model reads and code enforces, ten versions with revert (ADR-029)
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)

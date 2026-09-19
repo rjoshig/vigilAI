@@ -25,10 +25,13 @@ from typing import Final, Sequence
 
 import sqlalchemy as sa
 
-from greenlight_ai.db import models, repository
+from greenlight_ai.db import models, repository, versions
 from greenlight_ai.db.session import create_engine, session_factory, session_scope
 from greenlight_ai.db.settings import DbSettings
 from greenlight_ai.db.types import utcnow
+
+#: Where sample workbooks live under the data directory (``api/routers/admin.py``).
+TEMPLATE_DIR: Final[str] = "templates"
 
 _LOG: Final = logging.getLogger("purge")
 
@@ -138,11 +141,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
 
         if not runs:
+            pruned = versions.prune_versions(session)
+            orphans = versions.remove_orphan_samples(session, settings.data_dir, TEMPLATE_DIR)
+            print(f"Pruned {pruned} version(s); removed {orphans} orphaned sample file(s).")
             return 0
 
         purged = repository.purge_expired(session, settings.data_dir)
-        print(f"\nPurged {purged} run(s).")
-        _LOG.info("purge complete: %d run(s)", purged)
+        pruned = versions.prune_versions(session)
+        orphans = versions.remove_orphan_samples(session, settings.data_dir, TEMPLATE_DIR)
+        print(f"\nPurged {purged} run(s); pruned {pruned} version(s); removed {orphans} file(s).")
+        _LOG.info("purge complete: %d run(s), %d version(s)", purged, pruned)
 
     return 0
 

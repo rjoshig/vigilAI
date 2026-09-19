@@ -44,6 +44,7 @@ __all__ = [
     "FinalReport",
     "Job",
     "RETENTION_DAYS",
+    "DefinitionVersion",
 ]
 
 #: Runs expire this long after creation; the purge job deletes by ``runs.expires_at``
@@ -170,6 +171,10 @@ class Run(Base):
     #: here so the run page and the frozen report show what the model was told even
     #: after the note is edited or switched off.
     config_notes_snapshot: Mapped[Any] = mapped_column(Json, default=list)
+    #: Which version of each definition the run was processed under, as
+    #: ``{"artifact_type:<key>": n, "programme_rules:<code>": n}`` (ADR-029). A
+    #: finding on an old run still points at the definition that produced it.
+    definition_versions: Mapped[Any] = mapped_column(Json, default=dict)
     rules_version: Mapped[int] = mapped_column(sa.Integer, default=1)
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
@@ -455,6 +460,11 @@ class ArtifactType(Base):
     #: What the model should pay attention to, in plain language. Empty means the
     #: pipeline behaves exactly as it did before this existed.
     ai_context: Mapped[str] = mapped_column(sa.Text, default="")
+
+    #: The validation guide: ordered entries saying what a cell means and where it
+    #: answers to (Phase 6.8b). Empty means the model reads the report as it always
+    #: did; a concrete entry also compiles into a shadow check.
+    guide_entries: Mapped[Any] = mapped_column(Json, default=list)
 
     #: Whether the upload slot appears on the new-run form.
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
@@ -787,6 +797,37 @@ class ProgrammeRule(Base):
     created_by: Mapped[str] = mapped_column(sa.String(200), default="")
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
     deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True, index=True)
+
+
+class DefinitionVersion(Base):
+    """One snapshot of a definition an administrator edits (Phase 6.8c, ADR-029).
+
+    Taken after every save of an artifact type (its fields, samples, and guide) and
+    after every change to a programme's rule set. Ten are listed per object; a
+    version a run inside the retention window still references is kept beyond the
+    ten. A revert writes an old snapshot back as the next version, so nothing here
+    is ever overwritten.
+    """
+
+    __tablename__ = "definition_versions"
+    __table_args__ = (
+        sa.UniqueConstraint("kind", "object_key", "version", name="uq_definition_version"),
+    )
+
+    id: Mapped[int] = _pk()
+    #: ``artifact_type`` or ``programme_rules``.
+    kind: Mapped[str] = mapped_column(sa.String(30), index=True)
+    #: The artifact type's key, or the programme's code.
+    object_key: Mapped[str] = mapped_column(sa.String(60), index=True)
+    version: Mapped[int] = mapped_column(sa.Integer)
+    #: The whole state after the save, as JSON. Ids, names and paths; never a file.
+    snapshot: Mapped[Any] = mapped_column(Json, default=dict)
+    #: One line saying what changed from the version before.
+    summary: Mapped[str] = mapped_column(sa.String(500), default="")
+    #: When this version was written back from an older one, which one.
+    reverted_from: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
 
 
 class RuleStateChange(Base):

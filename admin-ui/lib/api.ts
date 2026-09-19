@@ -37,6 +37,9 @@ import type {
   TestResult,
   TrainingConfig,
   Usage,
+  DefinitionVersion,
+  GuideEntry,
+  VersionKind,
 } from "@/lib/types";
 
 const BASE = "/api/v1/admin";
@@ -169,6 +172,10 @@ export const api = {
   /** What a sample contains, already masked. */
   previewSample: (key: string, sampleId: number): Promise<SamplePreview> =>
     request<SamplePreview>(`/artifact-types/${key}/samples/${sampleId}/preview`),
+
+  /** Replace a type's validation guide; the answer carries the examples filled in. */
+  saveGuide: (key: string, entries: GuideEntry[]): Promise<ArtifactType> =>
+    request<ArtifactType>(`/artifact-types/${key}/guide`, json("PUT", { entries })),
 
   /** Remove one sample. */
   deleteSample: (key: string, sampleId: number): Promise<void> =>
@@ -388,4 +395,23 @@ export const api = {
   /** Every state this rule has moved between, with who moved it. */
   ruleHistory: (ruleKind: string, id: number): Promise<RuleStateChange[]> =>
     request<RuleStateChange[]>(`/rules/${ruleKind}/${id}/history`),
+
+  /** The last ten versions of an artifact type or a programme's rules, newest first. */
+  listVersions: (kind: VersionKind, key: string): Promise<DefinitionVersion[]> =>
+    request<DefinitionVersion[]>(`/versions/${kind}/${encodeURIComponent(key)}`),
+
+  /**
+   * Put an old version back as a new one. `confirm` has to be the word `revert`;
+   * the API enforces it with a 400.
+   */
+  revertVersion: (
+    kind: VersionKind,
+    key: string,
+    version: number,
+    confirm: string
+  ): Promise<DefinitionVersion> =>
+    request<DefinitionVersion>(
+      `/versions/${kind}/${encodeURIComponent(key)}/${version}/revert`,
+      json("POST", { confirm })
+    ),
 };

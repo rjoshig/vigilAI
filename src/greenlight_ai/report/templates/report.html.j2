@@ -203,6 +203,7 @@
         {%- if run.model_used %} · model <span class="mono">{{ run.model_used }}</span>{% endif %}
         {%- if run.prompt_version %} · prompts v{{ run.prompt_version }}{% endif %}
         · rules v{{ run.rules_version }}
+        {%- if run.definition_versions %} · definitions {% for token, version in run.definition_versions.items() %}{{ token.split(':')[1] }} v{{ version }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
         {%- if run.rerun_reason %} · re-run: {{ run.rerun_reason }}{% endif %}
       </p>
 

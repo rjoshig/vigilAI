@@ -158,6 +158,12 @@ def set_state(
     )
     session.flush()
     _LOG.info("%s %d: %s -> %s by %s", rule_kind, rule_id, from_state, to_state, actor or "?")
+    if rule_kind == "programme_rule":
+        from greenlight_ai.db import versions
+
+        versions.record_programme_version(
+            session, row.scope_code, actor, f"rule {to_state}: {row.title}"
+        )
     return row
 
 

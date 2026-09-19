@@ -9,13 +9,44 @@ runs them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from typing import Final, Literal, Sequence
 
 from greenlight_ai.rules.schema import Severity
 
-__all__ = ["CheckKind", "CheckDefinition", "ComplianceRule", "ReversePassCategory"]
+__all__ = [
+    "PROGRAMME_SCOPE_PREFIX",
+    "CheckKind",
+    "CheckDefinition",
+    "ComplianceRule",
+    "ReversePassCategory",
+    "in_scope",
+]
 
 CheckKind = Literal["expression", "judgment"]
+
+#: A scope that names a delivery programme rather than a customer (Phase 6.8).
+PROGRAMME_SCOPE_PREFIX: Final[str] = "programme:"
+
+
+def in_scope(scope: str, customer: str, programme_code: str = "") -> bool:
+    """Decide whether a definition's scope covers a run.
+
+    Args:
+        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        customer: The run's customer name.
+        programme_code: The run's delivery programme code, when it has one.
+
+    Returns:
+        ``True`` when the scope is everywhere, this customer, or this programme. A
+        programme scope never matches a run of another programme, and never matches a
+        run with no programme.
+    """
+    if scope == "all":
+        return True
+    if scope.startswith(PROGRAMME_SCOPE_PREFIX):
+        code = scope[len(PROGRAMME_SCOPE_PREFIX) :].strip().upper()
+        return bool(code) and code == programme_code.strip().upper()
+    return scope == customer
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,12 +61,17 @@ class CheckDefinition:
         instruction: What to judge, for ``"judgment"`` checks.
         reasoning: The plain-English reason shown to users on a failure.
         severity: How serious a failure is.
-        scope: ``"all"`` or a customer name.
-        is_active: Whether the check runs.
+        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        is_active: Whether the check's findings count.
+        id: The stored row, so a finding can name the rule behind it.
+        state: The lifecycle state (ADR-021). A ``shadow`` check runs and its
+            findings are recorded and shown to nobody.
     """
 
     name: str
     version: int = 1
+    id: int | None = None
+    state: str = "active"
     kind: CheckKind = "expression"
     expression: str = ""
     instruction: str = ""
@@ -44,16 +80,18 @@ class CheckDefinition:
     scope: str = "all"
     is_active: bool = True
 
-    def applies_to(self, customer: str) -> bool:
-        """Whether this check runs for a customer.
+    def applies_to(self, customer: str, programme_code: str = "") -> bool:
+        """Whether this check runs for a run.
 
         Args:
             customer: The run's customer name.
+            programme_code: The run's delivery programme code.
 
         Returns:
-            ``True`` when the check is active and in scope.
+            ``True`` when the check is active or in shadow, and in scope.
         """
-        return self.is_active and self.scope in ("all", customer)
+        runs = self.is_active or self.state == "shadow"
+        return runs and in_scope(self.scope, customer, programme_code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +106,7 @@ class ComplianceRule:
         name: The rule's identifier.
         json_path_contains: A fragment the implementing config path must contain.
         expected_value: The value the config must set, when there is one.
-        scope: ``"all"`` or a customer name.
+        scope: ``"all"``, a customer name, or ``programme:CODE``.
         reasoning: Why the rule exists, shown on a finding.
         is_active: Whether the rule is enforced.
     """
@@ -80,16 +118,17 @@ class ComplianceRule:
     reasoning: str = ""
     is_active: bool = True
 
-    def applies_to(self, customer: str) -> bool:
-        """Whether this rule is enforced for a customer.
+    def applies_to(self, customer: str, programme_code: str = "") -> bool:
+        """Whether this rule is enforced for a run.
 
         Args:
             customer: The run's customer name.
+            programme_code: The run's delivery programme code.
 
         Returns:
             ``True`` when the rule is active and in scope.
         """
-        return self.is_active and self.scope in ("all", customer)
+        return self.is_active and in_scope(self.scope, customer, programme_code)
 
 
 @dataclass(frozen=True, slots=True)

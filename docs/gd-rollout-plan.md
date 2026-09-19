@@ -63,6 +63,9 @@ The platform team, with the administrator.
 - [ ] Artifact types matched to the real report layouts (Phase 7, on the machine that
       holds the real files), with a sample stored for each and named values resolving
       on every sample.
+      Then a **validation guide** per report type, written from the real samples, so
+      the model knows what each cell means and the concrete entries run as checks
+      (Phase 6.8).
 - [ ] Masked columns populated from the real DIRT layout. The PII tripwire on.
 - [ ] Retention agreed and recorded as an ADR; security and compliance sign-off on
       retention and PII handling recorded as an ADR.

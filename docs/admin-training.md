@@ -61,6 +61,21 @@ What the tool accepts: the OSL, the configuration, and each report type. For eac
   them, so a type with no sample cannot be detected and its checks cannot be tested.
 - **Named values** are pointers into a report that checks refer to by name. Prefer a
   label lookup over a cell address: it survives an inserted row.
+- **Guide.** A validation guide per report type: an ordered list of entries, each
+  naming a cell or a label in the report, what it means, where it answers to in the
+  OSL (a section, a phrase, or both) and in the configuration (a JSON path), and
+  what to validate. Save it and the examples fill themselves from the samples. The
+  model reads the guide as background on every run; it never becomes a requirement.
+  An entry with a configuration path and a comparison (**equals** or **reconciles
+  within a tolerance**) that resolves on a sample also becomes a **check, born in
+  shadow**, on the Rules screen with origin "from a validation guide": it runs, its
+  findings are counted, and no reviewer sees them until you activate it there.
+  Leave the guide empty and the model reads the report exactly as it always did.
+- **Versions.** Every save of a type, its samples included, keeps a snapshot. The
+  **Versions** button lists the last ten with who, when, and what changed; **Revert**
+  puts one back, after you type `revert`, and appears as a new version so nothing is
+  ever lost. A removed sample's workbook stays on disk while a listed version still
+  names it, so a revert brings the file back too.
 
 ## Delivery programmes
 
@@ -78,6 +93,12 @@ strictness: **must** (a breach is a high finding), **should** (medium), or
 breaks; the strictness decides how serious that is, and code applies it. Add as many
 rules as the programme needs; switch one off from the Rules screen when it misfires.
 
+**Rule versions.** A programme's rule set is versioned as a whole: adding, editing,
+or changing the state of a rule makes a version. **Rule versions** on the card lists
+the last ten; reverting restores the wording, strictness and state of every rule as
+they were, and a rule that did not exist then is deleted (restorable from the Rules
+screen for six months).
+
 ## Checks and compliance rules
 
 **Checks** are cross-report comparisons over named values, written as an expression
@@ -85,6 +106,11 @@ that code evaluates. Describe one in plain English and the model proposes the na
 values and the expression; you correct it, **test it against the samples**, and
 activate it. **Compliance rules** say what must be present in every configuration in
 scope. Both are versioned; a change never edits an old finding.
+
+**Scope.** Every check and compliance rule applies **everywhere**, to **one delivery
+programme**, or to **one customer**. A rule scoped to Account Solicitation is never
+evaluated on an Account Monitoring run, and a run with no programme sees only global
+and customer rules. Pick the scope on the form; the list shows it in words.
 
 ## The training queue
 
@@ -121,7 +147,8 @@ and any **conflicts** with rules that already exist. Before approving:
 
 ## Rules
 
-Every rule the tool holds, whatever its origin: shipped, written here, or learned.
+Every rule the tool holds, whatever its origin: shipped, written here, learned, or
+compiled from a validation guide.
 Filtered to **active** by default; shadow, disabled, and deleted are one click away.
 Search covers the name, the reasoning, and what the rule checks. This is the screen to
 open when a finding surprises someone: it says what made it fire.
