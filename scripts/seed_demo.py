@@ -420,7 +420,24 @@ def seed_training(session: Any) -> None:
         )
     )
     session.flush()
-    _LOG.info("seeded the training queue: 4 observations, 2 candidates, 1 shadow rule")
+    # A standing note on the first run's configuration, so the queue shows a
+    # configuration-specific comment and the next run of it carries the note (ADR-024).
+    if first is not None:
+        session.add(
+            models.TrainingObservation(
+                author="John Doe",
+                kind="config_note",
+                configuration_id=first.configuration_id,
+                anchors=[{"kind": "config_path", "reference": first.configuration_id}],
+                statement="This configuration excludes closed accounts by design; a missing "
+                "closed-account count is not a gap.",
+                severity_hint="medium",
+                scope_hint="customer",
+                customer_name=customer,
+            )
+        )
+        session.flush()
+    _LOG.info("seeded the training queue: 5 observations, 2 candidates, 1 shadow rule")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
