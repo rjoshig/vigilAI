@@ -410,3 +410,83 @@ def test_a_pipeline_error_names_the_stage_and_survives_pickling() -> None:
     restored = pickle.loads(pickle.dumps(error))
     assert restored.stage == "s2_extract"
     assert str(restored) == str(error)
+
+
+# --- stage 2 normalization of a real model's answer shape -----------------------------
+
+
+def test_normalize_folds_fields_onto_values() -> None:
+    """A real model names delivered fields ``fields``; the schema calls them ``values``."""
+    from greenlight_ai.llm.prompts.schemas import ExtractResponse
+    from greenlight_ai.pipeline.s2_extract import normalize_response
+
+    data = {
+        "requirements": [
+            {
+                "req_type": "attributes",
+                "fields": ["account_id", "score"],
+                "description": "delivered fields",
+                "confidence": 0.9,
+            }
+        ]
+    }
+    response = ExtractResponse.model_validate(normalize_response(data))
+    assert response.requirements[0].values == ["account_id", "score"]
+
+
+def test_normalize_folds_a_flat_field_name_into_a_condition() -> None:
+    """``field_name`` on the requirement becomes an in/not_in condition on that field."""
+    from greenlight_ai.llm.prompts.schemas import ExtractResponse
+    from greenlight_ai.pipeline.s2_extract import normalize_response
+
+    data = {
+        "requirements": [
+            {
+                "req_type": "value_set",
+                "field_name": "status",
+                "values": ["deceased"],
+                "mode": "exclude",
+                "action": "reject",
+            }
+        ]
+    }
+    response = ExtractResponse.model_validate(normalize_response(data))
+    condition = response.requirements[0].conditions[0]
+    assert (condition.field_name, condition.operator, condition.value) == (
+        "status",
+        "not_in",
+        ["deceased"],
+    )
+
+
+def test_normalize_folds_invented_types_and_operators_onto_the_closed_sets() -> None:
+    from greenlight_ai.llm.prompts.schemas import ExtractResponse
+    from greenlight_ai.pipeline.s2_extract import normalize_response
+
+    data = {
+        "requirements": [
+            {
+                "type": "threshold",
+                "conditions": [{"field": "score", "operator": "gte", "threshold": 755}],
+            },
+            {"req_type": "something new", "source_text": "x"},
+        ]
+    }
+    response = ExtractResponse.model_validate(normalize_response(data))
+    assert response.requirements[0].req_type == "criteria"
+    assert response.requirements[0].conditions[0].operator == ">="
+    assert response.requirements[0].conditions[0].value == 755
+    assert response.requirements[1].req_type == "other"
+
+
+def test_normalize_survives_garbage() -> None:
+    from greenlight_ai.pipeline.s2_extract import normalize_response
+
+    assert normalize_response(None) == {"requirements": []}
+    assert normalize_response({"requirements": "nope"}) == {"requirements": []}
+    assert (
+        normalize_response({"requirements": [{"req_type": "quantity", "quantity": "1,000"}]})[
+            "requirements"
+        ][0]["quantity"]
+        == 1000.0
+    )

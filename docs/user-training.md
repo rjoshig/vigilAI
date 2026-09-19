@@ -31,11 +31,15 @@ Login may be off or on, depending on how the deployment is configured.
 
 ## The sidebar
 
+At the top-left is the Greenlight AI logo, a traffic signal with the green lit,
+beside the name and a small **User** chip; the admin console shows **Admin**. Clicking either takes you home. The same mark is the browser tab
+icon.
+
 The look of the app is one of three palettes chosen by the deployment (default,
 light-blue-yellow, or classic-teal); the sun/moon button at the foot of the sidebar
 switches the current palette between its light and dark variants.
 
-Under the Greenlight AI mark is a status line: **Train AI mode on** with a green dot, or
+Under the Greenlight AI mark is a status line, and its dot breathes gently while the mode is on: **Train AI mode on** with a green dot, or
 **Train AI mode off** with a grey dot. When it is on, some controls exist that do not
 otherwise, and each carries a small **Train AI** tag. Everything you type into a tagged
 control is recorded and reviewed by an administrator before it changes anything. See
@@ -48,16 +52,23 @@ administrator you can still open it, but nothing in it will let you change anyth
 
 **Runs → New run.**
 
-1. **Run details.** Customer name, order number, and the **Configuration ID**, which
-   is the order's ETL configuration number, the Solution Canvas config number.
+1. **Run details.** Customer name, order number, the **credit date**, and the
+   **Configuration ID**, which is the order's ETL configuration number, the Solution
+   Canvas config number. The configuration id is for your information: every run
+   gets its own id, and the same configuration id can be submitted as often as you
+   like. The credit date is the as-of date of the credit data; the tool checks that
+   the reports carry it and raises a finding when they do not.
    Choose the **delivery programme**: Account Monitoring, Account Solicitation,
-   Archives, or Other. Say whether **suppressions were applied**; the default is No,
+   Archives, or Other. Choose carefully: the tool checks that your inputs read like
+   that programme and raises a finding if they do not, and it holds the delivery to
+   the programme's rules. Say whether **suppressions were applied**; the default is No,
    because assuming Yes would let a missing suppression pass unremarked.
-2. **Delivery context** (optional). How many **deliverables** the campaign has and how
-   many **outputs this run validates**. The tool checks these numbers against the
-   files you upload: declaring twenty outputs and uploading five produces a
-   high-severity finding rather than a silent pass. Leave them blank if you do not
-   know; blank means unstated and never produces a finding.
+2. **Delivery notes** (optional). Anything about this delivery the OSL does not
+   say. **Every field on the form says whether the model sees it.** Customer, order,
+   configuration id, and additional notes stay with the run and are never sent to
+   the model. The programme, its rules, the suppressions answer, configuration notes,
+   and delivery notes reach the model as background. Accurate notes there improve
+   the validation; an inaccurate one misleads it.
 3. **Configuration notes.** Once you type a configuration id, any standing notes on
    that configuration appear under the field, with who wrote them. You can add one.
    A note is background for the model on every future run of that configuration; it

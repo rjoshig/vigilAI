@@ -55,7 +55,8 @@ where a term maps to code, the subpackage is named.
 
 | Term | Meaning |
 | --- | --- |
-| **Run** | One submission: customer name, order number, configuration ID, run date, notes, files. Status `queued` → `running` → `needs_review` → `finalized`, or `failed`. |
+| **Run** | One submission: customer name, order number, configuration ID (informational; duplicates allowed), credit date, programme, notes, files. Each run has its own id. Status `queued` → `running` → `needs_review` → `finalized`, or `failed`. |
+| **Credit date** | The as-of date of the credit data in a delivery, entered on the run. Code looks for it in the OSL, the configuration, and the reports and raises `credit_date_missing` when the reports do not carry it (ADR-027). |
 | **Input fingerprint** | Hash of all input files + active check versions. A match shows the existing report; re-running needs a logged **rerun reason**. |
 | **Stage** | One of the nine pipeline steps; each writes status, duration, and token use to `run_stages` so a failed run resumes. |
 | **Stage cache / LLM cache** | `llm_cache`: results keyed by content hash + model + prompt version, so identical content is never sent twice. |
@@ -83,6 +84,8 @@ uses them yet.
 | **Soft delete** | A deleted rule stops running and leaves the default view, and can be restored whole for six months. After that the deletion is permanent. |
 | **Tombstone** | What survives a permanent deletion: identity, version, provenance, and reasoning, so findings on old runs that cite the rule still explain themselves. |
 | **Configuration note** | A standing note on an ETL configuration id, written by anyone. Guidance for every future run of that configuration and an observation in the admin queue at once; never a rule on its own (ADR-024). |
+| **Programme rule** | A sentence true of every delivery in a programme, with a strictness (must, should, advisory). The model reads for breaches; code sets the severity from the strictness (ADR-026). |
+| **Programme check** | A grep of the OSL, configuration, and report headers for the declared programme's keywords. A mismatch is a finding, never a block. |
 | **Field constraint** | A rule about one attribute — never blank, allowed values, a range, a format — stored as structured data and evaluated by code, though it was written in plain words. |
 
 ## Identity vocabulary (Phase 6.2, specified but not built)

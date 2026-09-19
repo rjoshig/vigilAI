@@ -98,7 +98,8 @@ export interface RunSummary {
 
 export interface RunDetail extends RunSummary {
   notes: string;
-  run_date: string | null;
+  /** The credit date the delivery is cut as of; the tool checks the reports carry it. */
+  credit_date: string | null;
   rules_version: number;
   model_used: string;
   prompt_version: string;

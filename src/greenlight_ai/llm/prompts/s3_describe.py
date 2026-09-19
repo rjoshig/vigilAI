@@ -15,7 +15,7 @@ from greenlight_ai.llm.prompts.schemas import DescribeResponse
 __all__ = ["DESCRIBE_PROMPT", "VERSION"]
 
 #: Bump on any wording change: the version is part of the cache key (ADR-005).
-VERSION: Final[str] = "1"
+VERSION: Final[str] = "2"
 
 _SYSTEM: Final = """\
 You read one block of an ETL configuration file and say what it does, using the same \
@@ -32,6 +32,23 @@ connections, file paths, logging, scheduling, retries, runtime tuning.
 
 Requirement types: criteria, geography, value_set, attributes, waterfall, quantity, other.
 A technical block has req_type null.
+
+Business rules that are easy to mistake for plumbing:
+- A list of processing steps in order (pipeline, stages, steps) is waterfall, with the \
+steps copied in order.
+- A record count to read or deliver is quantity.
+- A suppression or exclusion flag that is switched on (deceased, OFAC, bankruptcy, \
+opt-out) is criteria: one condition on that flag, operator "=", value "true", \
+action "reject". A flag switched off is technical.
+- A list of output fields is attributes with mode include.
+- A dedupe key, a source table, a driver, and metadata are technical.
+
+The answer has exactly this shape and no other keys anywhere:
+{"elements": [ {element}, ... ]}
+An element has only these keys: json_path, req_type, is_technical, description, \
+conditions (a list of {"field_name", "operator", "value"}), values (a list of strings), \
+mode ("include" or "exclude"), steps (a list of strings), quantity (a number), \
+confidence (0 to 1). Do not add name, field, fields, id, or any other key.
 """
 
 _EXAMPLES: Final = """\
@@ -58,6 +75,25 @@ logging = {"destination": "stdout", "level": "INFO"}
 Answer:
 {"elements": [{"json_path": "logging", "req_type": null, "is_technical": true, \
 "description": "Sets log verbosity and destination.", "confidence": 0.99}]}
+
+Example 4
+Block:
+pipeline = {"steps": ["input", "geography", "score", "dedupe"]}
+Answer:
+{"elements": [{"json_path": "pipeline", "req_type": "waterfall", \
+"steps": ["input", "geography", "score", "dedupe"], "is_technical": false, \
+"description": "Runs the steps in this order.", "confidence": 0.96}]}
+
+Example 5
+Block:
+suppressions = {"deceased": true, "ofac": false}
+Answer:
+{"elements": [{"json_path": "suppressions.deceased", "req_type": "criteria", \
+"conditions": [{"field_name": "deceased", "operator": "=", "value": "true"}], \
+"is_technical": false, "description": "Rejects records flagged as deceased.", \
+"confidence": 0.95}, {"json_path": "suppressions.ofac", "req_type": null, \
+"is_technical": true, "description": "OFAC suppression is switched off.", \
+"confidence": 0.95}]}
 """
 
 _TEMPLATE: Final = """\

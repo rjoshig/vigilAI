@@ -96,7 +96,7 @@ export default function CompliancePage() {
     <>
       <PageHeader
         title="Compliance & scope"
-        description="Compliance rules must be present in every config in scope, even when the OSL never mentions them. Reverse-pass categories decide which config elements are checked back against the OSL."
+        description="Compliance rules must be present in every config in scope, even when the OSL never mentions them. Reverse-pass categories decide which config elements are checked back against the OSL. Evaluated by code on every run; nothing here is sent to the model."
       />
 
       {error ? (

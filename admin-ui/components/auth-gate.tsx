@@ -11,6 +11,8 @@
 
 import * as React from "react";
 
+import { Logo } from "@/components/logo";
+
 import {
   Button,
   Card,
@@ -135,8 +137,8 @@ function AuthFrame({ title, children }: { title: string; children: React.ReactNo
       <Card className="w-full max-w-sm">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <span className="inline-block h-4 w-4 rounded-full bg-success" aria-hidden="true" />
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-tertiary">
+              <Logo size={22} />
             </span>
             {title}
           </CardTitle>
@@ -177,7 +179,7 @@ function SignInScreen({
   }
 
   return (
-    <AuthFrame title="Greenlight AI admin">
+    <AuthFrame title="Greenlight Admin Console">
       <form
         className="grid gap-3"
         onSubmit={(event) => {

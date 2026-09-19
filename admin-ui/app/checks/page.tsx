@@ -84,7 +84,7 @@ export default function ChecksPage() {
     <>
       <PageHeader
         title="Checks"
-        description="Cross-report checks defined as data. The model helps write a check once; code runs it on every request at no token cost. Versioned, scoped, and switchable."
+        description="Cross-report checks defined as data. The model helps write a check once; code runs it on every request at no token cost. Versioned, scoped, and switchable. Evaluated by code on every run; nothing here is sent to the model."
         action={
           <Button onClick={() => setAuthoring(true)}>
             <Plus className="h-4 w-4" /> New check

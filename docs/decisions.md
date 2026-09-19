@@ -745,3 +745,111 @@ until the user renames them, and two documentation URLs point at the current
 repository until then. Anyone with a local `.env` or shell exports under the old
 prefix must update them. `compare-file` references are untouched: that is a sibling
 project, not this one.
+
+## ADR-026 — Programme rules are read by the model and graded by code
+
+**Status:** accepted 2026-09-19 (user decision)
+
+**Context:** A delivery programme, Account Solicitation, Account Monitoring, Archives,
+carries expectations the OSL does not restate, and until now the tool held them as
+one free-text "standing instructions" field that reached the model as background and
+could never produce a finding. The request was rules of the programme's own, several
+per programme, each with its own strictness, so a breach is surfaced with the
+seriousness the administrator intended. And a first, simple check that a run declared
+as a programme actually is one.
+
+**Decision:**
+
+1. **A programme rule is a sentence with a strictness**: must, should, or advisory.
+   Several per programme, edited in the console, with the same lifecycle as every
+   other rule.
+2. **The model reads; code grades.** One call per run shows the model the rules and
+   what the delivery contains, and it names which rules the evidence breaks, quoting
+   it. The finding's severity comes from the rule's strictness, applied by code:
+   high, medium, low. The model is told not to decide seriousness and not to compare
+   numbers. A rule id it was never shown is discarded as invention; a low-confidence
+   breach is a review item.
+3. **The programme check is a grep.** Each programme carries admin-editable keywords.
+   The check scans the OSL, the configuration, and the report headers. Declared
+   programme absent and another clearly present is a high finding naming both; absent
+   with nothing else is a review item. The run continues either way: a keyword check
+   is not reliable enough to stand in someone's way, and the finding puts the question
+   in front of the reviewer before the programme rules are trusted.
+4. **Programme rules are a fourth rule kind** on the Rules screen, so there is still
+   one place to look when a finding surprises someone.
+
+**Consequences:** The standing-instructions field stays as background; the rules are
+where enforcement lives. An administrator can now express "this always matters" and
+"this is worth a glance" without a developer. The cost is one more model call per
+run, cached like every other, and the discipline that the model is never allowed to
+grade, which the prompt tests enforce.
+
+## ADR-027 — A run has its own identity; the configuration id is information; the credit date is checked
+
+**Status:** accepted 2026-09-19 (user decision)
+
+**Context:** The new-run form treated the configuration id as the run's key, and the
+"run date" was the submission date, which the tool already records as `created_at`.
+What a reviewer needs on the run is the **credit date**, the as-of date of the credit
+data in the delivery, and that date is worth checking: a report that does not carry
+it is a report that cannot be tied to its delivery.
+
+**Decision:**
+
+1. **Every run has its own id.** The configuration id is entered for information,
+   is optional, and may repeat across runs. Configuration notes still attach to it.
+2. **The run carries a credit date**, entered on the form. Code searches the OSL,
+   the configuration, and every report for the date in its common spellings and
+   raises `credit_date_missing`: medium when it appears nowhere, low when it appears
+   only in the OSL or the configuration and not in the reports.
+3. **Every form and console field says whether the model sees it.** Customer, order,
+   configuration id, and additional notes never reach the model. The programme and
+   its rules, the suppressions answer, configuration notes, and delivery notes do,
+   as background (ADR-020). Keywords, checks, and compliance rules are evaluated by
+   code and never sent. The hint under the fields that reach the model says that
+   accurate notes improve the validation.
+4. The deliverable count and outputs-covered fields are removed from the form; the
+   files themselves say what arrived.
+
+**Consequences:** Migration `b614b77ca9d8` renames the column. A run that repeats a
+configuration id is normal, which is what the delivery-drift comparison of a later
+phase will build on.
+
+## ADR-028 — Prompts are hardened for a real model; the real benchmark waits for the target environment
+
+**Status:** accepted 2026-09-19 (user decision)
+
+**Context:** The first run of the golden set against a real model (a small hosted
+one, comparable to a mid-size local model) scored 0 / 12: every case failed at stage
+2 because the model returned keys the schema forbids (`fields` for the delivered
+attributes, `field_name` on the requirement rather than in a condition, a
+`description`, invented requirement types). With that fixed, two disagreements
+between how the stand-in and a real model read the fixtures produced spurious
+findings: the input population size was extracted as a delivery quantity, and
+suppression flags and pipeline steps were described as technical plumbing.
+
+**Decision:**
+
+1. **Stages 2 and 3 fold the model's answer onto the schema before validating it**
+   (`normalize_response`, `normalize_elements`): synonyms are renamed, a flat
+   `field_name` becomes a condition, unknown requirement types and operators are
+   folded onto the closed sets with a logged count, unknown keys are dropped, and
+   booleans become the strings the prompts ask for. Renaming and dropping only; no
+   value is compared or computed (ADR-001).
+2. **The prompts name the exact keys** and say no other key is permitted, with worked
+   examples for the shapes the model got wrong. `s2_extract` is version 3,
+   `s3_describe` version 2, so every cached answer is refreshed (ADR-005).
+3. **Both prompts read exclusions the same way.** An exclusion of records that carry
+   a flag or appear on a list is criteria on that flag (`= "true"`, action reject);
+   value_set is for a listed set of an attribute's values. A list of processing steps
+   is a waterfall; a record count is a quantity; the input population is context, not
+   a requirement.
+4. **Further model benchmarking stops here.** The synthetic set is now clean on one
+   real model (`docs/benchmarks/phase-2-real-model.md`). Comparing larger models on
+   synthetic fixtures would measure the fixtures, not the product. The benchmark that
+   counts runs on the target environment, against the in-house gateway, on real OSLs
+   and reports, and is the first task when that environment exists (Phase 7).
+
+**Consequences:** The pipeline no longer breaks on a well-meaning answer in a slightly
+different shape. The stand-in is unchanged and still passes. The Anthropic key used
+for the run lives only in `.env` and should be rotated.

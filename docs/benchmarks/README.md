@@ -8,13 +8,15 @@ pipeline against the synthetic golden set: each case carries its own oracle in
 | File | Provider | What it records |
 | --- | --- | --- |
 | [`phase-2-synthetic.md`](phase-2-synthetic.md) | `synthetic` | The scripted stand-in. Proves the pipeline's code paths, not a model's reading ability |
-| `phase-2.md` | a real model | **Not yet produced.** Phase 2 acceptance criterion 2, deferred by ADR-014 |
+| [`phase-2-real-model.md`](phase-2-real-model.md) | `anthropic` | The first real model, after the prompt hardening of ADR-028. 12 / 12 on the synthetic set |
+| `phase-2.md` | the in-house gateway, real files | **Not yet produced.** Deferred to the target environment (ADR-028) |
 
 Regenerate:
 
 ```bash
 python scripts/golden_set.py --out docs/benchmarks/phase-2-synthetic.md
-python scripts/golden_set.py --provider openai --out docs/benchmarks/phase-2.md
+python scripts/golden_set.py --provider anthropic --out docs/benchmarks/phase-2-real-model.md
+python scripts/golden_set.py --provider openai --out docs/benchmarks/phase-2.md   # in-house
 ```
 
 The synthetic numbers being perfect is expected and is **not** evidence that extraction

@@ -20,6 +20,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     status,
@@ -612,6 +613,7 @@ def list_scopes(
             standing_instructions=row.standing_instructions,
             is_active=row.is_active,
             sort_order=row.sort_order,
+            keywords=list(row.keywords or []),
             runs_using=counts.get(row.code, 0),
         )
         for row in rows
@@ -662,6 +664,7 @@ def save_scope(
     row.standing_instructions = payload.standing_instructions
     row.is_active = payload.is_active
     row.sort_order = payload.sort_order
+    row.keywords = [word.strip() for word in payload.keywords if word.strip()]
     session.flush()
 
     repository.audit(session, "admin.scope_saved", detail=code)
@@ -673,6 +676,7 @@ def save_scope(
         standing_instructions=row.standing_instructions,
         is_active=row.is_active,
         sort_order=row.sort_order,
+        keywords=list(row.keywords or []),
     )
 
 
@@ -1705,3 +1709,148 @@ def usage(
         findings_by_type=by_type,
         decisions=decisions,
     )
+
+
+# ------------------------------------------------------------- programme rules
+
+
+def _programme_rule_out(row: models.ProgrammeRule) -> wire.ProgrammeRuleOut:
+    """Render a programme rule.
+
+    Args:
+        row: The stored rule.
+
+    Returns:
+        The wire model.
+    """
+    return wire.ProgrammeRuleOut(
+        id=row.id,
+        scope_code=row.scope_code,
+        title=row.title,
+        text=row.text,
+        strictness=row.strictness,  # type: ignore[arg-type]
+        sort_order=row.sort_order,
+        state=row.state,
+        origin=row.origin,
+        created_by=row.created_by,
+    )
+
+
+@router.get("/programme-rules", response_model=list[wire.ProgrammeRuleOut])
+def list_programme_rules(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+    scope_code: str | None = Query(default=None),
+) -> list[wire.ProgrammeRuleOut]:
+    """The rules true of every delivery in a programme (ADR-026).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+        scope_code: One programme, or every programme when omitted.
+
+    Returns:
+        The rules in display order, every state except deleted.
+    """
+    statement = (
+        sa.select(models.ProgrammeRule)
+        .where(models.ProgrammeRule.state != "deleted")
+        .order_by(
+            models.ProgrammeRule.scope_code,
+            models.ProgrammeRule.sort_order,
+            models.ProgrammeRule.id,
+        )
+    )
+    if scope_code:
+        statement = statement.where(models.ProgrammeRule.scope_code == scope_code.strip().upper())
+    return [_programme_rule_out(row) for row in session.execute(statement).scalars()]
+
+
+@router.post(
+    "/programme-rules", response_model=wire.ProgrammeRuleOut, status_code=status.HTTP_201_CREATED
+)
+def create_programme_rule(
+    payload: wire.ProgrammeRuleIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ProgrammeRuleOut:
+    """Add a rule to a programme.
+
+    The model reads for breaches of it; the strictness decides how serious a breach
+    is, and code applies that, so the model never grades.
+
+    Args:
+        payload: The rule.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The stored rule, active at once.
+
+    Raises:
+        HTTPException: 404 when the programme does not exist.
+    """
+    require_admin(user)
+    catalog.seed_defaults(session)
+    code = payload.scope_code.strip().upper()
+    if catalog.scope_for(session, code) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no programme {code!r}")
+    row = models.ProgrammeRule(
+        scope_code=code,
+        title=payload.title.strip(),
+        text=payload.text.strip(),
+        strictness=payload.strictness,
+        sort_order=payload.sort_order,
+        scope=f"programme:{code}",
+        created_by=user.name,
+    )
+    session.add(row)
+    session.flush()
+    repository.audit(
+        session,
+        "admin.programme_rule_created",
+        detail=f"{code}:{row.id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _programme_rule_out(row)
+
+
+@router.patch("/programme-rules/{rule_id}", response_model=wire.ProgrammeRuleOut)
+def edit_programme_rule(
+    rule_id: int,
+    payload: wire.ProgrammeRuleIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ProgrammeRuleOut:
+    """Reword a programme rule or change its strictness.
+
+    Args:
+        rule_id: The rule.
+        payload: The new wording.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The updated rule. Its state is changed on the Rules screen, not here.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.ProgrammeRule, rule_id)
+    if row is None or row.state == "deleted":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no programme rule {rule_id}")
+    row.title = payload.title.strip()
+    row.text = payload.text.strip()
+    row.strictness = payload.strictness
+    row.sort_order = payload.sort_order
+    session.flush()
+    repository.audit(
+        session,
+        "admin.programme_rule_edited",
+        detail=str(rule_id),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _programme_rule_out(row)

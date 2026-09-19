@@ -47,14 +47,33 @@ const ORIGIN_LABELS: Record<string, string> = {
 };
 
 /**
+ * The kinds that arrive as one token but read better as words. A kind not listed
+ * here is shown as stored, so a new kind is still recognisable before this map
+ * learns it.
+ */
+const KIND_LABELS: Record<string, string> = {
+  programme_rule: "Programme rule",
+};
+
+function kindLabel(kind: string): string {
+  return KIND_LABELS[kind] ?? kind;
+}
+
+/**
  * A scope of `config:<id>` is stored as one token, but an administrator reads it as
- * the configuration it names (ADR-024). Every other scope form is shown as stored.
+ * the configuration it names (ADR-024); `programme:<code>` is a programme rule's
+ * scope and reads the same way. Every other scope form is shown as stored.
  */
 function scopeLabel(scope: string): string {
   const CONFIG_PREFIX = "config:";
-  return scope.startsWith(CONFIG_PREFIX)
-    ? `configuration ${scope.slice(CONFIG_PREFIX.length)}`
-    : scope;
+  const PROGRAMME_PREFIX = "programme:";
+  if (scope.startsWith(CONFIG_PREFIX)) {
+    return `configuration ${scope.slice(CONFIG_PREFIX.length)}`;
+  }
+  if (scope.startsWith(PROGRAMME_PREFIX)) {
+    return `programme ${scope.slice(PROGRAMME_PREFIX.length)}`;
+  }
+  return scope;
 }
 
 function when(value: string | null): string {
@@ -261,7 +280,7 @@ export default function RulesPage() {
                         <TD>
                           <div className="text-sm font-medium">{rule.name}</div>
                           <div className="mono text-[0.7rem] text-muted-foreground">
-                            {rule.rule_kind} #{rule.id}
+                            {kindLabel(rule.rule_kind)} #{rule.id}
                           </div>
                           {rule.summary ? (
                             <div className="max-w-md text-xs text-muted-foreground">

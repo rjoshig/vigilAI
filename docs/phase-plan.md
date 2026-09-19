@@ -22,6 +22,7 @@ risk.
 | 6.4 | Showing the mode, and notes that follow a configuration — a Train AI indicator in both apps; standing notes on a configuration id that reach the model as background and the admin queue as comments | 1 week | ✅ **complete** — one test open | [phase-6.4.md](phase-6.4.md) |
 | 6.5 | Training documentation, kept current — `user-training.md` and `admin-training.md`, re-read after every milestone and checked every ten commits | recurring | 🟡 **in progress** — by design, never closed | [phase-6.5.md](phase-6.5.md) |
 | 6.6 | Themes — named themes shared by both apps, a picker that steps through them, and the default and lock set from the admin console | days | ⬜ **not started** — specified | [phase-6.6.md](phase-6.6.md) |
+| 6.7 | Programme rules with a strictness, read by the model and graded by code, and a keyword check that a run is the programme it says it is | days | ✅ **complete** | [phase-6.7.md](phase-6.7.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of
@@ -83,5 +84,7 @@ answer as an ADR when it lands.
       `suppress` against `exclusions`)? If so the step names need the alias table too.
       Raised by ADR-016; confirm against real files in Phase 6.
 - [ ] Which model and endpoint should the golden set be benchmarked against? Phase 2
-      acceptance criterion 2 is open until this is answered (ADR-014).
+      acceptance criterion 2 is open until this is answered (ADR-014). A first hosted
+      model passes the synthetic set (ADR-028); the in-house gateway on real files is
+      the answer that matters, on the target environment.
 - [ ] Confirm "last modified" means a timestamp inside the config JSON, not the upload time.

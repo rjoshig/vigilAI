@@ -87,6 +87,12 @@ FindingType = Literal[
     "low_confidence_extraction",
     #: The run declared more outputs than the files uploaded cover (ADR-021).
     "deliverables_missing",
+    #: The inputs carry none of the declared programme's words (ADR-026).
+    "programme_mismatch",
+    #: A delivery breaks a rule true of every run in its programme (ADR-026).
+    "programme_rule_violation",
+    #: The credit date on the run does not appear in the reports (ADR-027).
+    "credit_date_missing",
     "could_not_evaluate",
 ]
 

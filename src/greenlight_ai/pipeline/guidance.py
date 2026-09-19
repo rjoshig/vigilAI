@@ -45,6 +45,9 @@ class RunGuidance:
         delivery_notes: Anything else the submitter said about the delivery.
         config_notes: Standing notes on the run's ETL configuration, written by
             whoever knows it (ADR-024). Background, never a requirement.
+        scope_code: The programme's code.
+        programme_rules: The programme's rules, each with its strictness.
+        programme_keywords: Every programme's keywords, for the classification check.
         artifact_context: Per-artifact guidance, keyed by artifact key.
     """
 
@@ -56,6 +59,14 @@ class RunGuidance:
     delivery_notes: str = ""
     config_notes: tuple[str, ...] = ()
     artifact_context: dict[str, str] | None = None
+    #: The programme's code, and its rules as (id, title, text, strictness). The
+    #: model reads for breaches of these; code sets the severity (ADR-026).
+    #: The credit date the submitter gave, for the artifact check (ADR-027).
+    credit_date: str = ""
+    scope_code: str = ""
+    programme_rules: tuple[tuple[int, str, str, str], ...] = ()
+    #: Every programme's keywords, for the classification check: code to words.
+    programme_keywords: dict[str, tuple[str, ...]] | None = None
 
     @property
     def is_empty(self) -> bool:
