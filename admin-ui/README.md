@@ -31,7 +31,7 @@ npm install
 npm run dev                 # http://localhost:3001
 ```
 
-It talks to `/api/*`, rewritten to `VIGILAI_API_URL` (default `http://127.0.0.1:8000`).
+It talks to `/api/*`, rewritten to `GREENLIGHT_AI_API_URL` (default `http://127.0.0.1:8000`).
 
 ## Gates
 

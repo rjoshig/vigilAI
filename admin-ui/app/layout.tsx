@@ -8,7 +8,7 @@ import { configuredPalette } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "vigilAI — Admin",
+  title: "Greenlight AI — Admin",
   description:
     "Report templates, named values, cross-report checks, compliance rules, reference data, and usage.",
 };
