@@ -11,9 +11,9 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1**, **6.2**, **6.3**; **6 in progress**; **7 dormant** (runs only on request) |
-| Branch | `claude/funny-cerf-jsyvpe`, pushed to `origin` |
-| Last updated | 2026-09-18 |
+| Phases complete | **0–5**, **6.1–6.4**; **6 in progress**; **7 dormant** (runs only on request) |
+| Branch | `feature/train-ai-visibility`, cut from `dev`; `main` and `dev` hold phases 0–6.3 |
+| Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
 reports; the worker runs the nine stages; a reviewer decides each finding; the frozen
@@ -102,6 +102,38 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (phase 6.4 built; branch rule)
+
+**Branch:** `feature/train-ai-visibility` · **Status:** complete, gates green.
+871 Python tests, 48 admin-ui, 61 user-ui.
+
+### What was completed
+
+- Pull request 1 merged into `main` and `dev` created from it. The merge had not
+  landed when the user thought it had; done from here on their word.
+- **Branch rule**: a branch is named for the work, never for who typed it. The
+  working branch was renamed from `claude/…` to `feature/train-ai-visibility` and the
+  rule is now explicit in `standards/git.md` and `CLAUDE.md`.
+- **Phase 6.4**: a Train AI indicator under the mark in both apps, green when on and
+  grey when off, with every mode-only control tagged. Configuration notes (ADR-024):
+  an observation of kind `config_note` tied to the ETL configuration id, background
+  for every future run of it, a comment in the admin queue, and synthesizable into a
+  rule scoped `config:<id>`. Available whatever the mode. The run page and the frozen
+  report show the notes the model was given.
+- The demo seed fills the training queue and adds a configuration note, because the
+  mock model returns empty shapes and a live synthesize would otherwise show nothing.
+
+### Pending
+
+- A rendered test that the indicator shows both states.
+- Items left open in 6.1 and 6.2, and everything under "Outstanding, needs the user".
+
+### Next concrete action
+
+Open a pull request from `feature/train-ai-visibility` to `dev`.
 
 ---
 

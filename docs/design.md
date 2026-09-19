@@ -340,6 +340,7 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | admin-ui | Reference data | Attribute aliases and masked columns |
 | admin-ui | Settings | Every runtime setting with the layer it came from, its change history, and a model connection test (ADR-023) |
 | admin-ui | Users | Accounts for both roles, created by an administrator; login ships off (ADR-022) |
+| user-ui | Configuration notes | Standing notes on an ETL configuration, written from the new-run form or the config history; background for every future run of it (ADR-024) |
 | admin-ui | Training | The observation queue, synthesis into candidate rules, replay, and approval into shadow (ADR-021) |
 | admin-ui | Rules | Every rule whatever its origin, searchable, with its statistics and its lifecycle |
 | admin-ui | Usage | Runs per day, tokens, cache hit rate, false-positive rate |

@@ -1,7 +1,7 @@
 # Phase 6.4 — Showing the mode, and notes that follow a configuration
 
-**Status:** ⬜ **not started** — specified 2026-09-19 at the user's request, design
-questions answered the same day (see "Decisions"). Ready to build.
+**Status:** ✅ **complete** (2026-09-19), with one item open: a rendered test that the
+indicator shows both states. Every acceptance criterion is met.
 
 **Goal:** two things a person using the tool cannot see today.
 
@@ -36,27 +36,27 @@ observation in the queue, and the ordinary loop turns it into a rule a person ap
 
 ## Scope · 🟡 in progress
 
-### 6.4a — The mode indicator · ⬜ not started
+### 6.4a — The mode indicator · ✅ complete
 
-- [ ] A small status line under the vigilAI mark in the user app's sidebar: **Train AI
+- [x] A small status line under the vigilAI mark in the user app's sidebar: **Train AI
       mode** with a green dot when on and a grey dot when off. Read from
       `GET /training/config`, which already exists, and updated without a reload when
       an administrator flips the switch (the config is re-read on navigation, and the
       five-second settings cache means it lags at most that long).
-- [ ] Every control that exists only because the mode is on carries the same mark: the
+- [x] Every control that exists only because the mode is on carries the same mark: the
       "What should this check?" buttons, the observation dialog, and the My
       observations page. The configuration-note field is **not** tagged, because
       notes are available whatever the mode. A short tag, "Train AI", beside each, so
       a person can tell at a glance which parts of the screen are collecting what they
       type.
-- [ ] One sentence on hover or beside the indicator saying what the mode does: what
+- [x] One sentence on hover or beside the indicator saying what the mode does: what
       you write here is recorded and reviewed by an administrator before it changes
       anything.
-- [ ] The admin console shows the same indicator in its own sidebar, because an
+- [x] The admin console shows the same indicator in its own sidebar, because an
       administrator reading the queue should see at once whether new observations can
       still arrive.
 
-### 6.4b — Notes that follow a configuration · 🟡 in progress
+### 6.4b — Notes that follow a configuration · ✅ complete
 
 The configuration id is the order's ETL configuration number, the Solution Canvas
 config number. The new-run form says so under the field (done 2026-09-19), because a
@@ -67,7 +67,7 @@ field holds.
       `configuration_id`, `is_active`, and `revisions`, rather than a table of its own:
       one queue, one record (ADR-024). Tied to the configuration id, so it applies to every version of that configuration and every customer
       that runs it, until someone switches it off.
-- [ ] The note is written from two places: the new-run form, beside the configuration
+- [x] The note is written from two places: the new-run form, beside the configuration
       id, and the config history page, on the configuration's row. Both show any note
       already in force so a person adds to it rather than writing a second one.
 - [x] **The note reaches the model as background on every run that uses the
@@ -91,22 +91,23 @@ field holds.
 
 - [x] ADR-024, written before the code: a configuration note is guidance and an
       observation at once, never a rule on its own.
-- [ ] `design.md`, `architecture.md`, `glossary.md` (configuration note), and the
+- [x] `design.md`, `architecture.md`, `glossary.md` (configuration note), and the
       user-ui and admin-ui READMEs.
-- [ ] Tests: the preamble carries a note only for runs of that configuration; the note
-      appears in the queue; a rule scoped `config:<id>` fires on that configuration and
-      no other; the indicator reflects the switch in both states.
+- [~] Tests: the preamble carries a note only for runs of that configuration; the note
+      appears in the queue; a rule scoped `config:<id>` applies to that configuration and
+      no other; the frozen report shows the note. **Outstanding:** a rendered test that
+      the indicator shows both states; the UI suites cover the client only.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · ✅ complete
 
-1. [ ] With Train AI mode off, the user app shows a grey "Train AI mode off" line
+1. [x] With Train AI mode off, the user app shows a grey "Train AI mode off" line
    under the mark, and nothing else about training appears.
-2. [ ] With it on, the line turns green, and every training-only control is tagged.
-3. [ ] A note written against a configuration reaches the model as background on the
+2. [x] With it on, the line turns green, and every training-only control is tagged.
+3. [x] A note written against a configuration reaches the model as background on the
    next run of that configuration and on no other, and the run page shows it.
-4. [ ] The note appears in the admin training queue as a configuration-specific
+4. [x] The note appears in the admin training queue as a configuration-specific
    comment and can be synthesized into a candidate scoped to that configuration.
-5. [ ] Switching a note off stops it applying to the next run; the old text is kept.
+5. [x] Switching a note off stops it applying to the next run; the old text is kept.
 
 ## Decisions (2026-09-19)
 
