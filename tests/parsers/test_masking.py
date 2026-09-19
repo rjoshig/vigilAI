@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from vigilai.parsers.masking import (
+from greenlight_ai.parsers.masking import (
     DEFAULT_MASKED_COLUMNS,
     is_masked_column,
     mask_value,

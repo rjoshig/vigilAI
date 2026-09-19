@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.worker.app import Worker
+from greenlight_ai.db import models
+from greenlight_ai.worker.app import Worker
 
 Submit = Callable[..., Any]
 
@@ -117,7 +117,7 @@ def test_no_log_line_carries_a_sample_row(
     submit: Submit, worker: Worker, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Logs carry ids and counts; a row value in one would outlive the run."""
-    with caplog.at_level(logging.DEBUG, logger="vigilai"):
+    with caplog.at_level(logging.DEBUG, logger="greenlight_ai"):
         submit("geography_extra_state")
         worker.run_once()
     text = "\n".join(record.getMessage() for record in caplog.records)
@@ -129,7 +129,7 @@ def test_no_log_line_carries_a_sample_row(
 
 def test_prompt_logging_is_off_by_default() -> None:
     """LLM_LOG_PROMPTS exists for synthetic data on a developer machine only."""
-    from vigilai.llm.settings import LLMSettings
+    from greenlight_ai.llm.settings import LLMSettings
 
     assert LLMSettings().log_prompts is False
     assert LLMSettings.from_env({}).log_prompts is False
@@ -137,9 +137,9 @@ def test_prompt_logging_is_off_by_default() -> None:
 
 def test_turning_prompt_logging_on_warns_loudly(caplog: pytest.LogCaptureFixture) -> None:
     """A deployment that leaves it on should see it in the log every call."""
-    from vigilai.llm import LLMSettings, MockClient
+    from greenlight_ai.llm import LLMSettings, MockClient
 
     client = MockClient(LLMSettings(log_prompts=True))
-    with caplog.at_level(logging.WARNING, logger="vigilai.llm.base"):
+    with caplog.at_level(logging.WARNING, logger="greenlight_ai.llm.base"):
         client.complete("system", "score at least 755", stage="s9_summarize")
     assert any("LLM_LOG_PROMPTS is on" in record.getMessage() for record in caplog.records)

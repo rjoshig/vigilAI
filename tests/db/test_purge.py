@@ -14,9 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 import purge  # noqa: E402
 
-from vigilai.db import models  # noqa: E402
-from vigilai.db.session import create_all, create_engine, session_factory  # noqa: E402
-from vigilai.db.settings import DbSettings  # noqa: E402
+from greenlight_ai.db import models  # noqa: E402
+from greenlight_ai.db.session import create_all, create_engine, session_factory  # noqa: E402
+from greenlight_ai.db.settings import DbSettings  # noqa: E402
 
 
 @pytest.fixture()
@@ -90,7 +90,7 @@ def test_a_dry_run_changes_nothing(
         session.commit()
 
     monkeypatch.setenv("DATABASE_URL", str(factory.kw["bind"].url))
-    monkeypatch.setenv("VIGILAI_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("GREENLIGHT_AI_DATA_DIR", str(tmp_path))
     assert purge.main(["--dry-run", "--log-level", "ERROR"]) == 0
     assert "nothing was deleted" in capsys.readouterr().out
 
@@ -108,7 +108,7 @@ def test_a_real_purge_deletes_the_run_and_its_files(
         session.commit()
 
     monkeypatch.setenv("DATABASE_URL", str(factory.kw["bind"].url))
-    monkeypatch.setenv("VIGILAI_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("GREENLIGHT_AI_DATA_DIR", str(tmp_path))
     assert purge.main(["--log-level", "ERROR"]) == 0
 
     with factory() as session:
@@ -130,7 +130,7 @@ def test_usage_statistics_survive_the_purge(
         session.commit()
 
     monkeypatch.setenv("DATABASE_URL", str(factory.kw["bind"].url))
-    monkeypatch.setenv("VIGILAI_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("GREENLIGHT_AI_DATA_DIR", str(tmp_path))
     purge.main(["--log-level", "ERROR"])
 
     with factory() as session:
@@ -149,6 +149,6 @@ def test_an_override_window_can_expire_older_runs(
         session.commit()
 
     monkeypatch.setenv("DATABASE_URL", str(factory.kw["bind"].url))
-    monkeypatch.setenv("VIGILAI_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("GREENLIGHT_AI_DATA_DIR", str(tmp_path))
     purge.main(["--older-than-days", "30", "--dry-run", "--log-level", "ERROR"])
     assert "1 run(s) would be purged" in capsys.readouterr().out

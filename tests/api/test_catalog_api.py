@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
+from greenlight_ai.db import models
 
 Submit = Callable[..., Any]
 
@@ -292,7 +292,7 @@ def test_configured_guidance_reaches_the_prompts(
     )
 
     seen: list[str] = []
-    from vigilai.llm import base as llm_base
+    from greenlight_ai.llm import base as llm_base
 
     original = llm_base.BaseClient.complete
 

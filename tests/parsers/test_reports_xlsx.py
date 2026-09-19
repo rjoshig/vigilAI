@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from vigilai.parsers import ParseError, parser_for
-from vigilai.parsers.reports.xlsx import PARSERS
+from greenlight_ai.parsers import ParseError, parser_for
+from greenlight_ai.parsers.reports.xlsx import PARSERS
 
 #: Anything shaped like a real identifier must never survive parsing (ADR-003).
 _PII_TRIPWIRE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")

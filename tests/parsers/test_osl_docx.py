@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from vigilai.parsers import DocxOslParser, ParseError
+from greenlight_ai.parsers import DocxOslParser, ParseError
 
 
 @pytest.fixture()

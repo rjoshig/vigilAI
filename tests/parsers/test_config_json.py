@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from vigilai.parsers import JsonConfigParser, ParseError, is_technical
+from greenlight_ai.parsers import JsonConfigParser, ParseError, is_technical
 
 
 @pytest.fixture()

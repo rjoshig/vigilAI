@@ -6,8 +6,8 @@ import copy
 import pickle
 from pathlib import Path
 
-from vigilai.parsers import ParseError
-from vigilai.parsers.base import OslSection, OslTable, ReportCell, ReportSheet
+from greenlight_ai.parsers import ParseError
+from greenlight_ai.parsers.base import OslSection, OslTable, ReportCell, ReportSheet
 
 
 def test_parse_error_message_names_the_file_and_reason() -> None:

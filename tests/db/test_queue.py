@@ -8,11 +8,11 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.db.queue import BACKOFF_SECONDS, JobQueue
-from vigilai.db.session import create_all, create_engine, session_factory
-from vigilai.db.settings import DbSettings
-from vigilai.db.types import utcnow
+from greenlight_ai.db import models
+from greenlight_ai.db.queue import BACKOFF_SECONDS, JobQueue
+from greenlight_ai.db.session import create_all, create_engine, session_factory
+from greenlight_ai.db.settings import DbSettings
+from greenlight_ai.db.types import utcnow
 
 
 @pytest.fixture()

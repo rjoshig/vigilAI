@@ -6,7 +6,7 @@ preamble is empty, so every prompt is exactly what it was before this feature.
 
 from __future__ import annotations
 
-from vigilai.pipeline.guidance import MAX_CONTEXT_CHARS, RunGuidance, preamble
+from greenlight_ai.pipeline.guidance import MAX_CONTEXT_CHARS, RunGuidance, preamble
 
 
 def test_nothing_configured_produces_no_preamble() -> None:

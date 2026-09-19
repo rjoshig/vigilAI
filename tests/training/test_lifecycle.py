@@ -13,10 +13,10 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.db.session import create_all, create_engine, session_factory
-from vigilai.db.settings import DbSettings
-from vigilai.training import lifecycle
+from greenlight_ai.db import models
+from greenlight_ai.db.session import create_all, create_engine, session_factory
+from greenlight_ai.db.settings import DbSettings
+from greenlight_ai.training import lifecycle
 
 
 @pytest.fixture()

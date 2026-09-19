@@ -9,11 +9,11 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.checks.definitions import DEFAULT_CATEGORIES
-from vigilai.db import models, repository
-from vigilai.db.session import create_all, create_engine, healthcheck, session_factory
-from vigilai.db.settings import DEFAULT_URL, DbSettings
-from vigilai.parsers.masking import DEFAULT_MASKED_COLUMNS
+from greenlight_ai.checks.definitions import DEFAULT_CATEGORIES
+from greenlight_ai.db import models, repository
+from greenlight_ai.db.session import create_all, create_engine, healthcheck, session_factory
+from greenlight_ai.db.settings import DEFAULT_URL, DbSettings
+from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 
 
 @pytest.fixture()

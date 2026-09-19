@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vigilai"
+name = "greenlight-ai"
 version = "0.0.1"
 description = "QC validation of a credit-data fulfillment process: OSL spec vs ETL config vs output reports."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
-authors = [{ name = "vigilAI Maintainers" }]
+authors = [{ name = "Greenlight AI Maintainers" }]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -57,13 +57,13 @@ dev = [
 ]
 
 [project.scripts]
-vigilai = "vigilai.cli:main"
+greenlight-ai = "greenlight_ai.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-vigilai = ["py.typed", "report/templates/*.j2"]
+greenlight_ai = ["py.typed", "report/templates/*.j2"]
 
 # ---------------------------------------------------------------------------
 # Tooling (standards/python.md explains intent; this file is authoritative)
@@ -117,7 +117,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["vigilai"]
+source = ["greenlight_ai"]
 branch = true
 
 [tool.coverage.report]

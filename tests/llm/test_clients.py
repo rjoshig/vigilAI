@@ -13,7 +13,7 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from vigilai.llm import (
+from greenlight_ai.llm import (
     AnthropicClient,
     CallLog,
     LLMBudgetExceeded,
@@ -389,7 +389,7 @@ def test_unusable_responses_raise(text: str) -> None:
 
 def test_the_mock_answers_every_llm_stage_against_its_real_schema() -> None:
     """ADR-014: the whole of Phase 2 runs on this provider, so it must satisfy them."""
-    from vigilai.llm.prompts import PROMPTS
+    from greenlight_ai.llm.prompts import PROMPTS
 
     client = MockClient()
     for stage, prompt in PROMPTS.items():

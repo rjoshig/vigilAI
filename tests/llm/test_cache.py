@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from vigilai.llm import LLMCache, MemoryCache, SqliteCache, cache_key
+from greenlight_ai.llm import LLMCache, MemoryCache, SqliteCache, cache_key
 
 
 def test_the_same_content_gives_the_same_key() -> None:

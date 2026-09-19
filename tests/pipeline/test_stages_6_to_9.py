@@ -6,14 +6,14 @@ from typing import Callable
 
 import pytest
 
-from vigilai.checks.definitions import AdminConfig, CheckDefinition, ComplianceRule
-from vigilai.checks.named_values import NamedValue
-from vigilai.llm import LLMResponseError
-from vigilai.pipeline.context import STAGE_ORDER, RunContext
-from vigilai.pipeline.run import run_pipeline
-from vigilai.pipeline.s8_verify import format_evidence
-from vigilai.pipeline.s9_summarize import format_findings
-from vigilai.rules.schema import Evidence, Finding
+from greenlight_ai.checks.definitions import AdminConfig, CheckDefinition, ComplianceRule
+from greenlight_ai.checks.named_values import NamedValue
+from greenlight_ai.llm import LLMResponseError
+from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext
+from greenlight_ai.pipeline.run import run_pipeline
+from greenlight_ai.pipeline.s8_verify import format_evidence
+from greenlight_ai.pipeline.s9_summarize import format_findings
+from greenlight_ai.rules.schema import Evidence, Finding
 
 MakeContext = Callable[[str], RunContext]
 
@@ -44,7 +44,7 @@ def test_technical_elements_are_never_reverse_checked(make_context: MakeContext)
 
 
 def test_categories_that_are_switched_off_are_ignored(make_context: MakeContext) -> None:
-    from vigilai.checks.definitions import ReversePassCategory
+    from greenlight_ai.checks.definitions import ReversePassCategory
 
     context = make_context("baseline_match")
     context.admin = AdminConfig(

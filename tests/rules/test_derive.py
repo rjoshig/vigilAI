@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from vigilai.rules import Condition, Rule, derive_checks
-from vigilai.rules.derive import INVERSE_OPERATOR
+from greenlight_ai.rules import Condition, Rule, derive_checks
+from greenlight_ai.rules.derive import INVERSE_OPERATOR
 
 
 def _criteria(operator: str, value: object, action: str = "accept", **kwargs: object) -> Rule:

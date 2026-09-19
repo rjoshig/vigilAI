@@ -15,13 +15,13 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.api.app import API_PREFIX, create_app
-from vigilai.auth import accounts
-from vigilai.auth.passwords import hash_password, verify_password
-from vigilai.auth.sessions import COOKIE_NAME
-from vigilai.auth.settings import BOOTSTRAP_PASSWORD, BOOTSTRAP_USERNAME, AuthSettings
-from vigilai.db import models
-from vigilai.db.settings import DbSettings
+from greenlight_ai.api.app import API_PREFIX, create_app
+from greenlight_ai.auth import accounts
+from greenlight_ai.auth.passwords import hash_password, verify_password
+from greenlight_ai.auth.sessions import COOKIE_NAME
+from greenlight_ai.auth.settings import BOOTSTRAP_PASSWORD, BOOTSTRAP_USERNAME, AuthSettings
+from greenlight_ai.db import models
+from greenlight_ai.db.settings import DbSettings
 
 Submit = Callable[..., Any]
 GOOD = "a-long-enough-password"

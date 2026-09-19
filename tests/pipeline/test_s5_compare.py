@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from vigilai.llm import LLMSettings, MockClient
-from vigilai.pipeline.context import RunContext
-from vigilai.pipeline.s5_compare import run as compare
-from vigilai.rules.normalize import AliasTable
-from vigilai.rules.schema import Condition, ConfigElement, Rule, Trace
+from greenlight_ai.llm import LLMSettings, MockClient
+from greenlight_ai.pipeline.context import RunContext
+from greenlight_ai.pipeline.s5_compare import run as compare
+from greenlight_ai.rules.normalize import AliasTable
+from greenlight_ai.rules.schema import Condition, ConfigElement, Rule, Trace
 
 ALIASES = AliasTable.from_mapping({"score": ["SCORE_V3"], "age": ["AGE"]})
 

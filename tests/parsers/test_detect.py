@@ -15,10 +15,10 @@ from typing import Any
 import pytest
 from sqlalchemy.orm import Session
 
-from vigilai.db import models
-from vigilai.db.session import create_all, create_engine, session_factory
-from vigilai.db.settings import DbSettings
-from vigilai.parsers.detect import (
+from greenlight_ai.db import models
+from greenlight_ai.db.session import create_all, create_engine, session_factory
+from greenlight_ai.db.settings import DbSettings
+from greenlight_ai.parsers.detect import (
     CONFIDENT_SCORE,
     Fingerprint,
     detect,
@@ -75,7 +75,7 @@ def _add_sample(
 
 def _sheet_names(path: Path) -> Any:
     """The parsed sheets of a workbook, for filling the stored sheet list."""
-    from vigilai.parsers.reports.xlsx import GenericReportParser
+    from greenlight_ai.parsers.reports.xlsx import GenericReportParser
 
     return GenericReportParser("unknown").parse(path).sheets
 
@@ -95,8 +95,8 @@ def test_normalization_makes_spelling_variants_match() -> None:
 
 def fingerprint_from(sheets: list[str], headers: list[str]) -> Fingerprint:
     """Build a fingerprint the way the parser would, without a file."""
-    from vigilai.parsers.base import ReportSheet
-    from vigilai.parsers.detect import fingerprint_sheet
+    from greenlight_ai.parsers.base import ReportSheet
+    from greenlight_ai.parsers.detect import fingerprint_sheet
 
     result = Fingerprint()
     for name in sheets:

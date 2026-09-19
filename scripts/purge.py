@@ -25,10 +25,10 @@ from typing import Final, Sequence
 
 import sqlalchemy as sa
 
-from vigilai.db import models, repository
-from vigilai.db.session import create_engine, session_factory, session_scope
-from vigilai.db.settings import DbSettings
-from vigilai.db.types import utcnow
+from greenlight_ai.db import models, repository
+from greenlight_ai.db.session import create_engine, session_factory, session_scope
+from greenlight_ai.db.settings import DbSettings
+from greenlight_ai.db.types import utcnow
 
 _LOG: Final = logging.getLogger("purge")
 

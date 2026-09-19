@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
-from vigilai.db import models
-from vigilai.db.queue import JobQueue
-from vigilai.db.session import create_all, create_engine, session_factory
-from vigilai.db.settings import DbSettings
-from vigilai.llm.settings import LLMSettings
-from vigilai.worker.app import TASK_PURGE, TASK_RUN_PIPELINE, Worker
+from greenlight_ai.db import models
+from greenlight_ai.db.queue import JobQueue
+from greenlight_ai.db.session import create_all, create_engine, session_factory
+from greenlight_ai.db.settings import DbSettings
+from greenlight_ai.llm.settings import LLMSettings
+from greenlight_ai.worker.app import TASK_PURGE, TASK_RUN_PIPELINE, Worker
 
 
 @pytest.fixture()
