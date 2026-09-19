@@ -80,6 +80,8 @@ class ScopeSpec:
         standing_instructions: Compliance expectations true of every run in it.
         is_active: Whether it is offered on the new-run form.
         sort_order: Display order.
+        keywords: Words that mark a delivery as this programme's, for the
+            classification check (ADR-026).
     """
 
     code: str
@@ -88,6 +90,7 @@ class ScopeSpec:
     standing_instructions: str = ""
     is_active: bool = True
     sort_order: int = 100
+    keywords: tuple[str, ...] = ()
 
 
 #: What ships. The two inputs that are not reports come first, then the report types
@@ -177,18 +180,21 @@ DEFAULT_SCOPES: Final[tuple[ScopeSpec, ...]] = (
         label="Account Monitoring",
         description="Ongoing review of an existing portfolio.",
         sort_order=10,
+        keywords=("account monitoring", "portfolio review", "existing accounts", "account review"),
     ),
     ScopeSpec(
         code="AS",
         label="Account Solicitation",
         description="Prescreen and invitation-to-apply campaigns.",
         sort_order=20,
+        keywords=("prescreen", "pre-screen", "solicitation", "firm offer", "invitation to apply"),
     ),
     ScopeSpec(
         code="ARCHIVE",
         label="Archives",
         description="Historical or archival extracts.",
         sort_order=30,
+        keywords=("archive", "archival", "historical", "as of"),
     ),
     ScopeSpec(
         code="OTHER",
@@ -244,6 +250,7 @@ def seed_defaults(session: Session) -> int:
                 standing_instructions=scope.standing_instructions,
                 is_active=scope.is_active,
                 sort_order=scope.sort_order,
+                keywords=list(scope.keywords),
             )
         )
         created += 1
@@ -322,6 +329,7 @@ def load_scopes(session: Session, active_only: bool = False) -> list[ScopeSpec]:
             standing_instructions=row.standing_instructions,
             is_active=row.is_active,
             sort_order=row.sort_order,
+            keywords=tuple(str(k) for k in (row.keywords or [])),
         )
         for row in rows
     ]

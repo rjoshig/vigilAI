@@ -196,3 +196,24 @@ class SynthesisResponse(BaseModel):
 
     rules: list[SynthesizedRule] = Field(default_factory=list)
     notes: str = ""
+
+
+class ProgrammeBreach(BaseModel):
+    """One programme rule the evidence breaks, in the model's reading (ADR-026)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The rule's id as listed in the prompt. Code maps it back and sets severity.
+    rule_id: int
+    #: The evidence quoted: the requirement, config element, or report summary line.
+    evidence: str = ""
+    reason: str = ""
+    confidence: Confidence = 0.5
+
+
+class ProgrammeRulesResponse(BaseModel):
+    """What one programme-rule reading returns. An empty list is a real answer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    breaches: list[ProgrammeBreach] = Field(default_factory=list)

@@ -17,7 +17,14 @@ from greenlight_ai.llm.prompts import PROMPTS, Prompt, get_prompt, prompt_versio
 from greenlight_ai.llm.prompts.registry import register
 
 #: The pipeline stages that call a model (``docs/architecture.md`` "The pipeline").
-PIPELINE_STAGES = {"s2_extract", "s3_describe", "s4_trace", "s8_verify", "s9_summarize"}
+PIPELINE_STAGES = {
+    "s2_extract",
+    "s3_describe",
+    "s4_trace",
+    "s8_programme",
+    "s8_verify",
+    "s9_summarize",
+}
 
 #: The admin flow's prompts: drafting a check (once, at authoring time) and answering a
 #: judgment check (``docs/design.md`` "Configurable checks").
@@ -142,6 +149,7 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("s2_extract", {"section"}),
         ("s3_describe", {"block"}),
         ("s4_trace", {"requirement", "element"}),
+        ("s8_programme", {"programme", "rules", "delivery"}),
         ("s8_verify", {"finding", "evidence"}),
         ("s9_summarize", {"findings"}),
         ("admin_draft_check", {"description", "report_types"}),
