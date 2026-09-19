@@ -57,6 +57,11 @@ observation in the queue, and the ordinary loop turns it into a rule a person ap
 
 ### 6.4b — Notes that follow a configuration · ⬜ not started
 
+The configuration id is the order's ETL configuration number, the Solution Canvas
+config number. The new-run form says so under the field (done 2026-09-19), because a
+note that follows a configuration only makes sense to someone who knows what the
+field holds.
+
 - [ ] `config_notes`: `configuration_id`, `text`, `author`, `author_user_id`,
       `is_active`, `version`, `created_at`, `updated_at`. Tied to the configuration
       id, so it applies to every version of that configuration and every customer

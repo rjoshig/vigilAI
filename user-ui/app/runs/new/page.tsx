@@ -304,7 +304,8 @@ export default function NewRunPage() {
                   onChange={(event) => setConfigurationId(event.target.value)}
                 />
                 <span className="text-[0.7rem] text-muted-foreground">
-                  Used to version the captured config.
+                  The ETL configuration number for this order, the Solution Canvas config number.
+                  Captured configs are versioned under it.
                 </span>
               </div>
               <div className="flex flex-col gap-1.5">
