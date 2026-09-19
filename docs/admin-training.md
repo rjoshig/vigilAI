@@ -69,6 +69,15 @@ instructions**: the compliance regime that is true of every run in that programm
 that an OSL usually does not restate. They reach the model as background, labelled as
 background. A programme can be switched off so users stop seeing it.
 
+Each programme also carries **keywords** and **rules**. The keywords are what the
+tool greps the OSL, configuration, and report headers for to confirm a run really is
+that programme; a run declared as one programme with none of its words gets a
+finding. The rules are sentences true of every delivery in the programme, each with a
+strictness: **must** (a breach is a high finding), **should** (medium), or
+**advisory** (low). The model reads each delivery against them and names what it
+breaks; the strictness decides how serious that is, and code applies it. Add as many
+rules as the programme needs; switch one off from the Rules screen when it misfires.
+
 ## Checks and compliance rules
 
 **Checks** are cross-report comparisons over named values, written as an expression

@@ -55,7 +55,9 @@ administrator you can still open it, but nothing in it will let you change anyth
 1. **Run details.** Customer name, order number, and the **Configuration ID**, which
    is the order's ETL configuration number, the Solution Canvas config number.
    Choose the **delivery programme**: Account Monitoring, Account Solicitation,
-   Archives, or Other. Say whether **suppressions were applied**; the default is No,
+   Archives, or Other. Choose carefully: the tool checks that your inputs read like
+   that programme and raises a finding if they do not, and it holds the delivery to
+   the programme's rules. Say whether **suppressions were applied**; the default is No,
    because assuming Yes would let a missing suppression pass unremarked.
 2. **Delivery context** (optional). How many **deliverables** the campaign has and how
    many **outputs this run validates**. The tool checks these numbers against the

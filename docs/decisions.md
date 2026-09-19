@@ -745,3 +745,41 @@ until the user renames them, and two documentation URLs point at the current
 repository until then. Anyone with a local `.env` or shell exports under the old
 prefix must update them. `compare-file` references are untouched: that is a sibling
 project, not this one.
+
+## ADR-026 — Programme rules are read by the model and graded by code
+
+**Status:** accepted 2026-09-19 (user decision)
+
+**Context:** A delivery programme, Account Solicitation, Account Monitoring, Archives,
+carries expectations the OSL does not restate, and until now the tool held them as
+one free-text "standing instructions" field that reached the model as background and
+could never produce a finding. The request was rules of the programme's own, several
+per programme, each with its own strictness, so a breach is surfaced with the
+seriousness the administrator intended. And a first, simple check that a run declared
+as a programme actually is one.
+
+**Decision:**
+
+1. **A programme rule is a sentence with a strictness**: must, should, or advisory.
+   Several per programme, edited in the console, with the same lifecycle as every
+   other rule.
+2. **The model reads; code grades.** One call per run shows the model the rules and
+   what the delivery contains, and it names which rules the evidence breaks, quoting
+   it. The finding's severity comes from the rule's strictness, applied by code:
+   high, medium, low. The model is told not to decide seriousness and not to compare
+   numbers. A rule id it was never shown is discarded as invention; a low-confidence
+   breach is a review item.
+3. **The programme check is a grep.** Each programme carries admin-editable keywords.
+   The check scans the OSL, the configuration, and the report headers. Declared
+   programme absent and another clearly present is a high finding naming both; absent
+   with nothing else is a review item. The run continues either way: a keyword check
+   is not reliable enough to stand in someone's way, and the finding puts the question
+   in front of the reviewer before the programme rules are trusted.
+4. **Programme rules are a fourth rule kind** on the Rules screen, so there is still
+   one place to look when a finding surprises someone.
+
+**Consequences:** The standing-instructions field stays as background; the rules are
+where enforcement lives. An administrator can now express "this always matters" and
+"this is worth a glance" without a developer. The cost is one more model call per
+run, cached like every other, and the discipline that the model is never allowed to
+grade, which the prompt tests enforce.
