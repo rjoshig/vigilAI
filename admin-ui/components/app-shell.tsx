@@ -91,13 +91,18 @@ function TrainingModeIndicator({ pathname }: { pathname: string }) {
 }
 
 /**
- * The mark: a green light in the brand box. There is no logo image; the name is set
- * in text and the mark is the one thing the name promises.
+ * The mark: a traffic light with the green lit. There is no logo image; the name is
+ * set in text and the mark is the one thing the name promises.
  */
-function GreenLightMark() {
+function TrafficLightMark() {
   return (
-    <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary" aria-hidden="true">
-      <span className="block h-4 w-4 rounded-full bg-success shadow-[0_0_8px_hsl(var(--success))]" />
+    <div
+      className="flex h-9 w-9 flex-col items-center justify-center gap-[3px] rounded-lg bg-primary"
+      aria-hidden="true"
+    >
+      <span className="block h-[7px] w-[7px] rounded-full bg-destructive/40" />
+      <span className="block h-[7px] w-[7px] rounded-full bg-warn/40" />
+      <span className="block h-[7px] w-[7px] rounded-full bg-success shadow-[0_0_6px_hsl(var(--success))]" />
     </div>
   );
 }
@@ -163,9 +168,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="app-sidebar sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r bg-card text-card-foreground">
         <div className="flex items-center gap-2.5 p-4">
-          <GreenLightMark />
+          <TrafficLightMark />
           <div>
-            <div className="text-lg font-bold leading-tight tracking-tight">Greenlight AI</div>
+            <div className="text-base font-bold leading-tight tracking-tight">
+              Greenlight Admin Console
+            </div>
             <div className="text-[0.8125rem] font-medium">QC Validation</div>
             <div className="text-[0.625rem] text-muted-foreground">
               Nothing ships without a green light.

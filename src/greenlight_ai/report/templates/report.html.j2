@@ -51,7 +51,9 @@
         background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--tertiary)) 100%);
         border-radius: 9px; font-weight: 700;
       }
-      .mark::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 8px #16a34a; margin: auto; }
+      .mark { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+      .mark i { display: block; width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; opacity: .45; }
+      .mark i.on { background: #16a34a; opacity: 1; box-shadow: 0 0 6px #16a34a; }
       .tagline { font-size: 11px; color: #6b7280; margin-top: 2px; }
       .name { font-weight: 600; }
       .sub { font-size: 0.78rem; color: hsl(var(--muted-foreground)); }
@@ -174,7 +176,7 @@
   <body>
     <header class="topbar no-print">
       <div class="brand">
-        <div class="mark" aria-hidden="true"></div>
+        <div class="mark" aria-hidden="true"><i></i><i></i><i class="on"></i></div>
         <div>
           <div class="name">Greenlight AI · QC Validation report</div>
           <div class="tagline">Nothing ships without a green light.</div>

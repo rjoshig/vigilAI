@@ -82,7 +82,7 @@ function SignIn({ onSignedIn }: SignInProps) {
   }
 
   return (
-    <CenteredCard title="Sign in" subtitle="Greenlight AI · QC Validation">
+    <CenteredCard title="Sign in" subtitle="Greenlight AI · Delivery Enablement">
       <form className="flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
         {error ? <ErrorState message={error} /> : null}
         <div className="flex flex-col gap-1.5">
@@ -201,7 +201,11 @@ function CenteredCard({ title, subtitle, children }: CenteredCardProps) {
       <Card className="w-full max-w-sm">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
-            <span className="inline-block h-4 w-4 rounded-full bg-success" aria-hidden="true" />{" "}
+            <span className="inline-flex items-center gap-1" aria-hidden="true">
+              <span className="h-2.5 w-2.5 rounded-full bg-destructive/40" />
+              <span className="h-2.5 w-2.5 rounded-full bg-warn/40" />
+              <span className="h-2.5 w-2.5 rounded-full bg-success" />
+            </span>{" "}
             {title}
           </CardTitle>
           <span className="text-xs text-muted-foreground">{subtitle}</span>
