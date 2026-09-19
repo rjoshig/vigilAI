@@ -33,6 +33,11 @@ self-registration: you create the account, give a first password, and the person
 changes it at first sign-in. Accounts are deactivated, never deleted, so what a
 person did stays attributed to them. You cannot deactivate the last administrator.
 
+## The sidebar
+
+The logo and the name sit at the top-left, with a small **Admin** label so the console
+is never mistaken for the user app. Clicking them goes home.
+
 ## The sidebar indicator
 
 Under the mark: **Train AI mode on** (green) or **off** (grey). When it is on,

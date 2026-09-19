@@ -23,6 +23,7 @@ import * as React from "react";
 import { useAuth } from "@/components/auth-gate";
 import { useTrainingEnabled } from "@/components/observation-dialog";
 import { TRAIN_AI_HINT } from "@/components/train-ai-tag";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -75,23 +76,6 @@ function TrainingModeLine({ enabled }: { enabled: boolean }) {
   );
 }
 
-/**
- * The mark: a traffic light with the green lit. There is no logo image; the name is
- * set in text and the mark is the one thing the name promises.
- */
-function TrafficLightMark() {
-  return (
-    <div
-      className="flex h-9 w-9 flex-col items-center justify-center gap-[3px] rounded-lg bg-primary"
-      aria-hidden="true"
-    >
-      <span className="block h-[7px] w-[7px] rounded-full bg-destructive/40" />
-      <span className="block h-[7px] w-[7px] rounded-full bg-warn/40" />
-      <span className="block h-[7px] w-[7px] rounded-full bg-success shadow-[0_0_6px_hsl(var(--success))]" />
-    </div>
-  );
-}
-
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
@@ -130,8 +114,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="app-sidebar sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r bg-card text-card-foreground">
-        <div className="flex items-center gap-2.5 p-4">
-          <TrafficLightMark />
+        {/* The box is the one theme-independent surface in the rail: the mark's dark
+            housing has to read on the navy palette as well as on white. */}
+        <Link href="/" aria-label="Greenlight AI home" className="flex items-center gap-2.5 p-4">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-[#F3F7F5]">
+            <Logo size={30} />
+          </span>
           <div>
             <div className="text-base font-bold leading-tight tracking-tight">Greenlight AI</div>
             <div className="text-[0.8125rem] font-medium">Delivery Enablement</div>
@@ -139,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Nothing ships without a green light.
             </div>
           </div>
-        </div>
+        </Link>
         <TrainingModeLine enabled={trainingEnabled} />
 
         <nav className="flex flex-1 flex-col gap-0.5 px-2.5 pt-2">

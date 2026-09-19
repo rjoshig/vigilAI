@@ -15,6 +15,8 @@
 import { LogIn, ShieldCheck } from "lucide-react";
 import * as React from "react";
 
+import { Logo } from "@/components/logo";
+
 import {
   Button,
   Card,
@@ -201,11 +203,9 @@ function CenteredCard({ title, subtitle, children }: CenteredCardProps) {
       <Card className="w-full max-w-sm">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1" aria-hidden="true">
-              <span className="h-2.5 w-2.5 rounded-full bg-destructive/40" />
-              <span className="h-2.5 w-2.5 rounded-full bg-warn/40" />
-              <span className="h-2.5 w-2.5 rounded-full bg-success" />
-            </span>{" "}
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#F3F7F5]">
+              <Logo size={22} />
+            </span>
             {title}
           </CardTitle>
           <span className="text-xs text-muted-foreground">{subtitle}</span>

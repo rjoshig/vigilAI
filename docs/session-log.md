@@ -105,6 +105,27 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-19 (the logo)
+
+**Branch:** `feature/logo` · **Status:** complete, gates green.
+
+### What was completed
+
+- The Greenlight AI mark, a traffic signal with the green lit, as one `Logo`
+  component per app with a size and a glow prop, in the sidebar brand block (which
+  now links home), on both sign-in screens, as the favicon, on the frozen report,
+  and in the mock. The admin console carries a small "Admin" label after the name.
+- The brand box behind the mark is a fixed light fill in every theme, the one
+  surface in the rail that does not follow the palette, so the dark housing reads on
+  the navy default.
+- Carried in the wording commit that missed pull request 6 by two minutes.
+
+### Next concrete action
+
+Open the pull request "Add Greenlight AI logo to user-ui and admin-ui headers".
+
+---
+
 ## Session: 2026-09-19 (renamed to Greenlight AI)
 
 **Branch:** `chore/rename-greenlight-ai` · **Status:** complete, gates green.
