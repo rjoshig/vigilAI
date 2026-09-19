@@ -51,6 +51,8 @@
         background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--tertiary)) 100%);
         border-radius: 9px; font-weight: 700;
       }
+      .mark::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 8px #16a34a; margin: auto; }
+      .tagline { font-size: 11px; color: #6b7280; margin-top: 2px; }
       .name { font-weight: 600; }
       .sub { font-size: 0.78rem; color: hsl(var(--muted-foreground)); }
       .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem 3rem; }
@@ -172,9 +174,10 @@
   <body>
     <header class="topbar no-print">
       <div class="brand">
-        <div class="mark">V</div>
+        <div class="mark" aria-hidden="true"></div>
         <div>
           <div class="name">Greenlight AI · QC Validation report</div>
+          <div class="tagline">Nothing ships without a green light.</div>
           <div class="sub">
             Run <span class="mono">VR-{{ "%04d"|format(run.id) }}</span> ·
             {{ run.customer_name }} · {{ run.order_number }} ·
