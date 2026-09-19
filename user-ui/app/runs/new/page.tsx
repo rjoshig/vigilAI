@@ -53,7 +53,7 @@ export default function NewRunPage() {
   // The notes lookup waits until typing pauses, so a person keying an id does not
   // fire one request per character.
   const debouncedConfigurationId = useDebounced(configurationId.trim(), CONFIG_ID_DEBOUNCE_MS);
-  const [runDate, setRunDate] = React.useState("");
+  const [creditDate, setCreditDate] = React.useState("");
   const [notes, setNotes] = React.useState("");
 
   const [scope, setScope] = React.useState("");
@@ -61,8 +61,6 @@ export default function NewRunPage() {
 
   // Kept as strings because an empty box means "unstated", which is a different
   // answer from zero and must survive the round trip without becoming one.
-  const [deliverableCount, setDeliverableCount] = React.useState("");
-  const [outputsValidated, setOutputsValidated] = React.useState("");
   const [deliveryNotes, setDeliveryNotes] = React.useState("");
 
   // The slots are whatever the admin catalog says they are, so switching a report type
@@ -115,10 +113,7 @@ export default function NewRunPage() {
       ? slot.is_required && filesIn(slot.key).length === 0
       : slot.is_required && !files[slot.key]
   );
-  const ready =
-    Boolean(customer.trim() && order.trim() && configurationId.trim()) &&
-    !requiredMissing &&
-    reportCount > 0;
+  const ready = Boolean(customer.trim() && order.trim()) && !requiredMissing && reportCount > 0;
 
   /** Give every report slot its first, empty part once the catalog has loaded. */
   React.useEffect(() => {
@@ -225,10 +220,8 @@ export default function NewRunPage() {
     form.set("notes", notes);
     form.set("scope", scope);
     form.set("has_suppressions", hasSuppressions ? "true" : "false");
-    if (runDate) form.set("run_date", runDate);
+    if (creditDate) form.set("credit_date", creditDate);
     if (reason) form.set("rerun_reason", reason);
-    if (deliverableCount.trim()) form.set("deliverable_count", deliverableCount.trim());
-    if (outputsValidated.trim()) form.set("outputs_validated", outputsValidated.trim());
     if (deliveryNotes.trim()) form.set("delivery_notes", deliveryNotes.trim());
     for (const slot of slots) {
       if (slot.kind === "report") continue;
@@ -297,6 +290,9 @@ export default function NewRunPage() {
                   value={customer}
                   onChange={(event) => setCustomer(event.target.value)}
                 />
+                <span className="text-[0.7rem] text-muted-foreground">
+                  Scopes rules and aliases to this customer. Not sent to the model.
+                </span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="order">
@@ -308,11 +304,12 @@ export default function NewRunPage() {
                   value={order}
                   onChange={(event) => setOrder(event.target.value)}
                 />
+                <span className="text-[0.7rem] text-muted-foreground">
+                  Identifies the order in the run list and the report. Not sent to the model.
+                </span>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="configuration">
-                  Configuration ID<span className="text-destructive"> *</span>
-                </Label>
+                <Label htmlFor="configuration">Configuration ID</Label>
                 <Input
                   id="configuration"
                   className="mono"
@@ -320,8 +317,9 @@ export default function NewRunPage() {
                   onChange={(event) => setConfigurationId(event.target.value)}
                 />
                 <span className="text-[0.7rem] text-muted-foreground">
-                  The ETL configuration number for this order, the Solution Canvas config number.
-                  Captured configs are versioned under it.
+                  The order&apos;s ETL configuration number, the Solution Canvas config number. For
+                  your information and the config history; it may repeat across runs, and every run
+                  gets its own id. Not sent to the model.
                 </span>
               </div>
               {debouncedConfigurationId ? (
@@ -330,13 +328,17 @@ export default function NewRunPage() {
                 </div>
               ) : null}
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="run-date">Run date</Label>
+                <Label htmlFor="credit-date">Credit date</Label>
                 <Input
-                  id="run-date"
+                  id="credit-date"
                   type="date"
-                  value={runDate}
-                  onChange={(event) => setRunDate(event.target.value)}
+                  value={creditDate}
+                  onChange={(event) => setCreditDate(event.target.value)}
                 />
+                <span className="text-[0.7rem] text-muted-foreground">
+                  The date the delivery is cut as of. Not sent to the model; the tool checks that
+                  the reports carry this date and raises a finding if none does.
+                </span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="scope">Delivery programme</Label>
@@ -349,7 +351,9 @@ export default function NewRunPage() {
                 </Select>
                 <span className="text-[0.7rem] text-muted-foreground">
                   {options?.scopes.find((option) => option.code === scope)?.description ??
-                    "Tells the checks which kind of delivery this is."}
+                    "Which kind of delivery this is."}{" "}
+                  Sent to the model as background, with the programme&apos;s rules. Choosing the
+                  right programme improves the validation.
                 </span>
               </div>
               <fieldset className="flex flex-col gap-1.5">
@@ -375,29 +379,9 @@ export default function NewRunPage() {
                   </label>
                 </div>
                 <span className="text-[0.7rem] text-muted-foreground">
-                  Whether records were suppressed before delivery.
+                  Whether records were suppressed before delivery. Sent to the model as background.
                 </span>
               </fieldset>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="deliverable-count">Deliverables in this campaign</Label>
-                <Input
-                  id="deliverable-count"
-                  type="number"
-                  min={0}
-                  value={deliverableCount}
-                  onChange={(event) => setDeliverableCount(event.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="outputs-validated">Outputs this run covers</Label>
-                <Input
-                  id="outputs-validated"
-                  type="number"
-                  min={0}
-                  value={outputsValidated}
-                  onChange={(event) => setOutputsValidated(event.target.value)}
-                />
-              </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="delivery-notes">Delivery notes</Label>
                 <Input
@@ -407,9 +391,7 @@ export default function NewRunPage() {
                   placeholder="Anything about the delivery itself: which segments were sent, what is still to come."
                 />
                 <span className="text-[0.7rem] text-muted-foreground">
-                  The two numbers are checked against the files uploaded, so a shortfall becomes a
-                  finding rather than going unnoticed. Leave them blank if you do not know; blank
-                  means unstated and produces no finding.
+                  Sent to the model as background. Accurate notes here improve the validation.
                 </span>
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -420,6 +402,9 @@ export default function NewRunPage() {
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Anything the reviewer should know: special instructions, known deviations, who asked for the run."
                 />
+                <span className="text-[0.7rem] text-muted-foreground">
+                  Kept for the reviewer and shown on the run. Not sent to the model.
+                </span>
               </div>
             </CardContent>
           </Card>

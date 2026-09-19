@@ -61,6 +61,8 @@ class RunGuidance:
     artifact_context: dict[str, str] | None = None
     #: The programme's code, and its rules as (id, title, text, strictness). The
     #: model reads for breaches of these; code sets the severity (ADR-026).
+    #: The credit date the submitter gave, for the artifact check (ADR-027).
+    credit_date: str = ""
     scope_code: str = ""
     programme_rules: tuple[tuple[int, str, str, str], ...] = ()
     #: Every programme's keywords, for the classification check: code to words.

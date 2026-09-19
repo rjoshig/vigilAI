@@ -62,6 +62,7 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
         outputs_validated=run.outputs_validated,
         delivery_notes=run.delivery_notes,
         config_notes=tuple(str(n) for n in (run.config_notes_snapshot or [])),
+        credit_date=run.credit_date.isoformat() if run.credit_date else "",
         scope_code=run.scope,
         programme_rules=tuple(
             (row.id, row.title, row.text, row.strictness)
