@@ -24,6 +24,7 @@ import * as React from "react";
 import { EvidencePanel } from "@/components/evidence-panel";
 import { ObservationDialog, anchorOf, useTrainingEnabled } from "@/components/observation-dialog";
 import { StageProgress } from "@/components/stage-progress";
+import { TrainAiTag } from "@/components/train-ai-tag";
 import {
   Badge,
   Button,
@@ -220,6 +221,7 @@ export default function ReviewPage() {
                 }
               >
                 <Lightbulb className="h-4 w-4" /> What should this check?
+                <TrainAiTag />
               </Button>
             ) : null}
             <Button variant="outline" size="sm" onClick={() => void clone()}>
@@ -272,6 +274,26 @@ export default function ReviewPage() {
             <p className="mt-3 text-xs text-muted-foreground">
               Updating every 3 seconds. The review screen opens when the pipeline finishes.
             </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {ready && run.config_notes.length > 0 ? (
+        <Card className="mb-4">
+          <CardHeader className="border-b">
+            <CardTitle>Configuration notes given to the model</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-3 text-xs">
+            <p className="mb-2 text-muted-foreground">
+              Standing notes on configuration <span className="mono">{run.configuration_id}</span>{" "}
+              that were in force when this run was submitted. The model saw them as background,
+              never as a requirement.
+            </p>
+            <ul className="list-disc space-y-1 pl-4">
+              {run.config_notes.map((note, index) => (
+                <li key={index}>{note}</li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       ) : null}
@@ -660,6 +682,7 @@ function FindingCard({
             title="Turn what you know into something the tool can check"
           >
             <Lightbulb className="h-4 w-4" /> What should this check?
+            <TrainAiTag />
           </Button>
         ) : null}
       </div>

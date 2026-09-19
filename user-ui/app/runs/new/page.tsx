@@ -12,6 +12,7 @@ import { AlertTriangle, HelpCircle, Play, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
+import { ConfigNotes } from "@/components/config-notes";
 import { FileDrop } from "@/components/file-drop";
 import { ReportSlotField, emptyPart, type ReportPart } from "@/components/report-slot";
 import {
@@ -31,12 +32,27 @@ import { api, ApiError } from "@/lib/api";
 import type { ArtifactSlot, DuplicateRun, NewRunOptions, TypeDetection } from "@/lib/types";
 import { fmtTime } from "@/lib/utils";
 
+const CONFIG_ID_DEBOUNCE_MS = 500;
+
+/** The value as it stood once it has been unchanged for `delayMs`. */
+function useDebounced(value: string, delayMs: number): string {
+  const [settled, setSettled] = React.useState(value);
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setSettled(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return settled;
+}
+
 export default function NewRunPage() {
   const router = useRouter();
 
   const [customer, setCustomer] = React.useState("");
   const [order, setOrder] = React.useState("");
   const [configurationId, setConfigurationId] = React.useState("");
+  // The notes lookup waits until typing pauses, so a person keying an id does not
+  // fire one request per character.
+  const debouncedConfigurationId = useDebounced(configurationId.trim(), CONFIG_ID_DEBOUNCE_MS);
   const [runDate, setRunDate] = React.useState("");
   const [notes, setNotes] = React.useState("");
 
@@ -308,6 +324,11 @@ export default function NewRunPage() {
                   Captured configs are versioned under it.
                 </span>
               </div>
+              {debouncedConfigurationId ? (
+                <div className="sm:col-span-2">
+                  <ConfigNotes configurationId={debouncedConfigurationId} mode="add" />
+                </div>
+              ) : null}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="run-date">Run date</Label>
                 <Input
