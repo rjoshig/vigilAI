@@ -451,6 +451,16 @@ export const api = {
     ),
 
   /** Turn an observation down. The reason is shown to whoever wrote it. */
+  /**
+   * Take an observation out of the queue so its author can write a fresh one.
+   *
+   * What you reach for when somebody submitted the wrong thing. Distinct from
+   * rejecting, which says it was considered and not acted on. Withdrawn, never
+   * deleted: the row survives, because nothing in the training record is deleted.
+   */
+  withdrawObservation: (id: number): Promise<Observation> =>
+    request<Observation>(`/admin/observations/${id}/withdraw`, { method: "POST" }),
+
   rejectObservation: (id: number, reason: string): Promise<Observation> =>
     request<Observation>(`/observations/${id}/reject`, json("POST", { reason })),
 

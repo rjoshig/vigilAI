@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.14a and 6.14e.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 6.14.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -147,6 +147,22 @@ both. The bar above the rows confirms, rejects or deletes a selection under one
 typed word. A programme entry with the same key as a global one replaces it on that
 programme's runs. **By report cell** is the same guide editor as on Artifact types.
 Everything here reaches the model as background; code does the comparing.
+
+### Correcting or removing what somebody submitted
+
+Feedback is submitted once: the author's form locks after they send it, so nothing
+changes underneath you while you are reading it. Two controls are yours.
+
+- **Withdraw** takes it off every screen and frees the author to write a fresh one.
+  What you reach for when somebody submitted the wrong thing — the wrong finding, a
+  half-finished sentence. The row is kept, because nothing in the training record is
+  ever deleted; it is simply no longer in anybody's way.
+- **Reject**, with a reason, says it was considered and not acted on. The author sees
+  the reason on **My observations**. Use it when the observation was fair and the answer
+  is no; use **Withdraw** when it should not have been submitted at all.
+
+You can also **edit the wording** in place, which is the right move for a typo. Every
+edit bumps the version, so the trail survives the convenience.
 
 ## Delivery programmes
 

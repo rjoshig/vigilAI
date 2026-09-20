@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.14a and 6.14e.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 6.14.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -17,6 +17,61 @@ the reports, and shows you a list of **findings**: places where the three disagr
 The model reads and judges meaning; every comparison of values, counts, and ranges is
 done by code, so a finding is exact and repeatable. You decide each finding, OK or Not
 OK, and generate a frozen one-page report with a PDF.
+
+## The journey of a run, end to end
+
+Before the screen-by-screen detail, here is the whole thing in order. Nothing in the
+middle needs you: the only two moments that do are the beginning and the end.
+
+```
+you fill the form and drop the files
+        │
+        ▼
+  do these artifacts match what you typed?          ← code, no AI, instant
+        │                        │
+     they agree            they disagree
+        │                        │
+        │                 the run is HELD and shows you both values.
+        │                 Say in one line why they belong together and it
+        │                 continues — or cancel and correct the form.
+        │                 Nothing has been spent either way.
+        ▼
+     QUEUED — and for about thirty seconds you can still cancel for free
+        │
+        ▼
+     RUNNING — nine stages, unattended, about half a minute
+        │      the AI reads and judges meaning; code makes every comparison
+        ▼
+   NEEDS REVIEW — it is ready for you
+        │
+        ▼
+     you decide each finding: OK or Not OK, with a comment
+        │
+        ▼
+     the gate: every high-severity finding decided, every gap acknowledged
+        │
+        ▼
+     FINALIZED — one page, frozen, with a PDF. Never regenerated.
+```
+
+**Who does what.** You describe the delivery and you judge the findings. The tool reads
+three documents you would otherwise hold in your head, and tells you where they
+disagree. It never decides whether a delivery is acceptable — that has your name on it.
+
+## Three different things are called "review"
+
+The word does three jobs in this tool, and mixing them up is the commonest confusion.
+
+| Where you see it | What it means |
+| --- | --- |
+| **Needs review** — a run's status | The pipeline has finished and the findings are waiting for you. It is not a verdict; it is "your turn". |
+| **review** — a finding's severity | The tool is *not confident* about this one. Something did not extract cleanly, or a second reading disagreed with the first. It is asking you to look, not telling you something is wrong. Treat it as a question. |
+| **Reviewing findings** — what you do | Deciding each finding OK or Not OK, with a comment. This is the judgement the whole tool exists to support. |
+
+The middle row is the one worth remembering: **a `review` severity is the tool being
+honest about uncertainty, not an accusation.** A finding it is sure about is high,
+medium or low. A finding it is unsure about says so rather than guessing, because a
+confident wrong answer costs more than an admitted doubt.
 
 ## Signing in
 
@@ -211,17 +266,25 @@ producing findings anyone sees. You will hear back either way.
   became; the evidence drawer names the rule. **Rules applied to this run**, above the
   findings, lists every administrator-written, guide, meaning-map and learned rule that
   produced a finding, and names the rules running silently in shadow.
-- **Saving twice rewords, it does not duplicate.** After a save the form stays open on
-  the observation you just wrote; change anything and press **Save changes** to reword
-  it. If the tool answers that **a rule already covers this**, or that a running rule
+- **You submit it once.** The button says **Submit observation**, and afterwards the
+  form shows exactly what you sent, greyed out and no longer editable. That is
+  deliberate: an administrator may already be reading it, and the model may already
+  have drafted a rule from it, and neither should change underneath them.
+  <br /><br />
+  **If you got something wrong**, ask an administrator to **withdraw** it. It leaves
+  every screen, you are free to write a fresh one, and the original is kept on the
+  record rather than deleted. An administrator can also correct the wording in place
+  if it is only a typo.
+  <br /><br />
+  If the tool answers that **a rule already covers this**, or that a running rule
   **says the opposite**, each rule it names carries a **Say this rule is wrong** button,
   which starts a correction pointed at that rule. That correction is the most useful
   thing you can tell an administrator.
 - **My observations** lists what you have written and where it has got to, as a chain:
   **Waiting → Drafted → In shadow → Live**, or **Switched off**, or **Not taken forward**
   with the administrator's reason. Once a rule exists the card names it. The chain is
-  read from the rule itself each time, so it is never stale. You can edit an observation
-  until an administrator picks it up. Configuration notes are not listed here: a note
+  read from the rule itself each time, so it is never stale. Configuration notes are not
+  listed here: a note
   already reaches the model on every run of its configuration, and it lives on the
   configuration's own screen.
 - **Do not paste account numbers, names, or any personal data.** The tool refuses to

@@ -423,6 +423,23 @@ export default function TrainingPage() {
                               )
                             }
                           />
+                          {/* Rejecting says it was considered and not acted on.
+                              Withdrawing says it should not have been submitted —
+                              the wrong finding, a half-finished sentence — and frees
+                              the author to write a fresh one. The row survives. */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            title="Take it off every screen and let the author submit again. The record is kept."
+                            onClick={() =>
+                              void act("withdraw the observation", () =>
+                                api.withdrawObservation(observation.id)
+                              )
+                            }
+                          >
+                            Withdraw
+                          </Button>
                         </div>
                       </div>
                     </div>
