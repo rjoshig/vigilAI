@@ -11,7 +11,7 @@
 
 import * as React from "react";
 
-import { Explain } from "@/components/explain";
+import { Explain, FieldEffect } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -159,7 +159,7 @@ export default function CompliancePage() {
           </Explain>
         }
         title="Compliance & scope"
-        description="Compliance rules must be present in every config in scope, even when the OSL never mentions them. Reverse-pass categories decide which config elements are checked back against the OSL. Evaluated by code on every run; nothing here is sent to the model."
+        description="Compliance rules must be present in every config in scope, even when the OSL never mentions them. Reverse-pass categories decide which config elements are checked back against the OSL. Code looks for each rule first; where it cannot find one, the model is asked where the control is and code decides what the answer means."
       />
 
       {error ? (
@@ -361,12 +361,28 @@ export default function CompliancePage() {
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="cr-reason">Reasoning</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="cr-reason">Reasoning</Label>
+              <Explain label="Why the reasoning matters more than it looks">
+                It appears on the finding, so a reviewer reads it.
+                <br />
+                <br />
+                It is also <b>what the model is told the control is</b> when code cannot find the
+                path. Describe the control in the words a configuration might use for it —
+                &ldquo;screens against the OFAC SDN list&rdquo; — rather than only citing the policy
+                that requires it. A rule described well is found under a name you never anticipated;
+                one described only as a regulation reference is not.
+              </Explain>
+            </div>
             <Input
               id="cr-reason"
-              placeholder="OFAC-listed consumers must be suppressed on every delivery."
+              placeholder="Screens every record against the OFAC SDN list before delivery."
               value={draft.reasoning}
               onChange={(event) => setDraft({ ...draft, reasoning: event.target.value })}
+            />
+            <FieldEffect
+              kind="model"
+              note="Shown on the finding, and read by the model when code cannot find the path — so the better it describes the control, the more likely it is found under an unfamiliar name."
             />
           </div>
           <div className="sm:col-span-3">
