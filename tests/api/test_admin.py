@@ -264,6 +264,36 @@ def test_a_judgment_check_needs_an_instruction(client: TestClient, api: str) -> 
     assert response.status_code == 422
 
 
+def test_a_judgment_check_needs_the_values_the_model_may_see(client: TestClient, api: str) -> None:
+    """A judgment with nothing to judge would be a call spent on a question with no facts."""
+    response = client.post(
+        f"{api}/admin/checks",
+        json={"name": "j", "kind": "judgment", "instruction": "Volumes should be in line."},
+    )
+    assert response.status_code == 422
+    assert "named value" in response.json()["detail"]
+
+
+def test_a_judgment_check_keeps_its_named_values(
+    client: TestClient, api: str, named_values: None
+) -> None:
+    created = client.post(
+        f"{api}/admin/checks",
+        json={
+            "name": "volume_plausible",
+            "kind": "judgment",
+            "instruction": "The billed volume should be in line with the delivered volume.",
+            "value_names": ["billing_count", "delivered_count"],
+            "severity": "high",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["value_names"] == ["billing_count", "delivered_count"]
+    listed = client.get(f"{api}/admin/checks").json()
+    ours = next(c for c in listed if c["name"] == "volume_plausible")
+    assert ours["value_names"] == ["billing_count", "delivered_count"]
+
+
 def test_a_check_can_be_disabled_without_touching_old_findings(
     client: TestClient, api: str, named_values: None
 ) -> None:

@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from greenlight_ai.api import schemas
+from greenlight_ai.api import provenance, schemas
 from greenlight_ai.api.deps import CurrentUser, current_user, get_session
 from greenlight_ai.db import models, repository
 from greenlight_ai.db.types import utcnow
@@ -112,7 +112,7 @@ def review_finding(
         session, "finding.reviewed", finding.run_id, f"{finding.finding_id}={payload.review_status}"
     )
     _LOG.info("finding %s reviewed as %s", finding.finding_id, payload.review_status)
-    return schemas.FindingOut.model_validate(finding)
+    return provenance.decorate_findings(session, [schemas.FindingOut.model_validate(finding)])[0]
 
 
 @router.post("/runs/{run_id}/findings/bulk-ok", response_model=int)

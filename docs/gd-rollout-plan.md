@@ -125,9 +125,18 @@ queue goes quiet.
       is recorded as an observation or a configuration note, anchored to what they
       were looking at.
 - [ ] The administrator works the queue **twice a week**: rejects with reasons,
-      synthesizes the rest, replays every candidate, and approves into shadow.
-- [ ] Shadow rules reviewed weekly with their fired and dismissal counts. Activate
-      the ones that earn it; narrow the ones that fire on the wrong population.
+      synthesizes the rest, replays every candidate against recent finalized runs (the
+      replay evaluates the rule against their stored reports, so what it says the rule
+      would have done is what it would have done), and approves into shadow.
+- [ ] Shadow rules reviewed weekly on the Rules screen with their fired and dismissal
+      counts **and the findings themselves**, which no reviewer sees. Mark the ones
+      that are not real problems: the dismissal rate is made of those decisions, and it
+      is what says whether a rule has earned activation. Narrow the ones firing on the
+      wrong population.
+- [ ] **Worked examples** added as the seniors correct the model: a section it read
+      wrongly and the requirement it should have found, a mapping they confirmed, a
+      rule they approved. Four per stage, scoped to the programme they came from. An
+      example teaches the model to read; it is never a rule.
 - [ ] Standing instructions written for each programme from what the seniors say is
       always true of it, and artifact guidance written for each report type from
       what they say they look at.
@@ -137,8 +146,9 @@ queue goes quiet.
       check, and lists what is still missing.
 
 **Gate:** the queue has gone quiet, meaning a week with fewer than a handful of new
-observations; the re-run benchmark is at or above stage 2 on every programme; and the
-seniors have signed off.
+observations; every shadow rule has either been activated or narrowed, with its
+dismissal rate looked at rather than assumed; the re-run benchmark is at or above
+stage 2 on every programme; and the seniors have signed off.
 
 ### Stage 4 — General rollout
 

@@ -168,9 +168,11 @@ def test_the_whole_loop_from_a_sentence_to_a_finding(
     assert after["status"] == "synthesized"
     assert after["statement"]
 
+    # Replay re-parses each run's stored reports, so it is queued for the worker and
+    # the candidate says so until the result lands (Phase 6.13e).
     replayed = client.post(f"{api}/admin/candidates/{candidate['id']}/replay")
     assert replayed.status_code == 200
-    assert "runs_examined" in replayed.json()["replay"]
+    assert replayed.json()["replay"]["status"] == "running"
 
     approved = client.post(
         f"{api}/admin/candidates/{candidate['id']}/approve", json={"note": "looks right"}
@@ -193,7 +195,9 @@ def test_the_whole_loop_from_a_sentence_to_a_finding(
     assert activated.json()["state"] == "active"
 
     assert submit().status_code == 201
-    worker.run_once()
+    # The replay queued above shares the queue with the run, so drain it (Phase 6.13e).
+    while worker.run_once():
+        pass
     with factory() as session:
         refs = set(session.execute(sa.select(models.Finding.rule_ref)).scalars())
     assert f"field_constraint:{rule['id']}" in refs

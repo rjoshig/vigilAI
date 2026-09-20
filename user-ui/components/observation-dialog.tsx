@@ -1,15 +1,19 @@
 "use client";
 
 /**
- * Train AI mode: the form a reviewer writes an observation in (ADR-021, 6.1e).
+ * Train AI mode: the form a reviewer writes an observation in (ADR-021, 6.1e, 6.13b).
  *
  * An observation never runs. It is a sentence plus the thing it points at; an
  * administrator reviews it and the model drafts a rule they approve. The anchor is
  * prefilled from whatever the person was looking at, because a rule the model can
  * synthesize reliably needs a selection and not only prose.
+ *
+ * The people writing these are senior associates, so the form gets out of the way: the
+ * sentence comes first and has focus, the expectation second, and the three settings sit
+ * under "Details" with defaults that are right most of the time.
  */
 
-import { Lightbulb } from "lucide-react";
+import { ChevronDown, ChevronRight, Lightbulb, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
@@ -27,6 +31,7 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
+import { SEVERITY_LABEL } from "@/lib/display";
 import type {
   Anchor,
   CoveringRule,
@@ -37,25 +42,45 @@ import type {
   Severity,
 } from "@/lib/types";
 
-const KINDS: { value: ObservationKind; label: string }[] = [
+/** The plain-English labels for the form's options, shared with the observations list. */
+export const KINDS: { value: ObservationKind; label: string }[] = [
   { value: "reconciliation", label: "Two things should agree" },
   { value: "field_constraint", label: "A field should always look like this" },
   { value: "correction", label: "The tool got something wrong" },
   { value: "note", label: "Something worth knowing" },
 ];
 
-const SEVERITIES: { value: Severity; label: string }[] = [
-  { value: "high", label: "High" },
-  { value: "medium", label: "Medium" },
-  { value: "low", label: "Low" },
-  { value: "review", label: "Needs a person to look" },
-];
+export const SEVERITIES: { value: Severity; label: string }[] = (
+  ["high", "medium", "low", "review"] as Severity[]
+).map((value) => ({ value, label: SEVERITY_LABEL[value] }));
 
-const SCOPES: { value: ObservationScope; label: string }[] = [
+export const SCOPES: { value: ObservationScope; label: string }[] = [
   { value: "customer", label: "This customer" },
   { value: "programme", label: "This delivery programme" },
   { value: "global", label: "Every run" },
 ];
+
+/** How an anchor reads as a chip. */
+export function anchorLabel(anchor: Anchor): string {
+  switch (anchor.kind) {
+    case "report_cell":
+      return `${anchor.artifact || "report"} ${anchor.sheet ? `${anchor.sheet}!` : ""}${anchor.cell}${anchor.field ? ` (${anchor.field})` : ""}`;
+    case "report_field":
+      return `${anchor.artifact || "report"} · ${anchor.field}`;
+    case "osl_section":
+      return `OSL · ${anchor.reference || "section"}`;
+    case "config_path":
+      return `config · ${anchor.reference || anchor.cell}`;
+    case "finding":
+      return `finding ${anchor.reference}`;
+    case "rule":
+      return `rule · ${anchor.value || anchor.reference}`;
+    case "run":
+      return `this run${anchor.value ? ` · ${anchor.value}` : ""}`;
+    default:
+      return anchor.reference || anchor.kind;
+  }
+}
 
 /** An empty anchor of a given kind, so the form always sends a complete shape. */
 export function anchorOf(kind: Anchor["kind"], fields: Partial<Anchor> = {}): Anchor {
@@ -114,6 +139,8 @@ export interface ObservationDialogProps {
   onSaved?: (observation: Observation) => void;
 }
 
+const MIN_STATEMENT = 3;
+
 export function ObservationDialog({
   anchors,
   runId,
@@ -130,6 +157,7 @@ export function ObservationDialog({
   // The narrowest scope that fits is the safe default: the usual cause of a noisy rule
   // is an assumption that holds for most records and not all.
   const [scope, setScope] = React.useState<ObservationScope>(existing?.scope_hint ?? "customer");
+  const [details, setDetails] = React.useState(Boolean(existing));
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
@@ -137,24 +165,42 @@ export function ObservationDialog({
   // than at the candidate stage, which would be weeks later through an administrator
   // (Phase 6.1e).
   const [coveredBy, setCoveredBy] = React.useState<CoveringRule[]>([]);
+  // The row this form is now editing: the one passed in, or the one it just created.
+  // Pressing Save a second time used to create a second observation (Phase 6.13a).
+  const [current, setCurrent] = React.useState<Observation | undefined>(existing);
+  // Anchors are state: a chip can be removed, and "say this rule is wrong" adds one.
+  const [pointing, setPointing] = React.useState<Anchor[]>(existing ? existing.anchors : anchors);
+  const statementRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Focus the sentence, and let Escape close from anywhere: the key handler used to sit
+  // on the overlay and did nothing until the person had tabbed into the dialog.
+  React.useEffect(() => {
+    statementRef.current?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function save() {
     setSaving(true);
     setError(null);
     const body: ObservationInput = {
       kind,
-      anchors: existing ? existing.anchors : anchors,
+      anchors: pointing,
       statement: statement.trim(),
       expectation: expectation.trim(),
       severity_hint: severity,
       scope_hint: scope,
-      run_id: existing ? existing.run_id : (runId ?? null),
-      finding_id: existing ? existing.finding_id : (findingId ?? null),
+      run_id: current ? current.run_id : (runId ?? null),
+      finding_id: current ? current.finding_id : (findingId ?? null),
     };
     try {
-      const stored = existing
-        ? await api.updateObservation(existing.id, body)
+      const stored = current
+        ? await api.updateObservation(current.id, body)
         : await api.createObservation(body);
+      setCurrent(stored);
       setSaved(true);
       setCoveredBy(stored.covered_by ?? []);
       onSaved?.(stored);
@@ -166,21 +212,43 @@ export function ObservationDialog({
     }
   }
 
+  /**
+   * Start a fresh observation saying that a rule already running is wrong. The panel
+   * used to ask for exactly this and offer no way to do it: the only button created a
+   * duplicate of what had just been saved.
+   */
+  function disputeRule(rule: CoveringRule) {
+    setCurrent(undefined);
+    setSaved(false);
+    setCoveredBy([]);
+    setKind("correction");
+    setStatement(`The rule "${rule.summary}" is wrong: `);
+    setExpectation("");
+    setPointing([
+      ...pointing.filter((anchor) => anchor.kind !== "rule"),
+      anchorOf("rule", { reference: `${rule.kind}:${rule.id}`, value: rule.summary }),
+    ]);
+    setDetails(true);
+    statementRef.current?.focus();
+  }
+
+  const tooShort = statement.trim().length < MIN_STATEMENT;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="observation-title"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
       }}
     >
       <Card className="w-full max-w-2xl">
         <CardHeader className="border-b">
           <CardTitle id="observation-title" className="flex items-center gap-1.5">
             <Lightbulb className="h-4 w-4 text-primary" />
-            {existing ? "Edit your observation" : "What should this check?"}
+            {current ? "Your observation" : "What should this check?"}
             <TrainAiTag />
           </CardTitle>
         </CardHeader>
@@ -197,11 +265,39 @@ export function ObservationDialog({
             </div>
           ) : null}
 
+          {pointing.length > 0 ? (
+            <ul className="flex flex-wrap gap-1.5" aria-label="What this observation points at">
+              {pointing.map((anchor, index) => (
+                <li
+                  key={`${anchor.kind}-${anchor.reference}-${anchor.cell}-${index}`}
+                  className="mono inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[0.68rem]"
+                  data-testid="anchor-chip"
+                >
+                  {anchorLabel(anchor)}
+                  {pointing.length > 1 ? (
+                    <button
+                      type="button"
+                      className="rounded-full hover:bg-accent"
+                      aria-label={`Remove ${anchorLabel(anchor)}`}
+                      onClick={() => setPointing(pointing.filter((_, i) => i !== index))}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           {error ? <ErrorState message={error} /> : null}
 
           {saved ? (
-            <p className="rounded-md border border-success/40 bg-success/10 px-2.5 py-2 text-xs">
-              Saved. You can follow what becomes of it on the Observations page.
+            <p
+              className="rounded-md border border-success/40 bg-success/10 px-2.5 py-2 text-xs"
+              data-testid="observation-saved"
+            >
+              Saved. Change anything and press Save changes to reword it; follow what becomes of it
+              on My observations.
             </p>
           ) : null}
 
@@ -216,63 +312,20 @@ export function ObservationDialog({
                   : "A rule already covers this."}
               </b>{" "}
               Your observation is saved either way, and an administrator will see both. If the
-              existing rule is wrong, say so in a moment — that is the most useful thing you can
-              tell us.
+              existing rule is wrong, say so — that is the most useful thing you can tell us.
               <ul className="mt-1 space-y-0.5">
                 {coveredBy.map((rule) => (
-                  <li key={`${rule.kind}-${rule.id}`}>
+                  <li key={`${rule.kind}-${rule.id}`} className="flex flex-wrap items-center gap-2">
                     <span className="mono">{rule.summary}</span>
-                    {rule.contradicts ? " — this is what yours contradicts" : ""}
+                    {rule.contradicts ? <span>— this is what yours contradicts</span> : null}
+                    <Button size="xs" variant="outline" onClick={() => disputeRule(rule)}>
+                      Say this rule is wrong
+                    </Button>
                   </li>
                 ))}
               </ul>
             </div>
           ) : null}
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="observation-kind">What kind of thing is this?</Label>
-              <Select
-                id="observation-kind"
-                value={kind}
-                onChange={(event) => setKind(event.target.value as ObservationKind)}
-              >
-                {KINDS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="observation-severity">How serious is a breach?</Label>
-              <Select
-                id="observation-severity"
-                value={severity}
-                onChange={(event) => setSeverity(event.target.value as Severity)}
-              >
-                {SEVERITIES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="observation-scope">Where should it apply?</Label>
-              <Select
-                id="observation-scope"
-                value={scope}
-                onChange={(event) => setScope(event.target.value as ObservationScope)}
-              >
-                {SCOPES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="observation-statement">
@@ -280,10 +333,15 @@ export function ObservationDialog({
             </Label>
             <Textarea
               id="observation-statement"
+              ref={statementRef}
               value={statement}
               onChange={(event) => setStatement(event.target.value)}
               placeholder="In your own words. For example: this column is what clause 4.2 is actually asking for."
             />
+            <span className="text-[0.7rem] text-muted-foreground">
+              Write no account numbers, names, or other personal data, here or below. Saving is
+              refused when the text looks like it carries any.
+            </span>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -294,19 +352,89 @@ export function ObservationDialog({
               onChange={(event) => setExpectation(event.target.value)}
               placeholder="For example: never blank for account review."
             />
-            <span className="text-[0.7rem] text-muted-foreground">
-              Write no account numbers, names, or other personal data. Saving is refused when the
-              text looks like it carries any.
-            </span>
           </div>
+
+          <button
+            type="button"
+            className="flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
+            aria-expanded={details}
+            onClick={() => setDetails(!details)}
+          >
+            {details ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            Details
+            {!details ? (
+              <span className="text-[0.7rem]">
+                {" "}
+                · {KINDS.find((k) => k.value === kind)?.label} · {SEVERITY_LABEL[severity]} ·{" "}
+                {SCOPES.find((s) => s.value === scope)?.label}
+              </span>
+            ) : null}
+          </button>
+
+          {details ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="observation-kind">What kind of thing is this?</Label>
+                <Select
+                  id="observation-kind"
+                  value={kind}
+                  onChange={(event) => setKind(event.target.value as ObservationKind)}
+                >
+                  {KINDS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="observation-severity">If this is broken, how serious is it?</Label>
+                <Select
+                  id="observation-severity"
+                  value={severity}
+                  onChange={(event) => setSeverity(event.target.value as Severity)}
+                >
+                  {SEVERITIES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="observation-scope">Where should it apply?</Label>
+                <Select
+                  id="observation-scope"
+                  value={scope}
+                  onChange={(event) => setScope(event.target.value as ObservationScope)}
+                >
+                  {SCOPES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
 
-        <div className="flex justify-end gap-2 border-t p-4">
+        <div className="flex items-center justify-end gap-2 border-t p-4">
+          {tooShort ? (
+            <span className="mr-auto text-[0.7rem] text-muted-foreground">
+              Write at least a few words before saving.
+            </span>
+          ) : null}
           <Button variant="ghost" onClick={onClose}>
             {saved ? "Close" : "Cancel"}
           </Button>
-          <Button disabled={statement.trim().length < 3 || saving} onClick={() => void save()}>
-            <Lightbulb className="h-4 w-4" /> {saving ? "Saving…" : "Save observation"}
+          <Button disabled={tooShort || saving} onClick={() => void save()}>
+            <Lightbulb className="h-4 w-4" />{" "}
+            {saving ? "Saving…" : current ? "Save changes" : "Save observation"}
           </Button>
         </div>
       </Card>

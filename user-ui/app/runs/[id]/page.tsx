@@ -26,6 +26,7 @@ import { CoverageCard } from "@/components/coverage-card";
 import { DriftCard } from "@/components/drift-card";
 import { EvidencePanel } from "@/components/evidence-panel";
 import { ObservationDialog, anchorOf, useTrainingEnabled } from "@/components/observation-dialog";
+import { RulesApplied } from "@/components/rules-applied";
 import { StageProgress } from "@/components/stage-progress";
 import { TrainAiTag } from "@/components/train-ai-tag";
 import {
@@ -84,6 +85,7 @@ export default function ReviewPage() {
   // Nothing about training is drawn while this is false, which is the shipped default.
   const trainingEnabled = useTrainingEnabled();
   const [observing, setObserving] = React.useState<ObservationTarget | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
 
   const loadRun = React.useCallback(async () => {
     try {
@@ -139,9 +141,17 @@ export default function ReviewPage() {
 
   async function bulkOk() {
     setBusy(true);
+    setError(null);
     try {
-      await api.bulkOkLow(runId);
+      const count = await api.bulkOkLow(runId);
+      setNotice(
+        count === 0
+          ? "No low-severity finding was still undecided."
+          : `${count} low-severity finding${count === 1 ? "" : "s"} marked OK as false positives.`
+      );
       await Promise.all([loadReview(), loadRun()]);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not mark the findings.");
     } finally {
       setBusy(false);
     }
@@ -149,17 +159,25 @@ export default function ReviewPage() {
 
   async function recheck() {
     setBusy(true);
+    setError(null);
     try {
       await api.recheck(runId);
       await loadRun();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not queue the re-check.");
     } finally {
       setBusy(false);
     }
   }
 
   async function clone() {
-    const result = await api.cloneRun(runId);
-    router.push(`/runs/${result.run_id}`);
+    setError(null);
+    try {
+      const result = await api.cloneRun(runId);
+      router.push(`/runs/${result.run_id}`);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not clone the run.");
+    }
   }
 
   if (error && !run) return <ErrorState message={error} onRetry={() => void loadRun()} />;
@@ -212,8 +230,8 @@ export default function ReviewPage() {
                 onClick={() =>
                   setObserving({
                     anchors: [
-                      anchorOf("osl_section", {
-                        reference: `run:${run.id}`,
+                      anchorOf("run", {
+                        reference: String(run.id),
                         value: `${run.customer_name} · ${run.order_number}`,
                       }),
                     ],
@@ -306,13 +324,21 @@ export default function ReviewPage() {
         <>
           <div className="mb-4 rounded-md border border-info/40 bg-info/5 p-3 text-xs">
             <b>
-              {undecidedHigh === 0
-                ? "Every high-severity finding has a decision."
-                : `${undecidedHigh} high-severity finding${undecidedHigh === 1 ? "" : "s"} still need a decision.`}
+              {run.finalized
+                ? "This run is frozen."
+                : run.can_finalize
+                  ? "Everything the gate asks for is done; the report can be generated."
+                  : `Not yet: ${run.finalize_blocked_by}`}
             </b>{" "}
-            The final report can only be generated once they all do. Low-severity findings can be
-            decided in bulk. Review decisions never call the model.
+            Every high and review finding needs a decision, and every requirement no report
+            evidenced needs acknowledging, before the report can be frozen. Low-severity findings
+            can be decided in bulk. Review decisions never call the model.
           </div>
+          {notice ? (
+            <p role="status" className="mb-4 text-xs text-success" data-testid="run-notice">
+              {notice}
+            </p>
+          ) : null}
 
           <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-5">
             <Stat label="Requirements" value={requirements?.rules.length ?? "—"} />
@@ -339,7 +365,27 @@ export default function ReviewPage() {
             </Card>
           ) : null}
 
-          <CoverageCard runId={runId} onChange={() => void loadRun()} editable={!run.finalized} />
+          <CoverageCard
+            runId={runId}
+            onChange={() => void loadRun()}
+            editable={!run.finalized}
+            onObserve={
+              trainingEnabled
+                ? (entry) =>
+                    setObserving({
+                      anchors: [
+                        anchorOf("osl_section", {
+                          reference: entry.osl_ref || entry.rule_id,
+                          value: entry.summary,
+                        }),
+                      ],
+                      context: `${entry.rule_id} — ${entry.summary} (nothing checked it)`,
+                      findingId: null,
+                    })
+                : null
+            }
+          />
+          <RulesApplied runId={runId} />
 
           <div className="mb-4 flex gap-1 border-b">
             {(["matrix", "findings"] as Tab[]).map((name) => (
@@ -360,7 +406,11 @@ export default function ReviewPage() {
           </div>
 
           {tab === "matrix" ? (
-            <MatrixTab rows={rows} onOpen={setOpenFinding} />
+            <MatrixTab
+              rows={rows}
+              onOpen={setOpenFinding}
+              onObserve={trainingEnabled ? setObserving : null}
+            />
           ) : (
             <FindingsTab
               findings={findings}
@@ -374,7 +424,18 @@ export default function ReviewPage() {
         </>
       ) : null}
 
-      <EvidencePanel finding={openFinding} onClose={() => setOpenFinding(null)} />
+      <EvidencePanel
+        finding={openFinding}
+        onClose={() => setOpenFinding(null)}
+        onObserve={
+          trainingEnabled
+            ? (finding) => {
+                setOpenFinding(null);
+                setObserving(findingTarget(finding));
+              }
+            : null
+        }
+      />
 
       {observing ? (
         <ObservationDialog
@@ -389,7 +450,16 @@ export default function ReviewPage() {
   );
 }
 
-function MatrixTab({ rows, onOpen }: { rows: MatrixRow[]; onOpen: (f: Finding) => void }) {
+function MatrixTab({
+  rows,
+  onOpen,
+  onObserve,
+}: {
+  rows: MatrixRow[];
+  onOpen: (f: Finding) => void;
+  /** Record what should be checked for a requirement, from its row (Phase 6.13b). */
+  onObserve: ((target: ObservationTarget) => void) | null;
+}) {
   const [filter, setFilter] = React.useState<string>("all");
   const counts = countByStatus(rows);
   const visible = filter === "all" ? rows : rows.filter((row) => row.status === filter);
@@ -459,6 +529,29 @@ function MatrixTab({ rows, onOpen }: { rows: MatrixRow[]; onOpen: (f: Finding) =
                 </TD>
                 <TD className="text-xs tabular-nums">{row.rule.confidence.toFixed(2)}</TD>
                 <TD>
+                  {onObserve ? (
+                    <button
+                      type="button"
+                      className="mr-1 inline-flex items-center rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                      title="Say what should be checked for this requirement"
+                      aria-label={`What should this check? ${row.rule.rule_id}`}
+                      data-testid="matrix-observe"
+                      onClick={() =>
+                        onObserve({
+                          anchors: [
+                            anchorOf("osl_section", {
+                              reference: row.rule.source_ref,
+                              value: row.rule.source_text,
+                            }),
+                          ],
+                          context: `${row.rule.rule_id} — ${row.rule.summary}`,
+                          findingId: null,
+                        })
+                      }
+                    >
+                      <Lightbulb className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                   {row.findings.length === 0 ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
@@ -663,8 +756,13 @@ function FindingCard({
           {LEG_LABEL[finding.leg] ?? finding.leg}
         </span>
         <span className="min-w-[12rem] flex-1 text-sm font-semibold">{finding.title}</span>
+        {finding.origin === "learned" ? (
+          <Badge tone="info" title={finding.rule_summary || undefined} data-testid="learned-mark">
+            <Lightbulb className="mr-1 h-3 w-3" /> Learned from an observation
+          </Badge>
+        ) : null}
         <Badge tone={decided ? (ok ? "solid-success" : "solid-destructive") : "muted"}>
-          {decided ? (ok ? "OK" : "Not OK") : "undecided"}
+          {decided ? (ok ? "OK" : "Not OK") : "Undecided"}
         </Badge>
       </div>
 

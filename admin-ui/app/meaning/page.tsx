@@ -336,7 +336,22 @@ function EntryCard({
   onPatch: (patch: MeaningEntryPatch) => void;
 }) {
   const [draft, setDraft] = React.useState<MeaningEntryPatch>({});
+  const [promoted, setPromoted] = React.useState(false);
+  const [promoteError, setPromoteError] = React.useState<string | null>(null);
   React.useEffect(() => setDraft({}), [entry.updated_at]);
+
+  /** Teach this confirmed mapping to the model as a worked example (ADR-038). */
+  async function promote() {
+    try {
+      await api.promoteExample({ source: "meaning", id: entry.id });
+      setPromoted(true);
+      setPromoteError(null);
+    } catch (caught) {
+      setPromoteError(
+        caught instanceof ApiError ? caught.detail : "Could not add it to the examples."
+      );
+    }
+  }
   const cell = draft.report_cells?.[0] ?? entry.report_cells[0];
   const dirty = Object.keys(draft).length > 0;
 
@@ -407,6 +422,19 @@ function EntryCard({
               Confirm
             </Button>
           ) : null}
+          {entry.status === "confirmed" ? (
+            // A mapping a person confirmed is the model being told what this
+            // requirement answers to, which is what a worked example teaches (ADR-038).
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={busy || promoted}
+              title="Add this mapping to the model's worked examples for tracing"
+              onClick={() => void promote()}
+            >
+              {promoted ? "Taught" : "Use as example"}
+            </Button>
+          ) : null}
           {entry.status !== "rejected" ? (
             <Button
               size="xs"
@@ -420,6 +448,7 @@ function EntryCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-2 pt-3 text-xs">
+        {promoteError ? <p className="text-destructive">{promoteError}</p> : null}
         {entry.question ? (
           <div className="rounded-md border border-warn/50 bg-warn/10 p-2">
             <b>The model asks:</b> {entry.question}

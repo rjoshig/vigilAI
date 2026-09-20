@@ -30,11 +30,13 @@ __all__ = [
     "VersionError",
     "artifact_snapshot",
     "current_versions",
+    "example_snapshot",
     "latest_version",
     "list_versions",
     "programme_snapshot",
     "prune_versions",
     "record_artifact_version",
+    "record_example_version",
     "record_meaning_version",
     "record_programme_version",
     "referenced_sample_paths",
@@ -47,7 +49,7 @@ _LOG: Final = logging.getLogger(__name__)
 #: How many versions the console lists per object (user decision, Phase 6.8).
 KEEP_VERSIONS: Final[int] = 10
 
-VersionKind = Literal["artifact_type", "programme_rules", "meaning"]
+VersionKind = Literal["artifact_type", "programme_rules", "meaning", "example"]
 
 #: Artifact-type fields an administrator edits, in snapshot order.
 _ARTIFACT_FIELDS: Final[tuple[str, ...]] = (
@@ -72,6 +74,18 @@ _SAMPLE_FIELDS: Final[tuple[str, ...]] = (
     "size_bytes",
     "sheets",
     "uploaded_by",
+)
+
+#: Worked-example fields the snapshot keeps; enough to re-create the row on a revert.
+_EXAMPLE_FIELDS: Final[tuple[str, ...]] = (
+    "scope",
+    "given",
+    "answer",
+    "note",
+    "origin",
+    "is_active",
+    "sort_order",
+    "created_by",
 )
 
 #: Programme-rule fields the snapshot keeps.
@@ -124,6 +138,29 @@ def programme_snapshot(session: Session, code: str) -> dict[str, Any]:
         "code": code,
         "rules": [
             {"id": rule.id, **{name: getattr(rule, name) for name in _RULE_FIELDS}} for rule in rows
+        ],
+    }
+
+
+def example_snapshot(session: Session, stage: str) -> dict[str, Any]:
+    """Capture one stage's worked examples (Phase 6.13d).
+
+    Args:
+        session: An open session.
+        stage: The prompt stage.
+
+    Returns:
+        A JSON-ready dictionary.
+    """
+    rows = session.execute(
+        sa.select(models.PromptExample)
+        .where(models.PromptExample.stage == stage)
+        .order_by(models.PromptExample.sort_order, models.PromptExample.id)
+    ).scalars()
+    return {
+        "stage": stage,
+        "examples": [
+            {"id": row.id, **{name: getattr(row, name) for name in _EXAMPLE_FIELDS}} for row in rows
         ],
     }
 
@@ -226,6 +263,24 @@ def record_meaning_version(
         The version written, or the latest when nothing changed.
     """
     return _record(session, "meaning", scope_key, snapshot, actor, summary)
+
+
+def record_example_version(
+    session: Session, stage: str, actor: str, summary: str = ""
+) -> models.DefinitionVersion:
+    """Snapshot one stage's worked examples after a change (Phase 6.13d).
+
+    Args:
+        session: An open session.
+        stage: The prompt stage.
+        actor: Who changed them.
+        summary: What changed, when the caller knows; derived otherwise.
+
+    Returns:
+        The version written, or the latest when nothing changed.
+    """
+    session.flush()
+    return _record(session, "example", stage, example_snapshot(session, stage), actor, summary)
 
 
 def _describe(before: dict[str, Any] | None, after: dict[str, Any]) -> str:
@@ -367,6 +422,9 @@ def revert(
         session.flush()
         session.refresh(row)
         snapshot = artifact_snapshot(row)
+    elif kind == "example":
+        summary = _restore_examples(session, key, target.snapshot)
+        snapshot = example_snapshot(session, key)
     else:
         summary = _restore_programme(session, key, target.snapshot)
         snapshot = programme_snapshot(session, key)
@@ -380,6 +438,37 @@ def revert(
         f"reverted to version {version}" + (f"; {summary}" if summary else ""),
         reverted_from=version,
     )
+
+
+def _restore_examples(session: Session, stage: str, snapshot: dict[str, Any]) -> str:
+    """Write a worked-example snapshot over the live rows; returns what changed."""
+    wanted = {int(entry["id"]): entry for entry in snapshot.get("examples", [])}
+    rows = {
+        row.id: row
+        for row in session.execute(
+            sa.select(models.PromptExample).where(models.PromptExample.stage == stage)
+        ).scalars()
+    }
+    restored = 0
+    for example_id, entry in wanted.items():
+        row = rows.get(example_id)
+        if row is None:
+            row = models.PromptExample(id=example_id, stage=stage)
+            session.add(row)
+        for name in _EXAMPLE_FIELDS:
+            if name in entry:
+                setattr(row, name, entry[name])
+        restored += 1
+    removed = 0
+    for example_id, row in rows.items():
+        if example_id not in wanted:
+            session.delete(row)
+            removed += 1
+    session.flush()
+    parts = [f"{restored} example{'' if restored == 1 else 's'} restored"]
+    if removed:
+        parts.append(f"{removed} added since then removed")
+    return "; ".join(parts)
 
 
 def _restore_artifact(session: Session, key: str, snapshot: dict[str, Any], data_dir: Path) -> str:

@@ -31,7 +31,9 @@ __all__ = [
     "FrontDoorOut",
 ]
 
-AnchorKind = Literal["report_cell", "report_field", "osl_section", "config_path", "finding"]
+AnchorKind = Literal[
+    "report_cell", "report_field", "osl_section", "config_path", "finding", "rule", "run"
+]
 
 
 class Anchor(BaseModel):
@@ -98,6 +100,15 @@ class ObservationOut(ObservationIn):
     #: statement reads as the opposite of it (Phase 6.1e). Shown to the author while
     #: they can still reconsider; nothing is blocked.
     covered_by: list[dict[str, Any]] = Field(default_factory=list)
+    #: What became of it, read from the rule tables (Phase 6.13b): ``waiting`` ·
+    #: ``drafted`` · ``approved`` (the rule is in shadow) · ``live`` · ``disabled`` ·
+    #: ``rejected``. The author stopped hearing anything after "drafted" before this.
+    outcome: str = "waiting"
+    outcome_note: str = ""
+    rule_ref: str = ""
+    rule_name: str = ""
+    rule_summary: str = ""
+    rule_state: str = ""
     created_at: dt.datetime
     synthesized_at: dt.datetime | None = None
 
@@ -136,7 +147,10 @@ class CandidateOut(BaseModel):
     #: Overlaps with an active rule, found by fingerprint. Two rules quietly saying
     #: nearly the same thing is how a findings list becomes noise.
     conflicts: list[dict[str, Any]] = Field(default_factory=list)
-    #: What this rule would have changed on the golden set and recent runs.
+    #: What this rule would have done to recent finalized runs, evaluated against
+    #: their stored reports by a worker job: which runs it would have fired on, a
+    #: few examples, and how many related findings reviewers dismissed. Carries
+    #: ``status: running`` while the job is queued (Phase 6.13e).
     replay: dict[str, Any] = Field(default_factory=dict)
     #: What the critique pass said about the first draft (Phase 6.11g).
     critique: dict[str, Any] = Field(default_factory=dict)

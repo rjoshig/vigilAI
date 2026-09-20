@@ -139,6 +139,7 @@ export const FINDING_LABEL: Record<string, string> = {
   report_violates_rule: "Report violates rule",
   count_does_not_reconcile: "Count does not reconcile",
   cross_report_disagreement: "Cross-report disagreement",
+  judgment_failed: "Judgment check failed",
   profile_anomaly: "Profile anomaly",
   low_confidence_extraction: "Low-confidence extraction",
   could_not_evaluate: "Could not evaluate",
@@ -149,4 +150,23 @@ export const LEG_LABEL: Record<string, string> = {
   osl_config: "OSL ↔ config",
   config_reports: "config ↔ reports",
   osl_reports: "OSL ↔ reports",
+};
+
+/** Where a finding came from, in words a reviewer can act on (Phase 6.13b). */
+export const ORIGIN_LABEL: Record<string, string> = {
+  built_in: "From the OSL and the configuration",
+  admin: "Administrator's rule",
+  guide: "From a validation guide",
+  meaning: "From the meaning map",
+  learned: "Learned from an observation",
+};
+
+/** What became of an observation, to its author (Phase 6.13b). */
+export const OUTCOME_LABEL: Record<string, string> = {
+  waiting: "Waiting for an administrator to look at it",
+  drafted: "The model has drafted a rule from it, for an administrator to approve",
+  approved: "Approved: the rule runs in shadow, counted but shown to nobody yet",
+  live: "Live: the rule produces findings on every run in its scope",
+  disabled: "The rule was switched off; nothing in the training record is deleted",
+  rejected: "Not taken forward",
 };

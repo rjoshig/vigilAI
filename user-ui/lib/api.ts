@@ -13,8 +13,11 @@ import type {
   ConfigDetail,
   ConfigNoteInput,
   ConfigSummary,
+  Coverage,
   CreateRunResult,
   CurrentUser,
+  Drift,
+  ExploreArtifact,
   FinalizeResult,
   Finding,
   NewRunOptions,
@@ -24,14 +27,12 @@ import type {
   Requirements,
   ReviewStatus,
   RunDetail,
+  RunRules,
   RunStats,
   RunSummary,
+  SamplePreview,
   TrainingConfig,
   TypeDetection,
-  Coverage,
-  Drift,
-  ExploreArtifact,
-  SamplePreview,
 } from "@/lib/types";
 
 /** Where the API lives. The Next rewrite proxies this to FastAPI, so there is no CORS. */
@@ -202,6 +203,11 @@ export const api = {
   },
 
   /** What the run checked and what it did not (Phase 6.11c). */
+  /** The rules that touched a run, grouped by origin; shadow rules named only. */
+  getRunRules(runId: number): Promise<RunRules> {
+    return request<RunRules>(`/runs/${runId}/rules`);
+  },
+
   getCoverage(runId: number): Promise<Coverage> {
     return request<Coverage>(`/runs/${runId}/coverage`);
   },

@@ -40,6 +40,11 @@ import type {
   Usage,
   DefinitionVersion,
   GuideEntry,
+  Correction,
+  ExampleStage,
+  PromoteExample,
+  PromptExample,
+  PromptExampleIn,
   VersionKind,
   BulkResult,
   RulesBulkResult,
@@ -47,6 +52,7 @@ import type {
   MeaningEntryPatch,
   MeaningSamples,
   ProposeResult,
+  ShadowFinding,
 } from "@/lib/types";
 
 const BASE = "/api/v1/admin";
@@ -497,6 +503,46 @@ export const api = {
   /** Every state this rule has moved between, with who moved it. */
   ruleHistory: (ruleKind: string, id: number): Promise<RuleStateChange[]> =>
     request<RuleStateChange[]>(`/rules/${ruleKind}/${id}/history`),
+
+  /** What a shadow rule found, which no reviewer sees (ADR-040). */
+  shadowFindings: (ruleKind: string, id: number): Promise<ShadowFinding[]> =>
+    request<ShadowFinding[]>(`/rules/${ruleKind}/${id}/shadow-findings`),
+
+  /**
+   * Say a shadow finding is not a real problem. The ordinary finding review, reached from
+   * the admin console because reviewers never see the finding; this is what makes a shadow
+   * rule's precision knowable before it is activated.
+   */
+  dismissShadowFinding: (findingId: number, note: string): Promise<ShadowFinding> =>
+    request<ShadowFinding>(
+      `/findings/${findingId}`,
+      json("PATCH", { review_status: "false_positive", review_note: note }),
+      ROOT
+    ),
+
+  // --- the administrator's worked examples (Phase 6.13d, ADR-038) ---------------------
+
+  /** The stages an example can be added to, with the examples that ship in the prompt. */
+  listExampleStages: (): Promise<ExampleStage[]> => request<ExampleStage[]>("/example-stages"),
+
+  /** The stored examples, for one stage or for all of them. */
+  listExamples: (stage?: string): Promise<PromptExample[]> =>
+    request<PromptExample[]>(`/examples${stage ? `?stage=${encodeURIComponent(stage)}` : ""}`),
+
+  /** Add an example. The API validates the answer against the stage's own schema. */
+  saveExample: (payload: PromptExampleIn): Promise<PromptExample> =>
+    request<PromptExample>("/examples", json("POST", payload)),
+
+  /** Edit an example, or activate and deactivate one. */
+  patchExample: (id: number, payload: Partial<PromptExampleIn>): Promise<PromptExample> =>
+    request<PromptExample>(`/examples/${id}`, json("PATCH", payload)),
+
+  /** Requirements reviewers rewrote, which is the model being told it read wrongly. */
+  listCorrections: (): Promise<Correction[]> => request<Correction[]>("/corrections"),
+
+  /** Turn a decision somebody already confirmed into a worked example. */
+  promoteExample: (payload: PromoteExample): Promise<PromptExample> =>
+    request<PromptExample>("/examples/promote", json("POST", payload)),
 
   /** The last ten versions of an artifact type or a programme's rules, newest first. */
   listVersions: (kind: VersionKind, key: string): Promise<DefinitionVersion[]> =>

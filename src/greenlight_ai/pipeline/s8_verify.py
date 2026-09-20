@@ -280,6 +280,27 @@ def _disagreement(
     return f"{len(dissenting)} of {len(answered)} readers disagreed — {reasons}."
 
 
+def _report_kind_of(context: RunContext, finding: Finding) -> str:
+    """Which report a finding is about, when it is about one.
+
+    An administrator's AI context for a report type reached no prompt at all before
+    6.13a: the preamble was only ever asked for the OSL, the configuration, or nothing.
+    The lens read is where a report is actually discussed, so it is where that context
+    belongs.
+
+    Args:
+        context: The run context.
+        finding: The finding being verified.
+
+    Returns:
+        The report kind named in the finding's evidence when the run has such a report,
+        otherwise the empty string, so a finding about the configuration gets no report
+        context bolted on.
+    """
+    name = (finding.evidence.report_name or "").strip()
+    return name if name and name in context.reports else ""
+
+
 def _ask(context: RunContext, lens: str, finding: Finding) -> LensResponse | None:
     """Put one finding to one lens.
 
@@ -300,7 +321,7 @@ def _ask(context: RunContext, lens: str, finding: Finding) -> LensResponse | Non
     try:
         result = context.client.complete(
             prompt.system,
-            preamble(context.guidance)
+            preamble(context.guidance, _report_kind_of(context, finding))
             + prompt.render(
                 finding=f"{finding.type} — {finding.title}. {finding.detail}",
                 evidence=format_evidence(finding.evidence),
@@ -430,7 +451,10 @@ def _delivery_summary(context: RunContext) -> str:
         Aggregates and requirement text only; never a sample row (ADR-003).
     """
     requirements = "; ".join(
-        str(getattr(rule.source, "text", "") or f"{rule.req_type}: {rule.values}")
+        # ``rule.source`` is where a rule came from, a word; the wording is
+        # ``source_text``. The old ``getattr`` on a string always fell through, so the
+        # programme prompt saw ``criteria: ()`` instead of the OSL sentence (6.13a, D7).
+        str(rule.source_text.strip() or f"{rule.req_type}: {list(rule.values)}")
         for rule in context.rules
     )[:4000]
     elements = "; ".join(

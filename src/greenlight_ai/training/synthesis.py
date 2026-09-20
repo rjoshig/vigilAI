@@ -10,15 +10,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Final, Sequence
+from typing import Any, Final, Mapping, Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from greenlight_ai import scopes
+from greenlight_ai.checks.expressions import ExpressionError
+from greenlight_ai.checks.expressions import validate as validate_expression
 from greenlight_ai.checks.field_constraints import CONSTRAINT_KINDS
 from greenlight_ai.db import models
 from greenlight_ai.llm.client import LLMClient, LLMError, LLMResponseError
+from greenlight_ai.llm.examples import LibraryExample
 from greenlight_ai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
 from greenlight_ai.llm.prompts.synthesize_critique import CRITIQUE_PROMPT
 from greenlight_ai.llm.prompts.schemas import (
@@ -29,6 +32,7 @@ from greenlight_ai.llm.prompts.schemas import (
 from greenlight_ai.training.lifecycle import set_state
 
 __all__ = [
+    "constraint_value",
     "SynthesisError",
     "ValidationProblem",
     "synthesize",
@@ -61,6 +65,35 @@ class ValidationProblem:
 
     rule_name: str
     reason: str
+
+
+def constraint_value(body: Mapping[str, Any]) -> Any:
+    """The parameter a drafted field constraint carries, in the shape the evaluator reads.
+
+    The model answers with ``values``, ``minimum``, ``maximum`` and ``pattern``, because
+    naming the parameter after the constraint is what keeps its answer checkable. The
+    evaluator reads one ``value`` whose shape depends on the constraint. Mapping between
+    them is done here and nowhere else, so approving a rule and replaying it cannot
+    disagree (Phase 6.13e).
+
+    Args:
+        body: The drafted rule.
+
+    Returns:
+        The parameter: a list for the value-set constraints, a number for a fill rate,
+        a mapping of bounds for a range, a pattern string for a format, and ``None``
+        for a constraint that takes no parameter.
+    """
+    constraint = str(body.get("constraint", ""))
+    if constraint in ("allowed_values", "forbidden_values"):
+        return [str(value) for value in (body.get("values") or [])]
+    if constraint == "fill_rate_min":
+        return body.get("minimum")
+    if constraint == "range":
+        return {"min": body.get("minimum"), "max": body.get("maximum")}
+    if constraint == "format":
+        return str(body.get("pattern") or "")
+    return body.get("value")
 
 
 def validate_rule(rule: SynthesizedRule, known_fields: Sequence[str]) -> str:
@@ -105,9 +138,20 @@ def validate_rule(rule: SynthesizedRule, known_fields: Sequence[str]) -> str:
     if rule.target_kind == "check":
         if not rule.expression.strip():
             return "a check needs an expression"
+        # Parsed here rather than at run time: a malformed expression that reaches a
+        # rule table becomes a finding nobody can explain (Phase 6.13e).
+        try:
+            validate_expression(rule.expression)
+        except ExpressionError as exc:
+            return f"the expression cannot be evaluated: {exc}"
         return ""
 
     if rule.target_kind == "compliance_rule":
+        if not rule.json_path_contains.strip():
+            return (
+                "a compliance rule needs the configuration path fragment it looks for; "
+                "without one it has nothing to check"
+            )
         if not rule.reasoning.strip():
             return "a compliance rule needs its reasoning, which is what a reviewer reads"
         return ""
@@ -144,7 +188,7 @@ def _body(rule: SynthesizedRule) -> dict[str, Any]:
         }
     if rule.target_kind == "check":
         return {"expression": rule.expression}
-    return {"reasoning": rule.reasoning}
+    return {"json_path_contains": rule.json_path_contains.strip(), "reasoning": rule.reasoning}
 
 
 def fingerprint_rule(target_kind: str, body: dict[str, Any], scope: str) -> str:
@@ -207,6 +251,7 @@ def find_conflicts(
                     {
                         "rule_kind": "field_constraint",
                         "id": row.id,
+                        "name": f"{row.field} {row.constraint}",
                         "summary": f"{row.field} {row.constraint}",
                         "scope": row.scope,
                         "state": row.state,
@@ -224,10 +269,30 @@ def find_conflicts(
                     {
                         "rule_kind": "check",
                         "id": check.id,
+                        "name": check.name,
                         "summary": check.expression,
                         "scope": check.scope,
                         "state": check.state,
                         "same": True,
+                    }
+                )
+    elif target_kind == "compliance_rule":
+        wanted_path = str(body.get("json_path_contains", "")).strip()
+        compliance_rows = session.execute(
+            sa.select(models.ComplianceRuleRow).where(models.ComplianceRuleRow.state != "deleted")
+        ).scalars()
+        for compliance in compliance_rows:
+            path = str((compliance.requirement or {}).get("json_path_contains", "")).strip()
+            if wanted_path and path == wanted_path:
+                conflicts.append(
+                    {
+                        "rule_kind": "compliance_rule",
+                        "id": compliance.id,
+                        "name": compliance.name,
+                        "summary": path,
+                        "scope": compliance.scope,
+                        "state": compliance.state,
+                        "same": compliance.scope == scope,
                     }
                 )
     return conflicts
@@ -304,14 +369,42 @@ def _critique_once(
         _LOG.info("redraft could not run (%s); the first draft stands", type(exc).__name__)
         return rule, critique
 
-    if not redrafted.rules:
-        return rule, critique
-    candidate_rule = redrafted.rules[0]
-    if validate_rule(candidate_rule, known_fields):
-        # A redraft that does not validate is worse than what it replaces.
+    # The redraft answers for every statement in the batch, so it can carry several
+    # rules. The one that replaces this draft is the one about the same thing; taking
+    # the first in the list swapped a compliance rule for a field constraint whenever
+    # the batch held both (Phase 6.13a).
+    candidate_rule = _matching_redraft(rule, redrafted.rules)
+    if candidate_rule is None or validate_rule(candidate_rule, known_fields):
+        # No redraft about this rule, or one that does not validate, is worse than
+        # what it replaces.
         return rule, critique
     critique["redrafted"] = True
     return candidate_rule, critique
+
+
+def _matching_redraft(
+    original: SynthesizedRule, redrafts: Sequence[SynthesizedRule]
+) -> SynthesizedRule | None:
+    """Pick the redraft that is about the same rule as the original.
+
+    Args:
+        original: The draft the critique found unfaithful.
+        redrafts: Every rule the redraft call returned.
+
+    Returns:
+        The redraft with the same target kind that shares the original's name or its
+        source statements, else the only same-kind redraft, else ``None``.
+    """
+    same_kind = [r for r in redrafts if r.target_kind == original.target_kind]
+    for candidate in same_kind:
+        if candidate.name.strip() and candidate.name.strip() == original.name.strip():
+            return candidate
+    for candidate in same_kind:
+        if original.from_statements and set(candidate.from_statements) & set(
+            original.from_statements
+        ):
+            return candidate
+    return same_kind[0] if len(same_kind) == 1 else None
 
 
 def _draft_text(rule: Any) -> str:
@@ -338,6 +431,7 @@ def synthesize(
     *,
     known_fields: Sequence[str] = (),
     report_kinds: Sequence[str] = (),
+    examples: Sequence[LibraryExample] = (),
     actor: str = "",
     user_id: int | None = None,
 ) -> list[models.RuleCandidate]:
@@ -351,6 +445,7 @@ def synthesize(
             follow.
         known_fields: Attribute names the tool knows, so an invented one is caught.
         report_kinds: The report types that exist.
+        examples: The administrator's worked examples for this stage (ADR-038).
         actor: Who asked for the synthesis.
         user_id: Their account id.
 
@@ -367,10 +462,14 @@ def synthesize(
         raise SynthesisError("no observations were selected")
     selected = list(observations)[:MAX_STATEMENTS]
 
-    statements = "\n".join(f"- {_statement_text(observation)}" for observation in selected)
+    # Numbered rather than bulleted, so a rule can say which statements it came from.
+    statements = "\n".join(
+        f"{index}. {_statement_text(observation)}" for index, observation in enumerate(selected, 1)
+    )
     result = client.complete(
         SYNTHESIZE_PROMPT.system,
-        SYNTHESIZE_PROMPT.render(
+        SYNTHESIZE_PROMPT.render_with_examples(
+            examples,
             statements=statements,
             attributes=", ".join(known_fields) or "none recorded",
             report_types=", ".join(report_kinds) or "none recorded",
@@ -393,7 +492,7 @@ def synthesize(
             "still in the queue"
         )
 
-    source_ids = [observation.id for observation in selected]
+    all_ids = [observation.id for observation in selected]
     scope = _scope_for(selected)
     created: list[models.RuleCandidate] = []
 
@@ -416,7 +515,7 @@ def synthesize(
             reasoning=rule.reasoning,
             severity=rule.severity,
             scope=scope,
-            source_observation_ids=source_ids,
+            source_observation_ids=_sources_for(rule, all_ids),
             status="rejected" if problem else "draft",
             admin_note=problem,
             model_draft=first_draft,
@@ -434,16 +533,47 @@ def synthesize(
     session.flush()
 
     # The observation is marked, never consumed: asking again says it has already
-    # been synthesized rather than doing the work twice or quietly dropping it.
-    usable = next((c for c in created if c.status == "draft"), None)
+    # been synthesized rather than doing the work twice or quietly dropping it. Each
+    # observation points at the draft that named it, so "what became of what I wrote"
+    # has one answer per sentence rather than one per batch.
+    fallback = next((c for c in created if c.status == "draft"), None)
     for observation in selected:
+        own = next(
+            (
+                c
+                for c in created
+                if c.status == "draft" and observation.id in (c.source_observation_ids or [])
+            ),
+            fallback,
+        )
         observation.status = "synthesized"
-        observation.candidate_id = usable.id if usable is not None else None
+        observation.candidate_id = own.id if own is not None else None
         observation.synthesized_at = sa.func.now()
     session.flush()
 
     _LOG.info("synthesized %d candidate(s) from %d observation(s)", len(created), len(selected))
     return created
+
+
+def _sources_for(rule: SynthesizedRule, all_ids: Sequence[int]) -> list[int]:
+    """Which observations a drafted rule came from.
+
+    Args:
+        rule: The drafted rule, whose ``from_statements`` are one-based indexes into
+            the numbered statements block.
+        all_ids: The observation ids in the order they were numbered.
+
+    Returns:
+        The ids the model named, in order and without repeats. The whole batch when it
+        named none or only nonsense, because a candidate with no source is worse than
+        one with too many.
+    """
+    chosen = [
+        all_ids[index - 1]
+        for index in dict.fromkeys(rule.from_statements)
+        if 1 <= index <= len(all_ids)
+    ]
+    return chosen or list(all_ids)
 
 
 def _statement_text(observation: models.TrainingObservation) -> str:
@@ -544,7 +674,12 @@ def approve(
     if candidate.status != "draft":
         raise SynthesisError(f"this candidate is already {candidate.status}")
 
-    conflicts = list(candidate.conflicts or [])
+    effective_scope = scope or candidate.scope
+    body = dict(candidate.body or {})
+    # Found again now rather than read from synthesis time: a rule created in between
+    # would otherwise be invisible to the one gate that exists to catch overlap.
+    conflicts = find_conflicts(session, candidate.target_kind, body, effective_scope)
+    candidate.conflicts = conflicts
     if conflicts and resolution not in ("supersede", "keep_both"):
         # Overlapping rules accumulate quietly and are very hard to untangle later, so
         # the decision is taken once, here, by the person approving (ADR-021).
@@ -554,15 +689,13 @@ def approve(
             "Say whether it supersedes them or whether both should run."
         )
 
-    effective_scope = scope or candidate.scope
-    body = dict(candidate.body or {})
     state = "shadow" if into_shadow else "active"
 
     if candidate.target_kind == "field_constraint":
         row: Any = models.FieldConstraint(
             field=str(body.get("field", "")),
             constraint=str(body.get("constraint", "")),
-            value=body.get("value"),
+            value=constraint_value(body),
             report_kinds=list(body.get("report_kinds") or []),
             severity=candidate.severity,
             reasoning=candidate.reasoning,
@@ -587,7 +720,10 @@ def approve(
     elif candidate.target_kind == "compliance_rule":
         row = models.ComplianceRuleRow(
             name=candidate.name,
-            requirement={"json_path_contains": candidate.name, "expected_value": True},
+            requirement={
+                "json_path_contains": str(body.get("json_path_contains", "")).strip(),
+                "expected_value": body.get("expected_value", True),
+            },
             scope=effective_scope,
             reasoning=candidate.reasoning,
             is_active=state == "active",

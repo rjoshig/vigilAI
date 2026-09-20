@@ -23,6 +23,8 @@ __all__ = [
     "RunDetail",
     "StageInfo",
     "FindingOut",
+    "RunRuleOut",
+    "RunRulesOut",
     "FindingPatch",
     "RuleOut",
     "TraceOut",
@@ -258,6 +260,14 @@ class FindingOut(BaseModel):
     #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
     #: the single second opinion.
     lens_opinions: list[dict[str, Any]] = Field(default_factory=list)
+    #: Where the finding came from (Phase 6.13b): ``built_in`` when code produced it
+    #: from the OSL and the configuration alone, else the origin of the rule behind it —
+    #: ``admin`` · ``guide`` · ``meaning`` · ``learned``. A reviewer deserves to know
+    #: that a finding exists because a colleague wrote a sentence.
+    origin: str = "built_in"
+    rule_name: str = ""
+    rule_summary: str = ""
+    run_id: int = 0
 
 
 class FindingPatch(BaseModel):
@@ -510,3 +520,26 @@ class DriftOut(BaseModel):
     config_version: Optional[int] = None
     #: OSL references a report evidenced last time and evidences no longer.
     newly_unchecked: list[str] = Field(default_factory=list)
+
+
+class RunRuleOut(BaseModel):
+    """One rule that touched a run (Phase 6.13b)."""
+
+    rule_ref: str
+    kind: str
+    name: str
+    summary: str = ""
+    origin: str = "admin"
+    state: str = "active"
+    #: How many findings it produced on this run. Zero for a shadow rule, whose
+    #: findings are counted for the administrator and shown to nobody (ADR-021).
+    findings: int = 0
+    shadow: bool = False
+
+
+class RunRulesOut(BaseModel):
+    """The rules applied to a run, as a reviewer may see them."""
+
+    applied: list[RunRuleOut] = Field(default_factory=list)
+    #: Rules that ran in shadow on this run, named and nothing more.
+    running_silently: list[RunRuleOut] = Field(default_factory=list)

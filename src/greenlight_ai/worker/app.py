@@ -28,15 +28,20 @@ from greenlight_ai.db.session import create_all, create_engine, session_factory,
 from greenlight_ai.db.settings import DbSettings
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.llm.settings import LLMSettings, resolved_llm_settings
+from greenlight_ai.config.store import resolve
+from greenlight_ai.worker.replay import replay_candidate
 from greenlight_ai.worker.runner import execute_run, recheck_run
 
-__all__ = ["Worker", "TASK_RUN_PIPELINE", "TASK_RECHECK", "TASK_PURGE", "main"]
+__all__ = ["Worker", "TASK_RUN_PIPELINE", "TASK_RECHECK", "TASK_PURGE", "TASK_REPLAY", "main"]
 
 _LOG: Final = logging.getLogger("greenlight_ai.worker")
 
 TASK_RUN_PIPELINE: Final[str] = "run_pipeline"
 TASK_RECHECK: Final[str] = "recheck"
 TASK_PURGE: Final[str] = "purge"
+#: Evaluate a drafted rule against recent finalized runs (Phase 6.13e). It re-parses
+#: stored files, so it belongs in the worker rather than in a request.
+TASK_REPLAY: Final[str] = "replay"
 
 #: How long to wait when there was nothing to do.
 IDLE_SLEEP_SECONDS: Final[float] = 1.0
@@ -79,6 +84,7 @@ class Worker:
             TASK_RUN_PIPELINE: self._run_pipeline,
             TASK_RECHECK: self._recheck,
             TASK_PURGE: self._purge,
+            TASK_REPLAY: self._replay,
         }
 
     def stop(self) -> None:
@@ -220,6 +226,32 @@ class Worker:
         if job.run_id is None:
             raise ValueError(f"job {job.id} has no run_id")
         recheck_run(self._factory, job.run_id, self._data_dir, self._settings_now())
+
+    def _replay(self, job: ClaimedJob) -> None:
+        """Evaluate a candidate rule against recent finalized runs.
+
+        Args:
+            job: The claimed job, carrying the candidate id.
+
+        Raises:
+            ValueError: When the job names no candidate.
+        """
+        candidate_id = int(dict(job.payload or {}).get("candidate_id") or 0)
+        if not candidate_id:
+            raise ValueError(f"job {job.id} has no candidate_id")
+
+        with session_scope(self._factory) as session:
+            candidate = session.get(models.RuleCandidate, candidate_id)
+            if candidate is None:
+                _LOG.info("replay: candidate %s is gone", candidate_id)
+                return
+            limit = int(resolve(session, "training.replay_runs").value)
+            candidate.replay = replay_candidate(session, candidate, self._data_dir, limit)
+            _LOG.info(
+                "replayed candidate %s over %s run(s)",
+                candidate_id,
+                candidate.replay.get("runs_examined", 0),
+            )
 
     def _settings_now(self) -> LLMSettings:
         """Adapter settings as they resolve at this moment.

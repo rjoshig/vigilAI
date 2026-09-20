@@ -15,9 +15,11 @@ import logging
 from typing import Any, Final
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from greenlight_ai.api import provenance
+from greenlight_ai.api.schemas import FindingOut
 from greenlight_ai.api.deps import CurrentUser, current_user, get_session, require_admin
 from greenlight_ai.api.schemas_training import (
     CandidateDecision,
@@ -38,10 +40,12 @@ from greenlight_ai.api.schemas_training import (
 )
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import models, repository
+from greenlight_ai.db.queue import JobQueue
 from greenlight_ai.training import conflicts
 from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.llm.tripwire import PiiDetected, assert_clean
+from greenlight_ai.worker.app import TASK_REPLAY
 from greenlight_ai.training import front_door, lifecycle, synthesis
 
 __all__ = ["router"]
@@ -82,17 +86,31 @@ def _require_enabled(session: Session) -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Train AI mode is not enabled")
 
 
-def _observation_out(row: models.TrainingObservation) -> ObservationOut:
+def _observation_out(
+    row: models.TrainingObservation, session: Session | None = None
+) -> ObservationOut:
     """Render a stored observation.
 
     Args:
         row: The observation.
+        session: When given, the outcome is read from the rule tables: what the
+            sentence became, and whether that rule is in shadow, live, or gone
+            (Phase 6.13b). Without it the outcome fields stay at their defaults.
 
     Returns:
         The wire model. ``editable`` is what the form uses to decide whether the
         author may still change it; once an administrator queues it, it freezes.
     """
+    outcome, note, facts = (
+        provenance.outcome_of(session, row) if session is not None else ("waiting", "", None)
+    )
     return ObservationOut(
+        outcome=outcome,
+        outcome_note=note,
+        rule_ref=facts.ref if facts else "",
+        rule_name=facts.name if facts else "",
+        rule_summary=facts.summary if facts else "",
+        rule_state=facts.state if facts else "",
         id=row.id,
         kind=row.kind,  # type: ignore[arg-type]
         anchors=list(row.anchors or []),
@@ -235,7 +253,7 @@ def create_observation(
         user_id=user.id,
         actor=user.name,
     )
-    out = _observation_out(row)
+    out = _observation_out(row, session)
     out.covered_by = covered
     return out
 
@@ -267,11 +285,16 @@ def list_observations(
     )
     if mine and user.id is not None:
         statement = statement.where(models.TrainingObservation.author_user_id == user.id)
+    if mine and not kind:
+        # A configuration note is guidance that already reaches the model; listing it
+        # as "waiting for an administrator" told the author two opposite things. Notes
+        # have their own screen, and are still here when asked for by kind.
+        statement = statement.where(models.TrainingObservation.kind != "config_note")
     if obs_status:
         statement = statement.where(models.TrainingObservation.status == obs_status)
     if kind:
         statement = statement.where(models.TrainingObservation.kind == kind)
-    return [_observation_out(row) for row in session.execute(statement).scalars()]
+    return [_observation_out(row, session) for row in session.execute(statement).scalars()]
 
 
 @router.patch("/observations/{observation_id}", response_model=ObservationOut)
@@ -322,7 +345,7 @@ def edit_observation(
     row.kind = payload.kind
     row.version += 1
     session.flush()
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 @router.post("/admin/observations/{observation_id}/reject", response_model=ObservationOut)
@@ -362,7 +385,7 @@ def reject_observation(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 # ------------------------------------------------------------ configuration notes
@@ -399,7 +422,7 @@ def list_config_notes(
     )
     if not include_inactive:
         statement = statement.where(models.TrainingObservation.is_active)
-    return [_observation_out(row) for row in session.execute(statement).scalars()]
+    return [_observation_out(row, session) for row in session.execute(statement).scalars()]
 
 
 @router.post("/configs/{configuration_id}/notes", response_model=ObservationOut, status_code=201)
@@ -457,7 +480,7 @@ def create_config_note(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 @router.patch("/config-notes/{note_id}", response_model=ObservationOut)
@@ -515,7 +538,7 @@ def edit_config_note(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 @router.post("/config-notes/{note_id}/active", response_model=ObservationOut)
@@ -553,7 +576,7 @@ def set_config_note_active(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 def _what_exists(session: Session) -> tuple[list[str], list[str]]:
@@ -633,6 +656,7 @@ def synthesize_candidates(
             rows,
             known_fields=known_fields,
             report_kinds=report_kinds,
+            examples=repository.load_prompt_examples(session).get("training_synthesize", ()),
             actor=user.name,
             user_id=user.id,
         )
@@ -697,6 +721,7 @@ def front_door_place(
             scope=payload.scope,
             known_fields=known_fields,
             report_kinds=report_kinds,
+            examples=repository.load_prompt_examples(session).get("admin_classify", ()),
             actor=user.name,
             user_id=user.id,
         )
@@ -751,21 +776,25 @@ def list_candidates(
 @router.post("/admin/candidates/{candidate_id}/replay", response_model=CandidateOut)
 def replay_candidate(
     candidate_id: int,
+    request: Request,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(require_admin),
 ) -> CandidateOut:
-    """Show what this rule would have changed, before anyone approves it.
+    """Ask for this rule to be evaluated against work already finished (Phase 6.13e).
 
-    A rule that would have fired on thirty historical runs that were all fine is a
-    bad rule, and this is where that becomes visible rather than next month.
+    A rule that would have fired on thirty historical runs that were all fine is a bad
+    rule, and this is where that becomes visible rather than next month. The evaluation
+    re-parses each run's stored reports, so it is queued for the worker rather than done
+    inside the request; the console polls the candidate until the result arrives.
 
     Args:
         candidate_id: The candidate.
+        request: The incoming request, carrying the queue backend flag.
         session: The request's session.
         user: The calling administrator.
 
     Returns:
-        The candidate with its replay filled in.
+        The candidate, with its replay marked as running.
 
     Raises:
         HTTPException: 404 when it does not exist.
@@ -773,63 +802,15 @@ def replay_candidate(
     row = session.get(models.RuleCandidate, candidate_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such candidate")
-    row.replay = _replay(session, row)
+    row.replay = {"status": "running", "note": "Evaluating against recent finalized runs."}
+    JobQueue(session, request.app.state.is_sqlite).enqueue(
+        TASK_REPLAY, payload={"candidate_id": candidate_id}
+    )
     session.flush()
     repository.audit(
         session, "training.replayed", detail=str(candidate_id), user_id=user.id, actor=user.name
     )
     return _candidate_out(row)
-
-
-def _replay(session: Session, candidate: models.RuleCandidate) -> dict[str, Any]:
-    """Estimate what a candidate would have done to work already reviewed.
-
-    Args:
-        session: The request's session.
-        candidate: The candidate.
-
-    Returns:
-        A summary the console shows before approval: how many finalized runs were
-        examined and how many carry the field or expression the rule touches. This
-        counts rather than re-runs the pipeline, because re-running it would re-read
-        every stored file and re-ask the model; the count is what answers "is this
-        rule about something that actually occurs".
-    """
-    limit = int(resolve(session, "training.replay_runs").value)
-    runs = list(
-        session.execute(
-            sa.select(models.Run)
-            .where(models.Run.status == "finalized")
-            .order_by(models.Run.created_at.desc())
-            .limit(limit)
-        ).scalars()
-    )
-    body = dict(candidate.body or {})
-    field = str(body.get("field", ""))
-
-    touched = 0
-    already_ok = 0
-    for run in runs:
-        findings = session.execute(
-            sa.select(models.Finding).where(models.Finding.run_id == run.id)
-        ).scalars()
-        for finding in findings:
-            if field and field.lower() in (finding.title or "").lower():
-                touched += 1
-                if finding.review_status == "false_positive":
-                    already_ok += 1
-
-    return {
-        "runs_examined": len(runs),
-        "runs_available": len(runs),
-        "related_findings": touched,
-        "previously_dismissed": already_ok,
-        "note": (
-            "Counts related findings on recent finalized runs. A rule that touches "
-            "many findings reviewers already dismissed is one to narrow before it is "
-            "approved."
-        ),
-    }
 
 
 @router.post("/admin/candidates/{candidate_id}/approve", response_model=CandidateOut)
@@ -968,8 +949,11 @@ def _statistics(session: Session) -> dict[str, tuple[int, int, dt.datetime | Non
             models.Finding.rule_ref,
             sa.func.count(),
             sa.func.sum(sa.case((models.Finding.review_status == "false_positive", 1), else_=0)),
-            sa.func.max(models.Finding.reviewed_at),
+            # The run's date, not the review's: a rule that fires on every run and is
+            # never triaged used to show "last fired: never" (6.13a).
+            sa.func.max(models.Run.created_at),
         )
+        .join(models.Run, models.Run.id == models.Finding.run_id)
         .where(models.Finding.rule_ref != "")
         .group_by(models.Finding.rule_ref)
     ).all()
@@ -988,13 +972,7 @@ def _summary(rule_kind: str, row: Any) -> str:
     Returns:
         The summary the rules screen searches and shows.
     """
-    if rule_kind == "field_constraint":
-        return f"{row.field} {row.constraint} {row.value}"
-    if rule_kind == "programme_rule":
-        return f"{row.scope_code} {row.strictness}: {row.text}"
-    if rule_kind == "check":
-        return str(row.expression or row.instruction)
-    return str((row.requirement or {}).get("json_path_contains", ""))
+    return provenance.summary_of(rule_kind, row)
 
 
 @router.get("/admin/rules", response_model=list[RuleOut])
@@ -1208,6 +1186,47 @@ def act_on_rule(
         for rule in collect_rules(session, state="all")
         if rule.rule_kind == rule_kind and rule.id == rule_id
     )
+
+
+@router.get("/admin/rules/{rule_kind}/{rule_id}/shadow-findings", response_model=list[FindingOut])
+def shadow_findings(
+    rule_kind: str,
+    rule_id: int,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+    limit: int = Query(default=25, ge=1, le=200),
+) -> list[FindingOut]:
+    """What a rule found while running in shadow (ADR-040).
+
+    A shadow rule's findings are stored and counted and shown to no reviewer. That kept
+    reviewers unburdened and left nobody able to say a shadow finding was wrong, so its
+    dismissal rate was pinned at zero and "precision becomes knowable in shadow" was a
+    promise with no mechanism. The administrator who decides whether to activate the
+    rule is the person who should see them, and may dismiss one through the ordinary
+    finding review.
+
+    Args:
+        rule_kind: Which rule surface.
+        rule_id: The rule.
+        session: The request's session.
+        _user: The calling administrator.
+        limit: How many, newest run first.
+
+    Returns:
+        The shadow findings, with the run each came from.
+
+    Raises:
+        HTTPException: 404 when the rule kind is not one.
+    """
+    if rule_kind not in provenance.RULE_TABLES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"{rule_kind!r} is not a rule kind")
+    rows = session.execute(
+        sa.select(models.Finding)
+        .where(models.Finding.rule_ref == f"{rule_kind}:{rule_id}", models.Finding.shadow.is_(True))
+        .order_by(models.Finding.run_id.desc(), models.Finding.id)
+        .limit(limit)
+    ).scalars()
+    return provenance.decorate_findings(session, [FindingOut.model_validate(row) for row in rows])
 
 
 @router.get("/admin/rules/{rule_kind}/{rule_id}/history", response_model=list[RuleStateChangeOut])

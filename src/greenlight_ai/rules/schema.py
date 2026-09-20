@@ -83,6 +83,9 @@ FindingType = Literal[
     "report_violates_rule",
     "count_does_not_reconcile",
     "cross_report_disagreement",
+    #: A judgment check the model answered "fail" over the named values it was shown;
+    #: code set the severity (ADR-039).
+    "judgment_failed",
     "profile_anomaly",
     "low_confidence_extraction",
     #: The run declared more outputs than the files uploaded cover (ADR-021).

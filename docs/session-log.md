@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.12**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phases 6.11 and 6.12 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036), one scope vocabulary and the front door built (ADR-037).** Next: open a PR to `dev`; the remaining work is blocked on the target machine |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 is complete and pushed** — all six milestones, every acceptance criterion met, the golden set unchanged at 15/15. **Next: nothing is started.** The phase gate says report before beginning anything, so the next session picks the next piece of work with the user. Two follow-ups carried forward: give the demo seed a run with a coverage gap so the browser test for that path runs instead of skipping; the user deletes the old remote branches themselves. A pull request into `dev` has not been opened — the user asks for one when they want it |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,180 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13f and the phase closes)
+
+**Branch:** `feature/loop-closes` · **Status:** phase 6.13 complete, gates green.
+
+The documents the milestones had not already carried. Both training documents say who
+Train AI mode is for and what the screens now do: the user document's Train AI section
+names the senior-associate audience and keeps the status chain; the administrator's gains
+a **Worked examples** section (what an example is, what the console refuses and why, how
+promotion works) and a replay that says what it now measures and what it does not claim.
+`gd-rollout-plan.md` stage 3 asks the seniors to review shadow findings rather than assume
+a dismissal rate, and to add worked examples as they correct the model; its gate says so.
+
+Every acceptance criterion is ticked, each against a test that exists: lens settings reach
+the context, two parts are two files, a shadow compliance rule produces a hidden finding
+with a reference, the author follows an observation from waiting to live, a finding names
+the learned rule behind it, an example is refused unless its answer fits the stage schema,
+a judgment verdict becomes what code decides it becomes, and a replay reports the runs it
+evaluated. 1222 Python tests, 86 admin-ui, 91 user-ui, golden set 15/15.
+
+**Next:** nothing is started. Phase 6.13 closes here; the next piece of work is the
+user's to choose.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13e: a replay that replays)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13e complete, gates green.
+
+Replay counted findings whose titles happened to contain the rule's field name, said
+nothing at all about a check or a compliance rule, and called the result "runs examined".
+It is now a worker job (`replay`): each of the last `training.replay_runs` finalized runs
+has its stored reports parsed again, with the same masking a run uses, and the drafted
+rule is put through the pipeline's own evaluators — field constraints, named values with
+the expression evaluator, configuration path presence. No model is called and nothing is
+written to a run. The console shows *Replaying…* and polls until the result lands.
+
+It is honest about its edges: firing means the rule would have raised a finding, not that
+the finding would have been right, and the dismissal count is an estimate, because the
+candidate has produced no findings of its own yet. Both are said on the card.
+
+`validate_rule` now parses a drafted check with `expressions.validate`, so a malformed
+expression is refused where it is written rather than becoming a run-time finding. The
+golden-set claim has left the candidate model, the wire model and the setting's help.
+
+**Found by replaying:** an approved field constraint lost its parameter. Synthesis answers
+with `values`, `minimum`, `maximum` and `pattern`; approval read `body["value"]`, which is
+not one of them, so every learned allowed-values, range and format constraint went live
+unable to check anything. `synthesis.constraint_value` is now the one mapping between the
+two shapes, used by approval and replay alike. A replay declining to fire on data that
+plainly breaks the rule is what surfaced it.
+
+**Next:** 6.13f, the remaining documents, then the phase closes.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13d: worked examples an administrator can give the model)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13d complete, gates green.
+
+Every prompt's worked examples lived in Python. An administrator could teach the model
+background prose, the validation guides and the meaning map, and not one *this wording
+means this requirement* pair. `prompt_examples` (migration `e6f8a0b2c4d6`) holds theirs,
+for six stages: extraction, description, tracing, judgment, classification and synthesis.
+
+What makes it safe is what the screen shows. An example is a pair, never a sentence: what
+the model would be shown and a good answer, with the answer validated against that
+stage's own Pydantic schema on save, so an example the pipeline could not parse is
+refused with the field named. The personal-data tripwire runs on save, because an example
+is text pasted from a real delivery. The block is rendered after the built-in examples,
+numbered on from them, under a line saying they show a shape and are not rules — and it
+is inserted into the *rendered* prompt, so nothing an administrator wrote is ever read as
+a placeholder, and the text being part of the prompt is what changes the cache key.
+
+The cap is enforced where it is set: a stage carries four, and the console refuses a
+fifth active one rather than storing a row that looks live and reaches nothing. Scope is
+the one vocabulary; the narrowest are shown first. Versions per stage, with revert.
+
+Promotion needs a click. The confirmed mapping keeps its button on the Meaning screen;
+the other two sources have no screen an administrator looks at (the training console
+lists drafts, and a requirement edit happens in the user app), so `GET /admin/corrections`
+lists the requirements reviewers rewrote, and the Examples screen offers both those and
+the rules approved from what reviewers wrote under *Teach from a correction somebody
+already made*.
+
+ADR-038 is written. 1213 Python tests, 86 admin-ui, 91 user-ui.
+
+**Next:** 6.13e, a replay that replays.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13c: judgment checks finished)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13c complete, gates green.
+
+A judgment check could be defined, stored and scoped, and stage 7 skipped it with a log
+line. It now runs, under ADR-001: `CheckDefinitionRow.value_names` (migration
+`d5e7f9a1b3c5`) names the values the model may see; the console's judgment form asks for
+them and the API refuses a judgment check that names none. Stage 7 resolves only those
+values, renders `name = value` lines and calls the registered `JUDGMENT_PROMPT` through
+the adapter, cached and budgeted like every call. Code decides what the verdict becomes:
+`fail` is a `judgment_failed` finding at the check's severity, `review` or a low-confidence
+answer is a review item that says a person must judge, `pass` records nothing, an
+unresolved value is `could_not_evaluate`, and a model that does not answer leaves a run
+notice rather than a silent pass. A shadow judgment check produces a hidden finding.
+
+Nine pipeline tests (`tests/pipeline/test_judgment.py`) and two API tests cover it. ADR-039
+and ADR-040 are written, and ADR-021's item 6 is amended to say how the dismissal rate is
+made — the code has cited all three since 6.13b. Acceptance criterion 7 is ticked.
+
+**Next:** 6.13d, the controlled examples library.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13b: the reviewer's loop closes)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13b complete, gates green.
+
+The author of an observation stopped hearing anything after "the model has drafted a
+rule". Now *My observations* shows a chain — Waiting → Drafted → In shadow → Live, or
+Switched off, or Not taken forward with the reason — and names the rule. The outcome is
+**derived from the rule tables at read time** (`api/provenance.py`) rather than written at
+approval, because a status written then would say "approved" forever while the rule went
+live or was disabled.
+
+A finding now says where it came from: `origin` is `built_in` when code produced it from
+the OSL and the configuration alone, else the origin of the rule behind it, and a card
+from a learned rule is marked *Learned from an observation*. *Rules applied to this run*
+lists every rule that produced a visible finding and names the ones running silently.
+Shadow findings are visible **to administrators only**, per rule on the Rules screen, with
+a *Not a real problem* control that records a dismissal — which is what makes a shadow
+rule's precision knowable before anyone activates it (ADR-040).
+
+The button went where the opinion forms: the evidence drawer, every matrix row, every
+coverage gap. The form asks for the sentence first and focuses it, the expectation second,
+and the three settings sit under *Details*; anchors are chips that can be removed; Escape
+and a click outside close it. Bulk OK says how many it marked and surfaces errors; the
+run-page banner states the gate's own reason. `e2e/tests/train-ai.spec.ts` records from a
+card, the drawer and a gap, and proves a second Save is an update.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13a: the repairs)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13a complete, gates green.
+
+A second review traced the flow from upload to frozen report, the learning loop, and
+every Train AI surface in the user app, in code, and found fifteen defects that no test
+caught and no screen showed. `phase-6.13.md` lists them. Every one is fixed in this
+milestone except D9 (judgment checks, its own milestone) and D11 (replay, its own), and
+every fix carries a test that failed on `dev` first.
+
+The two that mattered most: **the worker dropped the lens settings** — the console-aware
+resolver built `LLMSettings` without them, so with the database reachable every
+deployment ran on `single` whatever `.env` said — and **several files for one report kind
+overwrote each other on disk**, so three labelled parts were three rows over one file.
+The parts test passed because it uploaded identical bytes three times; it now uploads
+distinct bytes and checks the files on disk.
+
+The rest: a learned compliance rule wrote its own name as the path to look for; shadow
+compliance rules never ran and their findings carried no rule reference; shadow
+programme rules interrupted reviewers; the programme read saw `criteria: ()` instead of
+the OSL sentence; AI context written on a report type reached no prompt; the console
+could not approve a candidate that overlapped anything; pressing Save twice made two
+observations; configuration notes appeared on My observations as "waiting"; a compliance
+rule's expected value was never compared; every observation in a batch was linked to one
+candidate. Two more came out while fixing: the redraft after a critique took the *first*
+rule in the answer rather than the one about the same thing, and `last fired` on the
+Rules screen was the last review.
+
+The synthesis prompt is at version 2: statements are numbered and a rule says which it
+came from; a compliance rule carries `json_path_contains`.
 
 ---
 

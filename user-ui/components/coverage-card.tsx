@@ -11,7 +11,7 @@
  * Every number here is produced by code. The model is not involved.
  */
 
-import { AlertTriangle, ClipboardCheck, Eye } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Eye, Lightbulb } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -33,6 +33,12 @@ interface CoverageCardProps {
   onChange?: () => void;
   /** False once the run is frozen: the gaps are history, not work. */
   editable?: boolean;
+  /**
+   * Record what should have been checked, from the gap itself (Phase 6.13b). The tool
+   * saying "I did not check this" is exactly when a person knows what should have been.
+   * Absent when Train AI mode is off.
+   */
+  onObserve?: ((entry: RequirementCoverage) => void) | null;
 }
 
 const STATE_LABEL: Record<CoverageState, string> = {
@@ -54,7 +60,7 @@ function needsAcknowledging(entry: RequirementCoverage): boolean {
   return entry.state === "traced_unchecked" || entry.state === "manual";
 }
 
-export function CoverageCard({ runId, onChange, editable = true }: CoverageCardProps) {
+export function CoverageCard({ runId, onChange, editable = true, onObserve }: CoverageCardProps) {
   const [coverage, setCoverage] = React.useState<Coverage | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -212,17 +218,29 @@ export function CoverageCard({ runId, onChange, editable = true }: CoverageCardP
                     </div>
                     <p className="mt-1">{entry.summary}</p>
                     <p className="mt-0.5 text-muted-foreground">{entry.reason}</p>
-                    {editable && !entry.acknowledged ? (
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        className="mt-1.5"
-                        disabled={busy}
-                        onClick={() => void acknowledge([entry.rule_id])}
-                      >
-                        I have seen this
-                      </Button>
-                    ) : null}
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {editable && !entry.acknowledged ? (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => void acknowledge([entry.rule_id])}
+                        >
+                          I have seen this
+                        </Button>
+                      ) : null}
+                      {onObserve ? (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          title="Say what should have been checked here"
+                          onClick={() => onObserve(entry)}
+                          data-testid="gap-observe"
+                        >
+                          <Lightbulb className="h-3.5 w-3.5" /> What should this check?
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
 

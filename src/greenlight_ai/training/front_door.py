@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from greenlight_ai import scopes
 from greenlight_ai.db import models
 from greenlight_ai.llm.client import LLMClient, LLMError, LLMResponseError
+from greenlight_ai.llm.examples import LibraryExample
 from greenlight_ai.llm.prompts.admin_classify import CLASSIFY_PROMPT
 from greenlight_ai.llm.prompts.schemas import ClassifyResponse
 from greenlight_ai.training.synthesis import SynthesisError, synthesize
@@ -117,6 +118,7 @@ def classify(
     *,
     known_fields: Sequence[str] = (),
     report_kinds: Sequence[str] = (),
+    examples: Sequence[LibraryExample] = (),
 ) -> ClassifyResponse:
     """Ask which surface a statement belongs on.
 
@@ -126,6 +128,7 @@ def classify(
             delimited block, marked as data rather than as an instruction.
         known_fields: Attribute names the tool knows.
         report_kinds: The report types that exist.
+        examples: The administrator's worked examples for this stage (ADR-038).
 
     Returns:
         The classification.
@@ -137,7 +140,8 @@ def classify(
     try:
         result = client.complete(
             CLASSIFY_PROMPT.system,
-            CLASSIFY_PROMPT.render(
+            CLASSIFY_PROMPT.render_with_examples(
+                examples,
                 statement=statement.strip(),
                 attributes=", ".join(known_fields) or "none recorded",
                 report_types=", ".join(report_kinds) or "none recorded",
@@ -161,6 +165,7 @@ def place(
     scope: str = "",
     known_fields: Sequence[str] = (),
     report_kinds: Sequence[str] = (),
+    examples: Sequence[LibraryExample] = (),
     actor: str = "",
     user_id: int | None = None,
 ) -> FrontDoorResult:
@@ -173,6 +178,7 @@ def place(
         scope: Where it applies, as a scope token. Everywhere when omitted.
         known_fields: Attribute names the tool knows, so an invented one is caught.
         report_kinds: The report types that exist.
+        examples: The administrator's worked examples for the classification stage.
         actor: Who wrote it.
         user_id: Their account id.
 
@@ -188,7 +194,9 @@ def place(
     if not text:
         raise FrontDoorError("nothing was written")
 
-    classified = classify(client, text, known_fields=known_fields, report_kinds=report_kinds)
+    classified = classify(
+        client, text, known_fields=known_fields, report_kinds=report_kinds, examples=examples
+    )
     surface = classified.surface
 
     if surface == "unclear":

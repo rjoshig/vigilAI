@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.11 (c–h).
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.13.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -188,18 +188,40 @@ next run and keeps the text.
 ## Train AI mode
 
 When the sidebar line is green, the tool is collecting what reviewers know so it can
-get better. Nothing you write here runs; an administrator reads it, has the model
-draft a rule from it, and approves that rule, which then runs silently for a while
-before it starts producing findings. You will hear back either way.
+get better. It is aimed at the senior associates who know a programme well enough to
+say what should always be true of it, though anyone may write. Nothing you write here
+runs: an administrator reads it, has the model draft a rule from it, and approves that
+rule, which then runs silently against real deliveries for a while before it starts
+producing findings anyone sees. You will hear back either way.
 
-- **What should this check?** appears on the run page and on every finding. Use it
-  when you know something the tool did not check, or when a finding fired and you
-  know why it should not have. Say what you expect, how serious a breach would be,
-  and how far it applies: this customer, this programme, or everywhere. The control
-  pre-fills what you were looking at, which is what makes your note usable.
-- **My observations** lists what you have written and what became of it: waiting,
-  synthesized into a rule, or rejected with the administrator's reason. You can edit
-  an observation until an administrator picks it up.
+- **What should this check?** is wherever you form the opinion: on every finding card,
+  in the evidence drawer, on every row of the traceability matrix, beside **I have seen
+  this** on every coverage gap, and on the run as a whole. Use it when you know something
+  the tool did not check, or when a finding fired and you know why it should not have.
+  The form asks for one sentence first, then what you expect to see; kind, seriousness
+  and scope sit under **Details** with sensible defaults. The control pre-fills what you
+  were looking at, shown as chips you can remove, which is what makes your note usable.
+- **A coverage gap is the best place to write.** When the panel says a requirement was
+  traced but no report evidenced it, the tool is telling you it did not check something.
+  If you know what should have been checked, say so there.
+- **Findings from learned rules say so.** A card marked **Learned from an observation**
+  exists because a colleague wrote a sentence and an administrator approved the rule it
+  became; the evidence drawer names the rule. **Rules applied to this run**, above the
+  findings, lists every administrator-written, guide, meaning-map and learned rule that
+  produced a finding, and names the rules running silently in shadow.
+- **Saving twice rewords, it does not duplicate.** After a save the form stays open on
+  the observation you just wrote; change anything and press **Save changes** to reword
+  it. If the tool answers that **a rule already covers this**, or that a running rule
+  **says the opposite**, each rule it names carries a **Say this rule is wrong** button,
+  which starts a correction pointed at that rule. That correction is the most useful
+  thing you can tell an administrator.
+- **My observations** lists what you have written and where it has got to, as a chain:
+  **Waiting → Drafted → In shadow → Live**, or **Switched off**, or **Not taken forward**
+  with the administrator's reason. Once a rule exists the card names it. The chain is
+  read from the rule itself each time, so it is never stale. You can edit an observation
+  until an administrator picks it up. Configuration notes are not listed here: a note
+  already reaches the model on every run of its configuration, and it lives on the
+  configuration's own screen.
 - **Do not paste account numbers, names, or any personal data.** The tool refuses to
   save text that looks like it, and tells you so, because the only moment it can be
   removed is before it is saved.

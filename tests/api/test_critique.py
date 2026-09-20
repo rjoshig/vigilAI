@@ -120,36 +120,50 @@ def test_a_critique_that_cannot_run_leaves_the_first_draft_standing(
 # --- conflicts ---------------------------------------------------------------------------
 
 
-def _force_conflict(factory: sessionmaker[Session], candidate_id: int, rule_id: int) -> None:
-    """Record an overlap on a candidate, as detection would."""
+def _existing_rule(factory: sessionmaker[Session]) -> int:
+    """A field constraint already in force that the drafted candidate overlaps.
+
+    A real row rather than a forged ``conflicts`` list: approval finds overlaps again
+    at the moment of approving (Phase 6.13a), so only a rule that actually exists can
+    make it ask for a resolution.
+    """
     with factory() as session:
-        row = session.get(models.RuleCandidate, candidate_id)
-        assert row is not None
-        row.conflicts = [
-            {"id": rule_id, "name": "An existing rule", "summary": "covers the same ground"}
-        ]
+        row = models.FieldConstraint(
+            field="account_status",
+            constraint="not_blank",
+            value={},
+            report_kinds=["dirt"],
+            severity="high",
+            reasoning="An existing rule",
+            scope="everywhere",
+            state="active",
+            origin="admin",
+        )
+        session.add(row)
         session.commit()
+        return int(row.id)
 
 
 def test_approving_a_conflicting_candidate_without_a_resolution_is_refused(
     client: TestClient, api: str, scripted_model: None, factory: sessionmaker[Session]
 ) -> None:
     """Overlapping rules accumulate quietly and are very hard to untangle later."""
+    _existing_rule(factory)
     candidate = _draft(client, api, "The account status is never empty in the DIRT.")
-    _force_conflict(factory, candidate["id"], rule_id=1)
 
     refused = client.post(f"{api}/admin/candidates/{candidate['id']}/approve", json={})
 
     assert refused.status_code == 422
     assert "overlaps" in refused.json()["detail"]
     assert "supersede" in refused.json()["detail"]
+    assert "account_status not_blank" in refused.json()["detail"], "the overlap is named"
 
 
 def test_keeping_both_approves_and_leaves_the_other_rule_alone(
     client: TestClient, api: str, scripted_model: None, factory: sessionmaker[Session]
 ) -> None:
+    _existing_rule(factory)
     candidate = _draft(client, api, "The account status is never empty in the DIRT.")
-    _force_conflict(factory, candidate["id"], rule_id=1)
 
     approved = client.post(
         f"{api}/admin/candidates/{candidate['id']}/approve",
@@ -172,7 +186,6 @@ def test_superseding_disables_the_rule_it_replaces(
         existing_id = existing.id
 
     second = _draft(client, api, "The account status is never blank in the DIRT file.")
-    _force_conflict(factory, second["id"], rule_id=existing_id)
 
     approved = client.post(
         f"{api}/admin/candidates/{second['id']}/approve",

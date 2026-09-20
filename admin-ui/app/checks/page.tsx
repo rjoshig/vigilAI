@@ -34,7 +34,16 @@ import {
 import { BulkBar } from "@/components/bulk-bar";
 import { EVERYWHERE, ScopePicker, scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
-import type { Check, CheckIn, DraftResponse, Scope, Severity, TestResult } from "@/lib/types";
+import type {
+  Check,
+  CheckIn,
+  CheckKind,
+  DraftResponse,
+  NamedValue,
+  Scope,
+  Severity,
+  TestResult,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SEVERITY_TONE: Record<Severity, "destructive" | "warn" | "info" | "muted"> = {
@@ -49,6 +58,7 @@ const EMPTY: CheckIn = {
   kind: "expression",
   expression: "",
   instruction: "",
+  value_names: [],
   reasoning: "",
   severity: "medium",
   scope: EVERYWHERE,
@@ -231,6 +241,17 @@ function AuthorDialog({
 }) {
   const [description, setDescription] = React.useState("");
   const [draft, setDraft] = React.useState<DraftResponse | null>(null);
+  // Every named value the tool knows, for a judgment check to pick from (Phase 6.13c).
+  const [namedValues, setNamedValues] = React.useState<NamedValue[]>([]);
+  React.useEffect(() => {
+    api
+      .listNamedValues()
+      .then(setNamedValues)
+      .catch(() => {
+        // Without the list a judgment check can still be typed; the names are checked
+        // when the run resolves them.
+      });
+  }, []);
   const [check, setCheck] = React.useState<CheckIn>(
     initial
       ? {
@@ -238,6 +259,7 @@ function AuthorDialog({
           kind: initial.kind,
           expression: initial.expression,
           instruction: initial.instruction,
+          value_names: [...initial.value_names],
           reasoning: initial.reasoning,
           severity: initial.severity,
           scope: initial.scope,
@@ -375,14 +397,78 @@ function AuthorDialog({
               </div>
 
               <div className="flex flex-col gap-1">
-                <Label htmlFor="check-expression">Expression</Label>
-                <Input
-                  id="check-expression"
-                  className="mono"
-                  value={check.expression}
-                  onChange={(event) => setCheck({ ...check, expression: event.target.value })}
-                />
+                <Label htmlFor="check-kind">How is it decided?</Label>
+                <Select
+                  id="check-kind"
+                  value={check.kind}
+                  onChange={(event) =>
+                    setCheck({ ...check, kind: event.target.value as CheckKind })
+                  }
+                >
+                  <option value="expression">A formula — code evaluates it, no model call</option>
+                  <option value="judgment">
+                    A judgment — the model reads named values against an instruction
+                  </option>
+                </Select>
+                {check.kind === "judgment" ? (
+                  <p className="text-[0.7rem] text-warn">
+                    Use sparingly: a judgment check costs one model call on every run in its scope.
+                    The model sees only the named values you list below, never a report, and answers
+                    pass, fail or review; code sets the severity.
+                  </p>
+                ) : null}
               </div>
+
+              {check.kind === "expression" ? (
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="check-expression">Expression</Label>
+                  <Input
+                    id="check-expression"
+                    className="mono"
+                    value={check.expression}
+                    onChange={(event) => setCheck({ ...check, expression: event.target.value })}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="check-instruction">What should the model judge?</Label>
+                    <Textarea
+                      id="check-instruction"
+                      className="min-h-[4rem]"
+                      placeholder="The state mix should be plausible for a campaign limited to two states."
+                      value={check.instruction}
+                      onChange={(event) => setCheck({ ...check, instruction: event.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="check-values">Which named values may the model see?</Label>
+                    <select
+                      id="check-values"
+                      multiple
+                      className="mono min-h-[6rem] rounded-md border bg-background px-2 py-1 text-xs"
+                      value={check.value_names}
+                      onChange={(event) =>
+                        setCheck({
+                          ...check,
+                          value_names: Array.from(event.target.selectedOptions, (o) => o.value),
+                        })
+                      }
+                    >
+                      {namedValues.map((value) => (
+                        <option key={value.name} value={value.name}>
+                          {value.name} — {value.report_type}
+                          {value.sheet ? ` · ${value.sheet}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[0.7rem] text-muted-foreground">
+                      Only these reach the model. Define a named value under Artifact types first if
+                      the one you need is not listed.
+                    </span>
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
@@ -417,13 +503,15 @@ function AuthorDialog({
                 />
               </div>
 
-              <Button
-                variant="outline"
-                disabled={!check.expression.trim() || busy}
-                onClick={() => void test()}
-              >
-                <FlaskConical className="h-4 w-4" /> 3 · Test against the samples
-              </Button>
+              {check.kind === "expression" ? (
+                <Button
+                  variant="outline"
+                  disabled={!check.expression.trim() || busy}
+                  onClick={() => void test()}
+                >
+                  <FlaskConical className="h-4 w-4" /> 3 · Test against the samples
+                </Button>
+              ) : null}
 
               {result ? (
                 <div
@@ -446,7 +534,13 @@ function AuthorDialog({
               ) : null}
 
               <Button
-                disabled={!check.name.trim() || !check.expression.trim() || busy}
+                disabled={
+                  !check.name.trim() ||
+                  busy ||
+                  (check.kind === "expression"
+                    ? !check.expression.trim()
+                    : !check.instruction.trim() || check.value_names.length === 0)
+                }
                 onClick={() => void activate()}
               >
                 <Zap className="h-4 w-4" /> 4 · Activate

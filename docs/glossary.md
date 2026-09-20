@@ -48,7 +48,10 @@ where a term maps to code, the subpackage is named.
 | **Report template** | A sample Excel uploaded for one report type; documents where values live. |
 | **Named value** | A pointer into a report: report type, sheet, and a cell (`H9`) or a **label lookup** (the row where column A says "Billing count"). Label lookup preferred. |
 | **Check** (expression) | An expression over named values (`billing_count <= delivered_count`) with severity, message, and reasoning. Runs in code at no token cost. Versioned; can be disabled; carries a **scope**. |
-| **Judgment check** | A check a formula cannot express: an instruction + examples; the LLM sees only the named values and returns pass / fail / review. Use sparingly. |
+| **Replay** | Evaluating a drafted rule against the last few finalized runs before it is approved: their stored reports are parsed again and the pipeline's own evaluator runs the rule over them, in a worker job. Firing means it would have raised a finding, not that the finding would have been right. |
+| **Worked example** | A pair an administrator stores for one prompt stage: what the model would be shown, and a good answer. Validated against that stage's schema on save, scoped like any definition, at most four active per stage, and rendered after the prompt's own examples under a line saying they show a shape and are not rules (ADR-038). |
+| **Promotion** | Turning a decision a person already made — a confirmed mapping, a requirement a reviewer rewrote, an approved candidate — into a worked example. It always takes a click; nothing is promoted on its own. |
+| **Judgment check** | A check a formula cannot express: an instruction plus the named values the model may see. The model sees only those values, never a report, and returns pass / fail / review; code sets the severity and a low-confidence answer goes to a person (ADR-039). One model call per run in scope; use sparingly. |
 | **Masked columns** | The admin-maintained list of sensitive columns masked at parse time. |
 | **Scope** | Where a definition applies, as one token: `everywhere`, `programme:CODE`, `customer:NAME` or `config:ID`. One module reads it (`greenlight_ai/scopes.py`); the older forms `all` and a bare customer name still parse and are never rewritten (ADR-037). |
 
@@ -89,6 +92,8 @@ uses them yet.
 | **Observation** | One thing a person knows, in their own words, anchored to what they mean. The raw material of a learned rule; it never runs. |
 | **Anchor** | The typed selection an observation points at: a report cell or label, an OSL section, or a config JSON path. What makes synthesis reliable rather than a guess. |
 | **Candidate rule** | A rule the model drafted from one or more observations, validated by code and waiting for an administrator. It never runs. |
+| **Origin** (of a finding) | Where it came from: `built_in` when code produced it from the OSL and the configuration alone, else the origin of the rule behind it — `admin`, `guide`, `meaning` or `learned`. Shown on the review screen and in the evidence drawer (Phase 6.13b). |
+| **Outcome** (of an observation) | What became of it, read from the rule tables each time: waiting · drafted · approved (the rule is in shadow) · live · disabled · rejected. Never stored, so never stale. |
 | **Front door** | One box in the admin console where an administrator writes what they want checked. The model places the sentence on an existing surface; the drafting, the validation and the approval are the training loop's, unchanged. It adds no surface and no evaluator (ADR-037). |
 | **Surface** | One of the places an administrator can tell the tool something: an artifact type's AI context, a validation guide, a meaning entry, a named value, a check, a compliance rule, a programme rule, a standing instruction, a configuration note, a field constraint, an alias, a masked column, a reverse-pass category. |
 | **Shadow** | A rule state: it runs on every run and its findings are counted but shown to nobody, so its precision can be measured before it interrupts a reviewer. |

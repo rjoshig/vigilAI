@@ -203,7 +203,7 @@ Cross-report number checks are defined by admins as data, not code. The LLM help
 | Report template | A sample Excel uploaded for one report type, such as number flow or billing. It documents where values live |
 | Named value | A pointer into a report: report type, sheet, and either a cell (H9) or a label lookup (the row where column A says "Billing count"). Each has a plain-English description. Label lookup is preferred because it survives inserted rows |
 | Check | An expression over named values, plus severity, a message, and the reasoning behind it |
-| Judgment check | For rules a formula cannot express. Holds an instruction and examples. The LLM receives only the named values and the reasoning, and returns pass, fail, or review. Use sparingly |
+| Judgment check | For rules a formula cannot express. Holds an instruction and the list of named values the model may see. The LLM receives only those values and the instruction — never a report — and returns pass, fail, or review; code records the verdict and sets the severity (ADR-039). One model call per run in scope; use sparingly |
 
 Example checks, using your cases:
 
@@ -245,7 +245,7 @@ These Postgres tables cover runs, history, configs, checks, cache, and stats. Fi
 | traces | id, run\_id, rule\_id, config\_element\_id, verdict, reason, confidence, edited\_by | Links between OSL requirements and config elements. Users can fix a wrong link, then re-check |
 | report\_templates | id, report\_type, filename, storage\_path, notes | Sample Excel per report type, uploaded in the admin-ui |
 | named\_values | id, name, report\_type, sheet, locator (jsonb: cell or label lookup), description | Pointers into reports that checks refer to by name |
-| check\_definitions | id, name, version, kind (expression, judgment), expression, instruction, reasoning, severity, scope, is\_active | Admin-defined cross-report checks, versioned |
+| check\_definitions | id, name, version, kind (expression, judgment), expression, instruction, value\_names, reasoning, severity, scope, is\_active | Admin-defined cross-report checks, versioned |
 | compliance\_rules | id, name, requirement (jsonb), scope, is\_active | Rules that must be present in every config in scope |
 | llm\_cache | key (content hash + model + prompt version), stage, result (jsonb), created\_at, hits | Stage cache so identical content is never sent to the LLM twice |
 | final\_reports | id, run\_id, html\_path, pdf\_path, verdict, generated\_by, generated\_at | The frozen one-page report per run |
@@ -340,12 +340,13 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | admin-ui | Artifact types | Define which inputs the tool accepts — the OSL, the config, and each report — with a label, a meaning, an optional sample workbook, model guidance, and an on/off switch. Named values are defined here too |
 | admin-ui | Delivery programmes | AM, AS, Archives, and a catch-all, each with standing instructions that reach the model as background (ADR-020) |
 | admin-ui | Checks | Create, test, version, enable or disable cross-report checks |
+| admin-ui | Worked examples | Per stage: the examples that ship in the prompt, read-only, above the administrator's own. Add a pair — what the model is shown, and a good answer — scoped like any definition and validated against the stage's schema on save. At most four active per stage, so what is stored is what the model sees. A confirmed mapping, a requirement a reviewer rewrote and an approved rule can each be promoted into one with a click (ADR-038) |
 | admin-ui | Compliance and scope | Must-have compliance rules and reverse pass categories |
 | admin-ui | Reference data | Attribute aliases and masked columns |
 | admin-ui | Settings | Every runtime setting with the layer it came from, its change history, and a model connection test (ADR-023) |
 | admin-ui | Users | Accounts for both roles, created by an administrator; login ships off (ADR-022) |
 | user-ui | Configuration notes | Standing notes on an ETL configuration, written from the new-run form or the config history; background for every future run of it (ADR-024) |
-| admin-ui | Training | The observation queue, synthesis into candidate rules, replay, and approval into shadow (ADR-021) |
+| admin-ui | Training | The observation queue, synthesis into candidate rules, replay (the last finalized runs' stored reports parsed again and the drafted rule run over them by the worker), and approval into shadow (ADR-021) |
 | admin-ui | Rules | Every rule whatever its origin, searchable, with its statistics and its lifecycle |
 | admin-ui | Usage | Runs per day, tokens, cache hit rate, false-positive rate |
 

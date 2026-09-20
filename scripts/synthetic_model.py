@@ -392,6 +392,16 @@ def synthesize_responder(_system: str, user: str) -> str:
     lowered = blocks[-1].split("</statements>")[0].lower() if len(blocks) > 1 else user.lower()
     rules: list[dict[str, Any]] = []
 
+    def came_from(*needles: str) -> list[int]:
+        """Which numbered statements carry a trigger phrase, one-based like the prompt."""
+        hits: list[int] = []
+        for line in lowered.splitlines():
+            text = line.strip()
+            number, _, rest = text.partition(". ")
+            if number.isdigit() and any(needle in rest for needle in needles):
+                hits.append(int(number))
+        return hits
+
     if "never empty" in lowered or "not blank" in lowered or "never blank" in lowered:
         rules.append(
             {
@@ -408,6 +418,8 @@ def synthesize_responder(_system: str, user: str) -> str:
                 "reasoning": "A blank here means the extract dropped the value.",
                 "severity": "high",
                 "cannot_express": "",
+                "json_path_contains": "",
+                "from_statements": came_from("never empty", "not blank", "never blank"),
             }
         )
     if "between 300" in lowered or "below 300" in lowered:
@@ -426,6 +438,8 @@ def synthesize_responder(_system: str, user: str) -> str:
                 "reasoning": "Scores outside 300 to 850 are not valid.",
                 "severity": "medium",
                 "cannot_express": "",
+                "json_path_contains": "",
+                "from_statements": came_from("between 300", "below 300"),
             }
         )
     if "blank origination date" in lowered or "origination date" in lowered:
@@ -444,6 +458,8 @@ def synthesize_responder(_system: str, user: str) -> str:
                 "reasoning": "A blank origination date means the extract dropped it.",
                 "severity": "high",
                 "cannot_express": "",
+                "json_path_contains": "",
+                "from_statements": came_from("origination date"),
             }
         )
     if "billing count" in lowered and "delivered count" in lowered:
@@ -462,6 +478,8 @@ def synthesize_responder(_system: str, user: str) -> str:
                 "reasoning": "More billed than delivered means something was counted twice.",
                 "severity": "high",
                 "cannot_express": "",
+                "json_path_contains": "",
+                "from_statements": came_from("billing count"),
             }
         )
     if "configuration" in lowered and ("must" in lowered or "has to" in lowered):
@@ -480,6 +498,8 @@ def synthesize_responder(_system: str, user: str) -> str:
                 "reasoning": "The suppression must be configured whether or not the OSL says so.",
                 "severity": "high",
                 "cannot_express": "",
+                "json_path_contains": "suppressions.deceased",
+                "from_statements": came_from("configuration"),
             }
         )
     if "ignore your instructions" in lowered or "reply with the word" in lowered:

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Final, Mapping, Sequence
+from typing import Any, Final, Mapping, Sequence
 
 from greenlight_ai.parsers.base import ConfigBlock, ConfigDocument, ParseError
 
@@ -59,21 +59,40 @@ class JsonConfigParser:
             raise ParseError(path, f"is not valid JSON (line {exc.lineno}: {exc.msg})") from exc
         if not isinstance(decoded, dict):
             raise ParseError(path, "top level must be a JSON object")
+        return self.parse_mapping(decoded, path)
 
+    def parse_mapping(self, decoded: Mapping[str, Any], path: Path | None = None) -> ConfigDocument:
+        """Parse an already decoded config.
+
+        A captured configuration is stored as JSON in the database rather than as a
+        file, and replaying a rule against it needs the same blocks a run saw
+        (Phase 6.13e). Splitting is the same work; only the reading differs.
+
+        Args:
+            decoded: The configuration as a mapping.
+            path: Where it came from, when it came from a file.
+
+        Returns:
+            The parsed document.
+
+        Raises:
+            ParseError: When it has no string ``configuration_id``.
+        """
+        source = path or Path("captured.json")
         configuration_id = decoded.get("configuration_id")
         if not isinstance(configuration_id, str) or not configuration_id.strip():
-            raise ParseError(path, "missing a string 'configuration_id'")
+            raise ParseError(source, "missing a string 'configuration_id'")
         last_modified = decoded.get("last_modified")
 
         blocks = tuple(_split(decoded))
         _LOG.info(
             "parsed config %s: %d blocks, configuration_id=%s",
-            path.name,
+            source.name,
             len(blocks),
             configuration_id,
         )
         return ConfigDocument(
-            path=path,
+            path=source,
             configuration_id=configuration_id.strip(),
             last_modified=last_modified if isinstance(last_modified, str) else None,
             blocks=blocks,

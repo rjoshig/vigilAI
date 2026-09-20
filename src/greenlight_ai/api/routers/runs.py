@@ -26,7 +26,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from greenlight_ai.api import gate, schemas
+from greenlight_ai.api import provenance, gate, schemas
 from greenlight_ai.api.deps import (
     CurrentUser,
     current_user,
@@ -439,6 +439,7 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
                         kind,
                         data_dir,
                         str(run.id),
+                        part=part,
                     ),
                     part,
                     part_label,
@@ -514,15 +515,22 @@ def _parse_date(value: str | None) -> dt.date | None:
         value: The submitted string.
 
     Returns:
-        The date, or ``None`` when absent or unparseable. A bad date is not worth
-        rejecting an upload over; it is a label, not an input to the comparison.
+        The date, or ``None`` when absent.
+
+    Raises:
+        HTTPException: 422 when the value is not a date. It used to become ``None``
+            quietly, which switched the credit-date check off for that run with nobody
+            told; a label the tool checks against is an input after all (6.13a).
     """
-    if not value:
+    if not value or not value.strip():
         return None
     try:
         return dt.date.fromisoformat(value.strip())
-    except ValueError:
-        return None
+    except ValueError as exc:
+        raise HTTPException(
+            HTTP_422_UNPROCESSABLE,
+            f"credit_date must be a date written YYYY-MM-DD, not {value.strip()!r}",
+        ) from exc
 
 
 def _capture_config_from_upload(
@@ -677,7 +685,61 @@ def list_findings(
         statement = statement.where(models.Finding.severity == severity)
     if finding_type:
         statement = statement.where(models.Finding.type == finding_type)
-    return [schemas.FindingOut.model_validate(row) for row in session.execute(statement).scalars()]
+    findings = [
+        schemas.FindingOut.model_validate(row) for row in session.execute(statement).scalars()
+    ]
+    return provenance.decorate_findings(session, findings)
+
+
+@router.get("/{run_id}/rules", response_model=schemas.RunRulesOut)
+def list_run_rules(
+    run_id: int,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> schemas.RunRulesOut:
+    """The rules that touched this run, grouped by where they came from.
+
+    A reviewer could see a finding and not that a colleague's observation produced the
+    rule behind it (Phase 6.13b). Shadow rules are named and nothing more: their
+    findings are the administrator's to look at (ADR-021, ADR-040).
+
+    Args:
+        run_id: The run.
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The rules that produced a visible finding, with counts, and the rules that ran
+        silently.
+    """
+    _get_run(session, run_id)
+    rows = session.execute(
+        sa.select(models.Finding.rule_ref, models.Finding.shadow, sa.func.count())
+        .where(models.Finding.run_id == run_id, models.Finding.rule_ref != "")
+        .group_by(models.Finding.rule_ref, models.Finding.shadow)
+    ).all()
+    facts = provenance.facts_for_refs(session, (str(ref) for ref, _, _ in rows))
+
+    applied: list[schemas.RunRuleOut] = []
+    silent: list[schemas.RunRuleOut] = []
+    for ref, shadow, count in rows:
+        fact = facts.get(str(ref))
+        if fact is None:
+            continue
+        entry = schemas.RunRuleOut(
+            rule_ref=fact.ref,
+            kind=fact.kind,
+            name=fact.name,
+            summary=fact.summary,
+            origin=fact.origin,
+            state=fact.state,
+            findings=0 if shadow else int(count),
+            shadow=bool(shadow),
+        )
+        (silent if shadow else applied).append(entry)
+    applied.sort(key=lambda r: (r.origin, r.name))
+    silent.sort(key=lambda r: (r.origin, r.name))
+    return schemas.RunRulesOut(applied=applied, running_silently=silent)
 
 
 @router.get("/{run_id}/drift", response_model=schemas.DriftOut)

@@ -7,7 +7,7 @@
  * learned from an observation.
  */
 
-import { History, Scale, Search } from "lucide-react";
+import { EyeOff, History, Scale, Search } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -32,7 +32,13 @@ import Link from "next/link";
 import { BulkBar } from "@/components/bulk-bar";
 import { scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
-import type { Rule, RuleActionWord, RuleStateChange, RuleStateFilter } from "@/lib/types";
+import type {
+  Rule,
+  RuleActionWord,
+  RuleStateChange,
+  RuleStateFilter,
+  ShadowFinding,
+} from "@/lib/types";
 
 const STATES: RuleStateFilter[] = ["active", "shadow", "disabled", "deleted", "draft", "all"];
 
@@ -150,6 +156,8 @@ export default function RulesPage() {
   const [confirming, setConfirming] = React.useState<string | null>(null);
   const [history, setHistory] = React.useState<Record<string, RuleStateChange[]>>({});
   const [openHistory, setOpenHistory] = React.useState<string | null>(null);
+  const [shadow, setShadow] = React.useState<Record<string, ShadowFinding[]>>({});
+  const [openShadow, setOpenShadow] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<Rule[]>([]);
 
   const load = React.useCallback(async () => {
@@ -194,6 +202,30 @@ export default function RulesPage() {
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not read the rule's history.");
     }
+  }
+
+  async function toggleShadow(rule: Rule) {
+    const key = `${rule.rule_kind}-${rule.id}`;
+    if (openShadow === key) {
+      setOpenShadow(null);
+      return;
+    }
+    setOpenShadow(key);
+    try {
+      const loaded = await api.shadowFindings(rule.rule_kind, rule.id);
+      setShadow((current) => ({ ...current, [key]: loaded }));
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not read the shadow findings.");
+    }
+  }
+
+  async function dismiss(rule: Rule, finding: ShadowFinding) {
+    const key = `${rule.rule_kind}-${rule.id}`;
+    await act("dismiss the shadow finding of", async () => {
+      await api.dismissShadowFinding(finding.id, "not a real problem, judged in shadow");
+      const loaded = await api.shadowFindings(rule.rule_kind, rule.id);
+      setShadow((current) => ({ ...current, [key]: loaded }));
+    });
   }
 
   return (
@@ -391,9 +423,70 @@ export default function RulesPage() {
                               >
                                 <History className="h-3.5 w-3.5" /> History
                               </Button>
+                              {rule.state === "shadow" || rule.fired > 0 ? (
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
+                                  aria-label={`Shadow findings of ${rule.name}`}
+                                  title="What this rule found while nobody could see it"
+                                  onClick={() => void toggleShadow(rule)}
+                                >
+                                  <EyeOff className="h-3.5 w-3.5" /> Shadow findings
+                                </Button>
+                              ) : null}
                             </div>
                           </TD>
                         </TR>
+
+                        {openShadow === key ? (
+                          <TR className="hover:bg-transparent">
+                            <TD colSpan={10} className="bg-muted/30">
+                              {!shadow[key] ? (
+                                <Skeleton className="h-10" />
+                              ) : shadow[key].length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  This rule has produced no shadow finding yet. Precision is unknown
+                                  until it meets real runs.
+                                </p>
+                              ) : (
+                                <div className="text-xs">
+                                  <p className="mb-1 text-muted-foreground">
+                                    Reviewers never see these. Say when one is not a real problem:
+                                    that is what a shadow rule&apos;s dismissal rate is made of, and
+                                    what decides whether to activate it.
+                                  </p>
+                                  <ul className="space-y-1">
+                                    {shadow[key].map((finding) => (
+                                      <li
+                                        key={finding.id}
+                                        className="flex flex-wrap items-center gap-2"
+                                        data-testid="shadow-finding"
+                                      >
+                                        <span className="mono text-muted-foreground">
+                                          VR-{String(finding.run_id).padStart(4, "0")} ·{" "}
+                                          {finding.finding_id}
+                                        </span>
+                                        <span className="font-medium">{finding.title}</span>
+                                        {finding.review_status === "false_positive" ? (
+                                          <Badge tone="muted">dismissed</Badge>
+                                        ) : (
+                                          <Button
+                                            size="xs"
+                                            variant="outline"
+                                            disabled={busy}
+                                            onClick={() => void dismiss(rule, finding)}
+                                          >
+                                            Not a real problem
+                                          </Button>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </TD>
+                          </TR>
+                        ) : null}
 
                         {actionsFor(rule.state).map((action) =>
                           confirming === `${key}-${action}` ? (

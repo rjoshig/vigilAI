@@ -18,10 +18,32 @@ from greenlight_ai.db import models
 Submit = Callable[..., Any]
 
 
+def _distinct(workbook: bytes, marker: str) -> bytes:
+    """The same workbook with one extra sheet, so its bytes and hash differ.
+
+    Repeating identical bytes per part let a defect hide: three parts written to one
+    path were three rows over one file, and a test that could not tell the files apart
+    passed anyway (Phase 6.13a, D2).
+    """
+    import io
+
+    import openpyxl
+
+    book = openpyxl.load_workbook(io.BytesIO(workbook))
+    sheet = book.create_sheet("part")
+    sheet["A1"] = marker
+    out = io.BytesIO()
+    book.save(out)
+    return out.getvalue()
+
+
 def _files(
     fixtures_root: Path, case: dict[str, Any], extra_parts: int = 0
 ) -> list[tuple[str, tuple[str, bytes, str]]]:
-    """Build a multipart payload, optionally repeating the field distribution."""
+    """Build a multipart payload, optionally repeating the field distribution.
+
+    Every extra part carries different bytes from the first and from each other.
+    """
     xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     files: list[tuple[str, tuple[str, bytes, str]]] = [
         (
@@ -37,7 +59,8 @@ def _files(
         files.append((kind, (f"{kind}.xlsx", (fixtures_root / path).read_bytes(), xlsx)))
     for index in range(extra_parts):
         path = fixtures_root / case["reports"]["field_distribution"]
-        files.append(("field_distribution", (f"fd_extra_{index}.xlsx", path.read_bytes(), xlsx)))
+        payload = _distinct(path.read_bytes(), f"part {index + 2}")
+        files.append(("field_distribution", (f"fd_extra_{index}.xlsx", payload, xlsx)))
     return files
 
 
@@ -72,6 +95,57 @@ def test_a_slot_accepts_several_files_and_each_is_recorded_as_a_part(
         )
     assert [row.part for row in rows] == [1, 2, 3]
     assert [row.part_label for row in rows] == ["north", "south", "west"]
+
+
+def test_each_part_is_its_own_file_on_disk(
+    client: TestClient,
+    api: str,
+    factory: sessionmaker[Session],
+    fixtures_root: Path,
+    cases: dict[str, Any],
+    db_settings: Any,
+) -> None:
+    """Three parts are three files, each holding the bytes that were uploaded for it.
+
+    Before 6.13a every part of a kind was written to ``runs/<id>/<kind>.xlsx``, so the
+    rows were right and the files were not: whichever upload came last was checked
+    three times under three labels.
+    """
+    import hashlib
+
+    case = cases["baseline_match"]
+    response = client.post(
+        f"{api}/runs",
+        data={
+            "customer_name": case["customer"],
+            "order_number": case["order_number"],
+            "configuration_id": case["configuration_id"],
+            "field_distribution__label": ["north", "south", "west"],
+        },
+        files=_files(fixtures_root, case, extra_parts=2),
+    )
+    assert response.status_code == 201, response.text
+
+    with factory() as session:
+        rows = list(
+            session.execute(
+                sa.select(models.RunFile)
+                .where(models.RunFile.kind == "field_distribution")
+                .order_by(models.RunFile.part)
+            ).scalars()
+        )
+        keys = [row.storage_key for row in rows]
+        hashes = [row.sha256 for row in rows]
+
+    assert len(set(keys)) == 3, f"parts share a storage key: {keys}"
+    assert len(set(hashes)) == 3, "the parts were uploaded with different bytes"
+    for key, expected in zip(keys, hashes):
+        path = db_settings.data_dir / key
+        assert path.exists(), f"{key} was not written"
+        assert (
+            hashlib.sha256(path.read_bytes()).hexdigest() == expected
+        ), f"{key} holds different bytes from the ones recorded for it"
+    assert keys[0].endswith("field_distribution.xlsx"), "part one keeps the bare name"
 
 
 def test_one_file_per_slot_still_records_a_single_part(

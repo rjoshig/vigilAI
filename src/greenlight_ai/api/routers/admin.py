@@ -13,7 +13,7 @@ import logging
 import re
 import uuid
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal, Sequence, cast
+from typing import Annotated, Any, Final, Literal, Mapping, Sequence, cast
 
 import sqlalchemy as sa
 from fastapi import (
@@ -56,8 +56,10 @@ from greenlight_ai.training import lifecycle
 from greenlight_ai.llm.cache import LLMCache
 from greenlight_ai.llm.client import LLMError
 from greenlight_ai.llm.factory import build_client
-from greenlight_ai.llm.prompts import DRAFT_CHECK_PROMPT
+from greenlight_ai.llm import examples as example_library
+from greenlight_ai.llm.prompts import DRAFT_CHECK_PROMPT, get_prompt
 from greenlight_ai.llm.prompts.schemas import DraftCheckResponse
+from greenlight_ai.llm.tripwire import PiiDetected, assert_clean
 from greenlight_ai.parsers.base import ParseError, ReportKind
 from greenlight_ai.parsers.config_json import JsonConfigParser
 from greenlight_ai.parsers.osl import osl_parser_for
@@ -1210,6 +1212,7 @@ def list_checks(
             kind=row.kind,  # type: ignore[arg-type]
             expression=row.expression,
             instruction=row.instruction,
+            value_names=list(row.value_names or []),
             reasoning=row.reasoning,
             severity=row.severity,  # type: ignore[arg-type]
             scope=row.scope,
@@ -1242,7 +1245,7 @@ def save_check(
 
     Raises:
         HTTPException: 422 when an expression check has no valid expression, or a
-            judgment check has no instruction.
+            judgment check has no instruction or names no values.
     """
     require_admin(user)
 
@@ -1255,6 +1258,10 @@ def save_check(
             raise HTTPException(HTTP_422, str(exc)) from exc
     elif not payload.instruction.strip():
         raise HTTPException(HTTP_422, "a judgment check needs an instruction")
+    elif not [name for name in payload.value_names if name.strip()]:
+        raise HTTPException(
+            HTTP_422, "a judgment check needs at least one named value the model may see"
+        )
 
     existing = session.execute(
         sa.select(models.CheckDefinitionRow)
@@ -1269,6 +1276,7 @@ def save_check(
         kind=payload.kind,
         expression=payload.expression,
         instruction=payload.instruction,
+        value_names=list(payload.value_names),
         reasoning=payload.reasoning,
         severity=payload.severity,
         scope=payload.scope,
@@ -1330,6 +1338,7 @@ def set_check_active(
         kind=row.kind,  # type: ignore[arg-type]
         expression=row.expression,
         instruction=row.instruction,
+        value_names=list(row.value_names or []),
         reasoning=row.reasoning,
         severity=row.severity,  # type: ignore[arg-type]
         scope=row.scope,
@@ -2118,6 +2127,7 @@ _VERSION_KINDS: Final[dict[str, versions.VersionKind]] = {
     "artifact-type": "artifact_type",
     "programme": "programme_rules",
     "meaning": "meaning",
+    "example": "example",
 }
 
 
@@ -2328,3 +2338,512 @@ def bulk_delete(
         actor=user.name,
     )
     return wire.BulkResult(deleted=deleted, missing=missing)
+
+
+# --- the administrator's worked examples (Phase 6.13d, ADR-038) -------------------------
+
+
+#: What each stage is called on the screen, and what an example there teaches.
+_STAGE_LABELS: Final[dict[str, tuple[str, str]]] = {
+    "s2_extract": (
+        "Reading the OSL",
+        "A section of the requirements document and the requirements it states.",
+    ),
+    "s3_describe": (
+        "Describing the configuration",
+        "A block of the ETL configuration and what it does, in requirement words.",
+    ),
+    "s4_trace": (
+        "Tracing a requirement to the configuration",
+        "A requirement and a configuration element, and whether one implements the other.",
+    ),
+    "admin_judgment": (
+        "Judging named values",
+        "A judgment check's instruction with values, and the verdict a person would give.",
+    ),
+    "admin_classify": (
+        "Placing a statement",
+        "A sentence an administrator wrote, and which rule surface it belongs on.",
+    ),
+    "training_synthesize": (
+        "Drafting a rule from observations",
+        "Numbered statements from reviewers, and the rule they amount to.",
+    ),
+}
+
+#: Pulls the built-in examples out of a template so the console can show them read-only.
+_BUILT_IN = re.compile(r"^Example (\d+)\n(.*?)\nAnswer:\n(\{.*?\})\n", re.DOTALL | re.MULTILINE)
+
+
+def _example_out(row: models.PromptExample) -> wire.ExampleOut:
+    return wire.ExampleOut(
+        id=row.id,
+        stage=row.stage,
+        scope=row.scope,
+        given={str(k): str(v) for k, v in dict(row.given or {}).items()},
+        answer=dict(row.answer or {}),
+        note=row.note,
+        is_active=row.is_active,
+        sort_order=row.sort_order,
+        origin=row.origin,
+        created_by=row.created_by,
+        created_at=row.created_at,
+        updated_by=row.updated_by,
+        updated_at=row.updated_at,
+    )
+
+
+def _active_count(session: Session, stage: str, exclude: int = 0) -> int:
+    """How many of a stage's examples are active, so the cap is enforced where it is set."""
+    query = sa.select(sa.func.count(models.PromptExample.id)).where(
+        models.PromptExample.stage == stage,
+        models.PromptExample.is_active.is_(True),
+    )
+    if exclude:
+        query = query.where(models.PromptExample.id != exclude)
+    return int(session.execute(query).scalar_one())
+
+
+def _guard_cap(session: Session, stage: str, exclude: int = 0) -> None:
+    """Refuse an example that would not be shown.
+
+    A prompt carries at most :data:`MAX_PER_STAGE` library examples, so storing a fifth
+    active one would leave a row that looks live and reaches no prompt. That is the
+    class of silent defect this phase exists to remove.
+
+    Raises:
+        HTTPException: 422 when the stage already has its full set active.
+    """
+    if _active_count(session, stage, exclude) >= example_library.MAX_PER_STAGE:
+        raise HTTPException(
+            HTTP_422,
+            f"{stage} already has {example_library.MAX_PER_STAGE} active examples; "
+            "deactivate one first",
+        )
+
+
+def _validated(stage: str, given: Any, answer: Any) -> tuple[dict[str, str], dict[str, Any]]:
+    """Validate an example, turning a refusal into a 422 that names what is wrong.
+
+    The personal-data tripwire runs here, on the way in rather than at the prompt: an
+    example is text somebody pasted from a real delivery, and the moment they press save
+    is the last point at which the person who pasted it can take it out (ADR-003).
+    """
+    try:
+        cleaned, checked = example_library.validate_example(stage, given or {}, answer or {})
+    except example_library.ExampleError as exc:
+        raise HTTPException(HTTP_422, str(exc)) from exc
+    try:
+        assert_clean("\n".join(cleaned.values()) + "\n" + json.dumps(checked), stage=stage)
+    except PiiDetected as exc:
+        raise HTTPException(
+            HTTP_422,
+            f"this looks like it contains personal data, so it was not saved: {exc}",
+        ) from exc
+    return cleaned, checked
+
+
+@router.get("/example-stages", response_model=list[wire.ExampleStageOut])
+def list_example_stages(
+    _user: CurrentUser = Depends(require_admin),
+) -> list[wire.ExampleStageOut]:
+    """The stages an administrator may add worked examples to, with the built-in ones.
+
+    Args:
+        _user: The calling administrator.
+
+    Returns:
+        One entry per stage: what it is called, what an example there teaches, the
+        parts an example is made of, and the examples that ship in the prompt.
+    """
+    out: list[wire.ExampleStageOut] = []
+    for stage in example_library.EXAMPLE_STAGES:
+        label, description = _STAGE_LABELS.get(stage, (stage, ""))
+        template = get_prompt(stage).template
+        out.append(
+            wire.ExampleStageOut(
+                stage=stage,
+                label=label,
+                description=description,
+                fields=[
+                    wire.ExampleFieldOut(name=part.name, label=part.label, shape=part.shape)
+                    for part in example_library.fields_for(stage)
+                ],
+                built_in=[
+                    wire.BuiltInExample(number=int(number), shown=shown.strip(), answer=answer)
+                    for number, shown, answer in _BUILT_IN.findall(template)
+                ],
+                max_examples=example_library.MAX_PER_STAGE,
+            )
+        )
+    return out
+
+
+@router.get("/examples", response_model=list[wire.ExampleOut])
+def list_examples(
+    stage: str = "",
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+) -> list[wire.ExampleOut]:
+    """The stored worked examples, newest last within a stage.
+
+    Args:
+        stage: One stage, or every stage when omitted.
+        session: The request's session.
+        _user: The calling administrator.
+
+    Returns:
+        The examples, active and inactive alike; the console shows which is which.
+    """
+    query = sa.select(models.PromptExample).order_by(
+        models.PromptExample.stage,
+        models.PromptExample.sort_order,
+        models.PromptExample.id,
+    )
+    if stage:
+        query = query.where(models.PromptExample.stage == stage)
+    return [_example_out(row) for row in session.execute(query).scalars()]
+
+
+@router.post("/examples", response_model=wire.ExampleOut, status_code=status.HTTP_201_CREATED)
+def save_example(
+    payload: wire.ExampleIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ExampleOut:
+    """Add a worked example to a stage's library (ADR-038).
+
+    The answer is validated against the stage's own schema before anything is written:
+    an example the schema would reject teaches the model a shape the pipeline cannot
+    parse, which is worse than having no example at all.
+
+    Args:
+        payload: The example.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The stored example.
+
+    Raises:
+        HTTPException: 422 when the stage is unknown, a part is missing, the answer
+            fails the stage's schema, or the stage already has its full set active.
+    """
+    given, answer = _validated(payload.stage, payload.given, payload.answer)
+    if payload.is_active:
+        _guard_cap(session, payload.stage)
+
+    row = models.PromptExample(
+        stage=payload.stage,
+        scope=payload.scope,
+        given=given,
+        answer=answer,
+        note=payload.note,
+        origin="admin",
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+        created_by=user.name,
+        updated_by=user.name,
+    )
+    session.add(row)
+    session.flush()
+    versions.record_example_version(session, payload.stage, user.name, f"added {row.id}")
+    repository.audit(
+        session,
+        "admin.example.added",
+        detail=f"{payload.stage} {row.id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _example_out(row)
+
+
+@router.patch("/examples/{example_id}", response_model=wire.ExampleOut)
+def edit_example(
+    example_id: int,
+    payload: wire.ExamplePatch,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ExampleOut:
+    """Edit a stored example, or activate and deactivate one.
+
+    Args:
+        example_id: The example.
+        payload: The fields to change; anything omitted is left alone.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The example as it now stands.
+
+    Raises:
+        HTTPException: 404 when there is no such example, 422 when the edit would
+            leave an answer the stage's schema rejects or exceed the stage's cap.
+    """
+    row = session.get(models.PromptExample, example_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no example {example_id}")
+
+    if payload.given is not None or payload.answer is not None:
+        given, answer = _validated(
+            row.stage,
+            payload.given if payload.given is not None else dict(row.given or {}),
+            payload.answer if payload.answer is not None else dict(row.answer or {}),
+        )
+        row.given = given
+        row.answer = answer
+    if payload.scope is not None:
+        row.scope = payload.scope
+    if payload.note is not None:
+        row.note = payload.note
+    if payload.sort_order is not None:
+        row.sort_order = payload.sort_order
+    if payload.is_active is not None:
+        if payload.is_active and not row.is_active:
+            _guard_cap(session, row.stage, exclude=row.id)
+        row.is_active = payload.is_active
+    row.updated_by = user.name
+
+    session.flush()
+    versions.record_example_version(session, row.stage, user.name, f"edited {row.id}")
+    repository.audit(
+        session,
+        "admin.example.edited",
+        detail=f"{row.stage} {row.id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _example_out(row)
+
+
+#: The keys an extraction answer may carry; a stored rule has more than the prompt does.
+_EXTRACTED_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "req_type",
+        "conditions",
+        "values",
+        "mode",
+        "steps",
+        "quantity",
+        "action",
+        "applies_to",
+        "source_text",
+        "confidence",
+    }
+)
+
+
+def _promote_meaning(session: Session, entry_id: int) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """A confirmed requirement mapping, as a tracing example."""
+    entry = session.get(models.MeaningEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no meaning entry {entry_id}")
+    if entry.status != "confirmed":
+        raise HTTPException(HTTP_422, "only a confirmed mapping is worth teaching")
+    requirement = (entry.requirement_text or entry.osl_phrase or entry.key).strip()
+    element = entry.config_path.strip()
+    if not requirement or not element:
+        raise HTTPException(HTTP_422, "this mapping names no requirement or no config path")
+    if entry.meaning.strip():
+        element = f"{element} — {entry.meaning.strip()}"
+    return (
+        "s4_trace",
+        {"requirement": requirement, "element": element},
+        {
+            "verdict": "implemented",
+            "reason": (entry.meaning or "A person confirmed this mapping.").strip(),
+            "confidence": 0.95,
+        },
+    )
+
+
+def _promote_requirement(
+    session: Session, run_id: int, rule_id: str
+) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """A requirement a reviewer corrected, as an extraction example."""
+    row = session.execute(
+        sa.select(models.Rule).where(models.Rule.run_id == run_id, models.Rule.rule_id == rule_id)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"rule {rule_id} is not part of run {run_id}"
+        )
+    body = dict(row.rule or {})
+    section = str(body.get("source_text") or "").strip()
+    if not section:
+        raise HTTPException(HTTP_422, "this requirement quotes no wording to learn from")
+    requirement = {
+        key: value
+        for key, value in body.items()
+        if key in _EXTRACTED_KEYS and value not in (None, [], ())
+    }
+    return "s2_extract", {"section": section}, {"requirements": [requirement]}
+
+
+def _promote_candidate(
+    session: Session, candidate_id: int
+) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """An approved candidate, as a synthesis example."""
+    candidate = session.get(models.RuleCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no candidate {candidate_id}")
+    if candidate.status != "approved":
+        raise HTTPException(HTTP_422, "only an approved candidate is worth teaching")
+    ids = [int(value) for value in (candidate.source_observation_ids or [])]
+    rows = (
+        session.execute(
+            sa.select(models.TrainingObservation)
+            .where(models.TrainingObservation.id.in_(ids))
+            .order_by(models.TrainingObservation.id)
+        )
+        .scalars()
+        .all()
+        if ids
+        else []
+    )
+    statements = "\n".join(
+        f"{index}. {row.statement.strip()}" for index, row in enumerate(rows, 1) if row.statement
+    )
+    if not statements:
+        raise HTTPException(HTTP_422, "this candidate has no statement to show")
+    body = dict(candidate.body or {})
+    body.setdefault("name", candidate.name)
+    body.setdefault("target_kind", candidate.target_kind)
+    return "training_synthesize", {"statements": statements}, {"rules": [body]}
+
+
+@router.post(
+    "/examples/promote", response_model=wire.ExampleOut, status_code=status.HTTP_201_CREATED
+)
+def promote_example(
+    payload: wire.PromoteIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ExampleOut:
+    """Turn a decision a person already confirmed into a worked example (ADR-038).
+
+    The three sources are the three places somebody corrects the model: a confirmed
+    requirement mapping, a requirement a reviewer rewrote, and a candidate an
+    administrator approved. Nothing is promoted without this call.
+
+    Args:
+        payload: Which decision to promote, and where the example applies.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The stored example.
+
+    Raises:
+        HTTPException: 404 when the source does not exist, 422 when it was never
+            confirmed, carries nothing to teach, or the stage's set is already full.
+    """
+    if payload.source == "meaning":
+        stage, given, answer = _promote_meaning(session, payload.id)
+    elif payload.source == "requirement":
+        stage, given, answer = _promote_requirement(session, payload.id, payload.rule_id)
+    else:
+        stage, given, answer = _promote_candidate(session, payload.id)
+
+    given, answer = _validated(stage, given, answer)
+    _guard_cap(session, stage)
+
+    row = models.PromptExample(
+        stage=stage,
+        scope=payload.scope,
+        given=given,
+        answer=answer,
+        note=payload.note,
+        origin=f"promoted:{payload.source}:{payload.id}",
+        is_active=True,
+        created_by=user.name,
+        updated_by=user.name,
+    )
+    session.add(row)
+    session.flush()
+    versions.record_example_version(session, stage, user.name, f"promoted {row.id}")
+    repository.audit(
+        session,
+        "admin.example.promoted",
+        detail=f"{stage} from {payload.source} {payload.id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _example_out(row)
+
+
+def _rule_summary(body: Mapping[str, Any]) -> str:
+    """One line describing a stored requirement, for a list an administrator scans."""
+    req_type = str(body.get("req_type") or "requirement")
+    conditions = body.get("conditions") or []
+    if conditions:
+        first = conditions[0]
+        return (
+            f"{req_type} — {first.get('field_name', '')} "
+            f"{first.get('operator', '')} {first.get('value', '')}".strip()
+        )
+    values = body.get("values") or []
+    if values:
+        return f"{req_type} — {', '.join(str(value) for value in values[:4])}"
+    steps = body.get("steps") or []
+    if steps:
+        return f"{req_type} — {', '.join(str(step) for step in steps[:4])}"
+    return req_type
+
+
+@router.get("/corrections", response_model=list[wire.CorrectionOut])
+def list_corrections(
+    limit: int = 20,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+) -> list[wire.CorrectionOut]:
+    """Requirements a reviewer rewrote, newest first (Phase 6.13d, ADR-038).
+
+    A correction is the model being told it read a section wrongly, which is what a
+    worked example is for. They are listed here so an administrator can teach one;
+    nothing is promoted without their click.
+
+    Args:
+        limit: How many to return.
+        session: The request's session.
+        _user: The calling administrator.
+
+    Returns:
+        The corrections, each saying which run and requirement it is, the wording it
+        quotes, and whether it has been promoted already.
+    """
+    rows = (
+        session.execute(
+            sa.select(models.Rule, models.Run.customer_name)
+            .join(models.Run, models.Run.id == models.Rule.run_id)
+            .where(models.Rule.source == "user")
+            .order_by(models.Rule.edited_at.desc().nullslast(), models.Rule.id.desc())
+            .limit(max(1, min(limit, 100)))
+        )
+        .tuples()
+        .all()
+    )
+    promoted = {
+        str(origin)
+        for origin in session.execute(
+            sa.select(models.PromptExample.origin).where(
+                models.PromptExample.origin.like("promoted:requirement:%")
+            )
+        ).scalars()
+    }
+    out: list[wire.CorrectionOut] = []
+    for row, customer in rows:
+        body = dict(row.rule or {})
+        out.append(
+            wire.CorrectionOut(
+                run_id=row.run_id,
+                rule_id=row.rule_id,
+                customer=customer or "",
+                source_text=str(body.get("source_text") or ""),
+                summary=_rule_summary(body),
+                edited_by=row.edited_by,
+                edited_at=row.edited_at,
+                promoted=f"promoted:requirement:{row.run_id}" in promoted,
+            )
+        )
+    return out

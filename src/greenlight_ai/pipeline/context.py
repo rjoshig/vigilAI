@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Final, Literal, Mapping, Sequence
 
 from greenlight_ai.checks.definitions import AdminConfig
 from greenlight_ai.llm.client import LLMClient
+from greenlight_ai.llm.examples import LibraryExample
 from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from greenlight_ai.rules.normalize import AliasTable
@@ -191,6 +192,9 @@ class RunContext:
             delivery programme, its standing instructions, and per-artifact guidance
             (ADR-020). Empty by default, in which case prompts are unchanged.
         aliases: The attribute alias table, from the admin-ui in later phases.
+        examples: The administrator's worked examples, by stage, already scoped to
+            this run and capped (ADR-038). A stage with none renders exactly as it
+            always did.
         masked_columns: Header patterns masked at parse time (ADR-003).
         osl: The parsed OSL, set by stage 1.
         config: The parsed config, set by stage 1.
@@ -214,6 +218,7 @@ class RunContext:
     admin: AdminConfig = field(default_factory=AdminConfig)
     guidance: RunGuidance = field(default_factory=RunGuidance)
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
+    examples: Mapping[str, tuple[LibraryExample, ...]] = field(default_factory=dict)
     masked_columns: tuple[str, ...] = ()
 
     osl: OslDocument | None = None

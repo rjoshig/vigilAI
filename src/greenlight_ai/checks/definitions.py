@@ -2,8 +2,9 @@
 
 Cross-report number checks are defined by admins as data, not code: the LLM helps write
 a check once, and code runs it on every request at no token cost (``docs/design.md``
-"Configurable checks"). This module holds the definitions; :mod:`greenlight_ai.checks.runner`
-runs them.
+"Configurable checks"). This module holds the definitions; stage 6 evaluates the
+compliance rules and stage 7 the checks (:mod:`greenlight_ai.pipeline.s6_reverse`,
+:mod:`greenlight_ai.pipeline.s7_reports`).
 """
 
 from __future__ import annotations
@@ -51,6 +52,8 @@ class CheckDefinition:
         kind: ``"expression"`` for a formula, ``"judgment"`` for one the LLM answers.
         expression: The formula, for ``"expression"`` checks.
         instruction: What to judge, for ``"judgment"`` checks.
+        value_names: For a judgment check, the named values the model is shown and
+            nothing else (ADR-039).
         reasoning: The plain-English reason shown to users on a failure.
         severity: How serious a failure is.
         scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
@@ -67,6 +70,7 @@ class CheckDefinition:
     kind: CheckKind = "expression"
     expression: str = ""
     instruction: str = ""
+    value_names: tuple[str, ...] = ()
     reasoning: str = ""
     severity: Severity = "medium"
     scope: str = scopes.EVERYWHERE
@@ -101,6 +105,9 @@ class ComplianceRule:
         scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
         reasoning: Why the rule exists, shown on a finding.
         is_active: Whether the rule is enforced.
+        id: The stored row, so a finding can name the rule behind it.
+        state: The lifecycle state (ADR-021). A ``shadow`` rule runs and its findings
+            are recorded and shown to nobody.
     """
 
     name: str
@@ -109,6 +116,8 @@ class ComplianceRule:
     scope: str = scopes.EVERYWHERE
     reasoning: str = ""
     is_active: bool = True
+    id: int | None = None
+    state: str = "active"
 
     def applies_to(self, customer: str, programme_code: str = "") -> bool:
         """Whether this rule is enforced for a run.
@@ -118,9 +127,12 @@ class ComplianceRule:
             programme_code: The run's delivery programme code.
 
         Returns:
-            ``True`` when the rule is active and in scope.
+            ``True`` when the rule is active or in shadow, and in scope. Until 6.13a
+            this demanded ``is_active`` alone, so a learned compliance rule sat in
+            shadow forever with nothing to show for it.
         """
-        return self.is_active and in_scope(self.scope, customer, programme_code)
+        runs = self.is_active or self.state == "shadow"
+        return runs and in_scope(self.scope, customer, programme_code)
 
 
 @dataclass(frozen=True, slots=True)
