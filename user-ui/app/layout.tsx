@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthGate } from "@/components/auth-gate";
+import { PaletteProvider } from "@/components/palette-provider";
 import { ThemeProvider } from "@/components/theme-provider";
-import { configuredPalette } from "@/lib/theme";
+import { fetchAppearance } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -13,15 +14,19 @@ export const metadata: Metadata = {
     "Reconcile the OSL requirement spec, the ETL config, and the output reports for a credit-data delivery.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The default and the lock come from the API (console over .env), read per request.
+  const appearance = await fetchAppearance();
   return (
     // data-theme picks the palette; next-themes toggles .dark on top of it.
-    <html lang="en" data-theme={configuredPalette()} suppressHydrationWarning>
+    <html lang="en" data-theme={appearance.theme} suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <AuthGate>
-            <AppShell>{children}</AppShell>
-          </AuthGate>
+          <PaletteProvider initial={appearance}>
+            <AuthGate>
+              <AppShell>{children}</AppShell>
+            </AuthGate>
+          </PaletteProvider>
         </ThemeProvider>
       </body>
     </html>

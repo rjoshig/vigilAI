@@ -61,6 +61,7 @@ GROUPS: Final[tuple[str, ...]] = (
     "Throughput",
     "Uploads",
     "Retention",
+    "Appearance",
     "Platform",
 )
 
@@ -381,6 +382,28 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         maximum=3650,
         help="Runs, their files, and their findings are deleted after this. Aggregated "
         "usage survives. Shortening it deletes more at the next sweep.",
+    ),
+    # --- appearance (Phase 6.6) --------------------------------------------------------
+    SettingSpec(
+        key="ui.theme",
+        env="GREENLIGHT_AI_UI_THEME",
+        label="Default theme",
+        group="Appearance",
+        kind="enum",
+        default="classic-teal-navy",
+        help="The look every browser starts on, in both apps. A person's own choice, "
+        "where allowed, wins for that browser.",
+        choices=("classic-teal-navy", "classic-teal", "light-blue-yellow", "default"),
+    ),
+    SettingSpec(
+        key="ui.theme_locked",
+        env="GREENLIGHT_AI_UI_THEME_LOCKED",
+        label="Lock the theme",
+        group="Appearance",
+        kind="bool",
+        default=False,
+        help="Hides the theme picker in both apps and applies the default theme "
+        "everywhere, within the settings cache window.",
     ),
     # --- platform, read-only ----------------------------------------------------
     SettingSpec(

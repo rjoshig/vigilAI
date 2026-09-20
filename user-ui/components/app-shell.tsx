@@ -24,6 +24,7 @@ import { useAuth } from "@/components/auth-gate";
 import { useTrainingEnabled } from "@/components/observation-dialog";
 import { TRAIN_AI_HINT } from "@/components/train-ai-tag";
 import { Logo } from "@/components/logo";
+import { PalettePicker } from "@/components/theme-picker";
 import { Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -190,6 +191,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         ) : null}
 
+        <div className="flex justify-center border-t px-2 py-1.5">
+          <PalettePicker />
+        </div>
         <div className="flex items-center justify-between border-t p-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5" />

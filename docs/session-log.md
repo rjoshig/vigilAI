@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.7–6.9**; **6 in progress**; **6.6 specified**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/delivery-drift` (Phase 6.9), against `dev` |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.9**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/theme-picker` (Phase 6.6), against `dev` |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,24 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (Phase 6.6: the theme picker)
+
+**Branch:** `feature/theme-picker` · **Status:** complete; 934 Python tests, 82 user-ui,
+77 admin-ui, gates green; browser check of stepping, reload, and lock passed.
+
+### What was completed
+
+- `ui.theme` and `ui.theme_locked` in the Appearance settings group; the public
+  `GET /appearance`; both apps read it per request and re-read it in open tabs.
+- A theme picker at the foot of both sidebars, hidden when locked; the choice kept
+  per browser. A contrast test per app over every palette in both modes. ADR-031.
+
+### Next concrete action
+
+Browser tests for the core flows, in CI (the last item of the agreed order).
 
 ---
 
