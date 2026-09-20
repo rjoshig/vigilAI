@@ -745,15 +745,19 @@ function SampleStrip({
 
   const shown = preview?.sheets.find((one) => one.name === sheet) ?? preview?.sheets[0] ?? null;
   const disabled = busy || working;
-  // One group per scope: the global samples first, then every programme, so a variant
-  // of the OSL or the configuration for one programme has its own place.
+  // One group per scope for the OSL and the configuration, whose layout varies by
+  // programme: the global samples first, then every programme. Reports are the same
+  // layouts everywhere, so they keep one flat box (every sample there is global).
+  const grouped = type.kind !== "report";
   const groups: { code: string; title: string; hint: string }[] = [
     {
       code: "",
-      title: "Global",
-      hint: "Read for every programme that has no sample of its own.",
+      title: grouped ? "Global" : "Samples",
+      hint: grouped
+        ? "Read for every programme that has no sample of its own."
+        : "Named values, guides and type detection resolve against these.",
     },
-    ...(programmes ?? [])
+    ...(grouped ? (programmes ?? []) : [])
       .filter(
         (programme) =>
           programme.is_active || type.samples.some((s) => s.scope_code === programme.code)
