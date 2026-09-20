@@ -204,7 +204,12 @@ export default function RunsPage() {
                     <TD className="mono">VR-{String(run.id).padStart(4, "0")}</TD>
                     <TD>{run.customer_name}</TD>
                     <TD className="mono">{run.order_number}</TD>
-                    <TD className="mono text-xs">{run.configuration_id}</TD>
+                    <TD className="text-xs">
+                      <div className="mono">{run.configuration_id}</div>
+                      <div className="text-[0.7rem] text-muted-foreground">
+                        credit {run.credit_date ?? "—"} · run {run.created_at.slice(0, 10)}
+                      </div>
+                    </TD>
                     <TD className="text-xs text-muted-foreground">{fmtRelative(run.created_at)}</TD>
                     <TD className="whitespace-nowrap text-xs">{run.submitted_by || "—"}</TD>
                     <TD>

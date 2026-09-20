@@ -74,14 +74,15 @@ class RunSummary(BaseModel):
     #: Which delivery programme this run belongs to, e.g. "AM" (ADR-020).
     scope: str = ""
     scope_label: str = ""
+    #: The credit date the delivery is cut as of, shown with the configuration id so a
+    #: repeated configuration reads as "which month" (ADR-027).
+    credit_date: Optional[dt.date] = None
 
 
 class RunDetail(RunSummary):
     """A run with everything the Review screen needs up front."""
 
     notes: str = ""
-    #: The credit date the delivery is cut as of; checked against the artifacts.
-    credit_date: Optional[dt.date] = None
     rules_version: int = 1
     model_used: str = ""
     prompt_version: str = ""

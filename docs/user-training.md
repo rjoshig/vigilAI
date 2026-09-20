@@ -56,10 +56,11 @@ administrator you can still open it, but nothing in it will let you change anyth
 
 1. **Run details.** Customer name, order number, the **credit date**, and the
    **Configuration ID**, which is the order's ETL configuration number, the Solution
-   Canvas config number. The configuration id is for your information: every run
-   gets its own id, and the same configuration id can be submitted as often as you
-   like. The credit date is the as-of date of the credit data; the tool checks that
-   the reports carry it and raises a finding when they do not.
+   Canvas config number. It is required and it repeats: the same configuration is
+   run again months later, and the **credit date** and the run date, shown beside
+   it on the run list and the run page, tell those runs apart. Every run still gets
+   its own id. The credit date is the as-of date of the credit data; the tool checks
+   that the reports carry it and raises a finding when they do not.
    Choose the **delivery programme**: Account Monitoring, Account Solicitation,
    Archives, or Other. Choose carefully: the tool checks that your inputs read like
    that programme and raises a finding if they do not, and it holds the delivery to
