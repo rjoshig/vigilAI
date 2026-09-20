@@ -76,7 +76,7 @@ administrator you can still open it, but nothing in it will let you change anyth
    A note is background for the model on every future run of that configuration; it
    never makes anything pass or fail on its own. Write one when you know something
    about this configuration that the OSL does not say.
-4. **Input files.** The OSL and the configuration are required. Upload at least one
+4. **Input files.** The OSL (Word or PDF) and the configuration are required. Upload at least one
    report. The report slots you see are whatever an administrator has enabled; a
    type that is switched off simply does not appear.
    - **Several files for one report type.** Some campaigns deliver one field

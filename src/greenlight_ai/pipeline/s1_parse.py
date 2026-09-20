@@ -12,7 +12,7 @@ from typing import Final
 from greenlight_ai.parsers.base import ParseError
 from greenlight_ai.parsers.config_json import JsonConfigParser
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
-from greenlight_ai.parsers.osl_docx import DocxOslParser
+from greenlight_ai.parsers.osl import osl_parser_for
 from greenlight_ai.parsers.reports.xlsx import parser_for
 from greenlight_ai.pipeline.context import ReportPart, RunContext
 
@@ -33,7 +33,7 @@ def run(context: RunContext) -> None:
     """
     masked = context.masked_columns or DEFAULT_MASKED_COLUMNS
 
-    context.osl = DocxOslParser().parse(context.osl_path)
+    context.osl = osl_parser_for(context.osl_path).parse(context.osl_path)
     context.config = JsonConfigParser().parse(context.config_path)
 
     # A kind with no parts recorded is the ordinary single-file case, so the two

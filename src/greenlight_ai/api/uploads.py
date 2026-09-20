@@ -30,6 +30,7 @@ ALLOWED: Final[dict[str, frozenset[str]]] = {
             "",
         }
     ),
+    ".pdf": frozenset({"application/pdf", "application/octet-stream", ""}),
     ".json": frozenset(
         {"application/json", "text/json", "text/plain", "application/octet-stream", ""}
     ),

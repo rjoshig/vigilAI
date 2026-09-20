@@ -46,7 +46,11 @@ on the Settings screen.
 
 ## Artifact types
 
-What the tool accepts: the OSL, the configuration, and each report type. For each:
+What the tool accepts, in three tabs so the kinds are never confused: **Requirements
+(OSL)**, a Word or PDF document; **Solution Canvas (ETL configuration)**, the config
+JSON; and **Reports**, the Excel workbooks. Named values and validation guides live
+under Reports, because that is what they point into. Every type shows its definition
+version as `v1.0`, `v1.1`, … (the first save is `v1.0`). For each type:
 
 - **Enable or disable** it. A disabled type disappears from every user's upload form
   at once. Built-in types can be switched off but never deleted, because the fixed
@@ -56,7 +60,9 @@ What the tool accepts: the OSL, the configuration, and each report type. For eac
   should look at**, in plain words. Leave the guidance empty and the model reads the
   document exactly as it always did; this is additive, never a substitute for the OSL.
 - **Samples**, up to three per type, each with a label such as the customer or the
-  year. You can view a sample cell by cell, download it, and remove it. Named values
+  year. You can view a sample, download it, and remove it: a report cell by cell, an
+  OSL section by section with each paragraph numbered `¶1, ¶2…`, and a
+  configuration block by block with its JSON path. Named values
   resolve against the samples, and workbook type detection compares uploads with
   them, so a type with no sample cannot be detected and its checks cannot be tested.
 - **Named values** are pointers into a report that checks refer to by name. Prefer a

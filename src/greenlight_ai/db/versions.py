@@ -29,6 +29,7 @@ __all__ = [
     "VersionError",
     "artifact_snapshot",
     "current_versions",
+    "latest_version",
     "list_versions",
     "programme_snapshot",
     "prune_versions",
@@ -258,6 +259,21 @@ def list_versions(
             .limit(limit)
         ).scalars()
     )
+
+
+def latest_version(session: Session, kind: VersionKind, key: str) -> int:
+    """The newest version number of one object, or zero before its first save.
+
+    Args:
+        session: An open session.
+        kind: Which definition.
+        key: The artifact key or programme code.
+
+    Returns:
+        The version number.
+    """
+    latest = _latest(session, kind, key)
+    return latest.version if latest is not None else 0
 
 
 def current_versions(session: Session) -> dict[str, int]:
