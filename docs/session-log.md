@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **Phase 6.17 is complete**, both standing touchpoints included. **6.18a and 6.18f are built**; 6.18b–e wait on real verdicts, which is the new dormant [`phase-7.1.md`](phase-7.1.md). **Next concrete action: nothing in this repository.** 6.18b cannot be built honestly until stage 3 of the rollout has produced real verdicts and the Review load question has been answered in writing. What remains needs the user or the target machine: the retention ADR and security sign-off, `docker compose up --build` once, the in-house gateway and golden-set run, and whether a data dictionary exists to seed aliases from |
+| Branch | `claude/pending-items-review-f35uek`, pushed and level with the remote; **no PR yet, by request**. Phase 6.17 complete; 6.18a and 6.18f built. **[`phase-6.19.md`](phase-6.19.md) is specified from an audit and not started:** thirteen fields reach the model or decide what it is shown and carry no marker, and the training documents sit in a repository nobody using the tool will open. **Next concrete action: 6.19, starting with the two markers that change results most** — the delivery programme on the new-run form and worked examples in the console. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -103,6 +103,52 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (the marker audit, and phase 6.19)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** specification and one
+correction; nothing built, by request.
+
+**The audit found what it was asked to look for.** Twelve surfaces carry a
+`<FieldEffect>` marker and are correct. **Thirteen fields reach the model, or decide what
+the model is shown, and say nothing.** The two that matter most:
+
+- **Worked examples**, the screen that most directly teaches the model, has no marker at
+  all.
+- **Delivery programme** on the new-run form is unmarked and sits *between two fields
+  that are marked*, so it reads as less consequential than the notes box beneath it. It
+  reaches the model as background on every stage, selects which programme rules are read,
+  and triggers the check that the documents read like that programme.
+
+Also unmarked: meaning entries, validation guides, sample notes, the *Tell the tool*
+sentence, observation statements in both apps, programme rules, keywords, the
+suppressions answer, the deliverable count, the order number, aliases — and **masked
+columns**, which decide what never reaches a prompt at all and so arguably need the
+clearest marker in the product.
+
+**A doc claim that the audit falsified.** `user-training.md` said *"Every field on the
+form says whether the model sees it."* Four do not. Corrected to what is true today,
+and 6.19 restores the stronger sentence in the commit that earns it — the same discipline
+used on the training-document dates earlier in this session.
+
+**6.19 has two halves because they are the same problem at two distances**: a field that
+does not say what it does, and a product that does not say how to use it well. The second
+half is a **Guide in each app's sidebar**, one per audience, from the training document
+that already exists so it cannot drift. The phase doc says what each Guide must answer —
+for a user, what matters most from them *ranked*, how to read a finding, that deciding is
+theirs, what the tool says when it is unsure, and **what it will not catch**; for an
+administrator, which of the five surfaces to use and what improves the QC in the order it
+pays off. Its acceptance criterion for the user Guide is that somebody who has never seen
+the tool can read it and complete a run without asking anybody — **tested on a person,
+not asserted**.
+
+**Nothing in this session is a defect in the engine.** Everything the tool computes, it
+computes correctly. What 6.19 fixes is whether the people using it can tell.
+
+**Next concrete action:** 6.19, starting with the delivery-programme and worked-examples
+markers.
 
 ---
 

@@ -155,6 +155,10 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.18.md`](docs/phase-6.18.md) — **trust that is earned, measured, and
   revocable**: findings that learn their own severity from the verdicts people gave, a
   maturity level an administrator sets, and the sample that keeps the whole thing honest
+- [`docs/phase-6.19.md`](docs/phase-6.19.md) — **say what helps, and teach it in the
+  product**: the "Helps the AI" marker on the thirteen fields that reach the model and
+  do not say so, and a Guide in each app's sidebar so the training documents reach the
+  people using the tool rather than sitting in a repository
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and
