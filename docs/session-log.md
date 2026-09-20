@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/meaning` (Phase 6.10 Part B), against `dev` |
+| Branch | `dev` == `main`; next work on `feature/browser-tests` |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,14 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (documents brought current)
+
+Architecture (the `meaning/` package, the API row), CLAUDE.md's package list, the
+training documents' alignment date, the presentation brief (admin table, status),
+and the rollout readiness list, all describing the code at this commit.
 
 ---
 
