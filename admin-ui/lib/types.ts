@@ -220,6 +220,12 @@ export interface ComplianceRule {
   version: number;
   name: string;
   json_path_contains: string;
+  /**
+   * Other configuration paths that also count (Phase 6.15). Spelling and an extra
+   * level of nesting are already allowed for; this is for the case no amount of
+   * normalising reaches — a customer calling OFAC screening `sdn_screening`.
+   */
+  alternates: string[];
   expected_value: unknown;
   scope: string;
   reasoning: string;

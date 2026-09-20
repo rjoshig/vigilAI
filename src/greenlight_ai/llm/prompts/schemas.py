@@ -222,6 +222,28 @@ class JudgmentResponse(BaseModel):
     confidence: Confidence = 0.5
 
 
+class ComplianceLocation(BaseModel):
+    """Where, if anywhere, a configuration implements a compliance control (6.15A).
+
+    The model answers one narrow question and nothing wider. It is never asked whether
+    the delivery is compliant: that is a comparison, and comparisons are code's
+    (ADR-001). It is asked where something is, and code decides what that means.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: ``found`` when a path implements the control, ``absent`` when nothing does,
+    #: ``unsure`` when the configuration does not settle it. Prefer ``unsure`` to a
+    #: guess: a wrong ``absent`` is a high-severity finding about a control that is
+    #: actually in place, and a wrong ``found`` waves through one that is not.
+    verdict: Literal["found", "absent", "unsure"]
+    #: The configuration path that implements it, when ``found``. Must be a path that
+    #: appeared in the input; code checks that it does before believing it.
+    json_path: str = ""
+    reason: str = ""
+    confidence: Confidence = 0.5
+
+
 class SynthesizedRule(BaseModel):
     """One rule the model proposes from what people wrote (ADR-021).
 

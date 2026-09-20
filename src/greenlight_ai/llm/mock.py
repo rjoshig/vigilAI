@@ -66,6 +66,10 @@ def canned_for_stage(stage: str) -> str:
         "admin_draft_check": '{"named_values": [], "expression": "", "reasoning": "", '
         '"severity": "medium"}',
         "admin_judgment": '{"verdict": "review", "reason": "mock client", ' '"confidence": 0.0}',
+        # "absent" rather than "found": the mock must not invent a path, and
+        # absence is what the deterministic matcher already concluded.
+        "compliance_locate": '{"verdict": "absent", "json_path": "", '
+        '"reason": "mock client", "confidence": 0.0}',
     }
     return shapes.get(stage, "{}")
 

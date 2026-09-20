@@ -100,7 +100,12 @@ class ComplianceRule:
 
     Attributes:
         name: The rule's identifier.
-        json_path_contains: A fragment the implementing config path must contain.
+        json_path_contains: The configuration path that implements the rule.
+            Matched by :mod:`greenlight_ai.checks.compliance_match`, which
+            tolerates a different spelling and an extra level of nesting.
+        alternates: Other paths that also count, written by an administrator for
+            the case normalising does not reach — a customer whose OFAC screening
+            is called ``suppressions.sdn_screening`` (Phase 6.15).
         expected_value: The value the config must set, when there is one.
         scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
         reasoning: Why the rule exists, shown on a finding.
@@ -112,6 +117,7 @@ class ComplianceRule:
 
     name: str
     json_path_contains: str
+    alternates: tuple[str, ...] = ()
     expected_value: object = True
     scope: str = scopes.EVERYWHERE
     reasoning: str = ""
