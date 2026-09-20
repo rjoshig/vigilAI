@@ -69,7 +69,7 @@ def test_a_builtin_cannot_change_kind_or_be_deleted(client: TestClient, api: str
     assert changed.status_code == 422
     assert "built-in" in changed.json()["detail"]
 
-    deleted = client.delete(f"{api}/admin/artifact-types/dirt")
+    deleted = client.delete(f"{api}/admin/artifact-types/dirt?confirm=delete")
     assert deleted.status_code == 409
     assert "switch it off" in deleted.json()["detail"]
 
@@ -77,8 +77,8 @@ def test_a_builtin_cannot_change_kind_or_be_deleted(client: TestClient, api: str
 def test_an_unused_admin_defined_type_can_be_deleted(client: TestClient, api: str) -> None:
     """Nothing refers to it, so removing it loses no history."""
     assert _save(client, api, key="scratch", label="Scratch").status_code == 201
-    assert client.delete(f"{api}/admin/artifact-types/scratch").status_code == 204
-    assert client.delete(f"{api}/admin/artifact-types/scratch").status_code == 404
+    assert client.delete(f"{api}/admin/artifact-types/scratch?confirm=delete").status_code == 204
+    assert client.delete(f"{api}/admin/artifact-types/scratch?confirm=delete").status_code == 404
 
 
 def test_a_type_a_run_has_used_cannot_be_deleted(
@@ -100,7 +100,7 @@ def test_a_type_a_run_has_used_cannot_be_deleted(
         )
         session.commit()
 
-    response = client.delete(f"{api}/admin/artifact-types/scratch")
+    response = client.delete(f"{api}/admin/artifact-types/scratch?confirm=delete")
     assert response.status_code == 409
     assert "switch it off" in response.json()["detail"]
 
@@ -178,9 +178,9 @@ def test_a_scope_in_use_cannot_be_deleted(client: TestClient, api: str, submit: 
     """A stored run naming it must keep reading sensibly."""
     client.get(f"{api}/admin/scopes")
     assert submit(scope="AM").status_code == 201
-    response = client.delete(f"{api}/admin/scopes/AM")
+    response = client.delete(f"{api}/admin/scopes/AM?confirm=delete")
     assert response.status_code == 409
-    assert client.delete(f"{api}/admin/scopes/ARCHIVE").status_code == 204
+    assert client.delete(f"{api}/admin/scopes/ARCHIVE?confirm=delete").status_code == 204
 
 
 # --- the new-run form ---------------------------------------------------------------
@@ -367,7 +367,12 @@ def test_a_sample_can_be_downloaded_and_removed(
     assert downloaded.content == content
     assert name in downloaded.headers["content-disposition"]
 
-    assert client.delete(f"{api}/admin/artifact-types/dirt/samples/{sample_id}").status_code == 204
+    assert (
+        client.delete(
+            f"{api}/admin/artifact-types/dirt/samples/{sample_id}?confirm=delete"
+        ).status_code
+        == 204
+    )
     after = client.get(f"{api}/admin/artifact-types").json()
     assert next(t for t in after if t["key"] == "dirt")["samples"] == []
 

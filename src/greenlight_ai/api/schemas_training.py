@@ -207,3 +207,30 @@ class ConfigNoteIn(BaseModel):
 
     statement: str = Field(min_length=3, max_length=4000)
     severity_hint: Literal["high", "medium", "low", "review"] = "medium"
+
+
+class RuleRef(BaseModel):
+    """One rule on the Rules screen, by kind and id."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rule_kind: str = Field(min_length=1, max_length=40)
+    id: int
+
+
+class RulesBulkAction(BaseModel):
+    """One state change applied to several rules under one typed word (ADR-032)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[RuleRef] = Field(min_length=1, max_length=500)
+    action: Literal["enable", "disable", "delete", "restore", "activate"]
+    confirm: str = ""
+    note: str = ""
+
+
+class RulesBulkResult(BaseModel):
+    """What a bulk rule action did."""
+
+    changed: int = 0
+    failed: list[str] = Field(default_factory=list)

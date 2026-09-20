@@ -40,6 +40,8 @@ import type {
   DefinitionVersion,
   GuideEntry,
   VersionKind,
+  BulkResult,
+  RulesBulkResult,
 } from "@/lib/types";
 
 const BASE = "/api/v1/admin";
@@ -178,12 +180,19 @@ export const api = {
     request<ArtifactType>(`/artifact-types/${key}/guide`, json("PUT", { entries })),
 
   /** Remove one sample. */
-  deleteSample: (key: string, sampleId: number): Promise<void> =>
-    request<void>(`/artifact-types/${key}/samples/${sampleId}`, { method: "DELETE" }),
+  deleteSample: (key: string, sampleId: number, confirm: string): Promise<void> =>
+    request<void>(
+      `/artifact-types/${key}/samples/${sampleId}?confirm=${encodeURIComponent(confirm)}`,
+      {
+        method: "DELETE",
+      }
+    ),
 
   /** Delete an admin-defined type. Refused for a built-in or one a run has used. */
-  deleteArtifactType: (key: string): Promise<void> =>
-    request<void>(`/artifact-types/${key}`, { method: "DELETE" }),
+  deleteArtifactType: (key: string, confirm: string): Promise<void> =>
+    request<void>(`/artifact-types/${key}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    }),
 
   /** List the delivery programmes and their standing instructions. */
   listScopes: (): Promise<Scope[]> => request<Scope[]>("/scopes"),
@@ -192,8 +201,8 @@ export const api = {
   saveScope: (payload: ScopeIn): Promise<Scope> => request<Scope>("/scopes", json("POST", payload)),
 
   /** Delete a programme. Refused when a run already names it. */
-  deleteScope: (code: string): Promise<void> =>
-    request<void>(`/scopes/${code}`, { method: "DELETE" }),
+  deleteScope: (code: string, confirm: string): Promise<void> =>
+    request<void>(`/scopes/${code}?confirm=${encodeURIComponent(confirm)}`, { method: "DELETE" }),
 
   /** The rules of one programme, or of every programme when no code is given. */
   listProgrammeRules: (scopeCode = ""): Promise<ProgrammeRule[]> =>
@@ -221,8 +230,10 @@ export const api = {
     request<NamedValue>("/named-values", json("POST", payload)),
 
   /** Delete a named value. Refused when a check still refers to it. */
-  deleteNamedValue: (id: number): Promise<void> =>
-    request<void>(`/named-values/${id}`, { method: "DELETE" }),
+  deleteNamedValue: (id: number, confirm: string): Promise<void> =>
+    request<void>(`/named-values/${id}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    }),
 
   /** List every check, active or not. */
   listChecks: (): Promise<Check[]> => request<Check[]>("/checks"),
@@ -250,12 +261,21 @@ export const api = {
     request<ComplianceRule[]>("/compliance-rules"),
 
   /** Create or replace a compliance rule. */
-  saveComplianceRule: (payload: Omit<ComplianceRule, "id">): Promise<ComplianceRule> =>
+  saveComplianceRule: (payload: Omit<ComplianceRule, "id" | "version">): Promise<ComplianceRule> =>
     request<ComplianceRule>("/compliance-rules", json("POST", payload)),
 
   /** Delete a compliance rule. */
-  deleteComplianceRule: (id: number): Promise<void> =>
-    request<void>(`/compliance-rules/${id}`, { method: "DELETE" }),
+  deleteComplianceRule: (id: number, confirm: string): Promise<void> =>
+    request<void>(`/compliance-rules/${id}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    }),
+
+  /** Reword a compliance rule; each edit bumps its version. */
+  updateComplianceRule: (
+    id: number,
+    payload: Omit<ComplianceRule, "id" | "version">
+  ): Promise<ComplianceRule> =>
+    request<ComplianceRule>(`/compliance-rules/${id}`, json("PATCH", payload)),
 
   /** List the reverse-pass categories. */
   listCategories: (): Promise<Category[]> => request<Category[]>("/categories"),
@@ -272,7 +292,8 @@ export const api = {
     request<Alias>("/aliases", json("POST", payload)),
 
   /** Delete an attribute alias. */
-  deleteAlias: (id: number): Promise<void> => request<void>(`/aliases/${id}`, { method: "DELETE" }),
+  deleteAlias: (id: number, confirm: string): Promise<void> =>
+    request<void>(`/aliases/${id}?confirm=${encodeURIComponent(confirm)}`, { method: "DELETE" }),
 
   /** List the masked-column patterns. */
   listMaskedColumns: (): Promise<MaskedColumn[]> => request<MaskedColumn[]>("/masked-columns"),
@@ -282,8 +303,21 @@ export const api = {
     request<MaskedColumn>("/masked-columns", json("POST", { pattern, description })),
 
   /** Remove a masked-column pattern. */
-  deleteMaskedColumn: (id: number): Promise<void> =>
-    request<void>(`/masked-columns/${id}`, { method: "DELETE" }),
+  deleteMaskedColumn: (id: number, confirm: string): Promise<void> =>
+    request<void>(`/masked-columns/${id}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    }),
+
+  /**
+   * Delete several rows of one resource under one typed word (ADR-032). Checks and
+   * compliance rules are soft-deleted and stay restorable from the Rules screen.
+   */
+  bulkDelete: (
+    resource: "compliance-rules" | "checks" | "named-values" | "aliases" | "masked-columns",
+    ids: number[],
+    confirm: string
+  ): Promise<BulkResult> =>
+    request<BulkResult>(`/${resource}/bulk-delete`, json("POST", { ids, confirm })),
 
   /** Every runtime setting, grouped, with its effective value and its source. */
   listSettings: (): Promise<SettingGroup[]> => request<SettingGroup[]>("/settings"),
@@ -391,6 +425,15 @@ export const api = {
     note = ""
   ): Promise<Rule> =>
     request<Rule>(`/rules/${ruleKind}/${id}/action`, json("POST", { action, confirm, note })),
+
+  /** One state change on several rules, under one typed action word. */
+  actOnRules: (
+    items: { rule_kind: string; id: number }[],
+    action: RuleActionWord,
+    confirm: string,
+    note = ""
+  ): Promise<RulesBulkResult> =>
+    request<RulesBulkResult>("/rules/bulk", json("POST", { items, action, confirm, note })),
 
   /** Every state this rule has moved between, with who moved it. */
   ruleHistory: (ruleKind: string, id: number): Promise<RuleStateChange[]> =>

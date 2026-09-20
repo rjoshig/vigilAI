@@ -27,6 +27,9 @@ import {
   TR,
   Table,
 } from "@/components/ui/primitives";
+import Link from "next/link";
+
+import { BulkBar } from "@/components/bulk-bar";
 import { api, ApiError } from "@/lib/api";
 import type { Rule, RuleActionWord, RuleStateChange, RuleStateFilter } from "@/lib/types";
 
@@ -81,6 +84,14 @@ function when(value: string | null): string {
   if (!value) return "never";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+/** Where a rule's wording is edited, by kind; null when it has no owning screen. */
+function editHref(ruleKind: string, id: number): string | null {
+  if (ruleKind === "check") return `/checks?focus=${id}`;
+  if (ruleKind === "compliance_rule") return `/compliance?focus=${id}`;
+  if (ruleKind === "programme_rule") return `/scopes?focus=${id}`;
+  return null;
 }
 
 /** Which state changes make sense from where the rule is now. */
@@ -155,6 +166,7 @@ export default function RulesPage() {
   const [confirming, setConfirming] = React.useState<string | null>(null);
   const [history, setHistory] = React.useState<Record<string, RuleStateChange[]>>({});
   const [openHistory, setOpenHistory] = React.useState<string | null>(null);
+  const [selected, setSelected] = React.useState<Rule[]>([]);
 
   const load = React.useCallback(async () => {
     try {
@@ -256,140 +268,201 @@ export default function RulesPage() {
           hint="Widen the state filter, or clear the search box."
         />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <thead>
-                <TR className="hover:bg-transparent">
-                  <TH>Rule</TH>
-                  <TH>Origin</TH>
-                  <TH>State</TH>
-                  <TH>Scope</TH>
-                  <TH>Severity</TH>
-                  <TH>Fired</TH>
-                  <TH>Dismissed</TH>
-                  <TH>Last fired</TH>
-                  <TH className="text-right">Actions</TH>
-                </TR>
-              </thead>
-              <tbody>
-                {rules.map((rule) => {
-                  const key = `${rule.rule_kind}-${rule.id}`;
-                  return (
-                    <React.Fragment key={key}>
-                      <TR>
-                        <TD>
-                          <div className="text-sm font-medium">{rule.name}</div>
-                          <div className="mono text-[0.7rem] text-muted-foreground">
-                            {kindLabel(rule.rule_kind)} #{rule.id}
-                          </div>
-                          {rule.summary ? (
-                            <div className="max-w-md text-xs text-muted-foreground">
-                              {rule.summary}
-                            </div>
-                          ) : null}
-                          {rule.source_observation_ids.length > 0 ? (
-                            <div className="text-[0.7rem] text-muted-foreground">
-                              from observation {rule.source_observation_ids.join(", ")}
-                            </div>
-                          ) : null}
-                          {rule.state === "deleted" && rule.restorable_until ? (
-                            <div className="text-[0.7rem] text-destructive">
-                              restorable until {when(rule.restorable_until)}
-                            </div>
-                          ) : null}
-                        </TD>
-                        <TD>
-                          <Badge tone="outline">{ORIGIN_LABELS[rule.origin] ?? rule.origin}</Badge>
-                        </TD>
-                        <TD>
-                          <Badge tone={STATE_TONES[rule.state] ?? "muted"}>{rule.state}</Badge>
-                        </TD>
-                        <TD className="text-xs">{scopeLabel(rule.scope)}</TD>
-                        <TD className="text-xs">{rule.severity}</TD>
-                        <TD className="tabular-nums">{rule.fired}</TD>
-                        <TD className="tabular-nums">
-                          {rule.dismissed} ({Math.round(rule.dismissal_rate * 100)}%)
-                        </TD>
-                        <TD className="text-xs text-muted-foreground">
-                          {when(rule.last_fired_at)}
-                        </TD>
-                        <TD className="text-right">
-                          <div className="flex flex-wrap justify-end gap-1">
-                            {actionsFor(rule.state).map((action) => (
-                              <Button
-                                key={action}
-                                variant={action === "delete" ? "ghost" : "outline"}
-                                size="xs"
-                                disabled={busy}
-                                onClick={() => setConfirming(`${key}-${action}`)}
-                              >
-                                {action}
-                              </Button>
-                            ))}
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              aria-label={`History of ${rule.name}`}
-                              onClick={() => void toggleHistory(rule)}
-                            >
-                              <History className="h-3.5 w-3.5" /> History
-                            </Button>
-                          </div>
-                        </TD>
-                      </TR>
-
-                      {actionsFor(rule.state).map((action) =>
-                        confirming === `${key}-${action}` ? (
-                          <TR key={`${key}-${action}-confirm`} className="hover:bg-transparent">
-                            <TD colSpan={9}>
-                              <ConfirmAction
-                                action={action}
-                                busy={busy}
-                                onCancel={() => setConfirming(null)}
-                                onConfirm={(confirm, note) =>
-                                  void act(action, () =>
-                                    api.actOnRule(rule.rule_kind, rule.id, action, confirm, note)
+        <>
+          <BulkBar
+            count={selected.length}
+            busy={busy}
+            actions={[
+              { word: "disable", label: "Disable selected" },
+              { word: "enable", label: "Enable selected" },
+              { word: "activate", label: "Activate selected (shadow → active)" },
+              { word: "delete", label: "Delete selected (restorable)", destructive: true },
+            ]}
+            onClear={() => setSelected([])}
+            onAct={(confirm) =>
+              act(confirm, async () => {
+                const result = await api.actOnRules(
+                  selected.map((one) => ({ rule_kind: one.rule_kind, id: one.id })),
+                  confirm as RuleActionWord,
+                  confirm
+                );
+                setSelected([]);
+                if (result.failed.length > 0) {
+                  throw new ApiError(
+                    409,
+                    `${result.changed} changed; could not: ${result.failed.join("; ")}`
+                  );
+                }
+              })
+            }
+          />
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <thead>
+                  <TR className="hover:bg-transparent">
+                    <TH className="w-8" />
+                    <TH>Rule</TH>
+                    <TH>Origin</TH>
+                    <TH>State</TH>
+                    <TH>Scope</TH>
+                    <TH>Severity</TH>
+                    <TH>Fired</TH>
+                    <TH>Dismissed</TH>
+                    <TH>Last fired</TH>
+                    <TH className="text-right">Actions</TH>
+                  </TR>
+                </thead>
+                <tbody>
+                  {rules.map((rule) => {
+                    const key = `${rule.rule_kind}-${rule.id}`;
+                    return (
+                      <React.Fragment key={key}>
+                        <TR>
+                          <TD>
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${rule.name}`}
+                              checked={selected.some(
+                                (one) => one.rule_kind === rule.rule_kind && one.id === rule.id
+                              )}
+                              onChange={() =>
+                                setSelected((current) =>
+                                  current.some(
+                                    (one) => one.rule_kind === rule.rule_kind && one.id === rule.id
                                   )
-                                }
-                              />
-                            </TD>
-                          </TR>
-                        ) : null
-                      )}
-
-                      {openHistory === key ? (
-                        <TR className="hover:bg-transparent">
-                          <TD colSpan={9} className="bg-muted/30">
-                            {!history[key] ? (
-                              <Skeleton className="h-10" />
-                            ) : history[key].length === 0 ? (
-                              <p className="text-xs text-muted-foreground">
-                                This rule has not changed state since it was created.
-                              </p>
-                            ) : (
-                              <ul className="text-xs">
-                                {history[key].map((change) => (
-                                  <li key={change.id} className="py-0.5">
-                                    <span className="mono">
-                                      {change.from_state || "—"} → {change.to_state}
-                                    </span>{" "}
-                                    · {change.actor || "—"} · {when(change.at)}
-                                    {change.note ? ` · ${change.note}` : ""}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
+                                    ? current.filter(
+                                        (one) =>
+                                          !(one.rule_kind === rule.rule_kind && one.id === rule.id)
+                                      )
+                                    : [...current, rule]
+                                )
+                              }
+                            />
+                          </TD>
+                          <TD>
+                            <div className="text-sm font-medium">{rule.name}</div>
+                            <div className="mono text-[0.7rem] text-muted-foreground">
+                              {kindLabel(rule.rule_kind)} #{rule.id}
+                            </div>
+                            {rule.summary ? (
+                              <div className="max-w-md text-xs text-muted-foreground">
+                                {rule.summary}
+                              </div>
+                            ) : null}
+                            {rule.source_observation_ids.length > 0 ? (
+                              <div className="text-[0.7rem] text-muted-foreground">
+                                from observation {rule.source_observation_ids.join(", ")}
+                              </div>
+                            ) : null}
+                            {rule.state === "deleted" && rule.restorable_until ? (
+                              <div className="text-[0.7rem] text-destructive">
+                                restorable until {when(rule.restorable_until)}
+                              </div>
+                            ) : null}
+                          </TD>
+                          <TD>
+                            <Badge tone="outline">
+                              {ORIGIN_LABELS[rule.origin] ?? rule.origin}
+                            </Badge>
+                          </TD>
+                          <TD>
+                            <Badge tone={STATE_TONES[rule.state] ?? "muted"}>{rule.state}</Badge>
+                          </TD>
+                          <TD className="text-xs">{scopeLabel(rule.scope)}</TD>
+                          <TD className="text-xs">{rule.severity}</TD>
+                          <TD className="tabular-nums">{rule.fired}</TD>
+                          <TD className="tabular-nums">
+                            {rule.dismissed} ({Math.round(rule.dismissal_rate * 100)}%)
+                          </TD>
+                          <TD className="text-xs text-muted-foreground">
+                            {when(rule.last_fired_at)}
+                          </TD>
+                          <TD className="text-right">
+                            <div className="flex flex-wrap justify-end gap-1">
+                              {actionsFor(rule.state).map((action) => (
+                                <Button
+                                  key={action}
+                                  variant={action === "delete" ? "ghost" : "outline"}
+                                  size="xs"
+                                  disabled={busy}
+                                  onClick={() => setConfirming(`${key}-${action}`)}
+                                >
+                                  {action}
+                                </Button>
+                              ))}
+                              {editHref(rule.rule_kind, rule.id) ? (
+                                <Link
+                                  href={editHref(rule.rule_kind, rule.id) ?? "#"}
+                                  className="inline-flex h-6 items-center rounded px-2 text-xs hover:bg-accent"
+                                >
+                                  Edit
+                                </Link>
+                              ) : null}
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                aria-label={`History of ${rule.name}`}
+                                onClick={() => void toggleHistory(rule)}
+                              >
+                                <History className="h-3.5 w-3.5" /> History
+                              </Button>
+                            </div>
                           </TD>
                         </TR>
-                      ) : null}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </CardContent>
-        </Card>
+
+                        {actionsFor(rule.state).map((action) =>
+                          confirming === `${key}-${action}` ? (
+                            <TR key={`${key}-${action}-confirm`} className="hover:bg-transparent">
+                              <TD colSpan={10}>
+                                <ConfirmAction
+                                  action={action}
+                                  busy={busy}
+                                  onCancel={() => setConfirming(null)}
+                                  onConfirm={(confirm, note) =>
+                                    void act(action, () =>
+                                      api.actOnRule(rule.rule_kind, rule.id, action, confirm, note)
+                                    )
+                                  }
+                                />
+                              </TD>
+                            </TR>
+                          ) : null
+                        )}
+
+                        {openHistory === key ? (
+                          <TR className="hover:bg-transparent">
+                            <TD colSpan={10} className="bg-muted/30">
+                              {!history[key] ? (
+                                <Skeleton className="h-10" />
+                              ) : history[key].length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  This rule has not changed state since it was created.
+                                </p>
+                              ) : (
+                                <ul className="text-xs">
+                                  {history[key].map((change) => (
+                                    <li key={change.id} className="py-0.5">
+                                      <span className="mono">
+                                        {change.from_state || "—"} → {change.to_state}
+                                      </span>{" "}
+                                      · {change.actor || "—"} · {when(change.at)}
+                                      {change.note ? ` · ${change.note}` : ""}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </TD>
+                          </TR>
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       <p className="mt-3 text-xs text-muted-foreground">

@@ -32,6 +32,8 @@ from sqlalchemy.orm import Session
 
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
+    DELETE_WORD,
+    require_delete_word,
     CurrentUser,
     current_user,
     get_data_dir,
@@ -49,6 +51,7 @@ from greenlight_ai.checks.expressions import (
 from greenlight_ai.checks import guides
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
 from greenlight_ai.db import catalog, models, repository, versions
+from greenlight_ai.training import lifecycle
 from greenlight_ai.llm.cache import LLMCache
 from greenlight_ai.llm.client import LLMError
 from greenlight_ai.llm.factory import build_client
@@ -652,6 +655,7 @@ def delete_sample(
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(require_admin),
+    _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Remove one sample.
 
@@ -686,6 +690,7 @@ def delete_artifact_type(
     key: str,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete an admin-defined report type.
 
@@ -845,6 +850,7 @@ def delete_scope(
     code: str,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a delivery programme.
 
@@ -1067,6 +1073,7 @@ def delete_named_value(
     value_id: int,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a named value.
 
@@ -1117,7 +1124,9 @@ def list_checks(
         The checks, newest first.
     """
     rows = session.execute(
-        sa.select(models.CheckDefinitionRow).order_by(models.CheckDefinitionRow.id.desc())
+        sa.select(models.CheckDefinitionRow)
+        .where(models.CheckDefinitionRow.state != "deleted")
+        .order_by(models.CheckDefinitionRow.id.desc())
     ).scalars()
     return [
         wire.CheckOut(
@@ -1417,6 +1426,20 @@ def test_expression(
 # ------------------------------------------------------- compliance and scope
 
 
+def _compliance_out(row: models.ComplianceRuleRow) -> wire.ComplianceRuleOut:
+    """Build the wire model for one compliance rule."""
+    return wire.ComplianceRuleOut(
+        id=row.id,
+        name=row.name,
+        json_path_contains=str((row.requirement or {}).get("json_path_contains", "")),
+        expected_value=(row.requirement or {}).get("expected_value", True),
+        scope=row.scope,
+        reasoning=row.reasoning,
+        is_active=row.is_active,
+        version=row.version or 1,
+    )
+
+
 @router.get("/compliance-rules", response_model=list[wire.ComplianceRuleOut])
 def list_compliance_rules(
     session: Session = Depends(get_session),
@@ -1432,20 +1455,11 @@ def list_compliance_rules(
         The rules.
     """
     rows = session.execute(
-        sa.select(models.ComplianceRuleRow).order_by(models.ComplianceRuleRow.name)
+        sa.select(models.ComplianceRuleRow)
+        .where(models.ComplianceRuleRow.state != "deleted")
+        .order_by(models.ComplianceRuleRow.name)
     ).scalars()
-    return [
-        wire.ComplianceRuleOut(
-            id=row.id,
-            name=row.name,
-            json_path_contains=str((row.requirement or {}).get("json_path_contains", "")),
-            expected_value=(row.requirement or {}).get("expected_value", True),
-            scope=row.scope,
-            reasoning=row.reasoning,
-            is_active=row.is_active,
-        )
-        for row in rows
-    ]
+    return [_compliance_out(row) for row in rows]
 
 
 @router.post(
@@ -1482,7 +1496,7 @@ def save_compliance_rule(
     row.is_active = payload.is_active
     session.flush()
     repository.audit(session, "admin.compliance_saved", detail=payload.name)
-    return wire.ComplianceRuleOut(id=row.id, **payload.model_dump())
+    return _compliance_out(row)
 
 
 @router.delete("/compliance-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1490,6 +1504,7 @@ def delete_compliance_rule(
     rule_id: int,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a compliance rule.
 
@@ -1658,6 +1673,7 @@ def delete_alias(
     alias_id: int,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete an attribute alias.
 
@@ -1756,6 +1772,7 @@ def delete_masked_column(
     column_id: int,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Remove a masked-column pattern.
 
@@ -2115,3 +2132,124 @@ def revert_definition_version(
         actor=user.name,
     )
     return _version_out(row)
+
+
+# ------------------------------------------------------------- edit and bulk (ADR-032)
+
+
+@router.patch("/compliance-rules/{rule_id}", response_model=wire.ComplianceRuleOut)
+def edit_compliance_rule(
+    rule_id: int,
+    payload: wire.ComplianceRuleIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ComplianceRuleOut:
+    """Reword a compliance rule. Each edit bumps its version; old findings keep theirs.
+
+    Args:
+        rule_id: The rule.
+        payload: The new wording, path, scope and reasoning.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The updated rule.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.ComplianceRuleRow, rule_id)
+    if row is None or row.state == "deleted":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"compliance rule {rule_id} not found")
+    row.name = payload.name.strip()
+    row.requirement = {
+        "json_path_contains": payload.json_path_contains.strip(),
+        "expected_value": payload.expected_value,
+    }
+    row.scope = payload.scope.strip() or "all"
+    row.reasoning = payload.reasoning
+    row.version = (row.version or 1) + 1
+    session.flush()
+    repository.audit(
+        session,
+        "admin.compliance_rule_edited",
+        detail=f"{rule_id}:v{row.version}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _compliance_out(row)
+
+
+_BULK_TABLES: Final[dict[str, Any]] = {
+    "compliance-rules": models.ComplianceRuleRow,
+    "named-values": models.NamedValueRow,
+    "aliases": models.AttributeAlias,
+    "masked-columns": models.MaskedColumn,
+}
+
+
+@router.post("/{resource}/bulk-delete", response_model=wire.BulkResult)
+def bulk_delete(
+    resource: str,
+    payload: wire.BulkDeleteIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.BulkResult:
+    """Delete several rows of one resource under one typed word (ADR-032).
+
+    Compliance rules and checks are soft-deleted through the rule lifecycle, so they
+    stay restorable; the reference lists are removed outright, as their single
+    deletes are.
+
+    Args:
+        resource: ``compliance-rules``, ``checks``, ``named-values``, ``aliases`` or
+            ``masked-columns``.
+        payload: The ids and the typed word.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        How many rows went, and which ids were not found.
+
+    Raises:
+        HTTPException: 400 without the word, 404 for an unknown resource.
+    """
+    if payload.confirm.strip().lower() != DELETE_WORD:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"type {DELETE_WORD!r} to confirm; a delete cannot be undone",
+        )
+    who: dict[str, Any] = {"actor": user.name, "user_id": user.id, "note": "bulk delete"}
+    missing: list[int] = []
+    deleted = 0
+    if resource in ("checks", "compliance-rules"):
+        kind = "check" if resource == "checks" else "compliance_rule"
+        for rule_id in payload.ids:
+            try:
+                lifecycle.delete_rule(session, kind, rule_id, **who)
+                deleted += 1
+            except lifecycle.LifecycleError:
+                missing.append(rule_id)
+    elif resource in _BULK_TABLES:
+        table = _BULK_TABLES[resource]
+        for row_id in payload.ids:
+            row = session.get(table, row_id)
+            if row is None:
+                missing.append(row_id)
+                continue
+            if resource == "masked-columns" and getattr(row, "is_default", False):
+                missing.append(row_id)
+                continue
+            session.delete(row)
+            deleted += 1
+    else:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no bulk delete for {resource!r}")
+    session.flush()
+    repository.audit(
+        session,
+        f"admin.bulk_delete.{resource}",
+        detail=f"{deleted} of {len(payload.ids)}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return wire.BulkResult(deleted=deleted, missing=missing)

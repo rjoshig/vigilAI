@@ -122,6 +122,8 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   a guide per report type that the model reads and code enforces, ten versions with revert (ADR-029)
 - [`docs/phase-6.9.md`](docs/phase-6.9.md) — **delivery drift**: what changed since the
   previous finalized run of the same configuration, on the review screen and the report (ADR-030)
+- [`docs/phase-6.10.md`](docs/phase-6.10.md) — **meaning**: scoped samples, the mapping
+  interview, and edit / typed delete everywhere (ADR-032)
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)

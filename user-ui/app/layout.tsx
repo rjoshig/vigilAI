@@ -9,7 +9,7 @@ import { fetchAppearance } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Greenlight AI — QC Validation",
+  title: "Greenlight AI",
   description:
     "Reconcile the OSL requirement spec, the ETL config, and the output reports for a credit-data delivery.",
 };

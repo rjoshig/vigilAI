@@ -70,7 +70,10 @@ def test_revert_restores_fields_and_samples_and_is_itself_a_new_version(
     counts = next(t for t in stored if t["key"] == "counts")
     sample_id = counts["samples"][0]["id"]
     assert (
-        client.delete(f"{api}/admin/artifact-types/counts/samples/{sample_id}").status_code == 204
+        client.delete(
+            f"{api}/admin/artifact-types/counts/samples/{sample_id}?confirm=delete"
+        ).status_code
+        == 204
     )  # v4
     assert len(_versions(client, api)) == 4
 
@@ -117,7 +120,7 @@ def test_a_deleted_samples_workbook_stays_until_no_version_names_it(
         sample = session.get(models.ArtifactSample, sample_id)
         assert sample is not None
         path = sample.storage_path
-    client.delete(f"{api}/admin/artifact-types/counts/samples/{sample_id}")
+    client.delete(f"{api}/admin/artifact-types/counts/samples/{sample_id}?confirm=delete")
     assert (db_settings.data_dir / path).exists()
 
     with factory() as session:

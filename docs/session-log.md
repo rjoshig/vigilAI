@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.9**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/theme-picker` (Phase 6.6), against `dev` |
+| Branch | `feature/edit-and-confirm` (Phase 6.10 Part A), against `dev`; Part B next on `feature/meaning` |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,22 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-19 (Phase 6.10 Part A: edit and typed delete everywhere)
+
+**Branch:** `feature/edit-and-confirm` · **Status:** complete, gates green.
+
+- Every admin delete requires the typed word, API-enforced; bulk delete on the long
+  lists and a bulk state action on the Rules screen; compliance rules editable with
+  a version; checks editable from the list; Rules screen links to the owning screen.
+- Delivery programme cards tinted and bordered; user tab title "Greenlight AI".
+- ADR-032; `docs/phase-6.10.md` written with the decisions for Part B (Meaning).
+
+### Next concrete action
+
+Part B on `feature/meaning`: scoped samples + `meaning_entries` + migration first.
 
 ---
 

@@ -933,3 +933,27 @@ contrast thresholds, so a look can never flatten a severity.
 **Consequences:** No redeploy for a new default or a lock. A palette is one block of
 tokens in each app's `globals.css`, one entry in `lib/theme.ts`, and one choice in the
 registry; the contrast test fails the moment the tokens are wrong.
+
+## ADR-032 — A delete is typed on the admin side, confirmed on the user side, and one word covers a batch
+
+**Status:** accepted 2026-09-19 (user decision)
+
+**Context:** Seven admin deletes fired on one click; compliance rules could not be
+edited; long lists had no way to act on many rows at once.
+
+**Decision:**
+
+1. **Every admin delete asks the person to type `delete`**, and the API refuses a
+   delete without `?confirm=delete`, so a script cannot skip the pause the screen
+   imposes. Checks and compliance rules are soft-deleted through the rule lifecycle
+   and stay restorable; the reference lists are removed outright.
+2. **The user console asks "are you sure" and never a word.** It has no delete
+   today; the shared dialog exists so the first one has nothing to invent.
+3. **A batch takes one typed word**: `delete` for deletes, the action for state
+   changes (`disable`, `activate`, …), audited as counts.
+4. **Every rule's wording is editable on its owning screen**; the Rules screen
+   links there. An edit bumps the rule's version so old findings keep theirs.
+
+**Consequences:** One component (`confirm-delete`) and one bar (`bulk-bar`) in the
+admin app; every delete route carries the same dependency; a compliance rule now has
+a version like a check.

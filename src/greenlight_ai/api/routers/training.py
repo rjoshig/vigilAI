@@ -28,6 +28,8 @@ from greenlight_ai.api.schemas_training import (
     ObservationOut,
     RuleAction,
     RuleOut,
+    RulesBulkAction,
+    RulesBulkResult,
     RuleStateChangeOut,
     SynthesizeIn,
     TrainingConfigOut,
@@ -987,6 +989,56 @@ def _sources(session: Session, candidate_id: int | None) -> list[int]:
         return []
     candidate = session.get(models.RuleCandidate, candidate_id)
     return list(candidate.source_observation_ids or []) if candidate else []
+
+
+@router.post("/admin/rules/bulk", response_model=RulesBulkResult)
+def act_on_rules(
+    payload: RulesBulkAction,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> RulesBulkResult:
+    """Apply one state change to several rules under one typed word (ADR-032).
+
+    Args:
+        payload: The rules, the action, the typed word and an optional note.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        How many changed and which could not (as ``kind:id: reason``).
+
+    Raises:
+        HTTPException: 400 when the word does not match the action.
+    """
+    if payload.confirm.strip().lower() != payload.action:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"type {payload.action!r} to confirm; this applies to every future run",
+        )
+    who: dict[str, Any] = {"actor": user.name, "user_id": user.id, "note": payload.note}
+    handlers = {
+        "enable": lifecycle.enable_rule,
+        "activate": lifecycle.enable_rule,
+        "disable": lifecycle.disable_rule,
+        "delete": lifecycle.delete_rule,
+        "restore": lifecycle.restore_rule,
+    }
+    changed = 0
+    failed: list[str] = []
+    for item in payload.items:
+        try:
+            handlers[payload.action](session, item.rule_kind, item.id, **who)
+            changed += 1
+        except lifecycle.LifecycleError as exc:
+            failed.append(f"{item.rule_kind}:{item.id}: {exc}")
+    repository.audit(
+        session,
+        f"rule.bulk.{payload.action}",
+        detail=f"{changed} of {len(payload.items)}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return RulesBulkResult(changed=changed, failed=failed)
 
 
 @router.post("/admin/rules/{rule_kind}/{rule_id}/action", response_model=RuleOut)
