@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev`, level with `main` (2026-09-21). **Phases 6.14, 6.15 and 6.16 are complete and merged.** Everything still open is gathered in [`phase-6.17.md`](phase-6.17.md) — nothing blocking, each item with the reason it was left. **Next concrete action: 6.17a**, measure the programme keyword check for the brittleness compliance rules and named values were both measured for; it is the one surface never tested for it, and the two precedents point opposite ways so the answer is not guessable. About half an hour, and it either creates a phase or removes a worry |
+| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **Phases 6.14, 6.15 and 6.16 are complete and merged.** Everything still open is gathered in [`phase-6.17.md`](phase-6.17.md). **6.17a is measured and closed:** the programme keyword check *is* brittle, and it fails the way compliance rules did — at HIGH severity — not the way named values do, so 6.15's precedent applies and not 6.16d's. **Next concrete action: a decision from the user on which of the four recommendations in 6.17a to build** (the first two are a data change and a normalization pass, and may be enough), and **a discussion of 6.17c before any code** — the user asked for that explicitly |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -103,6 +103,47 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (6.17a — the programme keyword check, measured)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.17a complete, gates green.
+
+The third surface finally got the half-hour measurement the other two had. Seventeen
+deliveries, every one genuinely the programme it declared, worded the way another
+customer might word it. Four were silent, eleven raised a review item, and **five fired
+at HIGH** — a false positive at the highest severity the tool has.
+
+Two defects, and they compound. A phrase keyword needs exact adjacency and exact
+plurality, so `existing account` misses `existing accounts` and `invitation-to-apply`
+misses `invitation to apply`; that opens the door. Then `snapshot` and `historical` —
+two of the four shipped Archives keywords — are ordinary data-delivery vocabulary that
+any programme's specification contains, so Archives clears the two-hit floor by accident
+and the run is confidently reported as the wrong programme. The knife-edge case is a
+realistic prescreen OSL that is silent only because one sentence says `firm offer`:
+reword that phrase and the same document is HIGH.
+
+The control class still passes 3 of 3 — a delivery genuinely declared as the wrong
+programme is caught every time — so the check is not broken and should not be replaced.
+Anything built goes behind it, as 6.15's option C did.
+
+The measurement is kept as `tests/pipeline/test_programme_keyword_brittleness.py`,
+mirroring how 6.15 kept its measured failure shapes. Those tests assert what the check
+does **today**, not what it should do, so the result cannot drift unnoticed and a fix
+has to come past them deliberately.
+
+Also corrected status drift the tables had accumulated: `CLAUDE.md` and
+`phase-plan.md` both said 6.14 was not started and `phase-plan.md` said 6.15 was in
+progress, while both phase docs said otherwise. `check_docs.sh` does not compare the
+two tables against the phase docs, which is how that survived.
+
+**Pending:** a decision on which of 6.17a's four recommendations to build; 6.17b (the
+cap countdown); 6.17c, to be **discussed before any code** at the user's request; and
+the two standing touchpoints — `gd-rollout-plan.md` unread since 6.13, and both training
+documents still saying "after Phase 6.14".
+
+**Next concrete action:** discuss 6.17c with the user, then decide 6.17a's build.
 
 ---
 
