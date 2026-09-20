@@ -183,7 +183,9 @@ export default function ReviewPage() {
           </>
         }
         title={`${run.customer_name} · ${run.order_number}`}
-        description={`Configuration ${run.configuration_id}${
+        description={`Configuration ${run.configuration_id} · credit date ${
+          run.credit_date ?? "—"
+        } · run date ${run.created_at.slice(0, 10)}${
           run.submitted_by ? ` · submitted by ${run.submitted_by}` : ""
         }${
           run.model_used ? ` · model ${run.model_used} · prompts v${run.prompt_version}` : ""

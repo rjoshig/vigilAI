@@ -14,17 +14,18 @@ from greenlight_ai.pipeline.s7_reports import _date_spellings
 Submit = Callable[..., Any]
 
 
-def test_a_run_needs_no_configuration_id_and_duplicates_are_allowed(
+def test_a_configuration_id_is_required_and_never_unique(
     client: TestClient, api: str, factory: sessionmaker[Session], submit: Submit
 ) -> None:
-    """The run's own id is its identity; the configuration id is information."""
-    assert submit(configuration_id="").status_code == 201
+    """The run's own id is its identity; the configuration id names the order and repeats."""
+    # Required, never unique: the same configuration is run again months later.
+    assert submit(configuration_id="").status_code == 422
     second = submit(order_number="ORD-2", configuration_id="SAME", rerun_reason="second")
     third = submit(order_number="ORD-3", configuration_id="SAME", rerun_reason="third")
     assert second.status_code == 201 and third.status_code == 201
     with factory() as session:
         ids = list(session.execute(sa.select(models.Run.id).order_by(models.Run.id)).scalars())
-    assert ids == [1, 2, 3]
+    assert ids == [1, 2]
 
 
 def test_the_credit_date_is_stored_and_shown(client: TestClient, api: str, submit: Submit) -> None:

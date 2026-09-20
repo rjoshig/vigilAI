@@ -82,6 +82,8 @@ export interface RunSummary {
   customer_name: string;
   order_number: string;
   configuration_id: string;
+  /** The credit date the delivery is cut as of (null when not given). */
+  credit_date: string | null;
   status: RunStatus;
   current_stage: string;
   error: string;
@@ -99,7 +101,6 @@ export interface RunSummary {
 export interface RunDetail extends RunSummary {
   notes: string;
   /** The credit date the delivery is cut as of; the tool checks the reports carry it. */
-  credit_date: string | null;
   rules_version: number;
   model_used: string;
   prompt_version: string;

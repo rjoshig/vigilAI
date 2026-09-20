@@ -115,6 +115,17 @@ validates, a replay tests, and a person approves into shadow.
 - Delivery programme cards tinted and bordered; user tab title "Greenlight AI".
 - ADR-032; `docs/phase-6.10.md` written with the decisions for Part B (Meaning).
 
+### Also this session
+
+- Configuration id required again, never unique; credit date and run date shown
+  beside it on the run list and the run page (`feature/config-id-required`).
+- **First real runs on Haiku** through the demo stack: four fixture cases submitted,
+  all reached review with the expected findings (score 755 vs 750, the missing
+  waterfall step, states outside the set); one finalized with the frozen report and
+  PDF. The seeded programme rules fire on the synthetic fixtures (no opt-out text
+  there), which is the rules working, not a defect. Benchmark and the real admin
+  definitions come later, on the target PC.
+
 ### Next concrete action
 
 Part B on `feature/meaning`: scoped samples + `meaning_entries` + migration first.
