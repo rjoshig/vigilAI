@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.13d.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.14a and 6.14e.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -345,9 +345,10 @@ changed what and from what.
   retention asks for a second click: the next sweep deletes anything past the new
   window.
 - **Appearance.** The **default theme** every browser starts on, in both apps, and
-  **Lock the theme**, which hides the picker everywhere and applies the default. A
-  person's own choice wins for their browser until you lock; the change reaches open
-  tabs within a minute, no redeploy.
+  **Lock the theme**, which hides the picker everywhere and applies the default.
+  **Locking is on by default**, so both apps start out looking the same for everyone;
+  switch it off and each person's own choice wins for their browser. The change
+  reaches open tabs within a minute, no redeploy.
 - **Platform**, read-only: the database URL, the data directory, and the bind
   address. Each is needed to reach or protect the settings store itself, so none can
   live inside it.

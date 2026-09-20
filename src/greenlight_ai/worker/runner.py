@@ -15,6 +15,7 @@ from typing import Final
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
+from greenlight_ai.checks import field_labels
 from greenlight_ai.checks.guides import GuideEntry, guide_lines
 from greenlight_ai.meaning.render import effective_entries, meaning_lines
 from greenlight_ai.db import catalog, models, repository, versions
@@ -183,6 +184,13 @@ def build_context(
         ),
         guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
+        credit_date_labels=field_labels.resolve_labels(
+            session,
+            field_labels.CREDIT_DATE,
+            customer=run.customer_name,
+            programme=run.scope,
+            configuration_id=run.configuration_id,
+        ),
         examples=repository.load_prompt_examples(
             session, run.customer_name, run.configuration_id, run.scope or ""
         ),
@@ -236,6 +244,15 @@ def execute_run(
         run = session.get(models.Run, run_id)
         if run is None:
             raise ValueError(f"run {run_id} does not exist")
+        # A held run's artifacts disagree with what was submitted and nobody has
+        # accepted that yet (ADR-041). The gate lives at submit, but a queue consumer
+        # must not be able to race past it: a job enqueued before the hold, or replayed
+        # from a dead letter, arrives here and stops.
+        if run.status == "held":
+            raise ValueError(
+                f"run {run_id} is held: its artifacts disagree with what was submitted "
+                "and the disagreement has not been accepted"
+            )
         run.status = "running"
         run.started_at = run.started_at or utcnow()
         run.error = ""

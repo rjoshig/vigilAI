@@ -28,6 +28,10 @@ interface PaletteContextValue {
   palette: Palette;
   palettes: readonly Palette[];
   locked: boolean;
+  /** Whether this deployment explains its screens (Phase 6.14d). */
+  tooltips: boolean;
+  /** The line under the mark in the sidebar (Phase 6.14h). */
+  tagline: string;
   setPalette: (palette: Palette) => void;
   step: (direction: 1 | -1) => void;
 }
@@ -107,10 +111,12 @@ export function PaletteProvider({
       palette,
       palettes: PALETTES,
       locked: appearance.locked,
+      tooltips: appearance.tooltips,
+      tagline: appearance.tagline,
       setPalette,
       step: (direction) => setPalette(nextPalette(palette, direction)),
     }),
-    [palette, appearance.locked, setPalette]
+    [palette, appearance.locked, appearance.tooltips, appearance.tagline, setPalette]
   );
 
   return <PaletteContext.Provider value={value}>{children}</PaletteContext.Provider>;

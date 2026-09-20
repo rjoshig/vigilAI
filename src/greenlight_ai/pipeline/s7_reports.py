@@ -12,6 +12,7 @@ import logging
 from typing import Any, Final, Mapping, cast
 
 from greenlight_ai.checks.definitions import AdminConfig, CheckDefinition
+from greenlight_ai.checks import artifact_match, field_labels
 from greenlight_ai.checks.expressions import ExpressionError, UnresolvedValue, evaluate
 from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
@@ -218,6 +219,53 @@ def _date_spellings(iso: str) -> tuple[str, ...]:
     )
 
 
+def _compare_labelled_credit_date(
+    context: RunContext, iso: str, hit: field_labels.LabelHit
+) -> None:
+    """Compare the submitted credit date with the one the report is labelled with.
+
+    The strong form of the check (Phase 6.14b). A report that says what it is cut as
+    of can be disagreed with, which is a different and far more useful statement than
+    "this date appears nowhere".
+
+    Args:
+        context: The run context, whose ``findings`` this may append to.
+        iso: The credit date the submitter gave, as ``YYYY-MM-DD``.
+        hit: The labelled cell found in a report.
+    """
+    import datetime as _dt
+
+    try:
+        submitted = _dt.date.fromisoformat(iso)
+    except ValueError:
+        return
+    result = artifact_match.compare_credit_date(submitted, hit.value, hit.source)
+    if result.kind in ("match", "absent"):
+        _LOG.info("run %d stage 7: credit date %s confirmed by %s", context.run_id, iso, hit.source)
+        return
+
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="credit_date_mismatch",
+            severity="medium",
+            title=(
+                f"The reports are cut as of {hit.value}, not the credit date {iso} "
+                "given on the form"
+            ),
+            detail=(
+                f"Read {hit.value!r} from {hit.source}, which this delivery labels "
+                f"{hit.label!r}, and compared it with the credit date the submitter "
+                f"gave ({iso}). They disagree. Either the wrong reports were uploaded "
+                "or the credit date on the form is wrong; both are worth settling "
+                "before this is signed."
+            ),
+            leg="osl_reports",
+            evidence=Evidence(report_name=hit.source),
+        )
+    )
+
+
 def _check_credit_date(context: RunContext) -> None:
     """Confirm the credit date the submitter gave appears in the artifacts (ADR-027).
 
@@ -232,6 +280,19 @@ def _check_credit_date(context: RunContext) -> None:
     iso = context.guidance.credit_date
     if not iso:
         return
+
+    # Ask what this delivery calls its credit date, then read that cell and compare
+    # (Phase 6.14b). Finding the labelled value turns a presence test into a
+    # comparison: it can report "the report says 2026-03-31, you said 2026-04-30",
+    # which the old search over every cell could never do.
+    hit = field_labels.find_labelled_value(
+        context.reports,
+        context.credit_date_labels or field_labels.DEFAULT_LABELS[field_labels.CREDIT_DATE],
+    )
+    if hit is not None:
+        _compare_labelled_credit_date(context, iso, hit)
+        return
+
     spellings = _date_spellings(iso)
 
     def contains(text: str) -> bool:
@@ -276,7 +337,9 @@ def _check_credit_date(context: RunContext) -> None:
                     if elsewhere
                     else ", the OSL, and the configuration."
                 )
-                + " Confirm the reports were cut as of this credit date."
+                + " No cell labelled as the credit date was found in any report,"
+                " so this is the weaker search over every value rather than a"
+                " comparison. Confirm the reports were cut as of this credit date."
             ),
             leg="osl_reports",
             evidence=Evidence(report_name="every uploaded report"),

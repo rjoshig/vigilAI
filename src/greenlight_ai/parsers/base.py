@@ -233,6 +233,9 @@ class ConfigDocument:
     Attributes:
         path: Where the config was read from.
         configuration_id: The config's own identifier, used to version captured configs.
+        customer: The customer the configuration names, verbatim, or empty when it names
+            none. Compared with the customer the submitter chose before the run starts
+            (ADR-041); absence is absence, never a parse error.
         last_modified: The ``last_modified`` value carried in the file, verbatim.
         blocks: Logical blocks in document order.
         raw: The whole decoded document, for evidence rendering.
@@ -242,6 +245,7 @@ class ConfigDocument:
     configuration_id: str
     last_modified: str | None
     blocks: tuple[ConfigBlock, ...]
+    customer: str = ""
     raw: Mapping[str, object] = field(default_factory=dict)
 
     def block(self, json_path: str) -> ConfigBlock | None:

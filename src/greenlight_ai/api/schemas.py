@@ -130,6 +130,10 @@ class RunDetail(RunSummary):
     pdf_available: bool = False
     stages: list[StageInfo] = Field(default_factory=list)
     files: dict[str, str] = Field(default_factory=dict)
+    #: Where the artifacts disagreed with what was submitted, accepted or not
+    #: (ADR-041). Shown above the findings, because a mismatch says the findings may
+    #: have been computed against the wrong premise.
+    mismatches: list["ArtifactMismatchOut"] = Field(default_factory=list)
 
 
 class RequirementCoverageOut(BaseModel):
@@ -380,6 +384,48 @@ class DuplicateRun(BaseModel):
     message: str
 
 
+class ArtifactMismatchOut(BaseModel):
+    """One field where the artifacts disagree with what was submitted (ADR-041)."""
+
+    id: int
+    field: str
+    #: A short label for the field, so the screen does not have to know the vocabulary.
+    label: str = ""
+    submitted: str = ""
+    declared: str = ""
+    #: ``near`` (the same once punctuation and company suffixes are removed) or
+    #: ``different``.
+    kind: str = "different"
+    source: str = ""
+    reason: str = ""
+    accepted_at: Optional[dt.datetime] = None
+    accepted_by: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AcceptMismatches(BaseModel):
+    """Accept the disagreements on a held run and let it start.
+
+    One reason covers every mismatch, because the person is answering one question —
+    "yes, these artifacts are the delivery I meant" — and asking it once per field
+    would train them to type the same words three times.
+    """
+
+    reason: str = Field(min_length=1, max_length=2000)
+    #: Which fields to accept. Empty means all of them, which is what the button does.
+    fields: list[str] = Field(default_factory=list)
+
+
+class AcceptMismatchesResult(BaseModel):
+    """What `POST /runs/{id}/match/accept` returns."""
+
+    run_id: int
+    status: str
+    accepted: int
+    queue_position: Optional[int] = None
+
+
 class CreateRunResult(BaseModel):
     """What `POST /runs` returns."""
 
@@ -387,6 +433,10 @@ class CreateRunResult(BaseModel):
     status: str = ""
     queue_position: Optional[int] = None
     duplicate: Optional[DuplicateRun] = None
+    #: Present and non-empty when the run is ``held``: the artifacts disagree with what
+    #: was typed and somebody has to accept before it starts (ADR-041). The files are
+    #: stored and nothing needs re-uploading.
+    mismatches: list[ArtifactMismatchOut] = Field(default_factory=list)
 
 
 class CloneResult(BaseModel):

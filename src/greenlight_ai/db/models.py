@@ -143,7 +143,10 @@ class Run(Base):
     credit_date: Mapped[Optional[dt.date]] = mapped_column(sa.Date, nullable=True)
     notes: Mapped[str] = mapped_column(sa.Text, default="")
 
-    #: queued · running · needs_review · finalized · failed
+    #: held · queued · running · needs_review · finalized · failed. A run is ``held``
+    #: when the artifacts disagree with what the submitter typed (ADR-041): the files
+    #: are stored and the run exists, and it waits for somebody to accept the
+    #: disagreement rather than being thrown away and re-uploaded.
     status: Mapped[str] = mapped_column(sa.String(30), default="queued", index=True)
     current_stage: Mapped[str] = mapped_column(sa.String(30), default="")
     error: Mapped[str] = mapped_column(sa.Text, default="")
@@ -719,6 +722,112 @@ class CoverageAcknowledgement(Base):
     note: Mapped[str] = mapped_column(sa.Text, default="")
     actor: Mapped[str] = mapped_column(sa.String(200), default="")
     actor_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class Announcement(Base):
+    """A message an administrator puts at the top of an app for a while.
+
+    "Maintenance starts at 11pm on the 6th." The tool cannot know that, nobody should
+    have to deploy to say it, and an email is read by whoever happens to open it. A
+    scheduled banner is read by whoever is actually using the app when it matters.
+
+    Scheduling is part of it rather than a convenience: a notice nobody remembers to
+    take down is how an app comes to carry a stale warning for a month, which teaches
+    people to stop reading banners at all.
+    """
+
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = _pk()
+    #: ``info`` · ``warning`` · ``critical``. Chosen by the author; the apps render
+    #: each differently and none of them is dismissible, because a notice somebody
+    #: scheduled is a notice they wanted seen.
+    level: Mapped[str] = mapped_column(sa.String(20), default="info", index=True)
+    #: Who sees it: ``user``, ``admin`` or ``both``. The two apps have different
+    #: audiences and most messages are for one of them.
+    audience: Mapped[str] = mapped_column(sa.String(20), default="both", index=True)
+    message: Mapped[str] = mapped_column(sa.Text, default="")
+
+    #: When it starts and stops showing. Both are required: a banner with no end is
+    #: the stale-notice problem this is meant to avoid.
+    starts_at: Mapped[dt.datetime] = mapped_column(Utc)
+    ends_at: Mapped[dt.datetime] = mapped_column(Utc)
+    #: An off switch that does not lose the row, so a scheduled notice can be pulled
+    #: without retyping it next month.
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class FieldLabel(Base):
+    """What a delivery calls one of the fields the tool checks (Phase 6.14b).
+
+    The credit date is written *as-of date*, *data date*, *cycle date* or *extract
+    date* depending on who built the report. These are document labels, not data
+    attributes, so they are not ``attribute_aliases``: that table resolves attribute
+    names and loads as global-plus-customer only, and is the one table that never
+    adopted the scope vocabulary (ADR-029). These use it.
+    """
+
+    __tablename__ = "field_labels"
+    __table_args__ = (sa.UniqueConstraint("canonical", "label", "scope", name="uq_field_label"),)
+
+    id: Mapped[int] = _pk()
+    #: Which field this names. A closed set; ``credit_date`` is the first.
+    canonical: Mapped[str] = mapped_column(sa.String(40), index=True)
+    #: The label as it appears in a document, e.g. ``"As-of date"``. Matched with
+    #: punctuation and case ignored, so one spelling covers several.
+    label: Mapped[str] = mapped_column(sa.String(200))
+    #: Where it applies, as a scope token (``everywhere``, ``programme:CODE``,
+    #: ``customer:NAME``, ``config:ID``).
+    scope: Mapped[str] = mapped_column(sa.String(120), default="everywhere", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class ArtifactMismatch(Base):
+    """The artifacts disagreed with what the submitter typed (ADR-041).
+
+    One row per field that did not agree, written before the run is allowed to start.
+    A row with no ``accepted_at`` is why the run is ``held``; accepting fills the
+    reason and lets it queue. Rows are never deleted, so the review screen and the
+    frozen report can both show that somebody waived the question and why.
+    """
+
+    __tablename__ = "artifact_mismatches"
+    __table_args__ = (
+        sa.UniqueConstraint("run_id", "field", name="uq_artifact_mismatch_run_field"),
+    )
+
+    id: Mapped[int] = _pk()
+    run_id: Mapped[int] = mapped_column(sa.ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    #: One of ``checks.artifact_match.MATCH_FIELDS``.
+    field: Mapped[str] = mapped_column(sa.String(40))
+    #: What the person typed, verbatim.
+    submitted: Mapped[str] = mapped_column(sa.String(400), default="")
+    #: What the artifact declares, verbatim.
+    declared: Mapped[str] = mapped_column(sa.String(400), default="")
+    #: ``near`` or ``different``. A ``match`` never becomes a row.
+    kind: Mapped[str] = mapped_column(sa.String(20), default="different")
+    #: Where the declared value was read from, in words a person can act on.
+    source: Mapped[str] = mapped_column(sa.String(200), default="")
+
+    #: Why it was accepted. Empty until somebody accepts it.
+    reason: Mapped[str] = mapped_column(sa.Text, default="")
+    accepted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    accepted_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    accepted_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 

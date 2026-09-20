@@ -240,6 +240,43 @@ export interface Alias {
   customer_name: string | null;
 }
 
+/**
+ * What a delivery calls one of the fields the tool checks (Phase 6.14b).
+ *
+ * Document labels, not data attribute names: a credit date is written "as-of date" on
+ * one customer's reports and "cycle date" on another's. `is_builtin` rows are the
+ * spellings the tool ships with; they cannot be edited or removed.
+ */
+export interface FieldLabel {
+  id: number;
+  canonical: string;
+  label: string;
+  scope: string;
+  scope_label: string;
+  is_active: boolean;
+  created_by: string;
+  is_builtin: boolean;
+}
+
+/**
+ * A message scheduled at the top of an app (Phase 6.14g).
+ *
+ * Shown automatically between `starts_at` and `ends_at`, then gone. Not dismissible:
+ * a notice somebody scheduled is one they wanted read.
+ */
+export interface Announcement {
+  id: number;
+  level: "info" | "warning" | "critical";
+  audience: "user" | "admin" | "both";
+  message: string;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+  created_by: string;
+  /** Whether it is in force at this moment, so the screen need not compare dates. */
+  showing_now: boolean;
+}
+
 export interface MaskedColumn {
   id: number;
   pattern: string;

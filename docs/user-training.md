@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.13.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.14a and 6.14e.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -35,11 +35,13 @@ At the top-left is the Greenlight AI logo, a traffic signal with the green lit,
 beside the name and a small **User** chip; the admin console shows **Admin**. Clicking either takes you home. The same mark is the browser tab
 icon.
 
-The look of the app is one of four palettes. The **theme picker** at the foot of the
-sidebar steps through them with ‹ and ›; stop on the one you want and the choice is
-remembered in this browser. The sun/moon button switches the current palette between
-its light and dark variants. If an administrator has locked the theme, the picker is
-not shown and everyone sees the same look.
+The look of the app is one of four palettes. **Out of the box the theme is locked**,
+so everyone reviewing a delivery is looking at the same colours and no picker is
+shown. An administrator can unlock it under Appearance in the admin console; when
+they do, the **theme picker** appears at the foot of the sidebar and steps through
+the palettes with ‹ and ›. Stop on the one you want and the choice is remembered in
+this browser. The sun/moon button switches the current palette between its light and
+dark variants.
 
 Under the Greenlight AI mark is a status line, and its dot breathes gently while the mode is on: **Train AI mode on** with a green dot, or
 **Train AI mode off** with a grey dot. When it is on, some controls exist that do not

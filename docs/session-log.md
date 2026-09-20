@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 is complete and pushed** — all six milestones, every acceptance criterion met, the golden set unchanged at 15/15. **Next: nothing is started.** The phase gate says report before beginning anything, so the next session picks the next piece of work with the user. Two follow-ups carried forward: give the demo seed a run with a coverage gap so the browser test for that path runs instead of skipping; the user deletes the old remote branches themselves. A pull request into `dev` has not been opened — the user asks for one when they want it |
+| Branch | `feature/artifact-match`, cut from `dev` (2026-09-20). **Phase 6.14 is partly built**: 6.14a (the artifact match check) and 6.14e (the theme locked) are complete; 6.14b, 6.14c and 6.14d are in progress with every open item labelled **outstanding** in the phase doc. 1292 tests pass; every Python and UI gate is clean. **Next concrete action: close the four outstanding items** — an admin screen for `field_labels`, the remaining field markers and tooltips, the live cap countdown, and moving the credit date into the pre-flight (measure the added parse latency first). A pull request into `dev` has not been opened |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -23,6 +23,9 @@ one-page report is generated once and never regenerated.
 
 ```bash
 source .venv/bin/activate
+set -a && . ./.env && set +a   # nothing in src/ loads .env; without this the
+                               # worker starts on the built-in defaults and logs
+                               # "building mock client (model=gemma3:27b)"
 export DATABASE_URL="sqlite+pysqlite:///$PWD/data/demo.db" GREENLIGHT_AI_DATA_DIR="$PWD/data"
 python scripts/seed_demo.py          # 8 runs in every lifecycle state + admin data
 uvicorn greenlight_ai.api.app:get_app --factory --reload   # :8000
@@ -1864,3 +1867,100 @@ Four regression tests on the API side and four in the UI client, covering the ex
 shape of the bug: a 503 must be an unmistakable status with a non-PDF body, a 200 must
 be a real PDF with a filename, and the client must raise rather than hand back bytes in
 either failure case. 732 Python tests, 39 user-ui, 10 admin-ui.
+
+---
+
+## Session: 2026-09-20 (the real model, and Phase 6.14 specified)
+
+**Branch:** `dev`, synced to `900f301`. **Phase:** 6.13 complete; 6.14 specified, not
+started. **Status:** documentation only — no source file changed.
+
+**Completed.**
+
+- **The adapter ran against a real model for the first time.** `LLM_PROVIDER=anthropic`
+  with Claude Haiku 4.5. The model id in `.env` was corrected from a dated spelling to
+  the canonical `claude-haiku-4-5`; both were tested against the live endpoint and both
+  answer, but the model name is part of every cache key (ADR-005) and the undated form
+  is the one to keep. No code changed: the Anthropic client already sent the right
+  shape. A full run took 33s, 30 calls, 30,233 in / 2,792 out, about $0.045, and
+  reproduced on the real model exactly what the fixture plants. Stages 5, 6 and 7 made
+  **no calls at all**, which is ADR-001 visible in a log.
+- **A gap in the documented startup.** Nothing in `src/` loads `.env`; the commands in
+  "See it running" start the worker on the built-in defaults, so it logs
+  `building mock client (model=gemma3:27b)` and produces findings that read as real.
+  The block below now exports `.env` first.
+- **An identity mismatch was submitted deliberately, and passed.** Wrong customer, wrong
+  configuration id, a credit date in none of the artifacts. Only the credit date was
+  caught, at stage 7 of 9. `config.json` declares both `configuration_id` and
+  `customer`; the parser reads the first and ignores the second, and neither is ever
+  compared with what the submitter typed. Delivery drift then reported "no earlier
+  finalized run of configuration CFG-DOES-NOT-EXIST-999", which is indistinguishable
+  from a legitimate first run.
+- **[`phase-6.14.md`](phase-6.14.md) written** from that result: the artifact match check, the
+  credit date resolved by scoped label, one register and one marker for every field that
+  reaches the model, tooltips on by default, and the theme locked by default.
+- **A standing touchpoint added to `CLAUDE.md`:** a commit that changes what reaches the
+  model, what a stage reads, or a cap, updates `docs/model-context.md`, the field's
+  label or tooltip in both apps, and the training documents — in that commit.
+
+- **ADR-041 written**, recording the three decisions the user took on the phase before it
+  was built: an administrator accepts an identity mismatch, the gate does not cross-check
+  run history, and an accepted mismatch does not block the finalize gate. The third is a
+  deliberate departure from ADR-035 and the ADR says why — a coverage gap is a question
+  the tool cannot answer and must put to a person at the last moment; an identity
+  mismatch was already asked and answered by a named administrator before the run
+  started, and asking twice trains people to click through both.
+
+**Pending.** Every 6.14 box.
+
+**Blockers.** None.
+
+**Next concrete action.** Cut `feature/identity-gate` from `dev` and start 6.14a.
+
+**Housekeeping.** `data/demo.db` was re-seeded on the 6.13 schema; the previous file is
+`data/demo.db.pre-6.13.bak`. The demo database is built by `create_all` and carries no
+alembic stamp, so `alembic upgrade head` fails against it — re-seed rather than migrate.
+`pytest` is 1222 passing on `900f301`.
+
+---
+
+## Session: 2026-09-20 (Phase 6.14 — the artifacts belong together)
+
+**Branch:** `feature/artifact-match`. **Phase:** 6.14, partly built. **Status:** 1292
+tests pass; `black`, `flake8`, `mypy`, both UI gates and `check_docs.sh` clean.
+
+**Completed.**
+
+- **6.14a, the artifact match check — complete.** Code compares the submitted
+  configuration id and customer against what the uploaded configuration declares, before
+  the model is asked anything. A submission whose artifacts agree queues exactly as
+  before; one whose artifacts disagree is `held` with its files intact. Anyone who can
+  submit can accept, with one reason covering every mismatch and four common reasons one
+  click away. The worker refuses a `held` run so a replayed job cannot race the gate, and
+  the waiver is rendered on the frozen report.
+- **6.14e, the theme locked — complete.** `ui.theme_locked` defaults on; both training
+  documents corrected in the same commit, since both described a picker every user could
+  reach.
+- **6.14b, partly.** `field_labels` with the scope vocabulary, `resolve_labels`, and a
+  stage-7 check that finds the labelled cell and **compares** it — so it can now report
+  "the reports are cut as of 2026-03-31, not the 2026-04-30 you gave", which the old
+  search over every value could never say. Where no labelled cell exists the old search
+  runs and the finding says it is the weaker one.
+- **6.14c and 6.14d, partly.** `docs/model-context.md` is the register of every field a
+  person can write; `<FieldEffect>` states what a field does and never hides;
+  `<Explain>` is help and hides behind `ui.tooltips`, on by default.
+
+**Pending.** Four items, each labelled **outstanding** in `phase-6.14.md`: an admin
+screen for `field_labels` (a new label is a database row today); version history and
+revert for labels; the remaining field markers and tooltips beyond Artifact types and
+Delivery programmes; the live cap countdown; and moving the credit date into the
+pre-flight, which needs every report parsed at submit and is worth measuring first.
+
+**Blockers.** None.
+
+**Next concrete action.** Close the outstanding items, starting with the admin screen
+for `field_labels`.
+
+**Worth knowing.** The drift tests now walk the accept path: forcing two fixtures to
+share one configuration id is exactly the disagreement 6.14a catches, so the test does
+what a person would rather than being exempted from the gate.

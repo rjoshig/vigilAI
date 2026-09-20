@@ -5,6 +5,8 @@
 import type {
   AdminUser,
   Alias,
+  Announcement,
+  FieldLabel,
   ArtifactType,
   ArtifactTypeIn,
   AuthConfig,
@@ -320,6 +322,48 @@ export const api = {
   /** Delete an attribute alias. */
   deleteAlias: (id: number, confirm: string): Promise<void> =>
     request<void>(`/aliases/${id}?confirm=${encodeURIComponent(confirm)}`, { method: "DELETE" }),
+
+  /** Every scheduled notice, soonest first, including expired ones. */
+  listAnnouncements: (): Promise<Announcement[]> => request<Announcement[]>("/announcements"),
+
+  /** Schedule a notice. The server refuses a sixth, and says why. */
+  createAnnouncement: (payload: {
+    level: string;
+    audience: string;
+    message: string;
+    starts_at: string;
+    ends_at: string;
+  }): Promise<Announcement> => request<Announcement>("/announcements", json("POST", payload)),
+
+  /** Switch a notice on or off without losing it. */
+  setAnnouncementActive: (id: number, active: boolean): Promise<Announcement> =>
+    request<Announcement>(`/announcements/${id}/active?active=${active}`, { method: "POST" }),
+
+  /** Delete a notice. */
+  deleteAnnouncement: (id: number, confirm: string): Promise<void> =>
+    request<void>(`/announcements/${id}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    }),
+
+  /** What deliveries call the fields the tool checks, built-ins first. */
+  listFieldLabels: (): Promise<FieldLabel[]> => request<FieldLabel[]>("/field-labels"),
+
+  /** Add a label for a field the tool checks. */
+  createFieldLabel: (payload: {
+    canonical: string;
+    label: string;
+    scope: string;
+  }): Promise<FieldLabel> => request<FieldLabel>("/field-labels", json("POST", payload)),
+
+  /** Switch a label on or off, which retires it without losing the row. */
+  setFieldLabelActive: (id: number, active: boolean): Promise<FieldLabel> =>
+    request<FieldLabel>(`/field-labels/${id}/active?active=${active}`, { method: "POST" }),
+
+  /** Delete a label. */
+  deleteFieldLabel: (id: number, confirm: string): Promise<void> =>
+    request<void>(`/field-labels/${id}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    }),
 
   /** List the masked-column patterns. */
   listMaskedColumns: (): Promise<MaskedColumn[]> => request<MaskedColumn[]>("/masked-columns"),

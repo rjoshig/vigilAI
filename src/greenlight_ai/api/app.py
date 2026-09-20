@@ -162,6 +162,7 @@ def create_app(
         settings_router.router,
         training.router,
         appearance.router,
+        appearance.notices_router,
         meaning.router,
         coverage.router,
         explore.router,

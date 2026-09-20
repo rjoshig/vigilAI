@@ -21,6 +21,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
+import { NoticeBar } from "@/components/notice-bar";
+import { usePalette } from "@/components/palette-provider";
 import { useAuth } from "@/components/auth-gate";
 import { useTrainingEnabled } from "@/components/observation-dialog";
 import { TRAIN_AI_HINT } from "@/components/train-ai-tag";
@@ -122,6 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Null while login is off, which is the shipped default, so the footer stays as it was.
   const { user, signOut } = useAuth();
   const trainingEnabled = useTrainingEnabled();
+  const { tagline } = usePalette();
   const nav = trainingEnabled ? [...NAV, EXPLORE_NAV, TRAINING_NAV] : [...NAV, EXPLORE_NAV];
 
   return (
@@ -142,9 +145,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 User
               </span>
             </div>
-            <div className="text-[0.625rem] text-muted-foreground">
-              Nothing ships without a green light.
-            </div>
+            {tagline ? (
+              <div className="text-[0.625rem] text-muted-foreground">{tagline}</div>
+            ) : null}
           </div>
         </Link>
         <TrainingModeLine enabled={trainingEnabled} />
@@ -216,7 +219,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="h-screen min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[84rem] px-6 pb-12 pt-5">{children}</div>
+        <div className="mx-auto max-w-[84rem] px-6 pb-12 pt-5">
+          <NoticeBar audience="user" />
+          {children}
+        </div>
       </main>
     </div>
   );

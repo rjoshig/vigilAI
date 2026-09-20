@@ -16,6 +16,7 @@
 import { Pencil, Plus } from "lucide-react";
 import * as React from "react";
 
+import { Explain, FieldEffect } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -333,7 +334,19 @@ function ScopeCard({
           </span>
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor={`si-${scope.code}`}>Standing instructions</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor={`si-${scope.code}`}>Standing instructions</Label>
+            <Explain label="What standing instructions are for">
+              The compliance expectations that are true of every run in this programme and that the
+              OSL usually does not restate — the context a new reviewer would be told on their first
+              day.
+              <br />
+              <br />
+              Not a rule: something that must hold belongs in a programme rule below, where code
+              grades it. Narrower than a programme? A note on one configuration. About one document
+              rather than one programme? That artifact type&rsquo;s AI context.
+            </Explain>
+          </div>
           <Textarea
             id={`si-${scope.code}`}
             rows={3}
@@ -341,9 +354,10 @@ function ScopeCard({
             value={instructions}
             onChange={(event) => setInstructions(event.target.value)}
           />
-          <span className="text-[0.7rem] text-muted-foreground">
-            Background for reading the OSL, never a substitute for what the OSL says.
-          </span>
+          <FieldEffect
+            kind="model"
+            note="Background for every run in this programme. It never makes anything pass or fail; the OSL stays the source of truth."
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="flex items-center gap-2 text-xs">

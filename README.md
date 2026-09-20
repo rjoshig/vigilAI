@@ -109,8 +109,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/admin-training.md`](docs/admin-training.md) — **administrator training**: the
   admin console, the training queue, the rules, and a weekly routine
 - [`docs/presentation-brief.md`](docs/presentation-brief.md) — **design brief** for slide
-  decks and management documents: the design, its reasons, the diagrams, and what it
-  changes for an associate, at a general-audience level
+  decks and management documents: the design, its reasons, the advantages, what a run
+  costs and the controls on it, why the model is a setting rather than a dependency,
+  and what it changes for an associate — at a general-audience level
 - [`docs/gd-rollout-plan.md`](docs/gd-rollout-plan.md) — **Global Delivery rollout**:
   ownership, support tiers, escalation, change and release, acceptance criteria, the
   intake questionnaire, and the four gated stages from readiness to region by region
@@ -135,6 +136,13 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   repaired, the author of an observation sees what became of it, findings carry their
   origin, judgment checks finished, a controlled example library for the model, and a
   replay that replays
+- [`docs/model-context.md`](docs/model-context.md) — **what reaches the model**: the
+  register of every field a person can write, which prompt block it lands in, which
+  stages read it, the cap that applies, and whether code or the model acts on it
+- [`docs/phase-6.14.md`](docs/phase-6.14.md) — **the artifacts belong together**: an
+  artifact match check before any model call that a person accepts with a reason, the credit
+  date resolved by label, every field saying what it does to a run, tooltips on by
+  default, and the theme locked
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic

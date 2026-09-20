@@ -14,6 +14,7 @@ import type {
   ConfigNoteInput,
   ConfigSummary,
   Coverage,
+  AcceptMismatchesResult,
   CreateRunResult,
   CurrentUser,
   Drift,
@@ -171,6 +172,25 @@ export const api = {
 
   createRun(form: FormData): Promise<CreateRunResult> {
     return request<CreateRunResult>("/runs", { method: "POST", body: form });
+  },
+
+  /**
+   * Accept the artifact disagreements on a held run and let it start (ADR-041).
+   *
+   * One reason covers every mismatch: the person is answering one question — yes,
+   * these artifacts are the delivery I meant — and asking it per field would train
+   * them to type the same words three times. Pass `fields` to accept only some.
+   */
+  acceptMismatches(
+    runId: number,
+    reason: string,
+    fields?: string[]
+  ): Promise<AcceptMismatchesResult> {
+    return request<AcceptMismatchesResult>(`/runs/${runId}/match/accept`, {
+      method: "POST",
+      body: JSON.stringify({ reason, fields: fields ?? [] }),
+      headers: { "Content-Type": "application/json" },
+    });
   },
 
   /** List a run's findings, worst first. */

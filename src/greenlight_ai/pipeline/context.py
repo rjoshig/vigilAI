@@ -192,6 +192,8 @@ class RunContext:
             delivery programme, its standing instructions, and per-artifact guidance
             (ADR-020). Empty by default, in which case prompts are unchanged.
         aliases: The attribute alias table, from the admin-ui in later phases.
+        credit_date_labels: What this delivery calls its credit date, resolved from
+            the scoped label table (Phase 6.14b).
         examples: The administrator's worked examples, by stage, already scoped to
             this run and capped (ADR-038). A stage with none renders exactly as it
             always did.
@@ -220,6 +222,10 @@ class RunContext:
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
     examples: Mapping[str, tuple[LibraryExample, ...]] = field(default_factory=dict)
     masked_columns: tuple[str, ...] = ()
+    #: What this delivery calls its credit date, most specific scope first
+    #: (Phase 6.14b). Empty falls back to the built-in spellings, so a deployment
+    #: that configures none checks exactly as it did before the table existed.
+    credit_date_labels: tuple[str, ...] = ()
 
     osl: OslDocument | None = None
     config: ConfigDocument | None = None
