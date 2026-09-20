@@ -9,7 +9,7 @@ so they render in most tools and can be redrawn in any.
 
 **As of:** 2026-09-20. The tool is built through phase 6.13, with phase 6.14 part
 built, and is ahead of its first UAT. It has been run end to end against a real
-commercial model, not only the scripted stand-in. Timing figures in section 9 are
+commercial model, not only the scripted stand-in. Timing figures in sections 9 and 10 are
 expected values to be confirmed in UAT, not measurements.
 
 ---
@@ -23,7 +23,7 @@ do (the **ETL configuration**, a JSON file from the Solution Canvas), and what
 actually came out (the **reports**, Excel workbooks: a data-integrity report called
 the DIRT, field and state distributions, counts, billing). Today an associate reads
 all three, holds them in their head, and looks for disagreements. It takes about three
-to five hours per order, it depends on who is doing it, and a miss reaches the
+to six hours per order, it depends on who is doing it, and a miss reaches the
 customer.
 
 ## 2. What Greenlight AI does
@@ -291,18 +291,23 @@ with customers whose requirements change faster than release cycles do.
 
 ## 9. What changes for the associate: time and effort
 
-Today's manual check is about three to five hours per order. The expected shape with
+Today's manual check is about three to six hours per order. The expected shape with
 Greenlight AI is below. These are design targets, to be confirmed by the UAT benchmark in
 the rollout plan; the honest claim before UAT is the shape of the change, not the
 exact numbers.
 
 | Step | Today | With Greenlight AI | Who is busy |
 | --- | --- | --- | --- |
-| Gather the three files and read them | 1–2 hours | 5 minutes to fill the form and drop the files | Associate, briefly |
-| Reconcile OSL, configuration, and reports | 2–3 hours, by eye | 5–15 minutes, unattended | The tool |
-| Decide what is wrong and write it up | included above | 20–45 minutes reviewing findings with evidence in front of them | Associate |
+| Gather the three files and read them | 1 hour | 3–5 minutes to fill the form and drop the files | Associate, briefly |
+| Reconcile OSL, configuration, and reports | 2–5 hours, by eye | 3–5 minutes, unattended | The tool |
+| Decide what is wrong and write it up | included above | 5–10 minutes reviewing findings with evidence in front of them | Associate |
 | Produce the report | 15–30 minutes | Seconds; one page, frozen, with PDF | The tool |
-| **Associate's time per order** | **3–5 hours** | **about 30–60 minutes** | |
+| **Associate's time per order** | **3–6 hours** | **about 10–15 minutes** | |
+
+The reconciliation figure is measured rather than estimated: a full run on a real
+commercial model took 33 seconds end to end. Three to five minutes is the honest
+allowance for a queue and a larger delivery, and the associate is not waiting on it in
+any case.
 
 ```mermaid
 gantt
@@ -310,14 +315,14 @@ gantt
     dateFormat X
     axisFormat %s
     section Today
-    Read and gather           :a1, 0, 90
-    Reconcile by eye          :a2, 90, 240
-    Write up and report       :a3, 240, 270
+    Read and gather           :a1, 0, 60
+    Reconcile by eye          :a2, 60, 270
+    Write up and report       :a3, 270, 300
     section With Greenlight AI
     Submit                    :b1, 0, 5
-    Tool runs (unattended)    :b2, 5, 20
-    Review findings           :b3, 20, 55
-    Generate report           :b4, 55, 57
+    Tool runs (unattended)    :b2, 5, 10
+    Review findings           :b3, 10, 20
+    Generate report           :b4, 20, 21
 ```
 
 Beyond time:
@@ -331,7 +336,83 @@ Beyond time:
   one the UAT benchmark measures directly: findings against the manual outcome, on
   real orders.
 
-## 10. Why certain choices were made
+## 10. Cost, control, and not being tied to a model
+
+The three questions a technology group and a finance owner ask, answered from the way
+the tool is built rather than from a promise.
+
+### The model is a setting, not a dependency
+
+There is no vendor library anywhere in the code. Every call goes through one adapter
+that speaks two wire formats — the OpenAI-compatible one and the Anthropic one — over
+plain HTTP. **Changing model is four lines in a configuration file, or four fields in
+the admin console: provider, endpoint, key, model name.** No code change, no release,
+no redeploy.
+
+What that buys, in order of how much it matters:
+
+- **No lock-in.** The tool runs against an in-house endpoint, a commercial API, or a
+  local model on a laptop. The same code, the same results format.
+- **Better models, when you want them.** Model quality is improving faster than any
+  roadmap here. Moving to a better one is a configuration change that takes effect on
+  the next run, and the golden set says immediately whether it was an improvement.
+- **Cheaper models where they suffice.** The same switch works downward. Most of the
+  reading this tool does is not hard.
+- **A fallback that costs nothing to hold.** If a provider has an outage or a contract
+  lapses, the alternative is a configuration change, not a project.
+
+This has been exercised, not just designed: the tool has been run end to end on a
+commercial model and on a scripted stand-in used by the tests, with no code difference
+between them.
+
+### What a run costs, and the controls on it
+
+A full validation of a real delivery measured **33 seconds and roughly five cents**:
+about 30 calls, 30,000 tokens in and 2,800 out. Four mechanisms keep it there and keep
+it predictable.
+
+| Control | What it does |
+| --- | --- |
+| **A token budget per run** | A ceiling set in the admin console. A run that exceeds it stops and is flagged rather than quietly spending. One pathological input cannot empty a month's budget. |
+| **A content-addressed cache** | Nothing is ever sent to the model twice. The cache key is a hash of exactly what was sent, so a re-run, a repeated OSL section, or two deliveries sharing a clause cost nothing the second time. In a measured re-run, 22 of 23 calls were cache hits and the run cost a fifth of a cent. |
+| **Code does the bulk of the work** | Three of the nine stages make no model call at all — every comparison of a value, a set, a count or a sequence is Python. The model is used only where meaning has to be read, which is the expensive part and the small part. |
+| **A ceiling on second opinions** | Stage 8 re-reads high-severity findings. How many lenses read them, and a hard cap on those calls per run, are both settings. |
+
+Every one of these is visible: each run records its calls, tokens and cache hits, and
+the admin console shows usage over time. There is no month where the bill is a surprise.
+
+**One thing to know:** the token budget is set once for the deployment, not per
+configuration. A per-configuration budget would let a large, known-expensive delivery
+have its own ceiling; it is not built, and it is the obvious next step if spend needs
+finer control.
+
+### Nothing personal reaches the model
+
+Three independent layers, because one is a policy and three is a design.
+
+1. **Masked at parse time.** Columns an administrator names are replaced as the
+   workbook is read, so an unmasked value never exists anywhere downstream — not in
+   memory, not in a prompt, not in a log.
+2. **A tripwire on every prompt.** Each assembled prompt is scanned before it is sent
+   and refused if it looks like it carries personal data. A prompt that has been sent
+   cannot be recalled, so the check is in front of the send, not after it.
+3. **Structure, never values.** Where the model is shown what a report looks like, it
+   is shown labels and cell addresses — `dirt · Summary!Account status (B7)` — and
+   never a row of data. The function that does it says so in its own documentation and
+   is tested for it.
+
+Alongside those: prompt logging is off and stays off, sample rows never enter a test
+fixture, and the whole thing can run against a model inside your own network, in which
+case no delivery data crosses a boundary at all.
+
+### For the person using it
+
+None of the above asks anything of an associate. They fill in a short form, drop the
+files, and read findings. What the controls buy them is that the tool answers in half a
+minute, answers the same way twice, and does not stop working because a budget ran out
+mid-month.
+
+## 11. Why certain choices were made
 
 | Choice | Why |
 | --- | --- |
@@ -345,7 +426,7 @@ Beyond time:
 | A learned rule starts in shadow | Its precision is unknown until it meets real data; a false-positive flood costs trust that takes months to earn back. |
 | The report is frozen | What was signed off is what stays on record. |
 
-## 11. Where it runs
+## 12. Where it runs
 
 Five containers on the internal network: the user app, the admin console on its own
 URL, the API, a background worker, and the database. The model is an in-house
@@ -365,7 +446,7 @@ flowchart LR
     W --> LLM[In-house model endpoint]
 ```
 
-## 12. How it reaches the teams
+## 13. How it reaches the teams
 
 Four stages, each with an exit gate rather than a date.
 
@@ -382,7 +463,7 @@ senior associates on the floor to engineering, with escalation severities and
 response times written down. Acceptance is a signature per programme per region,
 against a precision and recall floor measured on real orders.
 
-## 13. Where the build stands
+## 14. Where the build stands
 
 | Done | Still to do |
 | --- | --- |
@@ -396,7 +477,7 @@ against a precision and recall floor measured on real orders.
 | Training documents and the rollout plan; delivery drift; four themes, locked by default | |
 | Proven on a real commercial model end to end: a full run in 33 seconds and about five cents, reproducing the planted findings exactly | |
 
-## 14. Glossary for a general audience
+## 15. Glossary for a general audience
 
 | Term | Meaning |
 | --- | --- |
