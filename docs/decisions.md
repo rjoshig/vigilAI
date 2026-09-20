@@ -1402,3 +1402,67 @@ to know about, and one more question a submitter can be asked at submit time. Th
 gate is code-only and adds no prompt, so the golden set is unaffected. What this does not
 do is verify that a configuration *belongs* to a customer — only that the artifacts agree
 with each other and with what was typed; point 4 is the reason, and it is revisitable.
+
+## ADR-042 — A programme keyword is matched loosely and counted strictly
+
+**Status:** accepted 2026-09-20 (Phase 6.17a).
+
+**Context:** The programme classification check greps a delivery's OSL, configuration
+and report headers for a programme's keywords and reports `programme_mismatch` when
+none of the declared programme's words appear. It was the third surface measured for
+the brittleness [`phase-6.15.md`](phase-6.15.md) found in compliance rules and
+[`phase-6.16.md`](phase-6.16.md) 6.16d found in named values, and it failed worse than
+either: compliance rules were repaired, named values were left alone because they fail
+at review severity, and this one fails at high.
+
+Twenty deliveries, every one genuinely the programme it declared, worded the way
+another customer might word it: 4 were silent, 11 raised a review item, and **5 fired
+at high severity**. Two defects compounded.
+
+1. A phrase keyword needed exact adjacency and exact plurality. `existing accounts` did
+   not find `existing account`; `invitation to apply` did not find
+   `invitation-to-apply`; `portfolio review` did not find *ongoing review of the
+   portfolio*. Single-word keywords survived inflection for free, because a substring
+   test catches `archives` for `archive`. Phrases had no such luck, so the shipped
+   programmes were unequally exposed.
+2. Severity rose to `high` only when *another* programme cleared a two-hit floor, and
+   two of the four shipped Archives keywords — `snapshot` and `historical` — are
+   ordinary data-delivery vocabulary that appears in a specification for any programme
+   at all. Archives cleared the floor by accident, so a delivery whose own words were
+   missed was not merely raised for review: it was confidently reported as a different
+   programme, at the highest severity the tool has.
+
+**Decision:** Match loosely, count strictly.
+
+**Loosely**, in `checks/programme_match.py`: three tests, any of which finds a keyword —
+a normalised substring (which preserves every match the old behaviour made, inflections
+included), the keyword's words adjacent after a conservative singular fold, and, for a
+multi-word keyword only, its words within a stated window of each other in any order.
+The fold is deliberately not a stemmer: it removes a plural and nothing else, because a
+false match here has to be explainable to the person reading the finding.
+
+**Strictly**, in the severity decision: a programme may be named as what a delivery
+"reads like" only on words **it alone claims**, and only when it is strictly ahead of
+the next programme. A word two programmes both list cannot tell them apart whoever
+added it, and a tie means the inputs are unfamiliar rather than evidence for either.
+The shipped lists also lost the two words that meant nothing and gained the words the
+business actually says.
+
+**Consequences:** The same twenty deliveries now measure 15 silent, 4 review and **1
+high**, with the control class — deliveries genuinely declared as the wrong programme —
+unchanged at 3 of 3. The check stays a grep: free, reproducible, and explainable to an
+auditor, which is the property worth protecting.
+
+The remaining high is kept deliberately and is the reason
+[`phase-6.18.md`](phase-6.18.md) 6.18f exists. A prescreen delivery that calls itself a
+*promotional acquisition mailing* and suppresses `existing accounts` has two of Account
+Monitoring's words and none of its own. **Nothing is misspelled** — the words really are
+the other programme's, and what makes them innocent is that they appear under *suppress*
+and *removes*. That is meaning, and no spelling rule reaches it. Closing it is the
+model's job, asked once after the code check has failed and answering *which programme
+does this read like*, never *is this correct*, which stays code's (ADR-001).
+
+The structural guard matters more than the keyword fix it replaced: removing `snapshot`
+and `historical` corrected one instance, and "a programme is named only on words it
+alone claims" is what stops an administrator recreating it with the next overlapping
+word they add.

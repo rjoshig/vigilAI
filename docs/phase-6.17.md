@@ -14,11 +14,13 @@ things deliberately left, each with the reason it was left and what would settle
 
 ## The work, in the order worth doing it
 
-### 6.17a — Measure the programme keyword check · ✅ complete
+### 6.17a — Measure the programme keyword check, and repair it · 🟡 in progress
 
-**Measured 2026-09-20. The answer is that it is brittle, and it fails the way compliance
-rules did — at HIGH severity — not the way named values do.** The precedent that
-applies is `docs/phase-6.15.md`, not 6.16d.
+**Measured 2026-09-20, and repaired the same day.** The answer was that it is brittle,
+and that it fails the way compliance rules did — at HIGH severity — not the way named
+values do. So 6.15's precedent applied, not 6.16d's, and the deterministic repair 6.15
+used was the right shape. **False high-severity findings went from five to one**; what
+is left is a meaning problem, deferred to [`phase-6.18.md`](phase-6.18.md) 6.18f.
 
 The measurement is `tests/pipeline/test_programme_keyword_brittleness.py`, run against
 the seeded programmes in `DEFAULT_SCOPES` rather than invented ones, because the seeded
@@ -92,25 +94,66 @@ two of Archives' do."* Anything built goes behind it, as 6.15's option C did.
 - [x] Decide whether anything needs building. **It does** — the recommendation is below,
       and it is a decision for the user, not a thing to start.
 
-#### Recommended, not started
+#### What was built, and what it cost
 
-Cheapest first, and the first two may be enough:
+Two changes, neither of which asks a model anything. ADR-042 records the decision.
 
-1. **Fix the seeded keywords, which is a data change, not a code change.** Drop
-   `snapshot` and `historical` from Archives, or replace them with words that mean
-   Archives (`back-file`, `legacy extract`, `prior-year`). This alone removes most of
-   the HIGH escalations, because it stops one programme clearing the floor by accident.
-   Add the singular and hyphenated forms the measurement found.
-2. **Normalize before matching.** Fold hyphens to spaces and collapse whitespace on both
-   sides, and match a phrase on a stemmed word sequence rather than a raw substring.
-   That is 6.15's option C applied to this surface, and it closes the plural and
-   hyphen rows without any new vocabulary.
-3. **Raise the floor for a HIGH, or lower the severity.** A programme should not be
-   named as the answer on two generic words. Either the floor rises above two, or
-   confidence has to come from words that only that programme uses.
-4. **Only if 1–3 leave something:** the 6.15 option A shape — ask the model *which
-   programme does this read like*, code decides what that means. The measurement does
-   not obviously need it, and it costs a model call on a check that is free today.
+**Match loosely** — `checks/programme_match.py`, in the shape `compliance_match.py`
+established. Three tests, any of which finds a keyword: a normalised substring (first,
+because it preserves every match the old behaviour made, inflections included), the
+keyword's words adjacent after a conservative singular fold, and — for a multi-word
+keyword only — its words within a stated window of each other in any order. The fold
+removes a plural and nothing else; a stemmer would also fold tense and derivation, and
+a false match here has to be explainable to the person reading the finding.
+
+**Count strictly** — a programme may be named as what a delivery "reads like" only on
+words **it alone claims**, and only when it is strictly ahead of the next programme. A
+tie is not an answer. The shipped lists lost `snapshot` and `historical` and gained the
+words the business says: `portfolio monitoring`, `account management`, `promotional
+offer`, `acquisition campaign`, `back file`, `prior year`, `legacy extract`.
+
+The structural guard matters more than the keyword edit. Removing two words fixed one
+instance; *a programme is named only on words it alone claims* is what stops an
+administrator recreating it with the next overlapping word they add.
+
+#### The measurement, re-run
+
+The same twenty deliveries, every one genuinely the programme it declares:
+
+| | Before | After |
+| --- | --- | --- |
+| Silent — correct | 4 | **15** |
+| Review — honest, but noise | 11 | 4 |
+| **High — a false positive at the top severity** | **5** | **1** |
+| Control: genuinely the wrong programme, caught | 3 of 3 | **3 of 3** |
+
+The four review items left are honest ones: `ITA` for *invitation to apply*, and a
+*legacy history pull* where the list says `legacy extract`. No spelling rule turns an
+abbreviation into the phrase it stands for, and the tool says it has not found the
+programme's words rather than claiming to know what the delivery is instead. An
+administrator adding the customer's word closes each one permanently.
+
+#### The one case left, and why it is left
+
+A delivery that calls itself a *promotional acquisition mailing* and says *suppress
+existing accounts; an account review removes anyone already on file* has two of Account
+Monitoring's words and none of its own, and is still reported at **high**.
+
+**Nothing is misspelled.** The words really are the other programme's, and what makes
+them innocent is that they appear under *suppress* and *removes* — a prescreen
+excluding the customers it already has. That is meaning, and no normalising rule
+reaches it. It is kept as a test, and it is the worked example
+[`phase-6.18.md`](phase-6.18.md) 6.18f exists to close: the model asked once, after the
+code check has failed, answering *which programme does this read like* and never *is
+this correct*, which stays code's (ADR-001).
+
+- [x] Fix the seeded keywords — a data change, and the structural guard behind it.
+- [x] Normalize before matching.
+- [x] Do not name a programme on words that carry no programme meaning.
+- [ ] **Deferred to 6.18f, not dropped:** the model as a second opinion after the code
+      check fails. The deterministic repair took the false-high count from five to one,
+      so this is now one case rather than a class — and the one case is a meaning
+      problem, which is what the model is for.
 
 ### 6.17b — The live cap countdown · ⬜ not started
 

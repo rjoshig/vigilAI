@@ -330,7 +330,11 @@ function ScopeCard({
           <span className="text-[0.7rem] text-muted-foreground">
             Comma-separated. The tool greps the OSL, the configuration, and the report headers for
             these to confirm a run really is this programme; a run declared as this programme with
-            none of them gets a finding.
+            none of them gets a finding. Spelling is handled for you — plurals, hyphens and the same
+            words in another order all match — so add vocabulary rather than variants. Give each
+            programme words that mean it and no other: a word another programme also lists is
+            ignored when deciding what a delivery looks like, and a word the business uses generally
+            (snapshot, historical, monthly) belongs in no list at all.
           </span>
         </div>
         <div className="flex flex-col gap-1">

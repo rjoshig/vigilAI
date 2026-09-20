@@ -12,7 +12,7 @@ import logging
 from typing import Any, Final, Mapping, cast
 
 from greenlight_ai.checks.definitions import AdminConfig, CheckDefinition
-from greenlight_ai.checks import artifact_match, field_labels
+from greenlight_ai.checks import artifact_match, field_labels, programme_match
 from greenlight_ai.checks.expressions import ExpressionError, UnresolvedValue, evaluate
 from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
@@ -352,29 +352,44 @@ def _check_credit_date(context: RunContext) -> None:
 _PROGRAMME_HIT_FLOOR: Final[int] = 2
 
 
+def _haystack(context: RunContext) -> list[str]:
+    """Everything the classification check is allowed to read.
+
+    Args:
+        context: The run context, after stage 1 has parsed everything.
+
+    Returns:
+        The OSL text, the configuration's JSON paths and descriptions, and the report
+        sheet names and headers. Never a data row (ADR-003): a header says what a
+        delivery is about, a row says who is in it.
+    """
+    parts: list[str] = []
+    if context.osl is not None:
+        parts.extend(section.as_text() for section in context.osl.sections)
+    if context.config is not None:
+        parts.extend(block.as_text() for block in context.config.blocks)
+    for document in context.reports.values():
+        for sheet in document.sheets:
+            parts.append(sheet.name)
+            parts.extend(sheet.header)
+    return parts
+
+
 def _programme_hits(context: RunContext, words: tuple[str, ...]) -> list[str]:
     """Which of a programme's words appear in the inputs.
+
+    Still a grep rather than a judgement, and still deliberately explainable — but a
+    grep that survives a hyphen and a plural, which Phase 6.17a measured it failing.
+    The matching rules are in `checks/programme_match.py`.
 
     Args:
         context: The run context, after stage 1 has parsed everything.
         words: The programme's keywords.
 
     Returns:
-        The words found, scanning the OSL text, the configuration's JSON paths and
-        descriptions, and the report sheet names and headers. A grep, not a judgement:
-        it is deliberately simple so it is deliberately explainable.
+        The words found.
     """
-    haystack_parts: list[str] = []
-    if context.osl is not None:
-        haystack_parts.extend(section.as_text() for section in context.osl.sections)
-    if context.config is not None:
-        haystack_parts.extend(block.as_text() for block in context.config.blocks)
-    for document in context.reports.values():
-        for sheet in document.sheets:
-            haystack_parts.append(sheet.name)
-            haystack_parts.extend(sheet.header)
-    haystack = " ".join(haystack_parts).lower()
-    return [word for word in words if word.lower() in haystack]
+    return programme_match.hits(_haystack(context), words)
 
 
 def _check_programme(context: RunContext) -> None:
@@ -398,13 +413,24 @@ def _check_programme(context: RunContext) -> None:
     if declared_hits:
         return
 
+    # Only a word one programme alone claims is evidence for naming that programme.
+    # Two of the shipped Archives keywords were ordinary data-delivery vocabulary, and
+    # a shared word cannot tell two programmes apart whoever added it (6.17a).
     others = {
-        code: _programme_hits(context, words)
+        code: _programme_hits(context, programme_match.discriminating(code, keywords))
         for code, words in keywords.items()
         if code != declared and words
     }
-    strongest = max(others.items(), key=lambda item: len(item[1]), default=("", []))
-    looks_like = strongest[0] if len(strongest[1]) >= _PROGRAMME_HIT_FLOOR else ""
+    ranked = sorted(others.items(), key=lambda item: len(item[1]), reverse=True)
+    strongest = ranked[0] if ranked else ("", [])
+    runner_up = len(ranked[1][1]) if len(ranked) > 1 else 0
+    # Clear the floor, and be strictly ahead of the next programme. Two that look
+    # equally likely mean the inputs are unfamiliar, not that either one is the answer.
+    looks_like = (
+        strongest[0]
+        if len(strongest[1]) >= _PROGRAMME_HIT_FLOOR and len(strongest[1]) > runner_up
+        else ""
+    )
 
     context.add_finding(
         Finding(

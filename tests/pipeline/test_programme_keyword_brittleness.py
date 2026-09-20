@@ -1,15 +1,27 @@
-"""The programme keyword check, measured for brittleness (Phase 6.17a).
+"""The programme keyword check, measured and then repaired (Phase 6.17a).
 
 The same half-hour measurement `docs/phase-6.15.md` ran against compliance rules and
 `docs/phase-6.16.md` ran against named values, run against the third surface that had
 never had it: the programme classification check in `s7_reports._check_programme`.
 
-**These tests assert what the check does today, not what it should do.** They are the
-measurement of record, so the result cannot drift unnoticed and a future fix has to
-come past them deliberately. Every case in the first two classes is genuinely the
-programme it declares; a finding on one of those is a false positive.
+**These are the measured cases, and they now assert the repaired behaviour.** Every
+case in the first three classes is genuinely the programme it declares, so a finding on
+one of those is a false positive. Across the twenty of them the repair moved the count
+from 4 silent / 11 review / **5 high** to 15 silent / 4 review / **1 high**, with the
+control class unchanged at 3 of 3.
 
-The measured table is in `docs/phase-6.17.md`.
+Two changes did it, and neither asks a model anything:
+
+- `checks/programme_match.py` widens the match so a hyphen, a plural and a word order
+  no longer hide a keyword that is present.
+- The shipped keyword lists lost the two words that meant nothing — ``snapshot`` and
+  ``historical`` — and a programme is now named only on words it alone claims.
+
+The one case still at high severity is kept deliberately, at the foot of this file. It
+is a vocabulary problem rather than a spelling one, and it is what
+`docs/phase-6.18.md` 6.18f exists to close.
+
+The measured tables are in `docs/phase-6.17.md`.
 """
 
 from __future__ import annotations
@@ -55,11 +67,26 @@ def _build(cls: Any, **given: Any) -> Any:
 
 
 def measure(osl_text: str, declared: str) -> str:
-    """Run the check over one OSL wording and report what fired.
+    """Run the check over one OSL wording, against the shipped programmes.
 
     Args:
         osl_text: The OSL's text, as one section.
         declared: The programme code the submitter declared.
+
+    Returns:
+        ``"silent"`` when nothing fired, otherwise the finding's severity.
+    """
+    return _measure_with(osl_text, declared, SEEDED)
+
+
+def _measure_with(osl_text: str, declared: str, keywords: dict[str, tuple[str, ...]]) -> str:
+    """Run the check over one OSL wording against a given set of programmes.
+
+    Args:
+        osl_text: The OSL's text, as one section.
+        declared: The programme code the submitter declared.
+        keywords: Every programme's keywords, for the cases that are about the rule
+            rather than about the shipped list.
 
     Returns:
         ``"silent"`` when nothing fired, otherwise the finding's severity.
@@ -73,7 +100,7 @@ def measure(osl_text: str, declared: str) -> str:
         guidance=RunGuidance(
             scope_code=declared,
             scope_label=declared,
-            programme_keywords=SEEDED,
+            programme_keywords=keywords,
         ),
     )
     section = _build(OslSection, number="1", heading="Scope", level=1, paragraphs=(osl_text,))
@@ -110,49 +137,68 @@ def test_where_the_words_match_the_check_is_silent_and_free(declared: str, osl_t
 
 
 @pytest.mark.parametrize(
-    "declared,osl_text,fires",
+    "declared,osl_text",
     [
-        # A phrase keyword needs exact adjacency: a hyphen breaks it.
-        ("AS", "An invitation-to-apply mailing for non-customers, scored and filtered.", "review"),
-        # Plain business vocabulary for the same campaign.
+        # A hyphen no longer breaks a phrase keyword.
+        ("AS", "An invitation-to-apply mailing for non-customers, scored and filtered."),
+        # Plain business vocabulary, now in the shipped list because it is what the
+        # business says.
         (
             "AS",
             "A promotional acquisition campaign targeting non-customers with a credit "
             "product mailing, filtered to the marketing universe.",
-            "review",
         ),
-        # The abbreviation the business actually says out loud.
-        ("AS", "The ITA file is built monthly and delivered to the mail house.", "review"),
         # The two halves of two different phrase keywords, recombined.
-        ("AM", "Portfolio monitoring of the book, run monthly across every open trade.", "review"),
-        # Singular where the keyword is plural: `existing accounts` is not a substring.
-        ("AM", "Each existing account is rescored monthly and returned with its band.", "review"),
-        ("AM", "An ongoing review of the portfolio, refreshing scores on open trades.", "review"),
-        ("AM", "A monthly account management refresh across the open book.", "review"),
-        ("ARCHIVE", "A back-file extract of prior-year records, frozen at period end.", "review"),
-        ("ARCHIVE", "A legacy history pull covering closed trades from earlier periods.", "review"),
+        ("AM", "Portfolio monitoring of the book, run monthly across every open trade."),
+        # Singular where the keyword is plural.
+        ("AM", "Each existing account is rescored monthly and returned with its band."),
+        # The keyword's words, in the other order, with connectives between them.
+        ("AM", "An ongoing review of the portfolio, refreshing scores on open trades."),
+        ("AM", "A monthly account management refresh across the open book."),
+        ("ARCHIVE", "A back-file extract of prior-year records, frozen at period end."),
     ],
 )
-def test_the_same_programme_in_other_words_fires(declared: str, osl_text: str, fires: str) -> None:
-    """Every one of these IS the declared programme, and every one produces a finding.
+def test_the_same_programme_in_other_words_is_now_silent(declared: str, osl_text: str) -> None:
+    """Every one of these IS the declared programme, and every one used to fire.
 
-    The failure shape is the same one 6.15 measured: a presence test cannot tell
-    *absent* from *spelled differently*. Phrase keywords are the fragile ones — they
-    need exact adjacency and exact plurality.
+    Each was a review item before 6.17a. The repair is entirely deterministic: the
+    words were always there, and the check could not see past a hyphen, a plural, or a
+    pair of words in the other order.
     """
-    assert measure(osl_text, declared) == fires
+    assert measure(osl_text, declared) == "silent"
 
 
-# --- class 3: where it escalates to high, and why that is the sharp one -------------
+@pytest.mark.parametrize(
+    "declared,osl_text",
+    [
+        # An abbreviation shares no letters with the phrase it stands for.
+        ("AS", "The ITA file is built monthly and delivered to the mail house."),
+        # `legacy extract` is in the list; this says `legacy history pull`.
+        ("ARCHIVE", "A legacy history pull covering closed trades from earlier periods."),
+    ],
+)
+def test_a_vocabulary_no_list_holds_is_an_honest_review_item(declared: str, osl_text: str) -> None:
+    """What normalising cannot reach, and should not pretend to.
+
+    No spelling rule turns ``ITA`` into ``invitation to apply``. These are raised for
+    review — not at high severity — which is the honest answer: the tool has not found
+    the programme's words and does not claim to know what the delivery is instead. An
+    administrator adding the customer's word closes each one permanently.
+    """
+    assert measure(osl_text, declared) == "review"
 
 
-def test_one_reworded_phrase_flips_a_realistic_osl_from_silent_to_high() -> None:
-    """The knife edge. One hit anywhere silences the check; zero hits can mean HIGH.
+# --- class 3: what the repair closed, and the one thing it did not -----------------
 
-    This is a realistic prescreen OSL: purpose, universe, delivery, compliance. It is
-    silent only because its last sentence happens to say `firm offer`. Reword that one
-    phrase — leaving a document that is still plainly a solicitation — and the check
-    reports at the highest severity it has that the delivery is a different programme.
+
+def test_the_knife_edge_case_is_gone() -> None:
+    """The sharpest row in the measurement, and it no longer fires either way.
+
+    A realistic prescreen OSL used to be silent only because its last sentence happened
+    to say ``firm offer``. Rewording that one phrase — leaving a document still plainly
+    a solicitation — reported it at high severity as a different programme. Both
+    spellings are now silent, because ``promotional acquisition campaign`` is itself a
+    thing the business says and is in the list.
     """
     osl = (
         "Purpose. A promotional acquisition campaign for non-customers. "
@@ -162,7 +208,7 @@ def test_one_reworded_phrase_flips_a_realistic_osl_from_silent_to_high() -> None
         "Compliance. Delivered under the {phrase} provisions of the Act."
     )
     assert measure(osl.format(phrase="firm offer"), "AS") == "silent"
-    assert measure(osl.format(phrase="applicable"), "AS") == "high"
+    assert measure(osl.format(phrase="applicable"), "AS") == "silent"
 
 
 @pytest.mark.parametrize(
@@ -178,26 +224,80 @@ def test_one_reworded_phrase_flips_a_realistic_osl_from_silent_to_high() -> None
             "An ongoing refresh of the open book. Each delivery is a snapshot, with "
             "historical balances for trend.",
         ),
-        (
-            "ARCHIVE",
-            "A back-file pull. Covers existing accounts closed in prior years; an "
-            "account review determines what is in range.",
-        ),
     ],
 )
-def test_generic_words_borrowed_from_another_programme_escalate_to_high(
-    declared: str, osl_text: str
-) -> None:
-    """The second defect, which compounds the first.
+def test_generic_words_no_longer_name_a_programme(declared: str, osl_text: str) -> None:
+    """The second defect, closed at the source.
 
-    Severity is `high` when another programme clears the two-hit floor. Two of the
-    Archives keywords — `snapshot` and `historical` — are ordinary data-delivery
-    vocabulary that appears in specifications for every programme. So a document whose
-    own words were missed does not merely raise a review item: it is confidently
-    reported as a different programme, on the strength of two words that carry no
-    programme meaning at all.
+    ``snapshot`` and ``historical`` used to be Archives keywords. They are ordinary
+    data-delivery vocabulary that appears in a specification for every programme, and
+    they let Archives clear the two-hit floor by accident — so a document whose own
+    words were missed was confidently reported as Archives at high severity.
+
+    They are gone from the shipped list, and the rule that replaced them is structural:
+    a programme is named only on words **it alone claims**, so an administrator adding
+    an overlapping word later cannot reintroduce this. These now raise an honest review
+    item instead.
     """
-    assert measure(osl_text, declared) == "high"
+    assert measure(osl_text, declared) == "review"
+
+
+def test_a_programme_is_not_named_on_words_another_programme_shares() -> None:
+    """The structural guard, tested directly rather than through the shipped list.
+
+    Two programmes both claim ``monthly refresh``. However often it appears, it cannot
+    say which of the two a delivery is, so it is not evidence for either.
+    """
+    shared = {
+        "AS": ("prescreen",),
+        "AM": ("monthly refresh", "account review"),
+        "ARCHIVE": ("monthly refresh", "archive"),
+    }
+    assert (
+        _measure_with(
+            "A monthly refresh of the file, prepared for the usual distribution.",
+            declared="AS",
+            keywords=shared,
+        )
+        == "review"
+    )
+
+
+def test_two_programmes_that_look_equally_likely_name_neither() -> None:
+    """A tie is not an answer.
+
+    When the strongest other programme is only level with the next, the inputs are
+    unfamiliar rather than evidence for one of them. Saying so is worth more than
+    picking the first.
+    """
+    keywords = {
+        "AS": ("prescreen",),
+        "AM": ("account monitoring", "portfolio review"),
+        "ARCHIVE": ("archive", "archival"),
+    }
+    text = "Account monitoring and a portfolio review of the archive, archival copies kept."
+    assert _measure_with(text, declared="AS", keywords=keywords) == "review"
+
+
+def test_the_one_case_the_deterministic_repair_does_not_close() -> None:
+    """Kept deliberately, as the worked example for `docs/phase-6.18.md` 6.18f.
+
+    This delivery is a solicitation. It says so in words no list holds — *promotional
+    acquisition mailing* — and it mentions Account Monitoring's vocabulary for the
+    ordinary reason that a prescreen suppresses the customers it already has. Code sees
+    two AM words and none of its own, and reports at high severity.
+
+    **No spelling rule reaches this**, because nothing is misspelled: the words really
+    are AM's, and what makes them innocent is that they appear under *suppress* and
+    *removes*. That is meaning, and meaning is what the model is for — asked once,
+    after the code check has failed, and answering *which programme does this read
+    like*, never *is this correct*, which stays code's (ADR-001).
+    """
+    osl = (
+        "A promotional acquisition mailing. Suppress existing accounts; an account "
+        "review of the current book removes anyone already on file."
+    )
+    assert measure(osl, "AS") == "high"
 
 
 # --- class 4: the control, which matters as much as the rest ------------------------

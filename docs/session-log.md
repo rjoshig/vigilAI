@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **Phases 6.14, 6.15 and 6.16 are complete and merged.** Everything still open is gathered in [`phase-6.17.md`](phase-6.17.md). **6.17a is measured and closed:** the programme keyword check *is* brittle, and it fails the way compliance rules did — at HIGH severity — not the way named values do, so 6.15's precedent applies and not 6.16d's. **Next concrete action: a decision from the user on which of the four recommendations in 6.17a to build** (the first two are a data change and a normalization pass, and may be enough), and **a discussion of 6.17c before any code** — the user asked for that explicitly |
+| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **Phases 6.14, 6.15 and 6.16 are complete and merged. 6.17a is measured and repaired** — false high-severity findings from the programme keyword check went from five to one, and the one left is a meaning problem, deferred to 6.18f rather than dropped. **[`phase-6.18.md`](phase-6.18.md) is written and not started:** trust that is earned, measured and revocable — the phase that lets a reviewer stop reading every finding. **Next concrete action: the user reads 6.18 and answers its five open questions** (where a signature lives, how many maturity levels, whether demotion follows scope or configuration, what the minimum evidence for a promotion is, and whether a demoted signature ever returns on its own). Nothing else in 6.17 is blocking |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -103,6 +103,72 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (6.17a repaired, and 6.18 specified)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.17a repaired, 6.18
+written, all gates green at 1443 tests.
+
+**6.17a — the repair.** Two changes, neither of which asks a model anything. ADR-042
+records the decision as *match loosely, count strictly*.
+
+*Loosely*: `checks/programme_match.py`, in the shape `compliance_match.py` established.
+Three tests, any of which finds a keyword — a normalised substring first, because it
+preserves every match the old behaviour made and with it every inflection a substring
+caught for free; the keyword's words adjacent after a conservative singular fold; and,
+for a multi-word keyword only, its words within a stated window in any order. The fold
+removes a plural and nothing else, because a false match here has to be explainable to
+the person reading the finding.
+
+*Strictly*: a programme may be named as what a delivery reads like only on words **it
+alone claims**, and only when it is strictly ahead of the next programme. A tie is not
+an answer. The seeded lists lost `snapshot` and `historical` and gained the words the
+business says. The structural guard matters more than the keyword edit: removing two
+words fixed one instance, and *a programme is named only on words it alone claims* is
+what stops an administrator recreating it with the next overlapping word they add.
+
+The same twenty deliveries re-measured: **4 silent / 11 review / 5 high → 15 silent /
+4 review / 1 high**, with the control class unchanged at 3 of 3. The four review items
+left are honest — `ITA` for *invitation to apply*, a *legacy history pull* where the
+list says `legacy extract` — and an administrator's added word closes each permanently.
+
+The one remaining high is kept as a test and is the worked example for 6.18f: a
+*promotional acquisition mailing* that suppresses `existing accounts` has two of
+Account Monitoring's words and none of its own. Nothing is misspelled — the words
+really are the other programme's, and what makes them innocent is that they appear
+under *suppress* and *removes*. No normalising rule reaches meaning.
+
+**6.18 — specified, not started.** Written from the goal the user stated directly: a
+reviewer should not have to look at every validation point. It corrects a misreading
+this session was itself making — ADR-021 puts a person at the gate of a **rule**, not
+of every **finding**, and approving a rule is precisely the act of saying *apply this
+without asking me again*. Five scope groups: findings that learn their own severity
+from the verdicts people gave; a maturity level an administrator sets deliberately and
+can drop instantly; trustworthiness as a dated number that gates any promotion;
+nothing hidden without a record, with `high` and above never auto-demoted; and a small
+random sample reviewed in full forever, so drift is caught by the tool rather than by
+the customer. The one automatic move in the phase is in the safe direction only: **the
+tool may revoke its own trust and may never grant it.** The model's own confidence
+score is explicitly not a licence to skip anyone — it discards a weak answer today and
+never trusts a strong one, and that stays.
+
+**Also corrected:** ADR-042 first cited a non-existent ADR for 6.15's matching work —
+there is no ADR covering it, so the reference now points at the phase doc. The admin
+console's keyword hint and `admin-training.md` both understated what the field does;
+an administrator cannot see a prompt or a matcher, so the hint is the only account they
+get of why their word list behaves as it does.
+
+**Pending:** 6.18's five open questions, which want the user; 6.17b (the cap
+countdown); 6.17c, where the premise is still factually wrong in the doc and the user
+has not yet said whether to correct it; and the two standing touchpoints —
+`gd-rollout-plan.md` unread since 6.13, and both training documents still dated *after
+Phase 6.14*. The admin document's keyword section is now current; the rest of its
+realignment with 6.15 and 6.16 has not been done, so the date is deliberately left as
+it was rather than claiming an alignment that did not happen.
+
+**Next concrete action:** the user reads `phase-6.18.md` and answers its open questions.
 
 ---
 

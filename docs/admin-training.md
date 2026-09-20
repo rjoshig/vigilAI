@@ -205,7 +205,22 @@ background. A programme can be switched off so users stop seeing it.
 Each programme also carries **keywords** and **rules**. The keywords are what the
 tool greps the OSL, configuration, and report headers for to confirm a run really is
 that programme; a run declared as one programme with none of its words gets a
-finding. The rules are sentences true of every delivery in the programme, each with a
+finding.
+
+**Two things about keywords are worth knowing before you edit them.** Matching is
+forgiving of spelling but not of vocabulary: `existing accounts` finds *existing
+account*, `invitation to apply` finds *invitation-to-apply*, and `portfolio review`
+finds *ongoing review of the portfolio* — so you never need to add plurals, hyphenated
+forms, or the same two words in the other order. What it cannot do is guess a word you
+have not given it, so **add the words your customers actually use** (an abbreviation
+like *ITA*, a vendor's name for a campaign) as you meet them.
+
+**Every keyword must mean its programme and no other.** A word two programmes both list
+is ignored when the tool decides which programme a delivery *looks like*, because it
+cannot tell them apart. A word the delivery business uses generally — *snapshot*,
+*historical*, *monthly* — belongs in no list at all: it appears in every programme's
+paperwork, and putting it in one makes the tool confidently name the wrong programme.
+Two such words shipped in the Archives list until Phase 6.17a measured what they cost. The rules are sentences true of every delivery in the programme, each with a
 strictness: **must** (a breach is a high finding), **should** (medium), or
 **advisory** (low). The model reads each delivery against them and names what it
 breaks; the strictness decides how serious that is, and code applies it. Add as many
