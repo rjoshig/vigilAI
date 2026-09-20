@@ -24,6 +24,7 @@ import * as React from "react";
 
 import { useAuth } from "@/components/auth-gate";
 import { Logo } from "@/components/logo";
+import { PalettePicker } from "@/components/theme-picker";
 import { Button } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -125,26 +126,31 @@ function SidebarFooter() {
   const { user, authEnabled, signOut } = useAuth();
 
   return (
-    <div className="flex items-center justify-between gap-2 border-t p-3 text-xs text-muted-foreground">
-      {authEnabled && user ? (
-        <>
-          <span className="min-w-0 truncate" title={user.email}>
-            {user.name}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <Button variant="outline" size="xs" onClick={signOut}>
-              <LogOut className="h-3.5 w-3.5" /> Sign out
-            </Button>
+    <>
+      <div className="flex justify-center border-t px-2 py-1.5">
+        <PalettePicker />
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t p-3 text-xs text-muted-foreground">
+        {authEnabled && user ? (
+          <>
+            <span className="min-w-0 truncate" title={user.email}>
+              {user.name}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="xs" onClick={signOut}>
+                <LogOut className="h-3.5 w-3.5" /> Sign out
+              </Button>
+              <ThemeToggle />
+            </div>
+          </>
+        ) : (
+          <>
+            <span>Admin · login is off</span>
             <ThemeToggle />
-          </div>
-        </>
-      ) : (
-        <>
-          <span>Admin · login is off</span>
-          <ThemeToggle />
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 

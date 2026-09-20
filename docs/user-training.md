@@ -35,9 +35,11 @@ At the top-left is the Greenlight AI logo, a traffic signal with the green lit,
 beside the name and a small **User** chip; the admin console shows **Admin**. Clicking either takes you home. The same mark is the browser tab
 icon.
 
-The look of the app is one of three palettes chosen by the deployment (default,
-light-blue-yellow, or classic-teal); the sun/moon button at the foot of the sidebar
-switches the current palette between its light and dark variants.
+The look of the app is one of four palettes. The **theme picker** at the foot of the
+sidebar steps through them with ‹ and ›; stop on the one you want and the choice is
+remembered in this browser. The sun/moon button switches the current palette between
+its light and dark variants. If an administrator has locked the theme, the picker is
+not shown and everyone sees the same look.
 
 Under the Greenlight AI mark is a status line, and its dot breathes gently while the mode is on: **Train AI mode on** with a green dot, or
 **Train AI mode off** with a grey dot. When it is on, some controls exist that do not
