@@ -16,6 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
 from greenlight_ai.checks.guides import GuideEntry, guide_lines
+from greenlight_ai.meaning.render import effective_entries, meaning_lines
 from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.db.cache import DbCache, record_calls
 from greenlight_ai.db.session import session_scope
@@ -89,6 +90,16 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
             )
             for artifact in catalog.load_artifacts(session)
             if artifact.guide_entries
+        )
+        + tuple(
+            block
+            for block in (
+                meaning_lines(
+                    effective_entries(session, run.scope or ""),
+                    scope.label if scope is not None else "",
+                ),
+            )
+            if block
         ),
     )
 

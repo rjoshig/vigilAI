@@ -52,6 +52,8 @@ export interface ArtifactTypeIn {
 export interface Sample {
   id: number;
   label: string;
+  /** The programme this sample belongs to; "" for a global one. */
+  scope_code: string;
   filename: string;
   sheets: string[];
   size_bytes: number;
@@ -506,7 +508,7 @@ export interface RuleStateChange {
 }
 
 /** Which definitions keep ten versions with revert (ADR-029). */
-export type VersionKind = "artifact-type" | "programme";
+export type VersionKind = "artifact-type" | "programme" | "meaning";
 
 /** One retained version of an artifact type or a programme's rule set. */
 export interface DefinitionVersion {
@@ -565,4 +567,84 @@ export interface BulkResult {
 export interface RulesBulkResult {
   changed: number;
   failed: string[];
+}
+
+/** Where in a report a requirement is evidenced (Phase 6.10). */
+export interface MeaningReportCell {
+  report_key: string;
+  sheet: string;
+  kind: "cell" | "label";
+  cell: string;
+  label: string;
+  label_column: number;
+  value_column: number;
+}
+
+export type MeaningStatus = "proposed" | "open" | "confirmed" | "rejected";
+
+/**
+ * One requirement mapping: OSL section → configuration block → report cells. The
+ * model proposes, a person confirms, code compiles (ADR-033).
+ */
+export interface MeaningEntry {
+  id: number;
+  scope_code: string;
+  key: string;
+  osl_section: string;
+  osl_phrase: string;
+  requirement_text: string;
+  config_path: string;
+  report_cells: MeaningReportCell[];
+  meaning: string;
+  validate: string;
+  comparison: "" | "equals" | "reconciles";
+  tolerance: number;
+  examples: { sample_id: number; label: string; value: string }[];
+  compliance_suggestion: { name: string; json_path_contains: string; reasoning: string } | null;
+  status: MeaningStatus;
+  question: string;
+  note: string;
+  confidence: number;
+  proposed_by: string;
+  confirmed_by: string;
+  confirmed_at: string | null;
+  updated_at: string;
+  compiled_check: boolean;
+  compiled_compliance: boolean;
+}
+
+export interface MeaningEntryPatch {
+  status?: MeaningStatus;
+  osl_section?: string;
+  osl_phrase?: string;
+  requirement_text?: string;
+  config_path?: string;
+  report_cells?: MeaningReportCell[];
+  meaning?: string;
+  validate?: string;
+  comparison?: "" | "equals" | "reconciles";
+  tolerance?: number;
+  note?: string;
+  drop_compliance_suggestion?: boolean;
+}
+
+export interface MeaningSamples {
+  samples: {
+    artifact_key: string;
+    label: string;
+    sample_id: number;
+    scope_code: string;
+    filename: string;
+  }[];
+  missing: string[];
+}
+
+export interface ProposeResult {
+  sections: number;
+  proposed: number;
+  open: number;
+  updated: number;
+  skipped_confirmed: number;
+  calls: number;
+  cached: number;
 }

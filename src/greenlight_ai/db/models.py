@@ -45,6 +45,7 @@ __all__ = [
     "Job",
     "RETENTION_DAYS",
     "DefinitionVersion",
+    "MeaningEntry",
 ]
 
 #: Runs expire this long after creation; the purge job deletes by ``runs.expires_at``
@@ -498,6 +499,9 @@ class ArtifactSample(Base):
         sa.ForeignKey("artifact_types.id", ondelete="CASCADE"), index=True
     )
     #: What distinguishes this sample from the others, e.g. the customer or the year.
+    #: The delivery programme this sample belongs to, or "" for a global one
+    #: (Phase 6.10). Three samples per type per programme.
+    scope_code: Mapped[str] = mapped_column(sa.String(20), default="", index=True)
     label: Mapped[str] = mapped_column(sa.String(200), default="")
     filename: Mapped[str] = mapped_column(sa.String(500), default="")
     storage_path: Mapped[str] = mapped_column(sa.String(500), default="")
@@ -799,6 +803,56 @@ class ProgrammeRule(Base):
     created_by: Mapped[str] = mapped_column(sa.String(200), default="")
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
     deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True, index=True)
+
+
+class MeaningEntry(Base):
+    """One requirement mapping: OSL section → config block → report cells (Phase 6.10).
+
+    Proposed by the model from the samples in scope, or written by hand; confirmed by
+    an administrator. A confirmed entry with a config path, a report cell that
+    resolves on a sample and a comparison compiles into a shadow check (ADR-021,
+    ADR-033). Cell-level meaning (the validation guide) stays on the artifact type.
+    """
+
+    __tablename__ = "meaning_entries"
+    __table_args__ = (sa.UniqueConstraint("scope_code", "key", name="uq_meaning_entry"),)
+
+    id: Mapped[int] = _pk()
+    #: "" for global, else the programme code. A programme entry with the same key
+    #: as a global one overrides it at run time.
+    scope_code: Mapped[str] = mapped_column(sa.String(20), default="", index=True)
+    #: A stable slug for the requirement, e.g. ``geography``.
+    key: Mapped[str] = mapped_column(sa.String(80))
+    osl_section: Mapped[str] = mapped_column(sa.String(40), default="")
+    osl_phrase: Mapped[str] = mapped_column(sa.String(300), default="")
+    requirement_text: Mapped[str] = mapped_column(sa.Text, default="")
+    config_path: Mapped[str] = mapped_column(sa.String(200), default="")
+    #: Report cells that evidence it: ``[{report_key, sheet, kind, cell, label,
+    #: label_column, value_column}]``.
+    report_cells: Mapped[Any] = mapped_column(Json, default=list)
+    meaning: Mapped[str] = mapped_column(sa.Text, default="")
+    validate: Mapped[str] = mapped_column(sa.Text, default="")
+    #: "" · equals · reconciles; what code checks between the first report cell and
+    #: the config value.
+    comparison: Mapped[str] = mapped_column(sa.String(20), default="")
+    tolerance: Mapped[float] = mapped_column(sa.Float, default=0.0)
+    #: Filled by code from the samples: ``[{sample_id, label, value}]``.
+    examples: Mapped[Any] = mapped_column(Json, default=list)
+    #: A compliance rule the model suggested: ``{name, json_path_contains, reasoning}``
+    #: or null.
+    compliance_suggestion: Mapped[Any] = mapped_column(Json, nullable=True)
+    #: proposed · open · confirmed · rejected.
+    status: Mapped[str] = mapped_column(sa.String(20), default="proposed", index=True)
+    #: The model's question when it could not place the requirement.
+    question: Mapped[str] = mapped_column(sa.Text, default="")
+    #: The administrator's note.
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    confidence: Mapped[float] = mapped_column(sa.Float, default=0.0)
+    proposed_by: Mapped[str] = mapped_column(sa.String(20), default="model")
+    confirmed_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    confirmed_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
 
 
 class DefinitionVersion(Base):

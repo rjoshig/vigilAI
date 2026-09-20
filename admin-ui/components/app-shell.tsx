@@ -16,6 +16,7 @@ import {
   SlidersHorizontal,
   Sun,
   UserCog,
+  Waypoints,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -38,6 +39,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: "/artifacts", label: "Artifact types", icon: BookMarked },
   { href: "/scopes", label: "Delivery programmes", icon: Layers },
+  { href: "/meaning", label: "Meaning", icon: Waypoints },
   { href: "/checks", label: "Checks", icon: ClipboardCheck },
   { href: "/compliance", label: "Compliance rules", icon: ShieldCheck },
   { href: "/rules", label: "Rules", icon: Scale },

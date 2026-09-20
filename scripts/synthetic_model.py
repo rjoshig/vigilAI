@@ -232,6 +232,76 @@ def trace_responder(_system: str, user: str) -> str:
     return json.dumps({"verdict": "not_related", "reason": "Different subject.", "confidence": 0.8})
 
 
+def map_responder(_system: str, user: str) -> str:
+    """Answer the mapping interview from the section heading in the prompt.
+
+    Reads the last ``Section:`` block (the worked examples carry earlier ones) and
+    proposes the links a competent reader would for the synthetic fixtures: the
+    population count against ``input.count`` with the Flow sheet's Input row, the
+    geography filter, and an OFAC exclusion the configuration does not carry, which
+    comes back as an open question with a compliance suggestion.
+    """
+    section = user.split("Section:\n")[-1].split("\nConfiguration blocks:")[0].strip()
+    heading = section.splitlines()[0].lower() if section else ""
+    requirements: list[dict[str, Any]] = []
+    if "population" in heading:
+        requirements.append(
+            {
+                "key": "input_population",
+                "requirement_text": section.splitlines()[-1][:200],
+                "config_path": "input.count",
+                "report_cells": [
+                    {"report_key": "counts", "sheet": "Flow", "label": "Input", "cell": ""}
+                ],
+                "validate": "The Flow sheet's Input row equals the configured input count.",
+                "comparison": "equals",
+                "confidence": 0.9,
+                "question": None,
+                "compliance_suggestion": None,
+            }
+        )
+    elif "geography" in heading:
+        requirements.append(
+            {
+                "key": "geography",
+                "requirement_text": section.splitlines()[-1][:200],
+                "config_path": "filters[0]",
+                "report_cells": [
+                    {
+                        "report_key": "state_distribution",
+                        "sheet": "States",
+                        "label": "State",
+                        "cell": "",
+                    }
+                ],
+                "validate": "Every state in the distribution is an allowed state.",
+                "comparison": "",
+                "confidence": 0.93,
+                "question": None,
+                "compliance_suggestion": None,
+            }
+        )
+    elif "exclusions" in heading:
+        requirements.append(
+            {
+                "key": "ofac_excluded",
+                "requirement_text": "Exclude any consumer on the OFAC list.",
+                "config_path": None,
+                "report_cells": [],
+                "validate": "OFAC hits are suppressed.",
+                "comparison": "",
+                "confidence": 0.5,
+                "question": "No configuration block mentions OFAC; is it set elsewhere?",
+                "compliance_suggestion": {
+                    "name": "OFAC suppression",
+                    "json_path_contains": "suppressions.ofac",
+                    "reasoning": "Every delivery must suppress OFAC hits.",
+                },
+            }
+        )
+    return json.dumps({"requirements": requirements})
+
+
 def synthesize_responder(_system: str, user: str) -> str:
     """Answer a training synthesis call, scripted from the statement's wording.
 
@@ -350,4 +420,5 @@ def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClie
         "s8_verify", json.dumps({"agreed": True, "reason": "Confirmed.", "confidence": 0.9})
     )
     client.register("training_synthesize", synthesize_responder)
+    client.register("admin_map_requirement", map_responder)
     return client

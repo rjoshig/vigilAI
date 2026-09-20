@@ -63,6 +63,8 @@ class SampleOut(BaseModel):
 
     id: int
     label: str = ""
+    #: The programme this sample belongs to; "" for a global one (Phase 6.10).
+    scope_code: str = ""
     filename: str = ""
     sheets: list[str] = Field(default_factory=list)
     size_bytes: int = 0

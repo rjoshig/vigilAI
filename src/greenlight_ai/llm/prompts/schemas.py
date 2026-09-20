@@ -217,3 +217,48 @@ class ProgrammeRulesResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     breaches: list[ProgrammeBreach] = Field(default_factory=list)
+
+
+class MappingReportCell(BaseModel):
+    """A report cell the model says evidences a requirement (Phase 6.10)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    report_key: str = Field(min_length=1)
+    sheet: str = ""
+    label: str = ""
+    cell: str = ""
+
+
+class MappingComplianceSuggestion(BaseModel):
+    """A compliance rule the model suggests when a requirement must always be configured."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    json_path_contains: str = Field(min_length=1)
+    reasoning: str = ""
+
+
+class MappingRequirement(BaseModel):
+    """One requirement the model found in an OSL section, with where it answers to."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    key: str = Field(min_length=1, max_length=80)
+    requirement_text: str = ""
+    config_path: str | None = None
+    report_cells: list[MappingReportCell] = Field(default_factory=list)
+    validate_text: str = Field(default="", alias="validate")
+    comparison: Literal["", "equals", "reconciles"] = ""
+    confidence: Confidence = 0.5
+    question: str | None = None
+    compliance_suggestion: MappingComplianceSuggestion | None = None
+
+
+class MappingProposal(BaseModel):
+    """The mapping interview's answer for one OSL section."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    requirements: list[MappingRequirement] = Field(default_factory=list)

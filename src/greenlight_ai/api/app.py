@@ -18,6 +18,7 @@ from greenlight_ai.api.deps import get_db_settings, get_llm_settings
 from greenlight_ai.api.routers import (
     admin,
     appearance,
+    meaning,
     auth,
     configs,
     findings,
@@ -159,6 +160,7 @@ def create_app(
         settings_router.router,
         training.router,
         appearance.router,
+        meaning.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 
