@@ -34,6 +34,7 @@ def run(context: RunContext) -> None:
 
     verified: list[Finding] = []
     disputed = 0
+    unverified: list[str] = []
 
     for finding in context.findings:
         if finding.severity != "high" or finding.verified:
@@ -55,13 +56,15 @@ def run(context: RunContext) -> None:
             answer = result.parsed(VerifyResponse)
         except LLMError as exc:
             # A verification that cannot run leaves the finding exactly as it was: the
-            # second opinion is an improvement, not a gate.
+            # second opinion is an improvement, not a gate. It is not silent either:
+            # the reviewer is told which findings went unverified (Phase 6.11c).
             _LOG.warning(
                 "run %s: verification of %s failed (%s); keeping the finding unchanged",
                 context.run_id,
                 finding.finding_id,
                 type(exc).__name__,
             )
+            unverified.append(finding.finding_id)
             verified.append(finding.model_copy(update={"verified": False}))
             continue
 
@@ -85,6 +88,13 @@ def run(context: RunContext) -> None:
         )
 
     context.findings = verified
+    if unverified:
+        context.notices.append(
+            f"The second opinion could not be obtained for {len(unverified)} high-severity "
+            f"finding(s) ({', '.join(unverified[:5])}"
+            + (", …" if len(unverified) > 5 else "")
+            + "). They are shown exactly as the checks produced them."
+        )
     _LOG.info(
         "run %s stage 8: %d high-severity findings verified, %d downgraded to review",
         context.run_id,
@@ -194,6 +204,11 @@ def _read_programme_rules(context: RunContext) -> None:
             "run %s: programme-rule reading failed (%s); no programme findings",
             context.run_id,
             type(exc).__name__,
+        )
+        context.notices.append(
+            f"The delivery was not read against {guidance.scope_label or guidance.scope_code}'s "
+            f"{len(guidance.programme_rules)} programme rule(s): the model could not be "
+            "reached. Nothing here says the delivery obeys them."
         )
         return
 

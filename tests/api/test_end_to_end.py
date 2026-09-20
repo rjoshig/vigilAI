@@ -60,6 +60,32 @@ def _add_low_finding(
         return int(finding.id)
 
 
+def _clear_the_gate(client: TestClient, api: str, run_id: int) -> None:
+    """Decide every finding the gate asks about and acknowledge every gap.
+
+    The gate is ADR-035's: high and review findings decided, coverage gaps and
+    unevaluated checks acknowledged. Tests that only want a finalized run say so in
+    one line rather than repeating the sequence.
+
+    Args:
+        client: The test client.
+        api: The API prefix.
+        run_id: The run.
+    """
+    for finding in client.get(f"{api}/runs/{run_id}/findings").json():
+        if finding["severity"] in {"high", "review"}:
+            client.patch(
+                f"{api}/findings/{finding['id']}",
+                json={"review_status": "false_positive", "review_note": "checked by hand"},
+            )
+    outstanding = client.get(f"{api}/runs/{run_id}/coverage").json()["outstanding"]
+    if outstanding:
+        client.post(
+            f"{api}/runs/{run_id}/coverage/acknowledge",
+            json={"targets": outstanding, "note": "seen"},
+        )
+
+
 @pytest.fixture()
 def completed_run(submit: Submit, worker: Worker, client: TestClient, api: str) -> dict[str, Any]:
     """A run submitted through the API and executed by the worker."""
@@ -271,7 +297,7 @@ def test_editing_an_unknown_rule_is_a_404(
 def test_a_decision_is_recorded_and_opens_the_gate(
     completed_run: dict[str, Any], client: TestClient, api: str
 ) -> None:
-    """ADR-015: every high-severity finding needs a decision."""
+    """ADR-035: high and review findings decided, and every coverage gap acknowledged."""
     run_id = completed_run["id"]
     assert client.get(f"{api}/runs/{run_id}").json()["can_finalize"] is False
 
@@ -284,7 +310,29 @@ def test_a_decision_is_recorded_and_opens_the_gate(
             assert response.status_code == 200
             assert response.json()["review_status"] == "confirmed"
 
+    _clear_the_gate(client, api, run_id)
     assert client.get(f"{api}/runs/{run_id}").json()["can_finalize"] is True
+
+
+def test_deciding_only_the_high_findings_no_longer_opens_the_gate(
+    completed_run: dict[str, Any], client: TestClient, api: str
+) -> None:
+    """The hole ADR-035 closes: a review finding left undecided used to finalize."""
+    run_id = completed_run["id"]
+    findings = client.get(f"{api}/runs/{run_id}/findings").json()
+    assert any(f["severity"] == "review" for f in findings), "the fixture should raise one"
+
+    for finding in findings:
+        if finding["severity"] == "high":
+            client.patch(
+                f"{api}/findings/{finding['id']}",
+                json={"review_status": "false_positive", "review_note": "checked"},
+            )
+
+    detail = client.get(f"{api}/runs/{run_id}").json()
+    assert detail["can_finalize"] is False
+    assert "decision" in detail["finalize_blocked_by"]
+    assert client.post(f"{api}/runs/{run_id}/finalize").status_code == 409
 
 
 def test_low_severity_findings_can_be_decided_in_bulk(
@@ -323,12 +371,7 @@ def test_bulk_ok_then_finalize_gives_an_ok_verdict(
     _add_low_finding(factory, run_id)
 
     client.post(f"{api}/runs/{run_id}/findings/bulk-ok")
-    for finding in client.get(f"{api}/runs/{run_id}/findings").json():
-        if finding["severity"] != "low":
-            client.patch(
-                f"{api}/findings/{finding['id']}",
-                json={"review_status": "false_positive", "review_note": "checked by hand"},
-            )
+    _clear_the_gate(client, api, run_id)
 
     body = client.post(f"{api}/runs/{run_id}/finalize").json()
 

@@ -95,12 +95,71 @@ class RunDetail(RunSummary):
     #: The configuration notes in force when the run was submitted (ADR-024).
     config_notes: list[str] = Field(default_factory=list)
     can_finalize: bool = False
+    #: Why not, when ``can_finalize`` is false: one sentence naming what is
+    #: outstanding (Phase 6.11d). Empty when the gate is satisfied.
+    finalize_blocked_by: str = ""
     finalized: bool = False
     #: Whether this deployment can render a PDF at all. False when the optional [pdf]
     #: extra is not installed, which is a deployment fact, not a per-run one.
     pdf_available: bool = False
     stages: list[StageInfo] = Field(default_factory=list)
     files: dict[str, str] = Field(default_factory=dict)
+
+
+class RequirementCoverageOut(BaseModel):
+    """How far one requirement got (Phase 6.11c)."""
+
+    rule_id: str
+    req_type: str = ""
+    state: str
+    osl_ref: str = ""
+    summary: str = ""
+    reason: str = ""
+    #: Whether a person has recorded that they saw this gap.
+    acknowledged: bool = False
+    acknowledged_by: str = ""
+    acknowledgement_note: str = ""
+
+
+class ReportCoverageOut(BaseModel):
+    """How many checks touched one uploaded report."""
+
+    kind: str
+    checks_applied: int = 0
+
+
+class UnevaluatedCheckOut(BaseModel):
+    """A check that was defined and could not be run."""
+
+    finding_id: str
+    title: str = ""
+    acknowledged: bool = False
+    acknowledged_by: str = ""
+    acknowledgement_note: str = ""
+
+
+class CoverageOut(BaseModel):
+    """What the run checked and what it did not."""
+
+    requirements: list[RequirementCoverageOut] = Field(default_factory=list)
+    reports: list[ReportCoverageOut] = Field(default_factory=list)
+    unevaluated: list[UnevaluatedCheckOut] = Field(default_factory=list)
+    notices: list[str] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+    #: Requirement ids and finding ids still waiting for an acknowledgement.
+    outstanding: list[str] = Field(default_factory=list)
+    #: Empty for a run processed before coverage existed, which the screen says
+    #: rather than showing an empty panel.
+    reason: str = ""
+
+
+class AcknowledgePayload(BaseModel):
+    """Recording that a person has seen a gap."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    targets: list[str] = Field(min_length=1)
+    note: str = ""
 
 
 class FindingOut(BaseModel):
@@ -373,3 +432,5 @@ class DriftOut(BaseModel):
     config: list[DriftConfigChange] = Field(default_factory=list)
     previous_config_version: Optional[int] = None
     config_version: Optional[int] = None
+    #: OSL references a report evidenced last time and evidences no longer.
+    newly_unchecked: list[str] = Field(default_factory=list)

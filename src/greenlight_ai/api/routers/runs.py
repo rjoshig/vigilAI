@@ -26,7 +26,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from greenlight_ai.api import schemas
+from greenlight_ai.api import gate, schemas
 from greenlight_ai.api.deps import CurrentUser, current_user, get_data_dir, get_session
 from greenlight_ai.api.uploads import UploadError, store_upload
 from greenlight_ai.config.store import resolve
@@ -94,27 +94,23 @@ def _severity_counts(session: Session, run_id: int) -> dict[str, int]:
     return counts
 
 
-def _can_finalize(session: Session, run_id: int) -> bool:
-    """Whether every high-severity finding has a decision (ADR-015).
+def _can_finalize(session: Session, run: models.Run) -> tuple[bool, str]:
+    """Whether the run can be frozen, and what stands in the way.
+
+    The gate is ADR-035's, which widens ADR-015's: every high and every ``review``
+    finding decided, and every coverage gap acknowledged. The one implementation lives
+    in :mod:`greenlight_ai.api.gate` so the answer the screen shows and the answer
+    finalize enforces cannot differ.
 
     Args:
         session: An open session.
-        run_id: The run.
+        run: The run row.
 
     Returns:
-        ``True`` when the gate is satisfied.
+        Whether the gate is satisfied, and the reason when it is not.
     """
-    undecided = session.execute(
-        sa.select(sa.func.count())
-        .select_from(models.Finding)
-        .where(
-            models.Finding.run_id == run_id,
-            models.Finding.severity == "high",
-            models.Finding.review_status == "undecided",
-            models.Finding.shadow.is_(False),
-        )
-    ).scalar_one()
-    return int(undecided) == 0
+    state = gate.gate_state(session, run)
+    return state.can_finalize, state.reason
 
 
 def _summary(
@@ -196,6 +192,7 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         The detail payload.
     """
     base = _summary(session, run, queue)
+    can_finalize, blocked_by = _can_finalize(session, run)
     finalized = (
         session.execute(
             sa.select(sa.func.count())
@@ -225,7 +222,8 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         input_fingerprint=run.input_fingerprint,
         has_suppressions=run.has_suppressions,
         config_notes=[str(n) for n in (run.config_notes_snapshot or [])],
-        can_finalize=_can_finalize(session, run.id),
+        can_finalize=can_finalize,
+        finalize_blocked_by=blocked_by,
         finalized=finalized,
         stages=stages,
         files={f.kind: f.filename for f in run.files},

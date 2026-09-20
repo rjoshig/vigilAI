@@ -44,7 +44,11 @@ class BrokenPdfRenderer:
 
 @pytest.fixture()
 def reviewed(submit: Submit, worker: Worker, client: TestClient, api: str) -> int:
-    """A run executed and fully reviewed, ready to finalize."""
+    """A run executed and fully reviewed, ready to finalize.
+
+    Fully reviewed means the gate in ADR-035: every finding decided **and** every
+    coverage gap acknowledged. Deciding the findings alone no longer opens it.
+    """
     run_id = submit("geography_extra_state").json()["run_id"]
     worker.run_once()
     for finding in client.get(f"{api}/runs/{run_id}/findings").json():
@@ -52,6 +56,12 @@ def reviewed(submit: Submit, worker: Worker, client: TestClient, api: str) -> in
         client.patch(
             f"{api}/findings/{finding['id']}",
             json={"review_status": status, "review_note": "reviewed by a test"},
+        )
+    outstanding = client.get(f"{api}/runs/{run_id}/coverage").json()["outstanding"]
+    if outstanding:
+        client.post(
+            f"{api}/runs/{run_id}/coverage/acknowledge",
+            json={"targets": outstanding, "note": "seen by a test"},
         )
     return int(run_id)
 
@@ -110,12 +120,11 @@ def test_a_second_finalize_is_refused(reviewed: int, client: TestClient, api: st
 
 
 def test_a_run_with_no_confirmed_findings_is_ok(
-    submit: Submit, worker: Worker, client: TestClient, api: str
+    submit: Submit, worker: Worker, client: TestClient, api: str, clear_gate: Callable[..., None]
 ) -> None:
     run_id = submit("baseline_match").json()["run_id"]
     worker.run_once()
-    for finding in client.get(f"{api}/runs/{run_id}/findings").json():
-        client.patch(f"{api}/findings/{finding['id']}", json={"review_status": "false_positive"})
+    clear_gate(run_id)
     assert client.post(f"{api}/runs/{run_id}/finalize").json()["verdict"] == "ok"
 
 

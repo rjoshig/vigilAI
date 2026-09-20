@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
+from greenlight_ai.api import gate
 from greenlight_ai.api.deps import CurrentUser, current_user, get_data_dir, get_session
 from greenlight_ai.db import models, repository, drift
 from greenlight_ai.report.pdf import PdfUnavailable, render_pdf, renderer_available
@@ -83,6 +84,11 @@ def finalize(
     Raises:
         HTTPException: 409 when the run is already finalized or the gate is not
             satisfied, 400 when the run never reached review.
+
+    The gate is ADR-035's: every high and every ``review`` finding decided, and every
+    coverage gap and unevaluated check acknowledged. What the person confirmed is
+    stored on the report, because a report that is evidence of a review should say
+    what the reviewer was shown.
     """
     run = _run(session, run_id)
 
@@ -97,24 +103,15 @@ def finalize(
             f"run {run_id} is {run.status}; only a reviewed run can be finalized",
         )
 
-    undecided = int(
-        session.execute(
-            sa.select(sa.func.count())
-            .select_from(models.Finding)
-            .where(
-                models.Finding.run_id == run_id,
-                models.Finding.severity == "high",
-                models.Finding.review_status == "undecided",
-                models.Finding.shadow.is_(False),
-            )
-        ).scalar_one()
-    )
-    if undecided:
+    # The gate is ADR-035's and lives in one place, so what the screen shows and what
+    # this refuses cannot drift apart.
+    state = gate.gate_state(session, run)
+    if not state.can_finalize:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"{undecided} high-severity finding(s) still need a decision before this run "
-            "can be finalized",
+            f"This run cannot be finalized yet: {state.reason}",
         )
+    confirmed = gate.attestation(session, run)
 
     findings = list(
         session.execute(
@@ -149,6 +146,7 @@ def finalize(
         ),
         generated_by=user.name,
         drift=drift.compute_drift(session, run),
+        attestation=confirmed,
     )
 
     storage_key = write_report(rendered.html, data_dir, run_id)
@@ -158,6 +156,7 @@ def finalize(
             html_path=storage_key,
             html_sha256=rendered.sha256,
             verdict=rendered.verdict,
+            attestation=confirmed,
             generated_by=user.name,
             generated_by_user_id=user.id,
         )

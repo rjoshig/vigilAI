@@ -16,7 +16,7 @@ from greenlight_ai.llm.prompts.schemas import SummarizeResponse
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.pipeline.guidance import preamble
 
-__all__ = ["run", "format_findings"]
+__all__ = ["run", "format_coverage", "format_findings"]
 
 _LOG: Final = logging.getLogger(__name__)
 
@@ -39,7 +39,10 @@ def run(context: RunContext) -> None:
     try:
         result = context.client.complete(
             SUMMARIZE_PROMPT.system,
-            preamble(context.guidance) + SUMMARIZE_PROMPT.render(findings=format_findings(context)),
+            preamble(context.guidance)
+            + SUMMARIZE_PROMPT.render(
+                findings=format_findings(context), coverage=format_coverage(context)
+            ),
             SUMMARIZE_PROMPT.schema,
             stage="s9_summarize",
             prompt_version=SUMMARIZE_PROMPT.version,
@@ -61,6 +64,31 @@ def run(context: RunContext) -> None:
         "run %s stage 9: summary written (%d top issues)",
         context.run_id,
         len(context.top_issues),
+    )
+
+
+def format_coverage(context: RunContext) -> str:
+    """Render the run's coverage counts for the summary prompt.
+
+    Counts only, produced by code. The model is told them so its summary cannot call a
+    delivery clean when part of it was never examined; it is not asked to compute or
+    judge anything from them (ADR-001).
+
+    Args:
+        context: The run context, after stage 7.
+
+    Returns:
+        One sentence of counts, or a note when coverage was not computed.
+    """
+    coverage = context.coverage
+    if coverage is None:
+        return "not computed for this run."
+    counts = coverage.counts
+    total = sum(counts.values())
+    return (
+        f"{counts['checked']} of {total} requirements were checked against a report; "
+        f"{counts['traced_unchecked'] + counts['untraced']} were left unchecked and "
+        f"{counts['manual']} need checking by hand."
     )
 
 

@@ -29,6 +29,7 @@ from greenlight_ai.checks.named_values import NamedValue
 from greenlight_ai.db import models
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
+from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, Trace
@@ -307,6 +308,13 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
     run.rules_version = context.rules_version
     run.summary = context.summary
     run.top_issues = list(context.top_issues)
+    if context.coverage is not None:
+        run.coverage = coverage_module.as_rows(context.coverage)
+        run.report_coverage = [
+            {"kind": entry.kind, "checks_applied": entry.checks_applied}
+            for entry in context.coverage.reports
+        ]
+    run.notices = list(context.notices)
 
 
 def _replace_rules(session: Session, run: models.Run, rules: Sequence[Rule]) -> None:

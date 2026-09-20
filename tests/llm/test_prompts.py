@@ -151,7 +151,7 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("s4_trace", {"requirement", "element"}),
         ("s8_programme", {"programme", "rules", "delivery"}),
         ("s8_verify", {"finding", "evidence"}),
-        ("s9_summarize", {"findings"}),
+        ("s9_summarize", {"findings", "coverage"}),
         ("admin_draft_check", {"description", "report_types"}),
         ("admin_judgment", {"instruction", "values"}),
         ("admin_map_requirement", {"section", "blocks", "cells"}),

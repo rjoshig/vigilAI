@@ -266,6 +266,44 @@
       <div class="card small muted">Nothing was marked Not OK.</div>
       {% endif %}
 
+      {% if attestation %}
+      <h2>What was checked</h2>
+      <p class="small muted">
+        A finding says what disagreed. This says what was compared, and what was not:
+        the absence of a finding is not on its own a pass. Counts produced by code.
+      </p>
+      <table>
+        <thead><tr><th>Requirements</th><th>Count</th></tr></thead>
+        <tbody>
+          <tr><td class="small">Checked against a report</td><td class="mono">{{ attestation.coverage.checked }}</td></tr>
+          <tr><td class="small">Traced to the configuration, evidenced by no report</td><td class="mono">{{ attestation.coverage.traced_unchecked }}</td></tr>
+          <tr><td class="small">Not traced to any configuration element</td><td class="mono">{{ attestation.coverage.untraced }}</td></tr>
+          <tr><td class="small">Verified by hand</td><td class="mono">{{ attestation.coverage.manual }}</td></tr>
+          <tr><td class="small"><b>Total</b></td><td class="mono"><b>{{ attestation.requirements_total }}</b></td></tr>
+        </tbody>
+      </table>
+      {% if attestation.unevidenced %}
+      <p class="small"><b>Acknowledged by {{ generated_by or "the reviewer" }} as not evidenced:</b>
+        {% for entry in attestation.unevidenced %}<span class="mono">{{ entry.rule_id }}</span>{% if entry.osl_ref %} ({{ entry.osl_ref }}){% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.</p>
+      {% endif %}
+      {% if attestation.unevaluated_checks %}
+      <p class="small"><b>{{ attestation.unevaluated_checks|length }} check(s) could not be evaluated</b>, acknowledged before freezing:
+        {% for finding_id in attestation.unevaluated_checks %}<span class="mono">{{ finding_id }}</span>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+      {% endif %}
+      {% if attestation.reports_without_checks %}
+      <p class="small"><b>Report(s) no check examined:</b>
+        {% for kind in attestation.reports_without_checks %}{{ kind|replace("_", " ") }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+      {% endif %}
+      {% if attestation.notices %}
+      <p class="small"><b>Notices:</b>
+        {% for notice in attestation.notices %}{{ notice }}{% if not loop.last %} {% endif %}{% endfor %}</p>
+      {% endif %}
+      <p class="small muted">
+        {% if attestation.shadow_findings %}{{ attestation.shadow_findings }} finding(s) came from rules running in shadow and are not shown here or counted anywhere (ADR-021).{% endif %}
+        {% if attestation.definition_versions %}Definition versions in force: {% for name, version in attestation.definition_versions.items() %}{{ name }} v{{ version }}{% if not loop.last %}, {% endif %}{% endfor %}.{% endif %}
+      </p>
+      {% endif %}
+
       {% if drift and drift.has_previous %}
       <h2>Since the previous run</h2>
       <p class="small muted">
@@ -283,6 +321,10 @@
         {{ drift.new|length }} new finding(s){% if drift.new %}: {% for f in drift.new %}<span class="mono">{{ f.finding_id }}</span> {{ f.title }}{% if not loop.last %}; {% endif %}{% endfor %}{% endif %}.
         {{ drift.resolved|length }} resolved{% if drift.resolved %}: {% for f in drift.resolved %}{{ f.title }}{% if not loop.last %}; {% endif %}{% endfor %}{% endif %}.
       </p>
+      {% if drift.newly_unchecked %}
+      <p class="small"><b>Evidenced by a report last time and not this time ({{ drift.newly_unchecked|length }}):</b>
+        {% for ref in drift.newly_unchecked %}{{ ref }}{% if not loop.last %}; {% endif %}{% endfor %}.</p>
+      {% endif %}
       {% if drift.requirements %}
       <p class="small"><b>Requirements that changed:</b>
         {% for r in drift.requirements %}{{ r.source_ref }} ({{ r.change }}{% if r.change == "changed" %}: {{ r.before }} → {{ r.after }}{% elif r.after %}: {{ r.after }}{% elif r.before %}: {{ r.before }}{% endif %}){% if not loop.last %}; {% endif %}{% endfor %}</p>

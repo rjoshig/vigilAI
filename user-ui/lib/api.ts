@@ -28,6 +28,7 @@ import type {
   RunSummary,
   TrainingConfig,
   TypeDetection,
+  Coverage,
   Drift,
 } from "@/lib/types";
 
@@ -186,6 +187,25 @@ export const api = {
   /** Mark every undecided low-severity finding OK, as a false positive. */
   bulkOkLow(runId: number): Promise<number> {
     return request<number>(`/runs/${runId}/findings/bulk-ok`, { method: "POST" });
+  },
+
+  /** What the run checked and what it did not (Phase 6.11c). */
+  getCoverage(runId: number): Promise<Coverage> {
+    return request<Coverage>(`/runs/${runId}/coverage`);
+  },
+
+  /**
+   * Record that a person has seen one or more coverage gaps.
+   *
+   * Not a decision that the delivery is fine: the record that the gap was in front of
+   * somebody before the report was frozen, which is what the gate asks for.
+   */
+  acknowledgeCoverage(runId: number, targets: string[], note = ""): Promise<number> {
+    return request<number>(`/runs/${runId}/coverage/acknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets, note }),
+    });
   },
 
   /** Read the traceability matrix. */

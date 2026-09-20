@@ -109,6 +109,8 @@ export interface RunDetail extends RunSummary {
   rerun_reason: string;
   input_fingerprint: string;
   can_finalize: boolean;
+  /** Why not, when can_finalize is false. Empty when the gate is satisfied. */
+  finalize_blocked_by: string;
   finalized: boolean;
   /** Whether this deployment can render a PDF at all (the optional [pdf] extra). */
   pdf_available: boolean;
@@ -458,4 +460,45 @@ export interface Drift {
   config: DriftConfigChange[];
   previous_config_version: number | null;
   config_version: number | null;
+  /** OSL references a report evidenced last time and evidences no longer. */
+  newly_unchecked: string[];
+}
+
+/** What happened to one requirement: was it actually checked? (Phase 6.11c) */
+export type CoverageState = "checked" | "traced_unchecked" | "untraced" | "manual";
+
+export interface RequirementCoverage {
+  rule_id: string;
+  req_type: string;
+  state: CoverageState;
+  osl_ref: string;
+  summary: string;
+  reason: string;
+  acknowledged: boolean;
+  acknowledged_by: string;
+  acknowledgement_note: string;
+}
+
+export interface ReportCoverage {
+  kind: string;
+  checks_applied: number;
+}
+
+export interface UnevaluatedCheck {
+  finding_id: string;
+  title: string;
+  acknowledged: boolean;
+  acknowledged_by: string;
+  acknowledgement_note: string;
+}
+
+export interface Coverage {
+  requirements: RequirementCoverage[];
+  reports: ReportCoverage[];
+  unevaluated: UnevaluatedCheck[];
+  notices: string[];
+  counts: Record<string, number>;
+  /** Requirement ids and finding ids still waiting for an acknowledgement. */
+  outstanding: string[];
+  reason: string;
 }

@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 
+import { CoverageCard } from "@/components/coverage-card";
 import { DriftCard } from "@/components/drift-card";
 import { EvidencePanel } from "@/components/evidence-panel";
 import { ObservationDialog, anchorOf, useTrainingEnabled } from "@/components/observation-dialog";
@@ -337,6 +338,8 @@ export default function ReviewPage() {
               <CardContent className="text-xs leading-relaxed">{run.summary}</CardContent>
             </Card>
           ) : null}
+
+          <CoverageCard runId={runId} onChange={() => void loadRun()} editable={!run.finalized} />
 
           <div className="mb-4 flex gap-1 border-b">
             {(["matrix", "findings"] as Tab[]).map((name) => (

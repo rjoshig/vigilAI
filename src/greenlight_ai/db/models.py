@@ -180,6 +180,17 @@ class Run(Base):
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
 
+    #: What the run checked and what it did not: one entry per requirement with its
+    #: state and the reason (Phase 6.11c). Absence of a finding is not a pass, and
+    #: this is the column that says so.
+    coverage: Mapped[Any] = mapped_column(Json, default=list)
+    #: How many checks produced a verdict against each uploaded report. A report with
+    #: none arrived and was asked nothing.
+    report_coverage: Mapped[Any] = mapped_column(Json, default=list)
+    #: Run-level things the reviewer must be told that are not findings: a second
+    #: opinion that could not be obtained, a programme reading that did not run.
+    notices: Mapped[Any] = mapped_column(Json, default=list)
+
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
     started_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     finished_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
@@ -634,11 +645,41 @@ class FinalReport(Base):
     pdf_path: Mapped[str] = mapped_column(sa.String(500), default="")
     html_sha256: Mapped[str] = mapped_column(sa.String(64))
     verdict: Mapped[str] = mapped_column(sa.String(20))
+    #: What the person confirmed when they froze it (Phase 6.11d): the coverage
+    #: counts, the unevaluated checks, the shadow rules and definition versions in
+    #: force, and the run's notices. Stored because a report that is evidence of a
+    #: review should say what the reviewer was shown.
+    attestation: Mapped[Any] = mapped_column(Json, default=dict)
     generated_by: Mapped[str] = mapped_column(sa.String(200), default="")
     generated_by_user_id: Mapped[Optional[int]] = mapped_column(
         sa.ForeignKey("users.id"), nullable=True
     )
     generated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class CoverageAcknowledgement(Base):
+    """A person has seen that something was not checked (Phase 6.11d).
+
+    The finalize gate needs one of these for every requirement no report evidenced and
+    every check that could not be evaluated. It is not a decision that the delivery is
+    fine; it is the record that the gap was in front of somebody before the report was
+    frozen.
+    """
+
+    __tablename__ = "coverage_acknowledgements"
+    __table_args__ = (sa.UniqueConstraint("run_id", "target", name="uq_coverage_ack_run_target"),)
+
+    id: Mapped[int] = _pk()
+    run_id: Mapped[int] = mapped_column(sa.ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    #: A requirement id for a coverage gap, a finding id for a check that could not be
+    #: evaluated. One column for both, because the gate asks the same question of each.
+    target: Mapped[str] = mapped_column(sa.String(40))
+    #: ``requirement`` or ``finding``.
+    kind: Mapped[str] = mapped_column(sa.String(20), default="requirement")
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    actor: Mapped[str] = mapped_column(sa.String(200), default="")
+    actor_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
 class TrainingObservation(Base):
