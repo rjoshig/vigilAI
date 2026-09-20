@@ -70,11 +70,22 @@ export default defineConfig({
   globalTeardown: "./global-teardown.ts",
 
   webServer: [
-    // `reuseExistingServer` is deliberately false everywhere: global setup wipes the
-    // database on every run, so a server left over from an earlier one is attached to
-    // the database that was just deleted and carries its state into this run.
+    // The database is wiped and seeded **by this command**, not by global setup.
+    // Playwright starts the web servers before it runs global setup, so seeding there
+    // left the API holding the previous run's database file: SQLite keeps a deleted
+    // file open, so every read and write went to the copy that had just been removed.
+    // The symptom was a run that was already frozen before the test touched it, and
+    // decisions that returned 200 and were nowhere afterwards. Seeding here happens
+    // before the server binds, which is the only ordering that guarantees one database.
+    //
+    // `reuseExistingServer` is deliberately false everywhere for the same reason: a
+    // server left over from an earlier run is attached to a database that no longer
+    // exists and would carry its state into this one.
     {
-      command: `${PYTHON} -m uvicorn greenlight_ai.api.app:get_app --factory --host 127.0.0.1 --port 8000`,
+      command:
+        `rm -rf "${DATA_DIR}" && mkdir -p "${DATA_DIR}" && ` +
+        `"${PYTHON}" "${path.join(ROOT, "scripts", "seed_demo.py")}" --log-level ERROR && ` +
+        `"${PYTHON}" -m uvicorn greenlight_ai.api.app:get_app --factory --host 127.0.0.1 --port 8000`,
       url: "http://127.0.0.1:8000/health",
       cwd: ROOT,
       env: SERVICE_ENV,

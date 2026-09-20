@@ -153,6 +153,23 @@ synthesis prompt would have meant changing that prompt, bumping its version and
 discarding its cache, to tell it something it works out anyway. When the two readings
 disagree, the answer says so instead of hiding it.
 
+### A bug in the browser harness, found on the way
+
+The browser suite was failing intermittently, and the first job was to establish that it
+was not this work: it fails the same way on the previous commit, two runs in three. The
+cause is that **Playwright starts the web servers before it runs global setup**, and
+global setup was what wiped and seeded the database. The API therefore opened the
+previous run's file and kept it after the wipe — SQLite keeps a deleted file open — so
+the whole suite read and wrote a database nothing else could see.
+
+It presented as caching and was nothing of the kind: a run already frozen before any
+test touched it, and review decisions that returned 200 and were nowhere afterwards.
+Seeding now happens inside the API's own web-server command, which is the only ordering
+that guarantees one database. Two further fixes came out of the same investigation: the
+decide loop drives from the server's list of undecided findings rather than from the
+cards, and an assertion after a reload waits for the element rather than for the
+navigation. Thirty browser tests, green twice in a row.
+
 ### Tests
 
 14 on the front door, 30 on the scope module, 3 more in the admin console. The three

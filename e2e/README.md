@@ -50,8 +50,16 @@ run: these tests finalize runs and approve rules, and both are one-way.
   `data-review-status`, not by a message that appears and clears. The production code
   carries `data-testid`, `data-severity`, `data-finding` and `data-review-status` on a
   finding card for exactly this.
-- **Servers are never reused.** Global setup wipes the database, so a server left over
-  from an earlier run is attached to the one it just wiped and carries its state in.
+- **The database is seeded by the API's own web-server command, never by global setup.**
+  Playwright starts the web servers *before* it runs global setup. Seeding in global
+  setup therefore handed the API the previous run's database file and then deleted it
+  underneath; SQLite keeps a deleted file open, so the suite spent the whole run reading
+  and writing a database nothing else could see. It looked like caching: a run already
+  frozen before any test touched it, and decisions that returned 200 and were nowhere
+  afterwards. Anything that must exist before a server binds belongs in that server's
+  command.
+- **Servers are never reused**, for the same reason: a server left over from an earlier
+  run is attached to a database that no longer exists.
 - **Ask the API how many things there are before counting them on screen.** A list
   renders progressively, so a count taken at the wrong moment misses one, and a missed
   item fails a later assertion for a reason the test cannot see.
@@ -63,3 +71,10 @@ run: these tests finalize runs and approve rules, and both are one-way.
 - **The screens read their run when they mount.** They do not promise to live-update, so
   a test that changes state and then checks a screen reloads it rather than asserting
   something the app never claimed.
+- **Reload, then wait for the thing itself.** A reload resolves when the document is
+  parsed, and these screens fetch their run after that, so a check taken the instant the
+  reload returns is always too early. Wait for the element, not for the navigation.
+- **Drive a loop from the server's list, not from the cards.** Deciding "every finding
+  still undecided" reads that list from the API each pass. Reading it from the cards
+  lets one stale render skip a finding permanently, and a skipped finding fails the gate
+  later for a reason that is nowhere near the cause.

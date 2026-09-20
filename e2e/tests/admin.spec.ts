@@ -11,6 +11,7 @@ import { expect, test } from "@playwright/test";
 const ADMIN = "http://127.0.0.1:3001";
 
 const SCREENS: ReadonlyArray<[string, string]> = [
+  ["/tell", "Tell the tool"],
   ["/artifacts", "Artifact types & meaning"],
   ["/scopes", "Delivery programmes"],
   ["/meaning", "Meaning"],
@@ -74,4 +75,25 @@ test("the usage screen reports runs and model calls", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Usage", exact: true })).toBeVisible();
   const body = (await page.locator("body").innerText()).toLowerCase();
   expect(body).toMatch(/run|token|call/);
+});
+
+// The stack runs on LLM_PROVIDER=mock, whose canned answer places nothing. That is the
+// right stand-in here: which surface a sentence belongs on is the model's judgment and
+// is asserted against the scripted model in `tests/api/test_front_door.py`. What a
+// browser can prove is the round trip — the statement reaches the API and the tool's
+// answer reaches the screen — and the answer worth proving is the one that creates
+// nothing, because that is the path where a wrong rule would otherwise be written.
+test("the front door sends a statement and shows what the tool made of it", async ({ page }) => {
+  await page.goto(`${ADMIN}/tell`);
+
+  await page
+    .getByLabel("One statement")
+    .fill("The account review file must never have a blank origination date.");
+  await page.getByTestId("tell-the-tool").click();
+
+  const result = page.getByTestId("front-door-result");
+  await expect(result).toBeVisible();
+  await expect(result).toContainText("Not placed");
+  await expect(page.getByTestId("front-door-question")).toBeVisible();
+  await expect(result).toContainText("Nothing was created.");
 });

@@ -15,52 +15,54 @@ import type { Locator, Page } from "@playwright/test";
 
 const RUN = 5;
 
+/** Read the current findings from the server, never from a response read earlier. */
+async function storedFindings(
+  page: Page
+): Promise<Array<{ finding_id: string; shadow?: boolean; review_status: string }>> {
+  // A cache-busting parameter, because every read here exists to find out what changed
+  // and a replayed body is the one answer that cannot. FastAPI ignores the extra key.
+  const reply = await page.request.get(`/api/v1/runs/${RUN}/findings?at=${Date.now()}`);
+  expect(reply.ok(), "the findings should be readable").toBeTruthy();
+  return reply.json();
+}
+
+/** Which findings a reviewer still has to decide, according to the server. */
+async function undecidedIds(page: Page): Promise<string[]> {
+  return (await storedFindings(page))
+    .filter((f) => !f.shadow && f.review_status === "undecided")
+    .map((f) => f.finding_id);
+}
+
 /**
  * Decide every finding on the review screen.
  *
- * It takes the first still-undecided card each time rather than counting once and
- * indexing: the list is fetched after the tab renders, so a count taken too early
- * misses findings, and each decision re-renders the list.
+ * Each pass asks the server which findings are still undecided and drives exactly
+ * those. Reading that from the cards instead would let one stale render skip a finding
+ * permanently: the loop would see a decision the browser believes it made, the gate
+ * would read what the server actually stored, and the two disagreeing is the whole
+ * reason this reads the server between passes.
  */
 async function decideEveryFinding(page: Page): Promise<void> {
-  // Ask the API how many findings there are before reading the screen. The list
-  // renders progressively, so a count taken from the DOM at the wrong moment misses
-  // one, and a missed finding leaves the gate shut for a reason the test cannot see.
-  const findings = await (await page.request.get(`/api/v1/runs/${RUN}/findings`)).json();
-  const expected = findings.filter((f: { shadow?: boolean }) => !f.shadow).length;
+  const expected = (await storedFindings(page)).filter((f) => !f.shadow).length;
   expect(expected, "the run should have findings to decide").toBeGreaterThan(0);
 
   await page.goto(`/runs/${RUN}`);
   await page.getByRole("button", { name: /^Findings/ }).click();
   await expect(page.getByTestId("finding-card")).toHaveCount(expected);
 
-  // Read the ids once. Deciding a finding re-renders the list, and both "the first
-  // undecided card" and a count taken at the wrong moment are moving targets: during a
-  // refetch the list is briefly empty, which would look like nothing left to do.
-  const ids = await page.$$eval('[data-testid="finding-card"]', (cards) =>
-    cards.map((card) => card.getAttribute("data-finding") ?? "")
-  );
-  expect(ids).toHaveLength(expected);
-
-  // Decide each one, then check against the server rather than the screen. A decision
-  // the card shows is a decision the browser believes it made; what the gate reads is
-  // what the server stored, and the two can differ while a request is in flight.
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    for (const id of ids) {
+    const left = await undecidedIds(page);
+    if (left.length === 0) return;
+
+    for (const id of left) {
       const card = page.locator(`[data-testid="finding-card"][data-finding="${id}"]`);
       await expect(card).toBeVisible();
-      if ((await card.getAttribute("data-review-status")) !== "undecided") continue;
       await card.getByRole("textbox").fill("checked by hand");
       await card.getByRole("button", { name: "False positive" }).click();
       await expect(card).toHaveAttribute("data-review-status", "false_positive");
     }
 
-    const stored = await (await page.request.get(`/api/v1/runs/${RUN}/findings`)).json();
-    const left = stored.filter(
-      (f: { shadow?: boolean; review_status: string }) =>
-        !f.shadow && f.review_status === "undecided"
-    );
-    if (left.length === 0) return;
+    if ((await undecidedIds(page)).length === 0) return;
     await page.reload();
     await page.getByRole("button", { name: /^Findings/ }).click();
     await expect(page.getByTestId("finding-card")).toHaveCount(expected);
@@ -81,9 +83,16 @@ test("a run is frozen only once every finding is decided and every gap acknowled
 }) => {
   await decideEveryFinding(page);
 
-  await page.goto(`/runs/${RUN}/report`);
+  // The server has not frozen anything yet, so say so before reading the screen: if the
+  // page disagrees, what failed is the reading and not the gate, and the two are worth
+  // telling apart.
+  const before = await page.request.get(`/api/v1/runs/${RUN}?at=${Date.now()}`);
+  expect((await before.json()).finalized, "the run should not be frozen yet").toBe(false);
+
   const generate = page.getByRole("button", { name: /Generate final report/ });
   const coverage = page.getByTestId("coverage-card");
+
+  await page.goto(`/runs/${RUN}/report`);
   await expect(coverage).toBeVisible();
 
   // Deciding the findings is not enough while a gap is outstanding.
@@ -132,16 +141,21 @@ test("a run is frozen only once every finding is decided and every gap acknowled
   ]);
 
   await expect
-    .poll(async () => (await (await page.request.get(`/api/v1/runs/${RUN}`)).json()).finalized, {
-      timeout: 30_000,
-      message: "the run never became frozen after the confirmation",
-    })
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/v1/runs/${RUN}?at=${Date.now()}`)).json()).finalized,
+      {
+        timeout: 30_000,
+        message: "the run never became frozen after the confirmation",
+      }
+    )
     .toBe(true);
 
-  // Reload rather than assert the screen live-updates: it reads the run when it
-  // mounts, and what matters is that the run is frozen and stays frozen.
+  // Reload rather than assert the screen live-updates: it reads the run when it mounts,
+  // and what matters is that the run is frozen and stays frozen. The badge appears once
+  // that read returns, so wait for it rather than for the reload to resolve.
   await page.reload();
-  await expect(page.getByText("frozen")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("frozen").first()).toBeVisible({ timeout: 30_000 });
   await expect(generate).toHaveCount(0);
 
   // And the frozen report states the limits of what was verified. Read it from the
