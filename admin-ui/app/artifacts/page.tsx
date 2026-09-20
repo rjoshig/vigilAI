@@ -935,6 +935,10 @@ function SampleCard({
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
           />
+          <FieldEffect
+            kind="model"
+            note="Read by the model while it maps this scope's requirements onto the report — not during a validation run. Say how this variant differs from the others, which is what the model cannot see from the workbook alone."
+          />
           <div className="flex gap-1">
             <Button
               size="xs"

@@ -13,7 +13,7 @@
 import { Sparkles } from "lucide-react";
 import * as React from "react";
 
-import { Explain } from "@/components/explain";
+import { Explain, FieldEffect } from "@/components/explain";
 import { BulkBar } from "@/components/bulk-bar";
 import { GuideEditor } from "@/components/guide-editor";
 import {
@@ -466,6 +466,11 @@ function EntryCard({
             <b>The model asks:</b> {entry.question}
           </div>
         ) : null}
+        <FieldEffect
+          kind="model"
+          className="mb-2"
+          note="A confirmed mapping is read by the model when it traces this requirement and when it checks a finding, so it stops re-deriving where a requirement answers to on every run. Code also compiles it into a check it runs itself."
+        />
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_6rem]">
           <div className="flex flex-col gap-1">
             <Label htmlFor={`m-cfg-${entry.id}`}>Configuration path</Label>

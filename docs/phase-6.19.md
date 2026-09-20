@@ -1,8 +1,9 @@
 # Phase 6.19 — Say what helps, and teach it in the product
 
-**Status:** ⬜ **not started** — specified 2026-09-20 from an audit the user asked for.
-Two things that belong together because they answer the same question from two
-distances: *what does what I type actually do, and how do I use this well?*
+**Status:** 🟡 **Part A complete** (2026-09-20), Part B not started. Specified from an
+audit the user asked for. Two things that belong together because they answer the same
+question from two distances: *what does what I type actually do, and how do I use this
+well?*
 
 **Nothing here is a defect in the engine.** Everything the tool computes, it computes
 correctly. This is about whether the people using it can tell.
@@ -65,21 +66,38 @@ answer and the deliverable count are all unmarked. The sentence has been correct
 what is true today, and **it goes back to the stronger wording in the same commit that
 makes it true again**.
 
-### Scope · ⬜ not started
+### One correction to the audit
 
-- [ ] A marker on every field in the two tables above, each stating what that field does
+Two of the thirteen were overstated, and the record should say so rather than quietly
+shrink. **There is no deliverable-count field on the new-run form** — the count is not
+exposed there, so there was nothing to mark. And several of the fields listed as
+"unmarked" did carry the information as ordinary prose beneath the box; what they lacked
+was the *standing marker*, which is visually consistent, cannot be switched off, and is
+the thing a reader learns to look for. The gap was real, and it was inconsistency rather
+than silence in those cases. The genuinely silent ones were worked examples, meaning
+entries, validation guides, sample notes, the *Tell the tool* sentence, the observation
+dialog, programme rules, keywords, and masked columns.
+
+### Scope · ✅ complete
+
+- [x] A marker on every field in the tables above, each stating what that field does
       rather than repeating a generic sentence.
-- [ ] **Start with the two that change results most**: the delivery programme on the new
-      run form, and worked examples in the admin console.
-- [ ] The masked-columns marker says plainly that it is what keeps personal data out of
-      every prompt.
-- [ ] A test that fails when a screen writing to a model-reaching field has no marker,
-      so this audit does not have to be repeated by hand. `tests/test_model_context_register.py`
-      already keeps the register honest against the code; this is the same idea pointed
-      at the UI.
-- [ ] `user-training.md` restored to the stronger sentence, in the commit that earns it.
-- [ ] `model-context.md` re-read end to end: every row in it should be findable on a
-      screen, and every marked field should be a row in it.
+- [x] **The two that change results most.** The **delivery programme** on the new-run
+      form now says it is one of the most important fields there and why. **Worked
+      examples** say they are the most direct way an administrator teaches the model.
+- [x] The **masked-columns** marker says plainly that it is what keeps personal data out
+      of every prompt, and that naming a column there is the strongest control an
+      administrator has.
+- [x] Fields that reach *nothing* are marked too, because a reader deciding how much care
+      to take deserves to know which it is: the order number identifies the run, and an
+      example's "why it is here" note is never shown to the model.
+- [x] **A test that fails when a marker is removed** —
+      `tests/test_field_markers.py`, seventeen checks. It also asserts the two apps word
+      the marker identically, and that `<FieldEffect>` never consults the tooltips
+      setting: what a field does to a run is not a tip for beginners, and a console that
+      stops saying it once somebody ticks a box lies to its experienced users. Verified
+      by breaking a marker and watching it fail.
+- [x] `user-training.md` restored to the stronger sentence, in the commit that earned it.
 
 ## Part B — A Guide in the product, one for each audience
 

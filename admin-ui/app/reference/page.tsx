@@ -31,6 +31,7 @@ import {
   Table,
 } from "@/components/ui/primitives";
 import { BulkBar } from "@/components/bulk-bar";
+import { FieldEffect } from "@/components/explain";
 import { FieldLabelsCard } from "@/components/field-labels-card";
 import { DeleteButton } from "@/components/confirm-delete";
 import { api, ApiError } from "@/lib/api";
@@ -244,6 +245,11 @@ export default function ReferencePage() {
               Matched against report column names. A trailing <span className="mono">*</span> makes
               it a prefix. There is no unmask control in v1.
             </p>
+            <FieldEffect
+              kind="code"
+              className="mb-3"
+              note="This list is what keeps personal data out of every prompt. A column named here is replaced as the workbook is read, so an unmasked value never exists downstream — not in a prompt, not in a log, not in the database. Naming a column here is the strongest control you have."
+            />
 
             {!masked ? (
               <Skeleton className="h-32" />

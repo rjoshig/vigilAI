@@ -406,6 +406,10 @@ function ScopeCard({
             ignored when deciding what a delivery looks like, and a word the business uses generally
             (snapshot, historical, monthly) belongs in no list at all.
           </span>
+          <FieldEffect
+            kind="code"
+            note="Code greps your documents for these; the model is not involved. They matter twice over: a run declared as this programme with none of them gets a finding, and finding none is also what makes the tool read the delivery to work out what it is."
+          />
           <KeywordSuggestionsStrip code={scope.code} onAccepted={onChanged} />
         </div>
         <div className="flex flex-col gap-1">
@@ -667,6 +671,10 @@ function RuleForm({
           placeholder="What every delivery in this programme has to do, in plain words."
           value={text}
           onChange={(event) => setText(event.target.value)}
+        />
+        <FieldEffect
+          kind="model"
+          note="The model reads every delivery in this programme against this sentence and names what it breaks. The strictness beside it decides how serious that is, and code applies it — the model never sets a severity. Write it as one plain obligation rather than a paragraph."
         />
       </div>
       <div className="flex gap-1.5">

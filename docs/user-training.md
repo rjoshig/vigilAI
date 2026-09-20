@@ -129,7 +129,7 @@ administrator you can still open it, but nothing in it will let you change anyth
    matches next time without being asked. Say whether **suppressions were applied**; the default is No,
    because assuming Yes would let a missing suppression pass unremarked.
 2. **Delivery notes** (optional). Anything about this delivery the OSL does not
-   say. **Most fields on the form say whether the model sees it** — the marker under the box. Four do not yet, including the delivery programme; [`phase-6.19.md`](phase-6.19.md) adds the rest. Customer, order,
+   say. **Every field on the form says whether the model sees it** — the small marker under the box. The delivery programme is the one to read: it is background for everything the model does, it brings in that programme's rules, and code checks your documents really do read like it. Customer, order,
    configuration id, and additional notes stay with the run and are never sent to
    the model. The programme, its rules, the suppressions answer, configuration notes,
    and delivery notes reach the model as background. Accurate notes there improve

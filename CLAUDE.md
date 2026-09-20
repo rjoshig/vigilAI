@@ -85,7 +85,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.16 | Numbers that mean something: the delivery programme and a thirty-day count on the runs screen, which engine produced each finding, and a dated report of the manual hours displaced | `docs/phase-6.16.md` | ✅ complete |
 | 6.17 | What is left, gathered in one place: measure the programme keyword check, the live cap countdown, how scope reaches the compliance locator, and the two standing touchpoints that have fallen behind | `docs/phase-6.17.md` | 🟡 in progress — 6.17a measured and closed |
 | 6.18 | Trust that is earned, measured, and revocable: findings that learn their own severity from people's verdicts, a maturity level an administrator sets, trustworthiness as a dated number, nothing hidden without a record, and a random sample reviewed in full forever | `docs/phase-6.18.md` | ⬜ not started |
-| 6.19 | Say what helps, and teach it in the product: the "Helps the AI" marker on every field that reaches the model or decides what it is shown, and a Guide in each app's sidebar | `docs/phase-6.19.md` | ⬜ not started |
+| 6.19 | Say what helps, and teach it in the product: the "Helps the AI" marker on every field that reaches the model or decides what it is shown, and a Guide in each app's sidebar | `docs/phase-6.19.md` | 🟡 part A (the markers) complete; the in-app Guide not started |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same

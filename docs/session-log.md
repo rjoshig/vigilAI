@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/pending-items-review-f35uek`, pushed and level with the remote; **no PR yet, by request**. Phase 6.17 complete; 6.18a and 6.18f built. **[`phase-6.19.md`](phase-6.19.md) is specified from an audit and not started:** thirteen fields reach the model or decide what it is shown and carry no marker, and the training documents sit in a repository nobody using the tool will open. **Next concrete action: 6.19, starting with the two markers that change results most** — the delivery programme on the new-run form and worked examples in the console. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
+| Branch | `claude/pending-items-review-f35uek`, pushed; **no PR yet, by request**. Phase 6.17 complete; 6.18a and 6.18f built; **6.19 part A complete** — every field that reaches the model, or decides what it is shown, now says so, and a test fails if a marker is removed. **Next concrete action: 6.19 part B**, the Guide in each app's sidebar, which the user has deferred. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -103,6 +103,54 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (the markers, fixed)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.19 part A complete,
+gates green at 1531 tests and all ten UI gates across both apps.
+
+**Every gap the audit found is closed.** Markers added to worked examples (the screen
+that most directly teaches the model and had none), meaning entries, validation guides,
+sample notes, the *Tell the tool* sentence, the observation dialog in the user app,
+programme rules, keywords, masked columns, the delivery programme, the suppressions
+answer and the order number.
+
+The two written most carefully are the two that matter most. **Delivery programme** now
+says it is one of the most important fields on the form and why — background for
+everything the model does, it brings in that programme's rules, and code checks the
+documents really do read like it. **Masked columns** says naming a column there is the
+strongest control an administrator has, which is the marker the product most needed and
+least had.
+
+Fields that reach *nothing* are marked too, because somebody deciding how much care to
+take deserves to know which it is: the order number identifies the run, and an example's
+"why it is here" note is never shown to the model.
+
+**`tests/test_field_markers.py`**, seventeen checks, so the audit never has to be done by
+hand again. It also asserts the two apps word the marker identically — a user told their
+note *helps the AI* and an administrator told the same thing differently are being given
+two products to reason about — and that `<FieldEffect>` never consults the tooltips
+setting, because what a field does to a run is not a tip for beginners and a console that
+stops saying it once somebody ticks a box lies to its experienced users.
+
+**Two corrections to my own audit**, recorded in the phase doc rather than quietly
+dropped. There is **no deliverable-count field on the new-run form**, so there was
+nothing to mark. And several fields I listed as unmarked did carry the information as
+prose beneath the box; what they lacked was the standing marker. The gap was real, but in
+those cases it was inconsistency rather than silence, and the phase doc now says which
+were genuinely silent.
+
+**A self-inflicted near-miss worth recording.** I verified the new test by breaking a
+marker and watching it fail — then restored the file with `git checkout`, which threw
+away the *uncommitted* marker I had just added. The full suite caught it. Verifying a
+guard test by breaking the thing it guards is right; doing it on unstaged work is not.
+
+**`user-training.md`'s claim is true again**: every field on the form says whether the
+model sees it, restored in the commit that earned it.
+
+**Next concrete action:** 6.19 part B, the Guide in each sidebar, deferred by the user.
 
 ---
 

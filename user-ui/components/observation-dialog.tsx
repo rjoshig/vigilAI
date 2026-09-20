@@ -17,6 +17,7 @@ import { ChevronDown, ChevronRight, Lightbulb, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
+import { FieldEffect } from "@/components/explain";
 import { TrainAiTag } from "@/components/train-ai-tag";
 import {
   Button,
@@ -349,6 +350,10 @@ export function ObservationDialog({
               Write no account numbers, names, or other personal data, here or below. Saving is
               refused when the text looks like it carries any.
             </span>
+            <FieldEffect
+              kind="model"
+              note="This is how you teach the tool. Your sentence goes to an administrator, who has the model draft a rule from it; code checks the draft and a person approves it before it counts. The clearer you are about what should have happened, the better the rule."
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

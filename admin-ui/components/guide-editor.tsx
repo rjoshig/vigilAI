@@ -12,6 +12,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 
+import { FieldEffect } from "@/components/explain";
 import { Badge, Button, Input, Label, Select, Textarea } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import type { ArtifactType, GuideComparison, GuideEntry } from "@/lib/types";
@@ -190,6 +191,10 @@ export function GuideEditor({ type, busy, onSaved }: GuideEditorProps) {
               placeholder="The delivered record count"
               value={entry.meaning}
               onChange={(event) => update(index, { meaning: event.target.value })}
+            />
+            <FieldEffect
+              kind="model"
+              note="Read by the model when it traces a requirement into this report and when it checks a finding, so it knows what a cell is for rather than guessing from its label. A complete entry also compiles into a check that code runs."
             />
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
