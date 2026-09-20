@@ -292,6 +292,11 @@ def list_observations(
         statement = statement.where(models.TrainingObservation.kind != "config_note")
     if obs_status:
         statement = statement.where(models.TrainingObservation.status == obs_status)
+    else:
+        # A withdrawn observation is gone from every screen: that is what withdrawing
+        # is for. The row survives and is still reachable by asking for that status
+        # explicitly, because nothing in the training record is deleted.
+        statement = statement.where(models.TrainingObservation.status != "withdrawn")
     if kind:
         statement = statement.where(models.TrainingObservation.kind == kind)
     return [_observation_out(row, session) for row in session.execute(statement).scalars()]
@@ -304,7 +309,12 @@ def edit_observation(
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> ObservationOut:
-    """Let the author fix what they wrote, until an administrator picks it up.
+    """Correct an observation. Administrators only (Phase 6.14k).
+
+    Feedback is submitted once. The author's form locks after they send it, because an
+    observation an administrator has already read — and may have drafted a rule from —
+    should not change underneath them. An administrator can still correct the wording,
+    and can withdraw it so the author may write a fresh one.
 
     Args:
         observation_id: The observation.
@@ -318,7 +328,7 @@ def edit_observation(
 
     Raises:
         HTTPException: 404 when it does not exist, 409 once it has been queued, and
-            403 when someone else wrote it.
+            403 when the caller is not an administrator.
     """
     _require_enabled(session)
     row = session.get(models.TrainingObservation, observation_id)
@@ -329,8 +339,7 @@ def edit_observation(
             status.HTTP_409_CONFLICT,
             f"this observation is {row.status} and can no longer be edited",
         )
-    if row.author_user_id is not None and user.id != row.author_user_id and not user.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "only the author can edit this")
+    require_admin(user)
 
     try:
         assert_clean(f"{payload.statement}\n{payload.expectation}")
@@ -345,6 +354,65 @@ def edit_observation(
     row.kind = payload.kind
     row.version += 1
     session.flush()
+    return _observation_out(row, session)
+
+
+@router.post("/admin/observations/{observation_id}/withdraw", response_model=ObservationOut)
+def withdraw_observation(
+    observation_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> ObservationOut:
+    """Take an observation out of the queue so its author can write a fresh one.
+
+    What an administrator reaches for when somebody submitted the wrong thing: the
+    wrong finding, a half-finished sentence, a note meant for a colleague. It leaves
+    the queue and leaves the author's view, and the author is free to submit again.
+
+    **Withdrawn, not deleted.** Nothing in the training record is ever deleted
+    (CLAUDE.md hard rule 8): what somebody said is worth more than the row it occupies,
+    and a record that can be made to disappear is not a record. Withdrawing achieves
+    what deleting was wanted for — it is gone from every screen and the slot is free —
+    while the row, its author and the reason survive.
+
+    Distinct from **rejecting**, which is a judgement that the observation was
+    considered and not acted on. Withdrawing says it should not have been submitted at
+    all, and invites a replacement.
+
+    Args:
+        observation_id: The observation.
+        session: The request's session.
+        user: The administrator withdrawing it.
+
+    Returns:
+        The observation, now withdrawn.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 once a rule has been drafted
+            from it — at that point rejecting the candidate is the honest move.
+    """
+    _require_enabled(session)
+    require_admin(user)
+    row = session.get(models.TrainingObservation, observation_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such observation")
+    if row.status not in ("new", "rejected"):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"this observation is {row.status}; a rule has been drafted from it, so "
+            "reject the candidate rather than withdrawing what it came from",
+        )
+    row.status = "withdrawn"
+    row.status_note = f"withdrawn by {user.name}"
+    session.flush()
+    repository.audit(
+        session,
+        "admin.observation_withdrawn",
+        detail=row.statement[:80],
+        user_id=user.id,
+        actor=user.name,
+    )
+    _LOG.info("observation %d withdrawn by %s", row.id, user.name)
     return _observation_out(row, session)
 
 

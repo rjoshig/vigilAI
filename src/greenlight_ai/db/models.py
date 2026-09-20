@@ -876,14 +876,16 @@ class TrainingObservation(Base):
     customer_name: Mapped[str] = mapped_column(sa.String(200), default="", index=True)
     scope_code: Mapped[str] = mapped_column(sa.String(20), default="")
 
-    #: new · synthesized · rejected. Forward only.
+    #: new · synthesized · rejected · withdrawn. Forward only. ``withdrawn`` means
+    #: an administrator took it out of the queue so its author could write a fresh
+    #: one — the row survives, because nothing in the training record is deleted.
     status: Mapped[str] = mapped_column(sa.String(20), default="new", index=True)
     status_note: Mapped[str] = mapped_column(sa.Text, default="")
     #: Which candidate it fed, set when it is synthesized. The row itself is untouched.
     candidate_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
     synthesized_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
-    #: Bumped on every edit; an observation is editable by its author until an
-    #: administrator queues it, and the audit trail has to survive the convenience.
+    #: Bumped on every edit. Feedback is submitted once: after that only an
+    #: administrator can correct the wording, and the audit trail has to survive it.
     version: Mapped[int] = mapped_column(sa.Integer, default=1)
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
     updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
