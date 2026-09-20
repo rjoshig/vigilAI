@@ -168,6 +168,11 @@ export function ObservationDialog({
   // The row this form is now editing: the one passed in, or the one it just created.
   // Pressing Save a second time used to create a second observation (Phase 6.13a).
   const [current, setCurrent] = React.useState<Observation | undefined>(existing);
+  // Feedback is submitted once. After that the form shows what was sent, greyed and
+  // read-only: an observation an administrator has already read and drafted a rule
+  // from should not change underneath them. A mistake is fixed by asking an
+  // administrator to delete it, which frees the person to write a fresh one.
+  const locked = Boolean(current);
   // Anchors are state: a chip can be removed, and "say this rule is wrong" adds one.
   const [pointing, setPointing] = React.useState<Anchor[]>(existing ? existing.anchors : anchors);
   const statementRef = React.useRef<HTMLTextAreaElement>(null);
@@ -248,15 +253,16 @@ export function ObservationDialog({
         <CardHeader className="border-b">
           <CardTitle id="observation-title" className="flex items-center gap-1.5">
             <Lightbulb className="h-4 w-4 text-primary" />
-            {current ? "Your observation" : "What should this check?"}
+            {locked ? "Your observation — submitted" : "What should this check?"}
             <TrainAiTag />
           </CardTitle>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-3 pt-4">
           <p className="text-xs text-muted-foreground">
-            This never runs on its own. An administrator reviews what you write and the model drafts
-            a rule they approve.
+            {locked
+              ? "Submitted, and locked so it cannot change while an administrator is reading it. If you need to correct something, ask an administrator to delete it and you can write a fresh one."
+              : "This never runs on its own, and you submit it once. An administrator reviews what you write and the model drafts a rule they approve."}
           </p>
 
           {context ? (
@@ -332,6 +338,7 @@ export function ObservationDialog({
               What should the tool check?<span className="text-destructive"> *</span>
             </Label>
             <Textarea
+              disabled={locked}
               id="observation-statement"
               ref={statementRef}
               value={statement}
@@ -347,6 +354,7 @@ export function ObservationDialog({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="observation-expectation">What do you expect to see?</Label>
             <Input
+              disabled={locked}
               id="observation-expectation"
               value={expectation}
               onChange={(event) => setExpectation(event.target.value)}
@@ -380,6 +388,7 @@ export function ObservationDialog({
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="observation-kind">What kind of thing is this?</Label>
                 <Select
+                  disabled={locked}
                   id="observation-kind"
                   value={kind}
                   onChange={(event) => setKind(event.target.value as ObservationKind)}
@@ -394,6 +403,7 @@ export function ObservationDialog({
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="observation-severity">If this is broken, how serious is it?</Label>
                 <Select
+                  disabled={locked}
                   id="observation-severity"
                   value={severity}
                   onChange={(event) => setSeverity(event.target.value as Severity)}
@@ -408,6 +418,7 @@ export function ObservationDialog({
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="observation-scope">Where should it apply?</Label>
                 <Select
+                  disabled={locked}
                   id="observation-scope"
                   value={scope}
                   onChange={(event) => setScope(event.target.value as ObservationScope)}
@@ -426,16 +437,17 @@ export function ObservationDialog({
         <div className="flex items-center justify-end gap-2 border-t p-4">
           {tooShort ? (
             <span className="mr-auto text-[0.7rem] text-muted-foreground">
-              Write at least a few words before saving.
+              Write at least a few words before submitting.
             </span>
           ) : null}
           <Button variant="ghost" onClick={onClose}>
-            {saved ? "Close" : "Cancel"}
+            {locked ? "Close" : "Cancel"}
           </Button>
-          <Button disabled={tooShort || saving} onClick={() => void save()}>
-            <Lightbulb className="h-4 w-4" />{" "}
-            {saving ? "Saving…" : current ? "Save changes" : "Save observation"}
-          </Button>
+          {locked ? null : (
+            <Button disabled={tooShort || saving} onClick={() => void save()}>
+              <Lightbulb className="h-4 w-4" /> {saving ? "Submitting…" : "Submit observation"}
+            </Button>
+          )}
         </div>
       </Card>
     </div>
