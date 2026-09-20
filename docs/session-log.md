@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev` == `main`; next work on `feature/browser-tests` |
+| Branch | `dev` == `main` (2026-09-20). **Next task: browser tests in CI** on `feature/browser-tests`, cut from `main` — see "Next concrete action" below |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,23 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (hand-off)
+
+`dev` and `main` are identical and every feature branch is merged. The next task, in
+the agreed order, is **browser tests in CI**: Playwright end-to-end tests over both
+apps against the seeded stack with the scripted model (`LLM_PROVIDER=mock`,
+`scripts/seed_demo.py`), wired into the manual-dispatch CI workflow. Cover: submit a
+run with parts and delivery context, review and finalize, download the PDF, sign in
+when login is on, work the training queue, change a setting, act on a rule with the
+typed word, Map on the Meaning screen (mock), the four palettes, a narrow viewport.
+Branch `feature/browser-tests` from `main`; PR to `dev`; promote.
+
+Skipped for now by decision: ownership/notifications. **Target PC only:** Phase 7,
+the real benchmark on the in-house gateway, `docker compose` verification, the
+Postgres load test, Meaning on the real samples.
 
 ---
 
