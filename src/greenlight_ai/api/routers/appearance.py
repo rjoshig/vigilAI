@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from greenlight_ai.api.deps import get_session
-from greenlight_ai import announcements
+from greenlight_ai import announcements, availability
 from greenlight_ai.config import store
 from greenlight_ai.config.registry import SETTINGS_BY_KEY
 
@@ -40,6 +40,14 @@ class AppearanceOut(BaseModel):
     tooltips: bool = True
     #: The line under the mark in both apps' sidebars (Phase 6.14h).
     tagline: str = ""
+    #: Whether the user app should show a maintenance page instead of itself
+    #: (Phase 6.14j). The console ignores this, so the switch can always be reached.
+    maintenance: bool = False
+    #: Whether a new run may be submitted. False while submissions are stopped or
+    #: maintenance is on, so the form can say so before somebody uploads seven files.
+    accepting: bool = True
+    #: What to tell somebody who is turned away.
+    unavailable_message: str = ""
 
 
 @router.get("", response_model=AppearanceOut)
@@ -52,12 +60,16 @@ def appearance(session: Session = Depends(get_session)) -> AppearanceOut:
     Returns:
         The resolved appearance settings (ADR-023: console over ``.env`` over default).
     """
+    state = availability.read(session)
     return AppearanceOut(
         theme=str(store.resolve(session, "ui.theme").value),
         locked=bool(store.resolve(session, "ui.theme_locked").value),
         palettes=list(SETTINGS_BY_KEY["ui.theme"].choices),
         tooltips=bool(store.resolve(session, "ui.tooltips").value),
         tagline=str(store.resolve(session, "ui.tagline").value),
+        maintenance=state.maintenance,
+        accepting=state.accepting,
+        unavailable_message=state.message if not state.accepting else "",
     )
 
 

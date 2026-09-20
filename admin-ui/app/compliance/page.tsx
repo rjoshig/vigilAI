@@ -11,6 +11,7 @@
 
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -134,6 +135,17 @@ export default function CompliancePage() {
   return (
     <>
       <PageHeader
+        explain={
+          <Explain label="What compliance rules are for">
+            A compliance rule asks whether the configuration <i>implements</i> something — an
+            opt-out list applied, a suppression in place. Code looks for it at a JSON path and
+            reports when it is absent.
+            <br />
+            <br />
+            Not here: a rule about a <i>report&rsquo;s values</i> is a <b>check</b>; a rule the
+            model reads and grades is a <b>programme rule</b>.
+          </Explain>
+        }
         title="Compliance & scope"
         description="Compliance rules must be present in every config in scope, even when the OSL never mentions them. Reverse-pass categories decide which config elements are checked back against the OSL. Evaluated by code on every run; nothing here is sent to the model."
       />

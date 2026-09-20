@@ -16,6 +16,7 @@ import {
   Lock,
   RefreshCw,
   ShieldCheck,
+  X,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -115,6 +116,7 @@ export default function ReviewPage() {
   }, [loadRun]);
 
   const active = run ? isActive(run.status) : false;
+  const [cancelling, setCancelling] = React.useState(false);
   React.useEffect(() => {
     if (!active) return;
     const timer = setInterval(() => void loadRun(), POLL_MS);
@@ -299,9 +301,42 @@ export default function ReviewPage() {
           </CardHeader>
           <CardContent>
             <StageProgress stages={run.stages} currentStage={run.current_stage} />
-            <p className="mt-3 text-xs text-muted-foreground">
-              Updating every 3 seconds. The review screen opens when the pipeline finishes.
-            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Updating every 3 seconds. The review screen opens when the pipeline finishes.
+              </p>
+              {run.status === "queued" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={cancelling}
+                  onClick={() =>
+                    void (async () => {
+                      setCancelling(true);
+                      try {
+                        await api.cancelRun(run.id);
+                        await loadRun();
+                      } catch (caught) {
+                        setError(
+                          caught instanceof ApiError ? caught.detail : "Could not cancel the run."
+                        );
+                      } finally {
+                        setCancelling(false);
+                      }
+                    })()
+                  }
+                >
+                  <X className="mr-1 h-4 w-4" aria-hidden />
+                  {cancelling ? "Cancelling…" : "Cancel this run"}
+                </Button>
+              ) : null}
+            </div>
+            {run.status === "queued" ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Nothing has been sent to the model yet, so cancelling costs nothing and keeps your
+                files — clone it with the correction rather than uploading again.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

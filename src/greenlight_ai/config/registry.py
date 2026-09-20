@@ -59,6 +59,7 @@ GROUPS: Final[tuple[str, ...]] = (
     "Training",
     "Login",
     "Throughput",
+    "Availability",
     "Uploads",
     "Retention",
     "Appearance",
@@ -418,6 +419,66 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         help="The look every browser starts on, in both apps. A person's own choice, "
         "where allowed, wins for that browser.",
         choices=("classic-teal-navy", "classic-teal", "light-blue-yellow", "default"),
+    ),
+    # --- availability (Phase 6.14j) ------------------------------------------------
+    SettingSpec(
+        key="queue.grace_seconds",
+        env="GREENLIGHT_AI_QUEUE_GRACE_S",
+        label="Seconds to change your mind",
+        group="Availability",
+        kind="int",
+        default=30,
+        minimum=0,
+        maximum=600,
+        help="How long a submitted run waits before the worker may pick it up. During "
+        "that window the person who submitted it can cancel, having spent nothing. "
+        "Set it to 0 to start runs immediately.",
+    ),
+    SettingSpec(
+        key="queue.paused",
+        env="GREENLIGHT_AI_QUEUE_PAUSED",
+        label="Hold the queue",
+        group="Availability",
+        kind="bool",
+        default=False,
+        help="Submissions are accepted and queue up as usual, and nothing new is "
+        "started until you release it. For a model endpoint that is down, or a window "
+        "where you would rather nothing ran. Work already running finishes.",
+    ),
+    SettingSpec(
+        key="submissions.paused",
+        env="GREENLIGHT_AI_SUBMISSIONS_PAUSED",
+        label="Stop accepting submissions",
+        group="Availability",
+        kind="bool",
+        default=False,
+        help="New runs are refused with the message below; everything already queued "
+        "still runs. Stronger than holding the queue: use it when you do not want work "
+        "piling up behind a hold.",
+    ),
+    SettingSpec(
+        key="maintenance.mode",
+        env="GREENLIGHT_AI_MAINTENANCE",
+        label="Maintenance mode",
+        group="Availability",
+        kind="bool",
+        default=False,
+        help="The user app shows a maintenance page instead of itself. This console "
+        "keeps working, so you can always switch it back off. It also stops "
+        "submissions and holds the queue for as long as it is on.",
+    ),
+    SettingSpec(
+        key="maintenance.message",
+        env="GREENLIGHT_AI_MAINTENANCE_MESSAGE",
+        label="What to tell people",
+        group="Availability",
+        kind="str",
+        default=(
+            "Greenlight AI is briefly unavailable for maintenance. Runs already "
+            "submitted are safe and will continue when it returns."
+        ),
+        help="Shown on the maintenance page and when a submission is refused. Say when "
+        "you expect to be back, if you know.",
     ),
     SettingSpec(
         key="ui.tagline",

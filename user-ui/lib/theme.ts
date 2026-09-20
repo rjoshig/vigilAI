@@ -51,6 +51,12 @@ export interface Appearance {
   tooltips: boolean;
   /** The line under the mark in the sidebar (Phase 6.14h). */
   tagline: string;
+  /** Whether the user app should show a maintenance page (Phase 6.14j). */
+  maintenance: boolean;
+  /** Whether a new run may be submitted right now. */
+  accepting: boolean;
+  /** What to tell somebody who is turned away. */
+  unavailableMessage: string;
 }
 
 /** Narrow a value to a known palette, falling back to the brand one. */
@@ -82,6 +88,12 @@ export function parseAppearance(body: unknown, fallback: Palette): Appearance {
     // reach the API still shows them rather than silently going quiet.
     tooltips: record.tooltips !== false,
     tagline: typeof record.tagline === "string" ? record.tagline : "",
+    // Default to available: a page that cannot reach the API should not tell
+    // somebody the tool is down when it may simply be the page that is.
+    maintenance: record.maintenance === true,
+    accepting: record.accepting !== false,
+    unavailableMessage:
+      typeof record.unavailable_message === "string" ? record.unavailable_message : "",
   };
 }
 
@@ -97,6 +109,9 @@ export async function fetchAppearance(): Promise<Appearance> {
     locked: true,
     tooltips: true,
     tagline: "",
+    maintenance: false,
+    accepting: true,
+    unavailableMessage: "",
   };
   const base = process.env.GREENLIGHT_AI_API_URL ?? "http://127.0.0.1:8000";
   const controller = new AbortController();

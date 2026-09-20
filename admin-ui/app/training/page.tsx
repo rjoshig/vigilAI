@@ -9,6 +9,7 @@
 import { GraduationCap, Sparkles } from "lucide-react";
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -233,6 +234,18 @@ export default function TrainingPage() {
     return (
       <>
         <PageHeader
+          explain={
+            <Explain label="What the queue is">
+              What associates wrote, in their own words, waiting for you. The model drafts a rule
+              from each, code checks it for overlap with rules that already exist, and a replay
+              shows what it would have changed on past runs.
+              <br />
+              <br />
+              You are approving a case the model assembled, not writing a specification. Approving
+              lands it in <b>shadow</b>, where it runs and is counted and nobody sees it until you
+              activate it.
+            </Explain>
+          }
           title="Training"
           description="Turning what reviewers know into rules, one approval at a time."
         />

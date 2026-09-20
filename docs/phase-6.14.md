@@ -170,14 +170,15 @@ who knows the product can turn them off.
       **finalize is not blocked by an accepted
       mismatch**.
 
-### 6.14b — The credit date, resolved by label · 🟡 in progress
+### 6.14b — The credit date, resolved by label · ✅ complete
 
-- [~] A `field_labels` table: canonical field (a closed set, `credit_date` first), label,
+- [x] A `field_labels` table: canonical field (a closed set, `credit_date` first), label,
       scope token via `scopes.py`, active flag, author. The built-in spellings live in
       `DEFAULT_LABELS` and are always appended after the configured ones, so a
       deployment that configures none checks exactly as it did before the table
-      existed. **Outstanding:** version history and revert, which every other
-      definition has (ADR-029).
+      existed. Versioned per canonical field with revert, the way worked examples are
+      versioned per stage (ADR-029): the useful question is what we called the credit
+      date last month, not what happened to row 14.
 - [x] `resolve_labels(session, canonical, scope)` returns the labels in force for a run,
       most specific scope first, exactly as examples and samples already resolve.
 - [x] The stage-7 check finds a cell whose label resolves to `credit_date`, reads the
@@ -185,16 +186,14 @@ who knows the product can turn them off.
       `_date_spellings`. Outcomes: match (no finding), mismatch (medium, naming both
       dates and where the label was found), no labelled cell (falls back to today's
       search, and the finding says the fallback was used).
-- [ ] The artifact match check in 6.14a uses the same resolution, so the date is checked once,
-      before the model runs, and stage 7 keeps only what needs parsed reports.
-      **Outstanding:** the gate compares the configuration id and the customer, both of
-      which come from the one small JSON it already decodes. Moving the credit date
-      forward means parsing every report at submit — worth doing, and worth measuring
-      the added latency first rather than assuming it.
-- [ ] Admin console: the label set under Reference data, with the scope picker every
-      other scoped definition uses. **Outstanding:** the table and its resolution work
-      and are tested; there is no screen for them yet, so a new label is a database
-      row today.
+- [x] The artifact match check in 6.14a uses the same resolution, so the date is checked once,
+      before the model runs, and stage 7 keeps only what the pre-flight did not reach.
+      The latency was measured rather than assumed: about 17 ms per thousand rows, so
+      the pre-flight reads smallest-first, stops at the first hit, and gives up after
+      1.5s.
+- [x] Admin console: the label set under Reference data, with the scope picker every
+      other scoped definition uses, the built-in spellings listed read-only beside it,
+      and switch-off rather than delete for retiring one.
 - [x] Tests: resolution honours scope precedence; a mismatch is reported with both dates;
       an unlabelled report still gets the fallback and says so; an unparseable submitted
       date disables the check loudly rather than silently (the smaller defect listed in
@@ -210,11 +209,10 @@ who knows the product can turn them off.
       model** (background, never a requirement), **evaluated by code**, and **reference
       only**. One wording each, used everywhere. The five ad-hoc phrasings found in
       `configs`, `config-notes`, `checks`, `artifacts` and `scopes` are replaced by it.
-- [~] Artifact **AI context** and programme **standing instructions** carry the marker
-      and an explanation. The remaining prompt-reaching fields — configuration notes,
-      guide entries, meaning entries, programme rules, examples — are listed in
-      `docs/model-context.md` and still need theirs; **outstanding**, carried in the
-      session log.
+- [x] Artifact **AI context**, programme **standing instructions**, configuration
+      notes and every field on the new-run form carry the marker. Five effects rather
+      than three, so a field says whether it helps the AI, is checked by code, is read
+      by a person, is your own note, or identifies the run.
 - [ ] Where a cap applies, the field shows what is left, not just the limit — an
       administrator writing the eleventh configuration note should see that the block is
       full before they write it, not after (`MAX_BLOCK_CHARS`, `MAX_PER_STAGE`).
@@ -224,16 +222,16 @@ who knows the product can turn them off.
       that `docs/model-context.md` does not list fails the test, so the register cannot
       drift from the code silently.
 
-### 6.14d — Tooltips, on by default · 🟡 in progress
+### 6.14d — Tooltips, on by default · ✅ complete
 
 - [x] A setting `ui.tooltips` in the `Appearance` group, `default=True`, with its `.env`
       name. Off hides every tooltip in both apps; nothing else changes.
 - [x] A `<Tooltip>` primitive in `admin-ui/components/ui/primitives.tsx` and its user-ui
       twin: keyboard reachable, dismissible, readable by a screen reader, and absent from
       the DOM rather than merely hidden when the setting is off.
-- [~] Artifact types and Delivery programmes carry one, each naming what belongs
-      elsewhere from the overlap table in `docs/admin-training.md`. The other admin
-      screens still need theirs; **outstanding**, carried in the session log.
+- [x] Every admin screen carries one, through a slot on `PageHeader`, each naming what
+      belongs elsewhere from the overlap table in `docs/admin-training.md` — which is
+      the part that actually helps somebody choosing between sixteen surfaces.
 - [x] Tooltip text lives beside the field, not in a central bundle: a field and its
       explanation are edited in one place or they drift.
 - [x] Tests: the setting toggles them; a tooltip is reachable by keyboard; the browser
@@ -249,6 +247,24 @@ who knows the product can turn them off.
       commit: both currently describe a picker every user can reach.
 - [x] Tests: locked by default with no override; an unlocked console restores the picker
       in both apps.
+
+### 6.14j — Holding work, and taking it back · ✅ complete
+
+- [x] Four switches resolved by one module (`availability.py`): a change-your-mind
+      window, hold the queue, stop accepting submissions, and maintenance mode. Asking
+      whether the tool is accepting work is enough; maintenance implies the other two.
+- [x] The window reuses the queue's existing `run_after`, so it is not a new mechanism.
+      Inside it the submitter can cancel having spent nothing, and the files are kept so
+      the next step is cloning the run corrected.
+- [x] `POST /runs/{id}/cancel`, refused once a run has started: stopping halfway leaves
+      a half-validated delivery no reviewer can tell from a whole one.
+- [x] The worker claims nothing while the queue is held, and logs the hold once rather
+      than once per poll. Work already running finishes.
+- [x] A maintenance page in the user app that polls itself back to life. The console
+      ignores the switch — one you cannot reach to turn off is one that strands you.
+- [x] Tests: each switch on its own; that a held queue still accepts; that releasing it
+      runs the backlog; that a cancelled run never starts; that the console survives
+      maintenance; and the window itself, which the rest of the suite switches off.
 
 ## Acceptance criteria · ⬜ not started
 

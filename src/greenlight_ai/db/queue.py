@@ -276,6 +276,37 @@ class JobQueue:
         self._session.flush()
         return True
 
+    def cancel_jobs(self, run_id: int) -> bool | None:
+        """Drop a run's pending jobs, unless one has already been taken.
+
+        Args:
+            run_id: The run whose work should not happen.
+
+        Returns:
+            ``None`` when the pending jobs were dropped, and ``False`` when a job for
+            this run is already running — the caller then has a race to report rather
+            than a cancellation to make. Reported rather than forced, because a job
+            that has started has a worker holding it and killing that from here would
+            leave the run half done with nothing watching.
+        """
+        running = self._session.execute(
+            sa.select(sa.func.count())
+            .select_from(Job)
+            .where(Job.run_id == run_id, Job.status == "running")
+        ).scalar_one()
+        if int(running) > 0:
+            return False
+
+        pending = list(
+            self._session.execute(
+                sa.select(Job).where(Job.run_id == run_id, Job.status == "queued")
+            ).scalars()
+        )
+        for job in pending:
+            self._session.delete(job)
+        _LOG.info("dropped %d pending job(s) for run %d", len(pending), run_id)
+        return None
+
     def queue_position(self, run_id: int) -> int | None:
         """Report how many jobs are ahead of a run's job.
 

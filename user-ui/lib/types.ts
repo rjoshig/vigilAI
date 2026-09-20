@@ -5,12 +5,13 @@
 
 /** Where a run is in its lifecycle. */
 /**
- * A run's lifecycle. "held" means the artifacts disagree with what was submitted
+ * A run's lifecycle. "held" means the artifacts disagree with what was submitted;
+ * "cancelled" means the submitter took it back before it started (Phase 6.14j).
  * and somebody has to accept that before it starts (ADR-041); the files are
  * already stored, so nothing needs re-uploading.
  */
 export type RunStatus =
-  "draft" | "held" | "queued" | "running" | "needs_review" | "finalized" | "failed";
+  "draft" | "held" | "cancelled" | "queued" | "running" | "needs_review" | "finalized" | "failed";
 
 /** How serious a finding is. "review" means a person must look, not that it is wrong. */
 export type Severity = "high" | "medium" | "low" | "review";
