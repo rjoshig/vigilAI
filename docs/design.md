@@ -203,7 +203,7 @@ Cross-report number checks are defined by admins as data, not code. The LLM help
 | Report template | A sample Excel uploaded for one report type, such as number flow or billing. It documents where values live |
 | Named value | A pointer into a report: report type, sheet, and either a cell (H9) or a label lookup (the row where column A says "Billing count"). Each has a plain-English description. Label lookup is preferred because it survives inserted rows |
 | Check | An expression over named values, plus severity, a message, and the reasoning behind it |
-| Judgment check | For rules a formula cannot express. Holds an instruction and examples. The LLM receives only the named values and the reasoning, and returns pass, fail, or review. Use sparingly |
+| Judgment check | For rules a formula cannot express. Holds an instruction and the list of named values the model may see. The LLM receives only those values and the instruction — never a report — and returns pass, fail, or review; code records the verdict and sets the severity (ADR-039). One model call per run in scope; use sparingly |
 
 Example checks, using your cases:
 
@@ -245,7 +245,7 @@ These Postgres tables cover runs, history, configs, checks, cache, and stats. Fi
 | traces | id, run\_id, rule\_id, config\_element\_id, verdict, reason, confidence, edited\_by | Links between OSL requirements and config elements. Users can fix a wrong link, then re-check |
 | report\_templates | id, report\_type, filename, storage\_path, notes | Sample Excel per report type, uploaded in the admin-ui |
 | named\_values | id, name, report\_type, sheet, locator (jsonb: cell or label lookup), description | Pointers into reports that checks refer to by name |
-| check\_definitions | id, name, version, kind (expression, judgment), expression, instruction, reasoning, severity, scope, is\_active | Admin-defined cross-report checks, versioned |
+| check\_definitions | id, name, version, kind (expression, judgment), expression, instruction, value\_names, reasoning, severity, scope, is\_active | Admin-defined cross-report checks, versioned |
 | compliance\_rules | id, name, requirement (jsonb), scope, is\_active | Rules that must be present in every config in scope |
 | llm\_cache | key (content hash + model + prompt version), stage, result (jsonb), created\_at, hits | Stage cache so identical content is never sent to the LLM twice |
 | final\_reports | id, run\_id, html\_path, pdf\_path, verdict, generated\_by, generated\_at | The frozen one-page report per run |

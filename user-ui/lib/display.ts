@@ -139,6 +139,7 @@ export const FINDING_LABEL: Record<string, string> = {
   report_violates_rule: "Report violates rule",
   count_does_not_reconcile: "Count does not reconcile",
   cross_report_disagreement: "Cross-report disagreement",
+  judgment_failed: "Judgment check failed",
   profile_anomaly: "Profile anomaly",
   low_confidence_extraction: "Low-confidence extraction",
   could_not_evaluate: "Could not evaluate",

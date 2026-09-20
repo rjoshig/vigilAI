@@ -205,6 +205,9 @@ class CheckIn(BaseModel):
     kind: Literal["expression", "judgment"] = "expression"
     expression: str = ""
     instruction: str = ""
+    #: For a judgment check: the named values the model may see (ADR-039). Empty for
+    #: an expression check, which code evaluates without a model.
+    value_names: list[str] = Field(default_factory=list)
     reasoning: str = ""
     severity: Severity = "medium"
     scope: ScopeToken = scopes.EVERYWHERE

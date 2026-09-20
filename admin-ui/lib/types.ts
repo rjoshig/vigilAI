@@ -183,6 +183,8 @@ export interface CheckIn {
   kind: CheckKind;
   expression: string;
   instruction: string;
+  /** For a judgment check: the named values the model may see, and nothing else. */
+  value_names: string[];
   reasoning: string;
   severity: Severity;
   scope: string;

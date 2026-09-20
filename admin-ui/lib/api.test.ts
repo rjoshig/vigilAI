@@ -90,6 +90,7 @@ describe("the admin API client", () => {
       kind: "expression",
       expression: "billing_count <= delivered_count",
       instruction: "",
+      value_names: [],
       reasoning: "Billing must not exceed delivered.",
       severity: "high",
       scope: "all",

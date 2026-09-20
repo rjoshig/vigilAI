@@ -127,16 +127,16 @@ The audience is senior associates. The form gets faster, not wordier.
       coverage-gap path is written and **skips against the demo seed**, which has no run
       with a gap — see "Found on the way".
 
-### 6.13c — Judgment checks, finished under ADR-001 · ⬜ not started
+### 6.13c — Judgment checks, finished under ADR-001 · ✅ complete
 
-- [ ] `CheckDefinitionRow` gains `value_names` (a list; migration). The console's
+- [x] `CheckDefinitionRow` gains `value_names` (a list; migration). The console's
       judgment form asks *Which named values may the model see?*
-- [ ] Stage 7 resolves only those values, renders `name = value` lines, and calls the
+- [x] Stage 7 resolves only those values, renders `name = value` lines, and calls the
       registered `JUDGMENT_PROMPT`, cached like every call. `fail` → a `judgment_failed`
       finding at the check's severity; `review` or low confidence → severity review;
       `pass` → nothing; an unresolved value → `could_not_evaluate` as today. Counts toward
       the token budget; coverage records the reports the values came from.
-- [ ] The console keeps *use sparingly* and states the per-run call.
+- [x] The console keeps *use sparingly* and states the per-run call.
 
 ### 6.13d — Controlled examples for the model · ⬜ not started
 
@@ -171,17 +171,18 @@ The audience is senior associates. The form gets faster, not wordier.
 - [ ] The golden-set claim leaves the candidate model, the wire model and the setting's
       help text.
 
-### 6.13f — Documentation · ⬜ not started
+### 6.13f — Documentation · 🟡 in progress
 
-- [ ] ADR-038 (examples are worked examples, never rules; promotion needs a click; a
-      per-stage cap; part of the cache key), ADR-039 (judgment checks under ADR-001),
-      ADR-040 (shadow findings visible to administrators only, dismissible); ADR-021's
-      "precision becomes knowable in shadow" amended to say how.
+- [~] ADR-038 (examples are worked examples, never rules; promotion needs a click; a
+      per-stage cap; part of the cache key) lands with 6.13d. **Done in 6.13c:** ADR-039
+      (judgment checks under ADR-001), ADR-040 (shadow findings visible to administrators
+      only, dismissible), and ADR-021's item 6 amended to say how precision becomes
+      knowable in shadow.
 - [ ] `design.md`, `architecture.md`, `glossary.md`, `llm-privacy.md`, both training
       documents (the Train AI section rewritten for senior associates and the status
       chain), `gd-rollout-plan.md` stage 3.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · 🟡 in progress
 
 1. [ ] `LLM_VERIFY_LENSES=delivery,compliance` in the environment, with the database
    reachable, produces a run whose findings carry those two lens opinions.
@@ -196,7 +197,7 @@ The audience is senior associates. The form gets faster, not wordier.
 6. [ ] An administrator adds a worked example for extraction; the next run's extraction
    prompt contains it and its cache key differs; an example whose answer fails the schema
    is refused.
-7. [ ] A judgment check with two named values produces a finding when the model says
+7. [x] A judgment check with two named values produces a finding when the model says
    fail, a review item when it says review, and nothing when it says pass; code sets the
    severity.
 8. [ ] Replay of a field-constraint candidate reports the runs it would have fired on,

@@ -509,7 +509,10 @@ matters.
    false-positive flood costs reviewer trust that takes months to earn back. A fixed
    threshold was considered and rejected: a rule that fires rarely would wait forever
    for a sample it never gets, so the judgement is a person's and the evidence is
-   shown rather than summarised.
+   shown rather than summarised. *Amended 2026-09-20:* "in front of them" was a
+   promise without a screen until Phase 6.13b. The shadow findings are now listed per
+   rule on the administrator's Rules screen with a dismissal control; that is what the
+   dismissal rate is made of, and reviewers never see them (ADR-040).
 9. **The narrowest scope that fits.** A learned rule applies to the customer or
    programme its observation came from; going global is a separate action. The most
    common cause of a noisy rule is an assumption that holds for most records and not
@@ -1188,3 +1191,83 @@ and `config:ID`, so a rule scoped to a delivery programme was loaded and never m
 Found by making one module answer the question. The cost is that two files, one Python
 and one TypeScript, must agree on the vocabulary; both say so at the top, and both are
 tested against the same list of stored forms.
+
+## ADR-039 — A judgment check shows the model named values and an instruction, and code sets the severity
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.13c
+
+**Context:** The design has always allowed a second kind of administrator check, for a
+rule a formula cannot express: *the billed volume should be in line with the delivered
+volume*. The console could define one, the database stored it, the loader scoped it, and
+stage 7 skipped it with a log line. It was the one place the product lets the model
+judge values rather than read text, and ADR-001 says code does every comparison, so the
+question was whether to remove it or to finish it in a way that keeps that rule.
+
+**Decision:** Finish it, narrowly.
+
+1. **The model sees the administrator's instruction and the named values the
+   administrator listed, and nothing else.** A judgment check carries `value_names`; a
+   check that names none is refused at save. Stage 7 resolves only those values and
+   renders `name = value` lines. No sheet, no row, no report reaches the prompt. An
+   unresolved value is a `could_not_evaluate` finding, as it is for an expression check,
+   and the model is not asked.
+2. **The model answers pass, fail or review with a reason and a confidence; code decides
+   what each becomes.** `fail` is a `judgment_failed` finding at the severity the
+   administrator set on the check. `review`, or a `fail` below a fixed confidence floor,
+   is a review-severity item that says a person must judge. `pass` records nothing. The
+   model never sets a severity and never sees the check's.
+3. **Silence is not a pass.** A model that does not answer leaves a run notice naming the
+   check. A check that quietly recorded nothing on an error would be the one thing a
+   check must not do.
+4. **It is a model call like every other.** It goes through the one adapter, is cached on
+   the rendered prompt and the prompt version, counts toward the run's token budget, and
+   coverage records the reports the values came from. A judgment check in shadow produces
+   a hidden finding, so its precision is measured the same way as any learned rule.
+5. **Use sparingly stays.** The console says what the check costs: one model call per run
+   it is in scope for.
+
+**Consequences:** ADR-001 holds. The model reads the values and the sentence and
+expresses a reading; it computes nothing, and the values it reads were resolved by the
+same code that resolves them for an expression check. The evidence on a judgment finding
+is the rendered lines, so a reviewer sees exactly what the model saw. The cost is one
+call per check per run, which is why the check requires the administrator to say which
+values it needs rather than offering every named value.
+
+## ADR-040 — Shadow findings are visible to administrators only, and dismissible
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.13b
+
+**Context:** ADR-021 says an approved rule runs in shadow until an administrator
+activates it "with its fired count, its dismissal rate, and its shadow findings in front
+of them". Until Phase 6.13b the findings were stored with `shadow = true`, hidden from
+every list, and shown to nobody; the dismissal rate was always zero because nothing could
+be dismissed. Precision in shadow was a promise, not a measurement.
+
+Two audiences could have seen them: the reviewers who judge findings on a run, or the
+administrators who decide whether a rule goes live.
+
+**Decision:**
+
+1. **Reviewers never see a shadow finding.** They carry the review load already, and a
+   rule in shadow is by definition one nobody has yet trusted. The review screen names a
+   shadow rule as *running silently* under *Rules applied to this run*, and shows nothing
+   of what it found.
+2. **Administrators see them per rule** on the Rules screen: the most recent findings a
+   shadow rule produced, each with the run it came from and a *Not a real problem*
+   control. That control records `review_status = false_positive` on the finding, through
+   the same endpoint a reviewer's decision uses.
+3. **The dismissal rate is made of those decisions.** The Rules screen's fired and
+   dismissed counts come from the finding rows, so a rule's precision in shadow is the
+   fraction an administrator judged wrong. There is still no threshold; the numbers are
+   shown and a person decides (ADR-021, item 6).
+4. **A finding says where it came from.** Every finding carries an origin (built-in,
+   administrator, guide, meaning, learned) and a one-line summary of the rule behind it,
+   resolved from its `rule_ref` at read time. A reviewer who sees a finding from a
+   learned rule sees that it was learned. An observation's outcome (waiting, drafted,
+   approved, live, disabled, rejected) is derived the same way, from the candidate and the
+   rule's current state, so it cannot go stale.
+
+**Consequences:** "Shadow before it counts" now has the evidence it always claimed. The
+cost is one more list on the Rules screen and one more flag on the finding endpoint. A
+shadow finding dismissed by an administrator is a finding row like any other, so it
+survives the rule's activation and stays in the record.

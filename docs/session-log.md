@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.12**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38 merged phases 6.11 and 6.12. **Phase 6.13 specified** (`phase-6.13.md`). Next: 6.13a repairs, one commit each, starting with D1 (lens settings dropped by the worker) and D2 (multi-part uploads overwrite each other) |
+| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 in progress** (`phase-6.13.md`): 6.13a repairs, 6.13b reviewer loop and 6.13c judgment checks are complete and pushed. **Next: 6.13d**, the controlled examples library — `prompt_examples` table versioned like every other definition, `Prompt.render_with_examples` (scope-aware, at most four, part of the cache key), promotion from a confirmed meaning entry / requirement edit / approved candidate, an admin Examples screen, and ADR-038. Then 6.13e (real replay) and 6.13f (docs). Two follow-ups: give the demo seed a run with a coverage gap so the browser test runs; the user deletes the old remote branches themselves |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -103,6 +103,29 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-20 (Phase 6.13c: judgment checks finished)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13c complete, gates green.
+
+A judgment check could be defined, stored and scoped, and stage 7 skipped it with a log
+line. It now runs, under ADR-001: `CheckDefinitionRow.value_names` (migration
+`d5e7f9a1b3c5`) names the values the model may see; the console's judgment form asks for
+them and the API refuses a judgment check that names none. Stage 7 resolves only those
+values, renders `name = value` lines and calls the registered `JUDGMENT_PROMPT` through
+the adapter, cached and budgeted like every call. Code decides what the verdict becomes:
+`fail` is a `judgment_failed` finding at the check's severity, `review` or a low-confidence
+answer is a review item that says a person must judge, `pass` records nothing, an
+unresolved value is `could_not_evaluate`, and a model that does not answer leaves a run
+notice rather than a silent pass. A shadow judgment check produces a hidden finding.
+
+Nine pipeline tests (`tests/pipeline/test_judgment.py`) and two API tests cover it. ADR-039
+and ADR-040 are written, and ADR-021's item 6 is amended to say how the dismissal rate is
+made — the code has cited all three since 6.13b. Acceptance criterion 7 is ticked.
+
+**Next:** 6.13d, the controlled examples library.
+
+---
+
 ## Session: 2026-09-20 (Phase 6.13b: the reviewer's loop closes)
 
 **Branch:** `feature/loop-closes` · **Status:** 6.13b complete, gates green.
@@ -120,7 +143,7 @@ from a learned rule is marked *Learned from an observation*. *Rules applied to t
 lists every rule that produced a visible finding and names the ones running silently.
 Shadow findings are visible **to administrators only**, per rule on the Rules screen, with
 a *Not a real problem* control that records a dismissal — which is what makes a shadow
-rule's precision knowable before anyone activates it (ADR-040, written in 6.13f).
+rule's precision knowable before anyone activates it (ADR-040).
 
 The button went where the opinion forms: the evidence drawer, every matrix row, every
 coverage gap. The form asks for the sentence first and focuses it, the expectation second,

@@ -452,8 +452,8 @@ export default function RulesPage() {
                                 <div className="text-xs">
                                   <p className="mb-1 text-muted-foreground">
                                     Reviewers never see these. Say when one is not a real problem:
-                                    that is what a shadow rule&apos;s dismissal rate is made of, and what
-                                    decides whether to activate it.
+                                    that is what a shadow rule&apos;s dismissal rate is made of, and
+                                    what decides whether to activate it.
                                   </p>
                                   <ul className="space-y-1">
                                     {shadow[key].map((finding) => (

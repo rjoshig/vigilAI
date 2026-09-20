@@ -183,6 +183,15 @@ bumps the version). **Every delete asks you to type `delete`**, and long lists h
 checkbox per row and a bar that deletes the selection under one typed word. Checks and
 compliance rules deleted this way are restorable from the Rules screen for six months.
 
+**Judgment checks run.** A check can be a **formula**, which code evaluates for free on
+every run, or a **judgment**: an instruction in plain words plus the named values the
+model may see. The model reads only those values — never a report, never a row — and
+answers pass, fail or review; code records the verdict at the severity you set, and an
+answer the model is not confident about goes to a person as a review item. A judgment
+check costs one model call on every run in its scope, so the form says *use sparingly*
+and asks which named values to show before it lets you activate it. Until 6.13c a
+judgment check was accepted and never ran.
+
 **Scope.** Every check and compliance rule applies **everywhere**, to **one delivery
 programme**, or to **one customer**. A rule scoped to Account Solicitation is never
 evaluated on an Account Monitoring run, and a run with no programme sees only global

@@ -124,6 +124,7 @@ def load_admin_config(
             kind=row.kind,  # type: ignore[arg-type]
             expression=row.expression,
             instruction=row.instruction,
+            value_names=tuple(str(v) for v in (row.value_names or [])),
             reasoning=row.reasoning,
             severity=row.severity,  # type: ignore[arg-type]
             scope=row.scope,

@@ -1210,6 +1210,7 @@ def list_checks(
             kind=row.kind,  # type: ignore[arg-type]
             expression=row.expression,
             instruction=row.instruction,
+            value_names=list(row.value_names or []),
             reasoning=row.reasoning,
             severity=row.severity,  # type: ignore[arg-type]
             scope=row.scope,
@@ -1242,7 +1243,7 @@ def save_check(
 
     Raises:
         HTTPException: 422 when an expression check has no valid expression, or a
-            judgment check has no instruction.
+            judgment check has no instruction or names no values.
     """
     require_admin(user)
 
@@ -1255,6 +1256,10 @@ def save_check(
             raise HTTPException(HTTP_422, str(exc)) from exc
     elif not payload.instruction.strip():
         raise HTTPException(HTTP_422, "a judgment check needs an instruction")
+    elif not [name for name in payload.value_names if name.strip()]:
+        raise HTTPException(
+            HTTP_422, "a judgment check needs at least one named value the model may see"
+        )
 
     existing = session.execute(
         sa.select(models.CheckDefinitionRow)
@@ -1269,6 +1274,7 @@ def save_check(
         kind=payload.kind,
         expression=payload.expression,
         instruction=payload.instruction,
+        value_names=list(payload.value_names),
         reasoning=payload.reasoning,
         severity=payload.severity,
         scope=payload.scope,
@@ -1330,6 +1336,7 @@ def set_check_active(
         kind=row.kind,  # type: ignore[arg-type]
         expression=row.expression,
         instruction=row.instruction,
+        value_names=list(row.value_names or []),
         reasoning=row.reasoning,
         severity=row.severity,  # type: ignore[arg-type]
         scope=row.scope,

@@ -48,7 +48,7 @@ where a term maps to code, the subpackage is named.
 | **Report template** | A sample Excel uploaded for one report type; documents where values live. |
 | **Named value** | A pointer into a report: report type, sheet, and a cell (`H9`) or a **label lookup** (the row where column A says "Billing count"). Label lookup preferred. |
 | **Check** (expression) | An expression over named values (`billing_count <= delivered_count`) with severity, message, and reasoning. Runs in code at no token cost. Versioned; can be disabled; carries a **scope**. |
-| **Judgment check** | A check a formula cannot express: an instruction + examples; the LLM sees only the named values and returns pass / fail / review. Use sparingly. |
+| **Judgment check** | A check a formula cannot express: an instruction plus the named values the model may see. The model sees only those values, never a report, and returns pass / fail / review; code sets the severity and a low-confidence answer goes to a person (ADR-039). One model call per run in scope; use sparingly. |
 | **Masked columns** | The admin-maintained list of sensitive columns masked at parse time. |
 | **Scope** | Where a definition applies, as one token: `everywhere`, `programme:CODE`, `customer:NAME` or `config:ID`. One module reads it (`greenlight_ai/scopes.py`); the older forms `all` and a bare customer name still parse and are never rewritten (ADR-037). |
 

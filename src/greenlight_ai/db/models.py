@@ -621,6 +621,10 @@ class CheckDefinitionRow(Base):
     kind: Mapped[str] = mapped_column(sa.String(20), default="expression")
     expression: Mapped[str] = mapped_column(sa.Text, default="")
     instruction: Mapped[str] = mapped_column(sa.Text, default="")
+    #: For a judgment check: the named values the model may see, and nothing else
+    #: (Phase 6.13c, ADR-039). The model judges those values against the instruction;
+    #: code records the verdict.
+    value_names: Mapped[Any] = mapped_column(Json, default=list, nullable=True)
     reasoning: Mapped[str] = mapped_column(sa.Text, default="")
     severity: Mapped[str] = mapped_column(sa.String(20), default="medium")
     scope: Mapped[str] = mapped_column(sa.String(200), default="all")

@@ -52,6 +52,8 @@ class CheckDefinition:
         kind: ``"expression"`` for a formula, ``"judgment"`` for one the LLM answers.
         expression: The formula, for ``"expression"`` checks.
         instruction: What to judge, for ``"judgment"`` checks.
+        value_names: For a judgment check, the named values the model is shown and
+            nothing else (ADR-039).
         reasoning: The plain-English reason shown to users on a failure.
         severity: How serious a failure is.
         scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
@@ -68,6 +70,7 @@ class CheckDefinition:
     kind: CheckKind = "expression"
     expression: str = ""
     instruction: str = ""
+    value_names: tuple[str, ...] = ()
     reasoning: str = ""
     severity: Severity = "medium"
     scope: str = scopes.EVERYWHERE
