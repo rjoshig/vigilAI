@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/queue-controls`, cut from `dev` (2026-09-21). **Phase 6.14 is complete but for one deferred item**: 6.14a, b, d, e and j are done; 6.14c is 🟡 with only the live cap countdown open, which the user parked as a nice-to-have. 1335 tests pass; every Python and UI gate is clean. **Next concrete action: open a PR into `dev`.** After that the phase gate says report before starting anything new |
+| Branch | `dev`, level with `main` (2026-09-21). **Phases 6.14, 6.15 and 6.16 are complete and merged.** Everything still open is gathered in [`phase-6.17.md`](phase-6.17.md) — nothing blocking, each item with the reason it was left. **Next concrete action: 6.17a**, measure the programme keyword check for the brittleness compliance rules and named values were both measured for; it is the one surface never tested for it, and the two precedents point opposite ways so the answer is not guessable. About half an hour, and it either creates a phase or removes a worry |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -2005,3 +2005,48 @@ it themselves.
 Also: a dev server left running across a `git checkout` corrupts its `.next` cache and
 serves a blank page on HTTP 200. Clear `.next` and restart after switching branches,
 and check rendered content rather than a status code when verifying the apps are up.
+
+---
+
+## Session: 2026-09-21 (6.15 and 6.16 shipped; what is left gathered into 6.17)
+
+**Branch:** `dev`, level with `main`. **Status:** 1391 tests pass; every Python and UI
+gate and `check_docs.sh` clean.
+
+**Completed.**
+
+- **Phase 6.15, both options.** A compliance rule was a substring match that could not
+  tell a control that is *absent* from one that is *spelled differently*, and reported
+  both at HIGH. Option C widens the match with four deterministic tests; option A asks
+  the model *where* a control is when C still fails, and code refuses a path it did not
+  offer, an answer below a confidence floor, any verdict but `found`, or no answer at
+  all. A located control is a review-severity question, never a pass.
+- **Phase 6.16.** A thirty-day run count and the delivery programme on the runs screen;
+  `Finding.engine` saying whether code or the model reached each answer; a dated report
+  of orders validated and manual hours displaced, which states on its face that the
+  hours figure was supplied rather than measured.
+- **Option B from 6.15 measured and deliberately not built.** Named values are brittle
+  the same way, but fail *safe* — `could_not_evaluate` at review severity, not a false
+  HIGH. One problem turned out to be two with different severities, and the severe one
+  was already closed. What remained was worth normalising the label lookup, not a new
+  authoring surface.
+- **Two stale console claims corrected.** Compliance and Checks both said "nothing here
+  is sent to the model"; 6.15 and 6.13d respectively had made that false. A test now
+  fails on any screen-wide claim of that kind.
+- **6.14's acceptance criteria closed.** All twelve were met and tested and none had
+  been ticked. Each was verified against a named passing test before ticking; the one
+  that had stopped being true as written was corrected rather than ticked.
+
+**Pending.** [`phase-6.17.md`](phase-6.17.md) — the programme keyword check is the one
+surface never measured for the brittleness two others were; the deferred cap countdown;
+how scope reaches the compliance locator; and the two standing touchpoints that have
+fallen behind.
+
+**Blockers.** None.
+
+**Next concrete action.** 6.17a: measure the programme keyword check.
+
+**Worth knowing.** Three times now a measurement has changed the plan rather than
+confirmed it — the nesting row in 6.15 was not the mechanism the specification claimed,
+segment matching alone would have been a regression, and option B turned out not to be
+worth building. Measuring first is cheap and it has yet to be wasted.

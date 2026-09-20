@@ -149,6 +149,8 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.16.md`](docs/phase-6.16.md) — **numbers that mean something**: a
   thirty-day run count, which engine produced each finding, and a dated report of the
   manual hours displaced that states the assumption it rests on
+- [`docs/phase-6.17.md`](docs/phase-6.17.md) — **what is left**: everything still open
+  after 6.14 to 6.16, in one document, each with why it was left and what would settle it
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic
