@@ -191,7 +191,7 @@ def test_the_new_run_form_is_generated_from_the_catalog(client: TestClient, api:
     before = client.get(f"{api}/runs/options").json()
     assert [s["code"] for s in before["scopes"]] == ["AM", "AS", "ARCHIVE", "OTHER"]
     slots = {a["key"]: a for a in before["artifacts"]}
-    assert slots["osl"]["is_required"] is True and slots["osl"]["accept"] == ".docx"
+    assert slots["osl"]["is_required"] is True and slots["osl"]["accept"] == ".docx,.pdf"
     assert slots["config"]["accept"] == ".json"
     assert slots["dirt"]["accept"] == ".xlsx"
     assert "score_distribution" not in slots

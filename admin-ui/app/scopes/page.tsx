@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/primitives";
 import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
+import { versionLabel } from "@/lib/versions";
 import type {
   ProgrammeRule,
   ProgrammeRuleIn,
@@ -50,6 +51,7 @@ const NEW_SCOPE: Omit<Scope, "id" | "runs_using"> = {
   keywords: [],
   is_active: true,
   sort_order: 100,
+  version: 0,
 };
 
 const DEFAULT_STRICTNESS: Strictness = "should";
@@ -251,6 +253,9 @@ function ScopeCard({
           <CardTitle>
             <span className="mono">{scope.code}</span> · {scope.label}
           </CardTitle>
+          <Badge tone="outline" title="Version of the rule set">
+            {versionLabel(scope.version)}
+          </Badge>
           {scope.is_active ? null : <Badge tone="muted">off</Badge>}
           {scope.runs_using > 0 ? <Badge tone="muted">{scope.runs_using} run(s)</Badge> : null}
         </div>

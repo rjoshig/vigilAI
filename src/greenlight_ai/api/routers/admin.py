@@ -8,6 +8,7 @@ model.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
@@ -54,6 +55,8 @@ from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.prompts import DRAFT_CHECK_PROMPT
 from greenlight_ai.llm.prompts.schemas import DraftCheckResponse
 from greenlight_ai.parsers.base import ParseError, ReportKind
+from greenlight_ai.parsers.config_json import JsonConfigParser
+from greenlight_ai.parsers.osl import osl_parser_for
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.parsers.reports.xlsx import PARSERS, parser_for
 
@@ -129,6 +132,76 @@ def _get_sample(session: Session, key: str, sample_id: int) -> models.ArtifactSa
     return sample
 
 
+def _osl_preview(path: Path) -> list[wire.SheetPreview]:
+    """An OSL as the console previews it: one "sheet" per section, a cell per line.
+
+    Args:
+        path: The stored ``.docx`` or ``.pdf``.
+
+    Returns:
+        Sections in order; paragraphs as ``¶n`` and table rows as ``Tn rm``, so an
+        administrator can point at the clause they mean.
+    """
+    document = osl_parser_for(path).parse(path)
+    sheets: list[wire.SheetPreview] = []
+    for section in document.sections:
+        cells = [
+            wire.CellPreview(cell=f"¶{i}", value=text[:200], label="", row=i, column=1)
+            for i, text in enumerate(section.paragraphs, start=1)
+        ]
+        for table in section.tables:
+            for r, row in enumerate(table.rows, start=1):
+                cells.append(
+                    wire.CellPreview(
+                        cell=f"T{table.index} r{r}",
+                        value=" | ".join(row)[:200],
+                        label=" | ".join(table.header)[:200],
+                        row=r,
+                        column=1,
+                    )
+                )
+        sheets.append(
+            wire.SheetPreview(
+                name=f"{section.number} {section.heading}"[:100],
+                rows=len(cells),
+                columns=1,
+                cells=cells[:PREVIEW_CELLS],
+            )
+        )
+    return sheets
+
+
+def _config_preview(path: Path) -> list[wire.SheetPreview]:
+    """An ETL configuration as the console previews it: one cell per block.
+
+    Args:
+        path: The stored ``.json``.
+
+    Returns:
+        One "sheet", the JSON path of each block as the cell and its content as the
+        value, so a guide or a compliance rule can name the path it means.
+    """
+    document = JsonConfigParser().parse(path)
+    cells = [
+        wire.CellPreview(
+            cell=block.json_path,
+            value=json.dumps(block.content, sort_keys=True)[:200],
+            label=block.kind,
+            row=i,
+            column=1,
+        )
+        for i, block in enumerate(document.blocks, start=1)
+    ]
+    return [
+        wire.SheetPreview(
+            name=f"Configuration {document.configuration_id}"[:100],
+            rows=len(cells),
+            columns=1,
+            cells=cells[:PREVIEW_CELLS],
+        )
+    ]
+
+
 def _sheet_preview(sheet: Any, masked: tuple[str, ...]) -> wire.SheetPreview:
     """Render one sheet's populated cells for the console.
 
@@ -177,7 +250,7 @@ def _sheet_preview(sheet: Any, masked: tuple[str, ...]) -> wire.SheetPreview:
 
 
 def _artifact_out(
-    row: models.ArtifactType, data_dir: Path, in_use: int = 0
+    row: models.ArtifactType, data_dir: Path, in_use: int = 0, version: int = 0
 ) -> wire.ArtifactTypeOut:
     """Build the wire model for one artifact type.
 
@@ -185,6 +258,7 @@ def _artifact_out(
         row: The stored type.
         data_dir: The shared volume.
         in_use: How many runs have uploaded this type.
+        version: Its newest definition version (ADR-029).
 
     Returns:
         The wire model, including the sample's sheets when there is one.
@@ -228,6 +302,7 @@ def _artifact_out(
         sheets=sheets,
         runs_using=in_use,
         guide=[guides.GuideEntry.model_validate(entry) for entry in row.guide_entries or []],
+        version=version,
     )
 
 
@@ -262,7 +337,13 @@ def list_artifact_types(
             sa.select(models.RunFile.kind, sa.func.count()).group_by(models.RunFile.kind)
         ).all()
     }
-    return [_artifact_out(row, data_dir, counts.get(row.key, 0)) for row in rows]
+    latest = versions.current_versions(session)
+    return [
+        _artifact_out(
+            row, data_dir, counts.get(row.key, 0), latest.get(f"artifact_type:{row.key}", 0)
+        )
+        for row in rows
+    ]
 
 
 @router.post(
@@ -325,7 +406,9 @@ def save_artifact_type(
 
     repository.audit(session, "admin.artifact_type_saved", detail=key)
     versions.record_artifact_version(session, row, user.name)
-    return _artifact_out(row, data_dir)
+    return _artifact_out(
+        row, data_dir, version=versions.latest_version(session, "artifact_type", row.key)
+    )
 
 
 @router.post(
@@ -408,7 +491,9 @@ def upload_sample(
     session.refresh(row)
     repository.audit(session, "admin.sample_uploaded", detail=key, user_id=user.id, actor=user.name)
     versions.record_artifact_version(session, row, user.name, "sample added")
-    return _artifact_out(row, data_dir)
+    return _artifact_out(
+        row, data_dir, version=versions.latest_version(session, "artifact_type", row.key)
+    )
 
 
 @router.put("/artifact-types/{key}/guide", response_model=wire.ArtifactTypeOut)
@@ -461,7 +546,9 @@ def save_guide(
         actor=user.name,
     )
     versions.record_artifact_version(session, row, user.name, "guide edited")
-    return _artifact_out(row, data_dir)
+    return _artifact_out(
+        row, data_dir, version=versions.latest_version(session, "artifact_type", row.key)
+    )
 
 
 @router.get("/artifact-types/{key}/samples/{sample_id}/download")
@@ -543,17 +630,19 @@ def preview_sample(
     path = data_dir / sample.storage_path
     if not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "the stored file is missing")
+    kind = sample.artifact_type.kind
     try:
-        document = parser_for(key).parse(path)
+        if kind == "osl":
+            sheets = _osl_preview(path)
+        elif kind == "config":
+            sheets = _config_preview(path)
+        else:
+            masked = repository.load_masked_columns(session)
+            sheets = [_sheet_preview(sheet, masked) for sheet in parser_for(key).parse(path).sheets]
     except ParseError as exc:
         raise HTTPException(HTTP_422, f"the sample could not be read: {exc}") from exc
 
-    masked = repository.load_masked_columns(session)
-    return wire.SamplePreviewOut(
-        sample_id=sample.id,
-        filename=sample.filename,
-        sheets=[_sheet_preview(sheet, masked) for sheet in document.sheets],
-    )
+    return wire.SamplePreviewOut(sample_id=sample.id, filename=sample.filename, sheets=sheets)
 
 
 @router.delete("/artifact-types/{key}/samples/{sample_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -672,6 +761,7 @@ def list_scopes(
     rows = session.execute(
         sa.select(models.RunScope).order_by(models.RunScope.sort_order, models.RunScope.code)
     ).scalars()
+    latest = versions.current_versions(session)
     return [
         wire.ScopeOut(
             id=row.id,
@@ -683,6 +773,7 @@ def list_scopes(
             sort_order=row.sort_order,
             keywords=list(row.keywords or []),
             runs_using=counts.get(row.code, 0),
+            version=latest.get(f"programme_rules:{row.code}", 0),
         )
         for row in rows
     ]
@@ -745,6 +836,7 @@ def save_scope(
         is_active=row.is_active,
         sort_order=row.sort_order,
         keywords=list(row.keywords or []),
+        version=versions.latest_version(session, "programme_rules", row.code),
     )
 
 

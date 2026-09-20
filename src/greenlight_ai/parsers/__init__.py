@@ -22,7 +22,9 @@ from greenlight_ai.parsers.base import (
 )
 from greenlight_ai.parsers.config_json import JsonConfigParser, is_technical
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS, is_masked_column, mask_value
+from greenlight_ai.parsers.osl import OSL_SUFFIXES, osl_parser_for
 from greenlight_ai.parsers.osl_docx import DocxOslParser
+from greenlight_ai.parsers.osl_pdf import PdfOslParser
 from greenlight_ai.parsers.reports.xlsx import PARSERS, XlsxReportParser, parser_for
 
 __all__ = [
@@ -32,6 +34,9 @@ __all__ = [
     "DEFAULT_MASKED_COLUMNS",
     "DocxOslParser",
     "JsonConfigParser",
+    "OSL_SUFFIXES",
+    "PdfOslParser",
+    "osl_parser_for",
     "OslDocument",
     "OslParser",
     "OslSection",

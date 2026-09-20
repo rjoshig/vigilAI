@@ -105,6 +105,21 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-19 (artifact types: three tabs, PDF OSLs, version labels)
+
+**Branch:** `feature/artifacts-tabs` · **Status:** complete, gates green.
+
+- Artifact types screen: tabs for Requirements (OSL), Solution Canvas (ETL
+  configuration) and Reports; named values and guides under Reports; each type and
+  programme shows its definition version as `v1.n`.
+- Samples preview by kind: an OSL by section and paragraph, a configuration by block
+  and path. Before this, an OSL sample was pushed through the workbook parser and
+  failed.
+- OSLs may be PDF: `parsers/osl_pdf.py` (pypdf) behind the same Protocol, chosen by
+  suffix; accepted on the new-run form and as a sample.
+
+---
+
 ## Session: 2026-09-19 (Phase 6.6: the theme picker)
 
 **Branch:** `feature/theme-picker` · **Status:** complete; 934 Python tests, 82 user-ui,

@@ -94,7 +94,9 @@ imports `pipeline`.
    results.
 4. **The catalog as data** — which artifacts the tool accepts, what each means, and
    which delivery programme a run belongs to are rows an administrator edits, not code
-   (ADR-020). `db/versions.py` snapshots every save of an artifact type or a
+   (ADR-020). `parsers/osl.py` picks the OSL parser by suffix: `osl_docx.py` for Word,
+   `osl_pdf.py` for PDF (text cut into numbered sections; a scanned PDF needs OCR
+   first). `db/versions.py` snapshots every save of an artifact type or a
    programme's rule set, lists the last ten, reverts one as a new version, and
    prunes the rest on the retention sweep (ADR-029). `db/catalog.py` holds the shipped defaults and seeds them;
    `pipeline/guidance.py` turns what is configured into a prompt preamble and returns

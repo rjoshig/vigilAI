@@ -15,6 +15,7 @@ import * as React from "react";
 import { Badge, Button, Input, Label, Skeleton } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import type { DefinitionVersion, VersionKind } from "@/lib/types";
+import { versionLabel } from "@/lib/versions";
 
 interface VersionsPanelProps {
   kind: VersionKind;
@@ -80,9 +81,11 @@ export function VersionsPanel({ kind, objectKey, onReverted }: VersionsPanelProp
       <ul className="divide-y rounded-md border">
         {rows.map((row, index) => (
           <li key={row.version} className="flex flex-wrap items-center gap-2 px-2 py-1.5 text-xs">
-            <span className="mono font-semibold">v{row.version}</span>
+            <span className="mono font-semibold">{versionLabel(row.version)}</span>
             {index === 0 ? <Badge tone="success">current</Badge> : null}
-            {row.reverted_from ? <Badge tone="muted">from v{row.reverted_from}</Badge> : null}
+            {row.reverted_from ? (
+              <Badge tone="muted">from {versionLabel(row.reverted_from)}</Badge>
+            ) : null}
             <span className="flex-1">{row.summary || "saved"}</span>
             <span className="text-muted-foreground">
               {row.created_by || "—"} · {when(row.created_at)}
@@ -124,7 +127,7 @@ export function VersionsPanel({ kind, objectKey, onReverted }: VersionsPanelProp
                 disabled={busy}
                 onClick={() => setConfirming(row.version)}
               >
-                Revert to v{row.version}
+                Revert to {versionLabel(row.version)}
               </Button>
             )}
           </li>
