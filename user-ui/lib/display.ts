@@ -72,6 +72,24 @@ export function isOk(status: ReviewStatus): boolean {
   return status === "false_positive" || status === "accepted_risk";
 }
 
+/** Severities on which Not OK must say why. Mirrors the API (Phase 6.11a). */
+const NOTE_REQUIRED_FOR_NOT_OK: ReadonlySet<string> = new Set(["high", "review"]);
+
+/**
+ * Why a decision cannot be recorded as it stands, or "" when it is complete.
+ *
+ * The same rule runs in the API, which is what enforces it; this copy exists so the
+ * reviewer is told before the request rather than by a rejection.
+ */
+export function decisionProblem(severity: string, status: ReviewStatus, note: string): string {
+  if (note.trim()) return "";
+  if (status === "accepted_risk") return "Accepting a risk needs a comment saying why.";
+  if (status === "confirmed" && NOTE_REQUIRED_FOR_NOT_OK.has(severity)) {
+    return `Not OK on a ${severity}-severity finding needs a comment saying what is wrong.`;
+  }
+  return "";
+}
+
 /** The matrix status for one requirement, from its trace and its findings. */
 export type MatrixStatus = "match" | "mismatch" | "partial" | "missing" | "extra";
 

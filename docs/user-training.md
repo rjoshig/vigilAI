@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.10.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.11a.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -109,10 +109,16 @@ The run page shows the **traceability matrix** and the **findings**, worst first
 - Each finding has a **severity** (high, medium, low, or review), a title that says
   what disagrees with what, the evidence from all three artefacts side by side, and
   an OK / Not OK decision with a comment.
-- **OK** means the finding is not a problem (a false positive or an accepted risk).
-  **Not OK** means the delivery has to change. A comment is expected on Not OK.
-- Low-severity findings can be decided in bulk. High-severity ones never can:
-  every one must be decided by hand before the report can be generated.
+- There are three decisions. **False positive** means the finding is not a real
+  problem. **Accepted risk** means it is real and the delivery goes ahead anyway, and
+  it always needs a comment saying why. **Not OK** means the delivery has to change,
+  and on a high or review finding it needs a comment too. The tool says so before it
+  records anything, so nothing you typed is lost.
+- Low-severity findings can be marked OK in bulk, as false positives. High-severity
+  ones never can: every one must be decided by hand before the report can be generated.
+- **Generate final report asks once**, showing the finding counts and reminding you
+  that freezing is permanent: the report is stored once, never regenerated, and the
+  findings can no longer be re-reviewed.
 - If a requirement was extracted wrongly, edit it and press **Re-check**. Only the
   comparison stages re-run; nothing is re-asked of the model that has not changed.
 - **Configuration notes given to the model** appear above the findings when the

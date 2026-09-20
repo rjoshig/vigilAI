@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev` == `main` (2026-09-20). **Next task: Phase 6.11a** (review defects and decision quality) on `feature/nothing-slips`, cut from `dev`; `docs/phase-6.11.md` is the spec. Browser tests in CI follow 6.11 |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11a is complete**; next is **6.11b, the benchmark harness** — see "Next concrete action". Browser tests in CI follow 6.11 |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -105,6 +105,47 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-20 (Phase 6.11a: review defects and decision quality)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 966 Python
+tests, 88 user-ui tests, `black`/`flake8`/`mypy`/lint/typecheck/format/build clean.
+
+- **The bulk-OK defect is fixed.** `bulk_ok_low_severity` writes `false_positive`; it
+  wrote `confirmed`, which reads as Not OK on the screen and turns the run's verdict,
+  so one click on "Mark all low OK" failed a clean delivery.
+- **Three decisions on the review screen**, not two: False positive, Accepted risk,
+  Not OK. Every OK used to be stored as `false_positive` and `accepted_risk` was
+  unreachable from the UI although the schema had it all along.
+- **A decision has to say what it means.** `decision_problem` (findings router)
+  refuses with 422 a Not OK on a high or review finding with no comment, and an
+  accepted risk with no comment at any severity. `decisionProblem`
+  (`user-ui/lib/display.ts`) is the same rule client-side, so the reviewer is asked
+  before the request rather than losing what they typed.
+- **Finalize asks once**, through `confirm-dialog`, showing the finding counts and
+  what freezing means. The attestation block replaces that body in 6.11d.
+
+**Two things found while doing it**, both recorded in `phase-6.11.md` "Found on the way":
+
+1. **No fixture case produces a low-severity finding**, so the existing bulk-OK test
+   had always passed on zero rows and proved nothing. The tests now create one
+   (`_add_low_finding`).
+2. **Every fixture case, the clean baseline included, carries two `could_not_evaluate`
+   findings at `review` severity**, and the gate lets them through undecided. That is
+   the hole 6.11c and 6.11d close, now confirmed on real output.
+
+A drift test helper that marked high findings Not OK with no comment started failing,
+correctly, and was given one.
+
+### Next concrete action
+
+**6.11b, the benchmark harness**, on the same branch: expected findings in the golden
+fixtures, precision and recall per finding type and per programme out of
+`scripts/golden_set.py` into `docs/benchmarks/`, the `LLM_PIPELINE_VARIANT` switch, and
+the two new cases (a requirement no report can evidence; a custom report type with no
+checks — and one that yields a low-severity finding, per the note above).
+
+---
+
 ## Session: 2026-09-20 (product review → Phase 6.11 specified)
 
 **Branch:** session branch, docs only · **Status:** `docs/phase-6.11.md` written and
@@ -139,7 +180,8 @@ it. Full reasoning in `docs/phase-6.11.md` "The idea".
 
 Cut `feature/nothing-slips` from `dev`. 6.11a first: the bulk-OK fix with the
 finalize-after-bulk-OK test, then reason codes and required comments, then the confirm
-on finalize. Then 6.11b, the harness, before any coverage or lens work.
+on finalize. Then 6.11b, the harness, before any coverage or lens work. *(6.11a landed
+the same day; see the session above.)*
 
 ---
 

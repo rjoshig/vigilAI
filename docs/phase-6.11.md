@@ -1,8 +1,9 @@
 # Phase 6.11 — Nothing slips: coverage, a fail-closed review, and independent lenses
 
-**Status:** ⬜ **not started** — specified 2026-09-20 after a review of the product as
-built through Phase 6.10. The decisions are in the table at the foot; the review that
-led to them is in `docs/session-log.md` (session of 2026-09-20).
+**Status:** 🟡 **in progress** — specified 2026-09-20 after a review of the product as
+built through Phase 6.10; **6.11a complete** the same day. The decisions are in the
+table at the foot; the review that led to them is in `docs/session-log.md` (session of
+2026-09-20).
 
 **Goal:** a compliance error must not be able to leave the tool as a clean report
 because nobody noticed it was never checked, and a reviewer's click must not be able to
@@ -96,21 +97,27 @@ whether verification ran.
 | Synthesis detects overlap with existing rules and stores it on the candidate; approving a conflicting candidate is not blocked. | Approving a candidate with an unresolved conflict requires choosing **supersede** the old rule or **reject** the new one. A critique pass runs once after the draft. |
 | The golden set reports pass/fail per case. | The golden set reports precision and recall per finding type per programme, with a pipeline-variant switch so any stage change can be compared against the default. |
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.11a — Review defects and decision quality · ⬜ not started
+### 6.11a — Review defects and decision quality · ✅ complete
 
-- [ ] `bulk_ok_low_severity` writes `false_positive`, and its docstring says so. A test
-      drives submit → bulk-OK → finalize and asserts verdict `ok`, every low finding
-      reading OK on the screen and in the report.
-- [ ] The OK action on the review screen offers **false positive** and **accepted
-      risk**; the API accepts both (it already does). `REVIEW_LABEL` already names them.
-- [ ] Reason required: on a high or `review` finding, OK without a reason and Not OK
-      without a comment are refused by the API (422 with a clear message) and blocked in
-      the UI. Accepted risk always requires a comment, at any severity.
-- [ ] Bulk OK stays low-only, records `false_positive`, and is audited as today.
-- [ ] Finalize uses `components/confirm-dialog.tsx` with the attestation block (6.11d)
-      as its body. Until 6.11d lands, the body is the severity counts.
+- [x] `bulk_ok_low_severity` writes `false_positive`, and its docstring says so. A test
+      drives submit → bulk-OK → finalize and asserts verdict `ok` with every low finding
+      reading OK. **No fixture case produces a low-severity finding**, so the existing
+      bulk test had always passed on zero rows; the tests now create one
+      (`_add_low_finding`) and so actually exercise the path.
+- [x] The review screen offers three decisions outright — **False positive**,
+      **Accepted risk**, **Not OK** — rather than an OK button that silently chose one.
+      Before this, every OK was stored as `false_positive` and `accepted_risk` was
+      unreachable from the screen.
+- [x] Reason required: `decision_problem` in the findings router refuses (422) a Not OK
+      on a high or `review` finding with no comment, and an accepted risk with no
+      comment at any severity. `decisionProblem` in `user-ui/lib/display.ts` is the same
+      rule, so the reviewer is asked before the request instead of losing what they
+      typed to a rejection. A false positive needs no comment: the choice is the reason.
+- [x] Bulk OK stays low-only, records `false_positive`, and is audited as today.
+- [x] Finalize uses `components/confirm-dialog.tsx`, with the severity counts and what
+      freezing means as its body. The attestation block replaces that body in 6.11d.
 
 ### 6.11b — Benchmark harness · ⬜ not started
 
@@ -236,12 +243,12 @@ whether verification ran.
       approved without supersede or reject; the harness reports precision and recall
       on the synthetic set and the two coverage cases appear.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · 🟡 in progress
 
-1. [ ] "Mark all low OK" on a run with only low findings, then finalize, gives a report
+1. [x] "Mark all low OK" on a run with only low findings, then finalize, gives a report
    whose verdict is OK and whose findings all read OK.
-2. [ ] A high finding cannot be marked OK without a reason or Not OK without a
-   comment, from the screen or the API.
+2. [x] A high finding cannot be marked Not OK without a comment, and an accepted risk
+   cannot be recorded without one at any severity, from the screen or the API.
 3. [ ] A run with a requirement no report evidenced shows it in the Coverage panel,
    cannot be finalized until it is acknowledged, and the frozen report's attestation
    lists it with the acknowledging person's name.
@@ -285,6 +292,19 @@ Answered by the user in the review session.
   model classifies a statement onto the existing surface and drafts it for the
   administrator to confirm into shadow, and unifies the scope vocabulary to one token
   (ADR-029 already says one). The expert screens stay.
+
+## Found on the way
+
+Two things turned up while fixing 6.11a and are worth carrying into the rest of the
+phase rather than losing in a commit message.
+
+- **No fixture case produces a low-severity finding**, so the bulk-OK test had never
+  run the code it named. 6.11b's golden-set work adds a case that does, and any future
+  test about severity should assert the row count it expected to touch.
+- **Every fixture case, including the clean baseline, carries two `could_not_evaluate`
+  findings at `review` severity**, and the gate lets all of them through undecided.
+  That is exactly the hole 6.11c and 6.11d close, now confirmed on real output rather
+  than argued from the code.
 
 ## Still open
 

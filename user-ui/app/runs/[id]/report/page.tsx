@@ -22,6 +22,7 @@ import {
   PageHeader,
   Skeleton,
 } from "@/components/ui/primitives";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { api, ApiError } from "@/lib/api";
 import type { RunDetail } from "@/lib/types";
 import { saveBlob } from "@/lib/utils";
@@ -35,6 +36,7 @@ export default function ReportPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
+  const [confirming, setConfirming] = React.useState(false);
 
   const load = React.useCallback(async () => {
     try {
@@ -75,6 +77,7 @@ export default function ReportPage() {
     setBusy(true);
     try {
       await api.finalize(runId);
+      setConfirming(false);
       await load();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not generate the final report.");
@@ -164,7 +167,7 @@ export default function ReportPage() {
                   Back to review
                 </Button>
               </Link>
-              <Button disabled={!run.can_finalize || busy} onClick={() => void finalize()}>
+              <Button disabled={!run.can_finalize || busy} onClick={() => setConfirming(true)}>
                 <Lock className="h-4 w-4" />
                 {busy ? "Generating…" : "Generate final report"}
               </Button>
@@ -188,6 +191,21 @@ export default function ReportPage() {
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirming}
+        title="Generate the final report?"
+        detail={
+          `This freezes run VR-${String(runId).padStart(4, "0")}: the report is stored once and ` +
+          `never regenerated, and the findings can no longer be re-reviewed. ` +
+          `${run.high} high, ${run.medium} medium, ${run.low} low and ${run.review} review ` +
+          `findings were raised, and every high one has a decision.`
+        }
+        confirmLabel="Yes, generate it"
+        busy={busy}
+        onConfirm={finalize}
+        onCancel={() => setConfirming(false)}
+      />
     </>
   );
 }

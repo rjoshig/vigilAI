@@ -12,9 +12,16 @@ Submit = Callable[..., Any]
 
 
 def _finalize(client: TestClient, api: str, run_id: int, high_as: str = "confirmed") -> None:
+    """Decide every finding and finalize.
+
+    A serious finding marked Not OK carries a comment, which the API requires since
+    Phase 6.11a.
+    """
     for finding in client.get(f"{api}/runs/{run_id}/findings").json():
         status = high_as if finding["severity"] == "high" else "false_positive"
-        client.patch(f"{api}/findings/{finding['id']}", json={"review_status": status})
+        patch = {"review_status": status, "review_note": "raised with the ETL team"}
+        response = client.patch(f"{api}/findings/{finding['id']}", json=patch)
+        assert response.status_code == 200, response.text
     response = client.post(f"{api}/runs/{run_id}/finalize")
     assert response.status_code == 201, response.text
 

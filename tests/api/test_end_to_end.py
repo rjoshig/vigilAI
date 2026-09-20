@@ -30,6 +30,36 @@ def _run_to_completion(worker: Worker, limit: int = 5) -> int:
     return processed
 
 
+def _add_low_finding(
+    factory: sessionmaker[Session], run_id: int, title: str = "Null rate is high"
+) -> int:
+    """Give a run a low-severity finding.
+
+    No fixture case produces one, so a test about the bulk action has to make one or it
+    proves nothing: before Phase 6.11a the existing bulk test passed on zero rows.
+
+    Args:
+        factory: The test session factory.
+        run_id: The run to attach it to.
+        title: The finding's title.
+
+    Returns:
+        The new finding's row id.
+    """
+    with factory() as session:
+        finding = models.Finding(
+            run_id=run_id,
+            finding_id="F-LOW-1",
+            type="profile_anomaly",
+            severity="low",
+            title=title,
+            detail="Null rate for a field is above its usual level.",
+        )
+        session.add(finding)
+        session.commit()
+        return int(finding.id)
+
+
 @pytest.fixture()
 def completed_run(submit: Submit, worker: Worker, client: TestClient, api: str) -> dict[str, Any]:
     """A run submitted through the API and executed by the worker."""
@@ -258,18 +288,119 @@ def test_a_decision_is_recorded_and_opens_the_gate(
 
 
 def test_low_severity_findings_can_be_decided_in_bulk(
-    submit: Submit, worker: Worker, client: TestClient, api: str
+    submit: Submit,
+    worker: Worker,
+    client: TestClient,
+    api: str,
+    factory: sessionmaker[Session],
 ) -> None:
+    """Bulk OK records OK. Before Phase 6.11a it wrote the Not OK value."""
     run_id = submit("score_value_mismatch").json()["run_id"]
     _run_to_completion(worker)
+    _add_low_finding(factory, run_id)
+
     decided = client.post(f"{api}/runs/{run_id}/findings/bulk-ok").json()
-    remaining = [
-        f
-        for f in client.get(f"{api}/runs/{run_id}/findings").json()
-        if f["severity"] == "low" and f["review_status"] == "undecided"
-    ]
-    assert decided >= 0
-    assert remaining == []
+    low = [f for f in client.get(f"{api}/runs/{run_id}/findings").json() if f["severity"] == "low"]
+
+    assert decided == 1
+    assert [f["review_status"] for f in low] == ["false_positive"]
+
+
+def test_bulk_ok_then_finalize_gives_an_ok_verdict(
+    submit: Submit,
+    worker: Worker,
+    client: TestClient,
+    api: str,
+    factory: sessionmaker[Session],
+) -> None:
+    """The defect Phase 6.11 opened with: "Mark all low OK" must never fail the run.
+
+    Until 6.11a the bulk action stored ``confirmed``, which reads as Not OK on the
+    screen and turns the verdict, so one click on a clean run failed the delivery.
+    """
+    run_id = submit("score_value_mismatch").json()["run_id"]
+    _run_to_completion(worker)
+    _add_low_finding(factory, run_id)
+
+    client.post(f"{api}/runs/{run_id}/findings/bulk-ok")
+    for finding in client.get(f"{api}/runs/{run_id}/findings").json():
+        if finding["severity"] != "low":
+            client.patch(
+                f"{api}/findings/{finding['id']}",
+                json={"review_status": "false_positive", "review_note": "checked by hand"},
+            )
+
+    body = client.post(f"{api}/runs/{run_id}/finalize").json()
+
+    assert body["verdict"] == "ok"
+    statuses = {f["review_status"] for f in client.get(f"{api}/runs/{run_id}/findings").json()}
+    assert statuses == {"false_positive"}
+
+
+def test_not_ok_on_a_high_finding_needs_a_comment(
+    completed_run: dict[str, Any], client: TestClient, api: str
+) -> None:
+    """A serious finding marked Not OK has to say what is wrong (Phase 6.11a)."""
+    run_id = completed_run["id"]
+    high = next(
+        f for f in client.get(f"{api}/runs/{run_id}/findings").json() if f["severity"] == "high"
+    )
+
+    refused = client.patch(f"{api}/findings/{high['id']}", json={"review_status": "confirmed"})
+    assert refused.status_code == 422
+    assert "comment" in refused.json()["detail"]
+
+    accepted = client.patch(
+        f"{api}/findings/{high['id']}",
+        json={"review_status": "confirmed", "review_note": "threshold is wrong"},
+    )
+    assert accepted.status_code == 200
+
+
+def test_accepting_a_risk_always_needs_a_comment(
+    submit: Submit,
+    worker: Worker,
+    client: TestClient,
+    api: str,
+    factory: sessionmaker[Session],
+) -> None:
+    """Accepted risk is the one decision whose reason is the whole record."""
+    run_id = submit("score_value_mismatch").json()["run_id"]
+    _run_to_completion(worker)
+    low_id = _add_low_finding(factory, run_id)
+
+    refused = client.patch(f"{api}/findings/{low_id}", json={"review_status": "accepted_risk"})
+    assert refused.status_code == 422
+
+    with_reason = client.patch(
+        f"{api}/findings/{low_id}",
+        json={"review_status": "accepted_risk", "review_note": "known, signed off last quarter"},
+    )
+    assert with_reason.status_code == 200
+
+
+def test_a_low_finding_needs_no_comment_either_way(
+    submit: Submit,
+    worker: Worker,
+    client: TestClient,
+    api: str,
+    factory: sessionmaker[Session],
+) -> None:
+    """The comment rule is for serious and uncertain findings, not for every click."""
+    run_id = submit("score_value_mismatch").json()["run_id"]
+    _run_to_completion(worker)
+    low_id = _add_low_finding(factory, run_id)
+
+    assert (
+        client.patch(f"{api}/findings/{low_id}", json={"review_status": "confirmed"}).status_code
+        == 200
+    )
+    assert (
+        client.patch(
+            f"{api}/findings/{low_id}", json={"review_status": "false_positive"}
+        ).status_code
+        == 200
+    )
 
 
 def test_a_decision_survives_a_recheck(

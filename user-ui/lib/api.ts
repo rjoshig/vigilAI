@@ -183,7 +183,7 @@ export const api = {
     });
   },
 
-  /** Mark every undecided low-severity finding as confirmed. */
+  /** Mark every undecided low-severity finding OK, as a false positive. */
   bulkOkLow(runId: number): Promise<number> {
     return request<number>(`/runs/${runId}/findings/bulk-ok`, { method: "POST" });
   },

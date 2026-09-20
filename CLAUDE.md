@@ -67,7 +67,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.8 | Scoped compliance, validation guides (report cell ↔ OSL ↔ config, with examples), ten versions of every definition with revert | `docs/phase-6.8.md` | ✅ complete |
 | 6.9 | Delivery drift: what changed since the previous finalized run of the same configuration, on the review screen and the frozen report | `docs/phase-6.9.md` | ✅ complete |
 | 6.10 | Meaning: scoped samples, the mapping interview (requirement ↔ config ↔ report cells, model proposes / person confirms / code compiles), edit and typed delete everywhere | `docs/phase-6.10.md` | ✅ complete |
-| 6.11 | Nothing slips: coverage of every requirement, a fail-closed finalize gate with an attestation, decision reasons, three independent lenses at stage 8 merged by code, a benchmark harness with precision and recall | `docs/phase-6.11.md` | ⬜ not started — specified, next up |
+| 6.11 | Nothing slips: coverage of every requirement, a fail-closed finalize gate with an attestation, decision reasons, three independent lenses at stage 8 merged by code, a benchmark harness with precision and recall | `docs/phase-6.11.md` | 🟡 in progress — 6.11a complete |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same

@@ -36,7 +36,7 @@ where a term maps to code, the subpackage is named.
 | --- | --- |
 | **Finding** | One potential issue: type, severity (High / Medium / Low / Review), title, detail, and three evidence pointers (OSL location + text, config JSON path + value, report name + sheet + cell). |
 | **Review** (severity) | A finding kept for a human look: low-confidence extraction (< 0.7) or a verify-stage disagreement. |
-| **Review status** | The user's decision on a finding: OK / Not OK with a comment; also confirmed / false positive / accepted risk for accuracy tracking. |
+| **Review status** | The reviewer's decision on a finding, one of three: **false positive** (not a real problem), **accepted risk** (real, accepted anyway, always with a comment), or **confirmed** — shown as **Not OK**, meaning the delivery has to change. Undecided until they choose. |
 | **Traceability matrix** | The main review view: one row per requirement, three columns (OSL, config, reports), status match / mismatch / partial / missing / extra. |
 | **Re-check** | Re-running stages 5–7 after a rule or trace edit. Seconds, no LLM. |
 | **Finalize / final report** | Generating the frozen one-page HTML report after review. Stored once, never regenerated; PDF rendered from it. |

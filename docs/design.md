@@ -185,10 +185,10 @@ Users can mark a finding as **confirmed**, **false positive**, or **accepted ris
 A run does not end with the pipeline. A person reviews the findings first, and only then is the final report produced.
 
 1. The pipeline finishes and the run status becomes needs review.
-2. The review screen shows the traceability matrix and the findings. Each finding has OK and Not OK buttons and a comment box. Low-severity findings can be marked OK in bulk.
+2. The review screen shows the traceability matrix and the findings. Each finding offers three decisions — false positive, accepted risk, Not OK — and a comment box. An accepted risk always needs a comment, and so does Not OK on a high or review finding. Low-severity findings can be marked OK in bulk, as false positives.
 3. Generate final report becomes active once the findings have decisions. Proposed gate: every high-severity finding needs a decision.
 4. The final report is one page of interactive HTML in the same format as the compare-file report. It shows the verdict, the counts, the Not OK items with their comments, and expandable detail.
-5. The report is frozen. It is stored once and never regenerated. PDF download is rendered from the stored HTML. Quick PDF export is scheduled for the last phase.
+5. The report is frozen. It is stored once and never regenerated, and generating it asks for a confirmation showing the finding counts, because the findings cannot be re-reviewed afterwards. PDF download is rendered from the stored HTML.
 
 Review decisions and report downloads never call the LLM.
 

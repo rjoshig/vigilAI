@@ -15,6 +15,7 @@ import {
   Lightbulb,
   Lock,
   RefreshCw,
+  ShieldCheck,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -55,11 +56,12 @@ import {
   SEVERITY_TONE,
   STATUS_LABEL,
   STATUS_TONE,
+  decisionProblem,
   isActive,
   isOk,
 } from "@/lib/display";
 import { buildMatrix, countByStatus, ruleValues, type MatrixRow } from "@/lib/matrix";
-import type { Anchor, Finding, Requirements, RunDetail, Severity } from "@/lib/types";
+import type { Anchor, Finding, Requirements, ReviewStatus, RunDetail, Severity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 3000;
@@ -120,14 +122,10 @@ export default function ReviewPage() {
     if (ready) void loadReview();
   }, [ready, loadReview]);
 
-  async function decide(finding: Finding, ok: boolean, note: string) {
+  async function decide(finding: Finding, status: ReviewStatus, note: string) {
     setBusy(true);
     try {
-      const updated = await api.reviewFinding(
-        finding.id,
-        ok ? "false_positive" : "confirmed",
-        note
-      );
+      const updated = await api.reviewFinding(finding.id, status, note);
       setFindings((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
       setOpenFinding((prev) => (prev && prev.id === updated.id ? updated : prev));
       await loadRun();
@@ -548,7 +546,7 @@ function findingTarget(finding: Finding): ObservationTarget {
 interface FindingsTabProps {
   findings: Finding[];
   busy: boolean;
-  onDecide: (finding: Finding, ok: boolean, note: string) => Promise<void>;
+  onDecide: (finding: Finding, status: ReviewStatus, note: string) => Promise<void>;
   onBulkOk: () => void;
   onOpen: (finding: Finding) => void;
   /** Null when Train AI mode is off, which removes the control entirely. */
@@ -621,13 +619,26 @@ function FindingCard({
 }: {
   finding: Finding;
   busy: boolean;
-  onDecide: (finding: Finding, ok: boolean, note: string) => Promise<void>;
+  onDecide: (finding: Finding, status: ReviewStatus, note: string) => Promise<void>;
   onOpen: (finding: Finding) => void;
   onObserve: ((target: ObservationTarget) => void) | null;
 }) {
   const [note, setNote] = React.useState(finding.review_note);
+  const [problem, setProblem] = React.useState("");
   const decided = finding.review_status !== "undecided";
   const ok = isOk(finding.review_status);
+
+  /**
+   * Record a decision, or say what is missing first.
+   *
+   * The API refuses the same cases; asking here means the reviewer never loses what
+   * they typed to a rejection.
+   */
+  async function record(status: ReviewStatus) {
+    const missing = decisionProblem(finding.severity, status, note);
+    setProblem(missing);
+    if (!missing) await onDecide(finding, status, note);
+  }
 
   return (
     <Card
@@ -658,17 +669,28 @@ function FindingCard({
       >
         <Button
           size="sm"
-          variant={decided && ok ? "success" : "outline"}
+          variant={finding.review_status === "false_positive" ? "success" : "outline"}
           disabled={busy}
-          onClick={() => void onDecide(finding, true, note)}
+          title="The finding is not a real problem"
+          onClick={() => void record("false_positive")}
         >
-          <CheckCircle2 className="h-4 w-4" /> OK
+          <CheckCircle2 className="h-4 w-4" /> False positive
+        </Button>
+        <Button
+          size="sm"
+          variant={finding.review_status === "accepted_risk" ? "success" : "outline"}
+          disabled={busy}
+          title="The finding is real and the delivery goes ahead anyway. Say why."
+          onClick={() => void record("accepted_risk")}
+        >
+          <ShieldCheck className="h-4 w-4" /> Accepted risk
         </Button>
         <Button
           size="sm"
           variant={decided && !ok ? "destructive" : "outline"}
           disabled={busy}
-          onClick={() => void onDecide(finding, false, note)}
+          title="The delivery has to change"
+          onClick={() => void record("confirmed")}
         >
           <XCircle className="h-4 w-4" /> Not OK
         </Button>
@@ -676,7 +698,10 @@ function FindingCard({
           className="min-w-[12rem] flex-1"
           placeholder="Comment — shown in the final report for Not OK items"
           value={note}
-          onChange={(event) => setNote(event.target.value)}
+          onChange={(event) => {
+            setNote(event.target.value);
+            setProblem("");
+          }}
           aria-label={`Comment on ${finding.finding_id}`}
         />
         {onObserve ? (
@@ -691,6 +716,12 @@ function FindingCard({
           </Button>
         ) : null}
       </div>
+
+      {problem ? (
+        <p role="alert" className="mt-2 text-xs font-medium text-destructive">
+          {problem}
+        </p>
+      ) : null}
     </Card>
   );
 }
