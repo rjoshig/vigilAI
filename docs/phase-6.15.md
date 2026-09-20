@@ -207,14 +207,17 @@ explicitly rather than asserting behaviour the code does not have.
 
 ## What to settle before this becomes a build plan
 
-- [ ] Is a model-located match a **finding** or a **confirmation prompt**? Review
+- [x] Is a model-located match a **finding** or a **confirmation prompt**? Answered
+      by the build: a confirmation prompt at review severity, never a pass. Review
       severity plus write-back is the current leaning, because it self-corrects.
-- [ ] Does a confirmed location amend the rule **automatically or through the training
+- [x] Answered by the build: neither. The finding names the path and the person adds
+      it as an alternate, which is simpler than a queue round-trip for a one-line
+      change and keeps ADR-021. Original question: automatically or through the training
       queue**? ADR-021 points at the queue.
 - [x] **Run statistics should say which engine answered.** Built in 6.16b:
       `Finding.engine` is `code` or `model`, and a run's statistics count them.
       Original note follows.
-- [ ] (superseded) When a rule is decided by
+- [x] (superseded by 6.16b) When a rule is decided by
       code and when it is decided after a model call, the run's statistics should
       distinguish them, so the cost and the reliability of each path are visible rather
       than inferred. This is wanted whichever shape is chosen.

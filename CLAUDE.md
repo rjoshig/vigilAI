@@ -83,6 +83,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.14 | The artifacts belong together: an artifact match check before any model call (configuration id, customer, credit date) any submitter accepts with a reason; the credit date resolved by label; every field says what it does to a run; tooltips on by default; the theme locked | `docs/phase-6.14.md` | ⬜ not started |
 | 6.15 | A compliance rule should survive being spelled differently: four deterministic tests widen the match, and where they still fail the model says where the control is and code decides what that means | `docs/phase-6.15.md` | ✅ complete |
 | 6.16 | Numbers that mean something: the delivery programme and a thirty-day count on the runs screen, which engine produced each finding, and a dated report of the manual hours displaced | `docs/phase-6.16.md` | ✅ complete |
+| 6.17 | What is left, gathered in one place: measure the programme keyword check, the live cap countdown, how scope reaches the compliance locator, and the two standing touchpoints that have fallen behind | `docs/phase-6.17.md` | ⬜ not started |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
