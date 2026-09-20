@@ -323,6 +323,63 @@ class AliasOut(AliasIn):
     id: int
 
 
+class AnnouncementIn(BaseModel):
+    """A notice to show at the top of an app for a while (Phase 6.14g)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: ``info`` · ``warning`` · ``critical``.
+    level: str = "info"
+    #: ``user`` · ``admin`` · ``both``.
+    audience: str = "both"
+    message: str = Field(min_length=1, max_length=2000)
+    #: Both required. A notice with no end is the stale-banner problem this avoids.
+    starts_at: dt.datetime
+    ends_at: dt.datetime
+    is_active: bool = True
+
+
+class AnnouncementOut(AnnouncementIn):
+    """A stored notice."""
+
+    id: int
+    created_by: str = ""
+    #: Whether it is showing at this moment, so the console can say so rather than
+    #: leaving an administrator to compare dates in their head.
+    showing_now: bool = False
+
+
+class FieldLabelIn(BaseModel):
+    """What a delivery calls one of the fields the tool checks (Phase 6.14b).
+
+    Document labels, not data attribute names: the credit date is written *as-of
+    date* on one customer's reports and *cycle date* on another's. Scoped with the
+    one scope vocabulary (ADR-029), so a programme or a single configuration can
+    name its own spelling without changing anybody else's.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Which field this names. A closed set; unknown values are refused.
+    canonical: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=200)
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    is_active: bool = True
+
+
+class FieldLabelOut(FieldLabelIn):
+    """A stored label."""
+
+    id: int
+    #: The scope written the way the screens write it, e.g. "Account Monitoring".
+    scope_label: str = ""
+    created_by: str = ""
+    #: True for the spellings that ship with the tool. They cannot be edited or
+    #: deleted; a delivery that says it differently adds its own.
+    is_builtin: bool = False
+
+
 class MaskedColumnIn(BaseModel):
     """A report column pattern whose values are masked at parse time."""
 

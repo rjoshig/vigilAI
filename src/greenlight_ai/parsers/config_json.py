@@ -83,6 +83,10 @@ class JsonConfigParser:
         if not isinstance(configuration_id, str) or not configuration_id.strip():
             raise ParseError(source, "missing a string 'configuration_id'")
         last_modified = decoded.get("last_modified")
+        # The configuration usually names the customer it was built for. It is not
+        # required — a file without one is a file without one, not a broken file — but
+        # where it is present it is compared with what the submitter chose (ADR-041).
+        customer = decoded.get("customer")
 
         blocks = tuple(_split(decoded))
         _LOG.info(
@@ -94,6 +98,7 @@ class JsonConfigParser:
         return ConfigDocument(
             path=source,
             configuration_id=configuration_id.strip(),
+            customer=customer.strip() if isinstance(customer, str) else "",
             last_modified=last_modified if isinstance(last_modified, str) else None,
             blocks=blocks,
             raw=decoded,

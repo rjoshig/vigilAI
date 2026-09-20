@@ -152,7 +152,27 @@
 
       @media print {
         .no-print { display: none !important; }
+        /* Provenance a reader needs on screen and not on the filed copy: when it was
+           generated and by whom, the input hash, the rules version. The report is the
+           record of a judgement, and the run page holds the audit trail. */
+        .print-hide { display: none !important; }
         body { background: #fff; }
+
+        /* Compact for paper. The screen copy stays roomy; the PDF is filed, attached
+           to an email and read at arm's length, and every millimetre of leading is a
+           page somebody scrolls past. */
+        html { font-size: 13px; }
+        .wrap { padding: 0 10mm; max-width: none; }
+        h1 { font-size: 1.25rem; margin: 0 0 0.35rem; }
+        h2 { font-size: 1rem; margin: 0.9rem 0 0.35rem; }
+        header { padding: 6mm 10mm 3mm; }
+        .card, .body { padding: 2.5mm 3mm; }
+        table { font-size: 0.78rem; }
+        td, th { padding: 1.2mm 2mm; }
+        dl.kv { gap: 0.15rem 0.6rem; }
+        p, li { margin: 0.25rem 0; }
+        details { margin: 0.35rem 0; }
+        .small { font-size: 0.72rem; }
         /* Every finding is expanded on paper: a collapsed section is invisible there,
            and the PDF is the artifact people file. CSS alone cannot do this — a closed
            <details> hides its children through the browser's own mechanism, which
@@ -184,7 +204,7 @@
           <div class="sub">
             Run <span class="mono">VR-{{ "%04d"|format(run.id) }}</span> ·
             {{ run.customer_name }} · {{ run.order_number }} ·
-            <span class="frozen">frozen {{ generated_at }} · stored once, never regenerated</span>
+            <span class="frozen"><span class="print-hide">frozen {{ generated_at }} · </span>stored once, never regenerated</span>
           </div>
         </div>
       </div>
@@ -200,9 +220,7 @@
       <p class="muted small">
         Configuration <span class="mono">{{ run.configuration_id }}</span>
         {%- if run.credit_date %} · credit date {{ run.credit_date }}{% endif %}
-        {%- if run.model_used %} · model <span class="mono">{{ run.model_used }}</span>{% endif %}
-        {%- if run.prompt_version %} · prompts v{{ run.prompt_version }}{% endif %}
-        · rules v{{ run.rules_version }}
+        <span class="print-hide">· rules v{{ run.rules_version }}</span>
         {%- if run.definition_versions %} · definitions {% for token, version in run.definition_versions.items() %}{{ token.split(':')[1] }} v{{ version }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
         {%- if run.rerun_reason %} · re-run: {{ run.rerun_reason }}{% endif %}
       </p>
@@ -264,6 +282,25 @@
       </div>
       {% else %}
       <div class="card small muted">Nothing was marked Not OK.</div>
+      {% endif %}
+
+      {% if mismatches %}
+      <h2>Accepted before the run started</h2>
+      <p class="small muted">
+        The artifacts did not match what was submitted. The disagreement was shown
+        before anything was validated, and accepted with a reason. Compared by code.
+      </p>
+      <table>
+        <tr><th>Field</th><th>Submitted</th><th>The file said</th><th>Accepted by, and why</th></tr>
+        {% for mismatch in mismatches %}
+        <tr>
+          <td class="small">{{ mismatch.label }}</td>
+          <td class="mono">{{ mismatch.submitted }}</td>
+          <td class="mono">{{ mismatch.declared }}</td>
+          <td class="small">{{ mismatch.accepted_by }} — {{ mismatch.reason }}</td>
+        </tr>
+        {% endfor %}
+      </table>
       {% endif %}
 
       {% if attestation %}
@@ -457,10 +494,10 @@
             <dt>Customer</dt><dd>{{ run.customer_name }}</dd>
             <dt>Order</dt><dd class="mono">{{ run.order_number }}</dd>
             <dt>Configuration</dt><dd class="mono">{{ run.configuration_id }}</dd>
-            <dt>Rules version</dt><dd>{{ run.rules_version }}</dd>
+            <dt class="print-hide">Rules version</dt><dd class="print-hide">{{ run.rules_version }}</dd>
             <dt>Pipeline duration</dt><dd>{{ stats.duration }}</dd>
             <dt>Model calls / tokens</dt><dd>{{ stats.calls }} calls · {{ stats.tokens }} tokens · {{ stats.cache_hits }} cache hits</dd>
-            <dt>Input fingerprint</dt><dd class="mono">{{ run.input_fingerprint[:16] }}…</dd>
+            <dt class="print-hide">Input fingerprint</dt><dd class="mono print-hide">{{ run.input_fingerprint[:16] }}…</dd>
             {% if run.config_notes_snapshot %}
             {# What the model was told about this configuration, as it stood at
                submission (ADR-024). A reviewer reading a finding needs that context. #}
@@ -478,7 +515,7 @@
                 no findings were decided
               {%- endif -%}
             </dd>
-            <dt>Generated</dt><dd>{{ generated_at }}{% if generated_by %} by {{ generated_by }}{% endif %}</dd>
+            <dt class="print-hide">Generated</dt><dd class="print-hide">{{ generated_at }}{% if generated_by %} by {{ generated_by }}{% endif %}</dd>
           </dl>
         </div>
       </details>

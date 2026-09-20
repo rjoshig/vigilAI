@@ -94,8 +94,13 @@ FindingType = Literal[
     "programme_mismatch",
     #: A delivery breaks a rule true of every run in its programme (ADR-026).
     "programme_rule_violation",
-    #: The credit date on the run does not appear in the reports (ADR-027).
+    #: The credit date on the run does not appear in the reports (ADR-027). The
+    #: weaker of the two: no cell labelled as the credit date was found anywhere, so
+    #: the check fell back to searching every value (Phase 6.14b).
     "credit_date_missing",
+    #: A report says it is cut as of a different date from the one submitted
+    #: (Phase 6.14b). The strong form: a labelled cell was read and disagreed.
+    "credit_date_mismatch",
     "could_not_evaluate",
     #: One of stage 8's lenses saw something in the same evidence the finding does
     #: not mention (Phase 6.11e). Always ``review`` severity: a lens proposes, it

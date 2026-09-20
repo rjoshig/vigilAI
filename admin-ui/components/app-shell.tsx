@@ -25,6 +25,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
+import { NoticeBar } from "@/components/notice-bar";
+import { usePalette } from "@/components/palette-provider";
 import { useAuth } from "@/components/auth-gate";
 import { Logo } from "@/components/logo";
 import { PalettePicker } from "@/components/theme-picker";
@@ -162,6 +164,7 @@ function SidebarFooter() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { tagline } = usePalette();
 
   return (
     <div className="flex min-h-screen">
@@ -181,9 +184,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 Admin
               </span>
             </div>
-            <div className="text-[0.625rem] text-muted-foreground">
-              Nothing ships without a green light.
-            </div>
+            {tagline ? (
+              <div className="text-[0.625rem] text-muted-foreground">{tagline}</div>
+            ) : null}
           </div>
         </Link>
 
@@ -222,7 +225,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="h-screen min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[84rem] px-6 pb-12 pt-5">{children}</div>
+        <div className="mx-auto max-w-[84rem] px-6 pb-12 pt-5">
+          <NoticeBar audience="admin" />
+          {children}
+        </div>
       </main>
     </div>
   );

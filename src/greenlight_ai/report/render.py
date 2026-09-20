@@ -192,6 +192,7 @@ def render_report(
     now: dt.datetime | None = None,
     drift: Drift | None = None,
     attestation: dict[str, Any] | None = None,
+    mismatches: Sequence[Any] = (),
     submitted_by: str = "",
     reviewers: Sequence[str] = (),
 ) -> RenderedReport:
@@ -212,6 +213,9 @@ def render_report(
             are often not the same person.
         reviewers: Who decided the findings, each named once. Empty when nobody did,
             which the report says rather than implying a review that never happened.
+        mismatches: Where the artifacts disagreed with the submission and somebody
+            accepted it before the run started (ADR-041). Shown on the report because a
+            reviewer signing the delivery should see that the question was waived.
         attestation: What the person confirmed when they froze it (Phase 6.11d): the
             coverage counts, the gaps they acknowledged, the shadow rules and
             definition versions in force, and the run's notices. A report that is
@@ -279,6 +283,7 @@ def render_report(
             reviewers=list(reviewers),
             drift=drift,
             attestation=attestation or {},
+            mismatches=list(mismatches),
             stats={
                 "duration": _duration(stages),
                 "calls": len(calls),

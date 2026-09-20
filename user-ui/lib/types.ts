@@ -4,7 +4,13 @@
  */
 
 /** Where a run is in its lifecycle. */
-export type RunStatus = "draft" | "queued" | "running" | "needs_review" | "finalized" | "failed";
+/**
+ * A run's lifecycle. "held" means the artifacts disagree with what was submitted
+ * and somebody has to accept that before it starts (ADR-041); the files are
+ * already stored, so nothing needs re-uploading.
+ */
+export type RunStatus =
+  "draft" | "held" | "queued" | "running" | "needs_review" | "finalized" | "failed";
 
 /** How serious a finding is. "review" means a person must look, not that it is wrong. */
 export type Severity = "high" | "medium" | "low" | "review";
@@ -116,6 +122,8 @@ export interface RunDetail extends RunSummary {
   pdf_available: boolean;
   stages: StageInfo[];
   files: Record<string, string>;
+  /** Where the artifacts disagreed with the submission, accepted or not (ADR-041). */
+  mismatches: ArtifactMismatch[];
   /**
    * The configuration notes in force when the run was submitted (ADR-024). Copied
    * onto the run so that what the model was told cannot change after the fact.
@@ -260,11 +268,44 @@ export interface DuplicateRun {
   message: string;
 }
 
+/**
+ * One field where the artifacts disagree with what was submitted (ADR-041).
+ *
+ * `kind` is "near" when the two are the same once punctuation and company suffixes
+ * are removed, and "different" otherwise. A near match is still shown: it is usually
+ * the same customer and occasionally is not.
+ */
+export interface ArtifactMismatch {
+  id: number;
+  field: string;
+  /** A short label for the field, so the screen need not know the vocabulary. */
+  label: string;
+  submitted: string;
+  declared: string;
+  kind: "near" | "different";
+  source: string;
+  reason: string;
+  accepted_at: string | null;
+  accepted_by: string;
+}
+
 export interface CreateRunResult {
   run_id: number | null;
   status: string;
   queue_position: number | null;
   duplicate: DuplicateRun | null;
+  /**
+   * Non-empty when `status` is "held": the artifacts disagree with what was typed.
+   * The files are already stored, so accepting costs a reason and a click.
+   */
+  mismatches: ArtifactMismatch[];
+}
+
+export interface AcceptMismatchesResult {
+  run_id: number;
+  status: string;
+  accepted: number;
+  queue_position: number | null;
 }
 
 export interface RecheckResult {

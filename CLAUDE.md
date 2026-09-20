@@ -41,6 +41,16 @@ every doc describing what is true at that commit, not what was planned — see
   (readiness, focus-group UAT with a benchmark, senior associates validating with
   Train AI mode on, then region by region). When a phase closes, re-read it and
   update the readiness checklist.
+- **What a field does to a run, in the same commit that changes it.**
+  `docs/model-context.md` is the register of every field a person can write: which
+  prompt block it lands in, which stages read it, the cap that applies, and whether
+  code or the model acts on it. **If a commit changes what reaches the model, what a
+  stage reads, or a cap, it updates that register, the field's label or tooltip in
+  both apps, and the training documents — in that commit.** A console that says a
+  field is background when it now decides something is worse than a console that says
+  nothing: an administrator cannot see a prompt, so the label is the only account they
+  get. Adding a field that reaches the model without marking it as such is the same
+  defect as shipping it undocumented. Details: `docs/phase-6.14.md`.
 
 ## Phase gating
 
@@ -70,6 +80,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.11 | Nothing slips: coverage of every requirement, a fail-closed finalize gate with an attestation, decision reasons, three independent lenses at stage 8 merged by code, a benchmark harness with precision and recall | `docs/phase-6.11.md` | ✅ complete |
 | 6.12 | One front door: an administrator says what to check in their own words and the model drafts it onto the surface that already runs it; one scope vocabulary everywhere | `docs/phase-6.12.md` | ✅ complete |
 | 6.13 | The loop closes: fifteen silent defects repaired, the observation author sees the outcome, findings carry their origin, judgment checks finished, a controlled example library, a real replay | `docs/phase-6.13.md` | ✅ complete |
+| 6.14 | The artifacts belong together: an artifact match check before any model call (configuration id, customer, credit date) any submitter accepts with a reason; the credit date resolved by label; every field says what it does to a run; tooltips on by default; the theme locked | `docs/phase-6.14.md` | ⬜ not started |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same

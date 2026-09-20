@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 
+import { ArtifactMatchCard } from "@/components/artifact-match-card";
 import { CoverageCard } from "@/components/coverage-card";
 import { DriftCard } from "@/components/drift-card";
 import { EvidencePanel } from "@/components/evidence-panel";
@@ -272,6 +273,13 @@ export default function ReviewPage() {
             </Link>
           </>
         }
+      />
+
+      <ArtifactMatchCard
+        runId={run.id}
+        mismatches={run.mismatches ?? []}
+        held={run.status === "held"}
+        onAccepted={() => void loadRun()}
       />
 
       {run.status === "failed" ? (

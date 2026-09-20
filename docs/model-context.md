@@ -1,0 +1,122 @@
+# What reaches the model, and what code decides
+
+**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i).
+
+An administrator cannot see a prompt. Everything they know about where their words end
+up comes from the label next to the box they typed them in, which makes that label the
+only account they get — and a console that says a field is background when it now
+decides something is worse than a console that says nothing.
+
+This file is the register those labels quote. It is derived from the call sites, not
+from memory: every row names the function that puts the value into a prompt or compares
+it, so it can be checked rather than believed.
+
+**It changes in the same commit as the code.** `CLAUDE.md` carries that as a standing
+touchpoint: a commit that changes what reaches the model, what a stage reads, or a cap
+updates this file, the field's marker in both apps, and the training documents, in that
+commit.
+
+## The five things a field can do
+
+Both apps mark every field a person can write with one of these, and the marker never
+hides — it is a fact about the run, not help text. Somebody writing a note deserves to
+know whether they are teaching the model, feeding a comparison, leaving a message for
+the next reviewer, or writing to themselves.
+
+| Marker | What it means |
+| --- | --- |
+| **Helps the AI** | Rendered into the prompt as background. Better context here means better findings; it never makes anything pass or fail. |
+| **Checked by code** | Compared against the artifacts by code. It can produce a finding, and the same inputs always give the same answer. |
+| **Read by a person** | Shown to whoever reviews or signs off the run. Nothing automated acts on it. |
+| **Your own note** | Kept with the run for you and anyone looking later. Reaches no model and no check. |
+| **Identifies the run** | How the run is found, grouped, and compared with earlier ones — and checked against what the uploaded files declare. |
+
+## The one rule everything here obeys
+
+**The model reads and judges meaning. Code does every comparison** (ADR-001). Nothing in
+this register lets a person make the model compare, compute or decide. A field that
+reaches the model can change what it pays attention to; it can never make a finding.
+Findings come from code evaluating a rule, and rules live in the rule tables.
+
+## Fields that reach the model
+
+All of these are assembled by `pipeline/guidance.py::preamble`, which labels the whole
+block *"Context, which is background rather than a requirement. Requirements come only
+from the document itself."* If nothing is configured it returns an empty string and the
+prompts are byte-for-byte what they were before any of this existed.
+
+| Field | Where it is written | Reaches | Cap |
+| --- | --- | --- | --- |
+| Artifact type **AI context** | Admin → Artifact types | The prompt for that artifact only: OSL at stage 2, configuration at stage 3 and 4, a report type at stage 8 | 1,500 characters |
+| Programme **standing instructions** | Admin → Delivery programmes | Every stage that builds a preamble, on runs in that programme | 1,500 characters |
+| **Configuration notes** | User → Configurations, or Admin | Every stage that builds a preamble, on runs of that configuration (ADR-024) | 1,500 characters each |
+| **Delivery notes** | The new-run form | Every stage that builds a preamble, on that run | 1,500 characters |
+| Programme **scope label** and counts | Admin → Delivery programmes; the new-run form | Every stage that builds a preamble | — |
+| **Validation guides** | Admin → Artifact types → Guide | Stages 4 and 8, as a separate block (`guide_block`) | — |
+| **Meaning entries** | Admin → Meaning | Stages 4 and 8, through the guide block | — |
+| **Programme rules** | Admin → Delivery programmes | Stage 8, with their strictness — which the model states and **code** grades | — |
+| **Worked examples** | Admin → Examples | Extraction, description, tracing, judgment, classification, synthesis (ADR-038) | 4 per stage |
+| **Judgment check named values** | Admin → Checks | Stage 7, as `name = value` lines for the named values that check lists | — |
+
+**The stages that build a preamble** are 2 (extract), 3 (describe), 4 (trace),
+7 (reports), 8 (verify) and 9 (summarize). Stages 5 (compare) and 6 (reverse) build
+none and make no model call at all: they are pure comparison, which is ADR-001 visible
+in a stage log.
+
+**The whole preamble is capped at 6,000 characters** (`MAX_BLOCK_CHARS`). Past it the
+block is trimmed as a whole and the model is told what was left out — before 6.11e each
+field was capped alone, so ten configuration notes were ten times the cap.
+
+**Every one of these is part of the cache key**, because the cache key is a hash of what
+was actually sent (ADR-005). Editing guidance therefore refreshes exactly the calls it
+changes, and nothing else, without anyone remembering to bump a version.
+
+## Fields code evaluates
+
+These never reach a prompt. Code compares them against the artifacts, and each can
+produce a finding.
+
+| Field | Where it is written | Evaluated by |
+| --- | --- | --- |
+| **Expression checks** | Admin → Checks | `checks/expressions.py` at stage 7 |
+| **Field constraints** | Admin → Rules | `checks/field_constraints.py` at stage 7 |
+| **Compliance rules** | Admin → Compliance | `pipeline/s6_reverse.py` |
+| **Programme rule strictness** | Admin → Delivery programmes | `pipeline/s8_verify.py` — the model says whether it holds, code sets the severity |
+| **Named values** | Admin → Artifact types | `checks/named_values.py`, resolved against the report |
+| **Attribute aliases** | Admin → Reference data | `rules/normalize.py`, applied at stages 4, 5 and 7 |
+| **Masked columns** | Admin → Reference data | `parsers/masking.py`, at parse time (ADR-003) |
+| **Submitted identity** | The new-run form | `checks/artifact_match.py`, before any model call (ADR-041) |
+| **Credit date** | The new-run form | `checks/artifact_match.py` before the run starts, against the cell `checks/field_labels.py` resolves; `pipeline/s7_reports.py` for whatever the pre-flight did not reach |
+| **Field labels** | Admin → Reference data | `checks/field_labels.py`, resolving what a delivery calls a checked field |
+| **Scheduled notices** | Admin → Settings → Notices | Nothing evaluates them; they are shown to people between their start and end (Phase 6.14g) |
+
+## Fields that are reference only
+
+| Field | What it is for |
+| --- | --- |
+| Artifact type **description** | Read by the person uploading the file. Reaches nothing. |
+| **Artifact samples** | Specimens other definitions resolve against: workbook type detection, named values, guide examples, and the mapping interview. **A sample's contents never enter a validation run** — `grep sample src/greenlight_ai/pipeline/` finds only ADR-003 comments. |
+| Sample **notes** | Read by the model during the mapping interview for that scope, not during a run. |
+| **Programme keywords** | Compared by code at stage 7 to confirm a run is the programme it claims. |
+
+## What never reaches a prompt, under any setting
+
+**No sample row, and no personal data** (ADR-003). The tripwire scans every assembled
+prompt and refuses to send a match; `LLM_LOG_PROMPTS` stays false. Where the model is
+shown a report's shape — in the mapping interview — it is shown *labels and addresses,
+never values*: `meaning/interview.py::_cells_text` says so in its docstring and is
+tested for it.
+
+## Checking this file against the code
+
+```bash
+# Every place a preamble is built:
+grep -rn "preamble(" --include="*.py" src/greenlight_ai/pipeline/
+
+# Every place a sample is read (should never be under pipeline/):
+grep -rn "sample" --include="*.py" src/greenlight_ai/pipeline/
+
+# The caps:
+grep -n "MAX_CONTEXT_CHARS\|MAX_BLOCK_CHARS" src/greenlight_ai/pipeline/guidance.py
+grep -n "MAX_PER_STAGE" src/greenlight_ai/llm/examples.py
+```

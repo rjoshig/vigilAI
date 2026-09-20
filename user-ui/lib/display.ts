@@ -31,6 +31,7 @@ export const STATUS_TONE: Record<
   "muted" | "info" | "warn" | "solid-success" | "destructive"
 > = {
   draft: "muted",
+  held: "warn",
   queued: "muted",
   running: "info",
   needs_review: "warn",
@@ -41,6 +42,7 @@ export const STATUS_TONE: Record<
 /** The label for each run status. */
 export const STATUS_LABEL: Record<RunStatus, string> = {
   draft: "Draft",
+  held: "Held — check the artifacts",
   queued: "Queued",
   running: "Running",
   needs_review: "Needs review",

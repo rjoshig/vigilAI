@@ -464,3 +464,34 @@ def test_a_run_nobody_decided_says_so_rather_than_implying_a_review(
         )
 
     assert "no findings were decided" in rendered.html
+
+
+def test_the_report_never_names_the_model(reviewed: int, client: TestClient, api: str) -> None:
+    """Which model ran it is an operational fact, not part of the judgement.
+
+    It stays on the run record and in the stage log, where an administrator can find
+    it; the report is what goes to a customer's file (Phase 6.14f).
+    """
+    client.post(f"{api}/runs/{reviewed}/finalize")
+    html = client.get(f"{api}/runs/{reviewed}/report").text
+    # The name of a model, in any of the spellings a provider uses.
+    for vendor in ("claude", "gpt-", "gemma", "llama", "mock-model"):
+        assert vendor not in html.lower(), f"the report names {vendor}"
+    # The subtitle line that used to carry it, and the prompt-set version beside it.
+    assert "· model <span" not in html
+    assert "prompts v" not in html
+
+
+def test_the_filed_copy_hides_what_belongs_only_on_screen(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    """Generated-by, the input hash and the rules version are print-hidden.
+
+    They are still in the HTML — the screen copy is where somebody chases provenance
+    — and the stylesheet drops them when the page is printed to PDF.
+    """
+    client.post(f"{api}/runs/{reviewed}/finalize")
+    html = client.get(f"{api}/runs/{reviewed}/report").text
+    assert ".print-hide { display: none !important; }" in html
+    assert 'class="print-hide">Input fingerprint' in html
+    assert 'class="print-hide">Generated' in html

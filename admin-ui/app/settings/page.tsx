@@ -27,7 +27,9 @@ import {
   TR,
   Table,
 } from "@/components/ui/primitives";
+import { AnnouncementsCard } from "@/components/announcements-card";
 import { api, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type {
   ConfigChange,
   ProviderTestResult,
@@ -362,8 +364,12 @@ function History({ changes }: { changes: ConfigChange[] }) {
   );
 }
 
+/** The tab that holds scheduled notices, which are rows rather than settings. */
+const NOTICES_TAB = "Notices";
+
 export default function SettingsPage() {
   const [groups, setGroups] = React.useState<SettingGroup[] | null>(null);
+  const [tab, setTab] = React.useState<string>("");
   const [changes, setChanges] = React.useState<ConfigChange[]>([]);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -407,6 +413,16 @@ export default function SettingsPage() {
     [setGroups]
   );
 
+  // Notices are not a setting — they are rows with a schedule — but they belong where
+  // an administrator already goes to change how the apps behave.
+  const tabs = React.useMemo(
+    () => [...(groups ?? []).map((group) => group.name), NOTICES_TAB],
+    [groups]
+  );
+  React.useEffect(() => {
+    if (!tab && tabs.length > 0) setTab(tabs[0]);
+  }, [tab, tabs]);
+
   return (
     <>
       <PageHeader
@@ -423,27 +439,61 @@ export default function SettingsPage() {
       {!groups ? (
         <Skeleton className="h-96" />
       ) : (
-        <div className="grid gap-4">
-          {groups.map((group) => (
-            <Card key={group.name}>
-              <CardHeader className="border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                  {group.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {group.settings.map((setting) => (
-                  <SettingRow key={setting.key} setting={setting} onChanged={onChanged} />
-                ))}
-                {group.name === "Model" ? <ConnectionTest /> : null}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <>
+          {/* One tab per group rather than one long page. Eight groups down a single
+              column meant the setting somebody wanted was almost always below the
+              fold, and a settings screen is read by somebody who already knows which
+              one they came for. */}
+          <div
+            role="tablist"
+            aria-label="Settings groups"
+            className="mb-4 flex flex-wrap gap-1 border-b border-border"
+          >
+            {tabs.map((name) => (
+              <button
+                key={name}
+                role="tab"
+                type="button"
+                aria-selected={name === tab}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm",
+                  name === tab
+                    ? "border-primary font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setTab(name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+
+          {tab === NOTICES_TAB ? (
+            <AnnouncementsCard onError={setError} />
+          ) : (
+            groups
+              .filter((group) => group.name === tab)
+              .map((group) => (
+                <Card key={group.name}>
+                  <CardHeader className="border-b">
+                    <CardTitle className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                      {group.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    {group.settings.map((setting) => (
+                      <SettingRow key={setting.key} setting={setting} onChanged={onChanged} />
+                    ))}
+                    {group.name === "Model" ? <ConnectionTest /> : null}
+                  </CardContent>
+                </Card>
+              ))
+          )}
+        </>
       )}
 
-      <History changes={changes} />
+      {tab === NOTICES_TAB ? null : <History changes={changes} />}
     </>
   );
 }
