@@ -809,6 +809,7 @@ function SampleStrip({
                 <AddSample
                   type={type}
                   scope={group.code}
+                  grouped={grouped}
                   disabled={disabled}
                   onAdd={(file, label, notes) =>
                     run("add the sample", () =>
@@ -995,11 +996,14 @@ function SampleCard({
 function AddSample({
   type,
   scope,
+  grouped,
   disabled,
   onAdd,
 }: {
   type: ArtifactType;
   scope: string;
+  /** Whether this type's samples are split by programme; reports are not. */
+  grouped: boolean;
   disabled: boolean;
   onAdd: (file: File, label: string, notes: string) => void;
 }) {
@@ -1025,7 +1029,11 @@ function AddSample({
         id={`sample-notes-${id}`}
         rows={2}
         className="mt-1 text-xs"
-        placeholder="How this variant differs; what the model should know about it."
+        placeholder={
+          grouped
+            ? "How this variant differs; what the model should know about it."
+            : "Anything worth knowing about this workbook."
+        }
         value={notes}
         onChange={(event) => setNotes(event.target.value)}
       />
@@ -1050,7 +1058,8 @@ function AddSample({
         disabled={disabled}
         onClick={() => fileInput.current?.click()}
       >
-        <Upload className="h-3.5 w-3.5" /> Add {scope ? `for ${scope}` : "global"} sample
+        <Upload className="h-3.5 w-3.5" />{" "}
+        {grouped ? `Add ${scope ? `for ${scope}` : "global"} sample` : "Add sample"}
       </Button>
     </div>
   );
