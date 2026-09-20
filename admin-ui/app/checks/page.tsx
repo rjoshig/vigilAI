@@ -11,7 +11,7 @@
 import { AlertTriangle, FlaskConical, Plus, Sparkles, Zap } from "lucide-react";
 import * as React from "react";
 
-import { Explain } from "@/components/explain";
+import { Explain, FieldEffect } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -114,7 +114,7 @@ export default function ChecksPage() {
           </Explain>
         }
         title="Checks"
-        description="Cross-report checks defined as data. The model helps write a check once; code runs it on every request at no token cost. Versioned, scoped, and switchable. Evaluated by code on every run; nothing here is sent to the model."
+        description="Cross-report checks defined as data, versioned, scoped and switchable. An expression check is a formula code evaluates, at no token cost. A judgment check sends its instruction and its named values to the model on every run — which is why the form says use it sparingly."
         action={
           <Button onClick={() => setAuthoring("new")}>
             <Plus className="h-4 w-4" /> New check
@@ -442,6 +442,10 @@ function AuthorDialog({
                     value={check.expression}
                     onChange={(event) => setCheck({ ...check, expression: event.target.value })}
                   />
+                  <FieldEffect
+                    kind="code"
+                    note="Evaluated by code on every run in scope, at no token cost, and the same inputs always give the same answer."
+                  />
                 </div>
               ) : (
                 <>
@@ -453,6 +457,10 @@ function AuthorDialog({
                       placeholder="The state mix should be plausible for a campaign limited to two states."
                       value={check.instruction}
                       onChange={(event) => setCheck({ ...check, instruction: event.target.value })}
+                    />
+                    <FieldEffect
+                      kind="model"
+                      note="Sent to the model on every run in scope, with the values below. It answers pass, fail or review and code sets the severity — the model never decides how serious something is."
                     />
                   </div>
                   <div className="flex flex-col gap-1">

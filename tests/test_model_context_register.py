@@ -93,3 +93,53 @@ def test_no_sample_reaches_a_run(register: str) -> None:
         "a sample is being read inside the pipeline; docs/model-context.md says none is, "
         "and ADR-003 governs what may reach a prompt:\n" + "\n".join(offenders)
     )
+
+
+#: Both consoles' source, for claims about what reaches the model.
+UI_DIRS: Final[tuple[Path, ...]] = (REPO / "admin-ui", REPO / "user-ui")
+
+#: Phrases that assert nothing reaches the model. Each one is a promise, and a promise
+#: that stops being true is worse than no promise: an administrator cannot see a prompt,
+#: so the screen is the only account they get.
+_ABSOLUTE_CLAIMS: Final[tuple[str, ...]] = (
+    "nothing here is sent to the model",
+    "nothing on this screen reaches the model",
+    "none of this reaches the model",
+)
+
+
+def _ui_sources() -> list[Path]:
+    """Every page and component of both apps, skipping dependencies and builds."""
+    found: list[Path] = []
+    for root in UI_DIRS:
+        for sub in ("app", "components"):
+            found.extend(
+                path
+                for path in (root / sub).rglob("*.tsx")
+                if "node_modules" not in path.parts and ".next" not in path.parts
+            )
+    return found
+
+
+def test_no_screen_makes_a_blanket_claim_that_nothing_reaches_the_model() -> None:
+    """A screen-wide promise cannot survive a screen gaining one model-backed field.
+
+    This is not hypothetical. The compliance screen said "nothing here is sent to the
+    model" and stayed saying it after Phase 6.15 gave compliance rules a model-backed
+    locator; the checks screen said it while judgment checks had been sending their
+    instruction since 6.13c. Both were true when written.
+
+    A field may say what *it* does — that is what `<FieldEffect>` is for, and it lives
+    next to the field that would change with it. A whole screen may not, because the
+    claim outlives the thing it was describing.
+    """
+    offenders: list[str] = []
+    for path in _ui_sources():
+        lowered = path.read_text(encoding="utf-8").lower()
+        for claim in _ABSOLUTE_CLAIMS:
+            if claim in lowered:
+                offenders.append(f"{path.relative_to(REPO)}: {claim!r}")
+    assert not offenders, (
+        "a screen claims nothing on it reaches the model. Say it on the field with "
+        "<FieldEffect>, where it is next to the thing that would change:\n" + "\n".join(offenders)
+    )
