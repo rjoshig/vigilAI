@@ -7,7 +7,7 @@ design documents, and management briefings. Everything here is at the level a us
 a manager needs; engineering detail lives in the repository. Diagrams are in Mermaid
 so they render in most tools and can be redrawn in any.
 
-**As of:** 2026-09-19. The tool is built through phase 6.4 and is ahead of its first
+**As of:** 2026-09-20. The tool is built through phase 6.10 and is ahead of its first
 UAT. Timing figures in section 8 are expected values to be confirmed in UAT, not
 measurements.
 
@@ -202,11 +202,12 @@ deployment and no restart.
 
 | Area | What |
 | --- | --- |
-| Inputs | Which report types the tool accepts, what each means, up to three sample layouts per type, and a switch to hide a type from every user at once. |
-| Programmes | Account Monitoring, Account Solicitation, Archives, Other: each with standing instructions that reach the model as background. |
+| Inputs | The OSL (Word or PDF), the ETL configuration, and each report type in their own tabs; what each means; up to three sample layouts per type per programme; every definition kept in ten versions with revert; a switch to hide a type from every user at once. |
+| Meaning | The mapping interview: the model reads the sample OSL against the sample configuration and reports and proposes, per requirement, where it answers to; an administrator confirms, and code turns the confirmed rows into checks that run in shadow first. Global, and per programme. |
+| Programmes | Account Monitoring, Account Solicitation, Archives, Other: each with standing instructions, keywords, and rules of its own with a strictness the model never grades; checks and compliance rules can be scoped to one programme. |
 | Rules | Every rule the tool holds, whatever its origin, searchable, with how often it fires and how often it is dismissed. Enable, disable, delete, restore. |
 | Training | The queue of what associates wrote; synthesis; approval; activation. |
-| Settings | The model provider and key, login rules, throughput limits, upload size, retention. Each shows where its value came from. |
+| Settings | The model provider and key, login rules, throughput limits, upload size, retention, the default theme and its lock. Each shows where its value came from. |
 | Accounts | Users and administrators, when login is on. |
 
 **Why this matters:** the tool fits the work as the work changes, in days rather than
@@ -310,10 +311,11 @@ against a precision and recall floor measured on real orders.
 | Done | Still to do |
 | --- | --- |
 | The pipeline, the two apps, the frozen report and PDF | Fitting the parsers to the real file layouts, on the machine that holds them |
-| Configurable checks, rules, programmes, and settings from the admin console | The in-house model benchmark on the golden set |
+| Configurable checks, rules, programmes, meaning, versions and settings from the admin console | The in-house model benchmark on real files, on the target machine |
 | Optional login and full attribution | The first UAT and its benchmark |
 | Train AI mode end to end, with shadow rules | Compliance sign-off on retention and personal data |
-| Training documents and the rollout plan | Region-by-region rollout |
+| Training documents and the rollout plan; delivery drift; four themes | Region-by-region rollout |
+| Proven on a real model: the golden set 12 / 12, four live runs with the expected findings, the mapping interview proposing 12 links from one OSL | Browser tests in CI |
 
 ## 13. Glossary for a general audience
 

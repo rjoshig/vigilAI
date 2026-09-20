@@ -176,7 +176,7 @@ the code they describe, never in a follow-up.
 - Type hints on every signature, Google-style docstrings, `pathlib`, `logging` (never
   `print`), no magic numbers, pure functions where possible, `argparse` CLI.
 - `src/greenlight_ai/` subpackages: `parsers/ rules/ pipeline/ checks/ llm/ db/ api/ worker/
-  report/ auth/ config/ training/` + `cli.py`. Dependencies point down; `api/` never imports `pipeline/`.
+  report/ auth/ config/ training/ meaning/` + `cli.py`. Dependencies point down; `api/` never imports `pipeline/`.
 - Pydantic v2 at boundaries only (LLM output schemas, API wire models, config).
 - Prompts are versioned; the version is part of every cache key.
 - Frontend: Next.js 15 App Router, TypeScript strict, Tailwind 3, npm, Vitest. Theme
