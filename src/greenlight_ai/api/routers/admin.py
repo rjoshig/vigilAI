@@ -8,6 +8,7 @@ model.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import re
@@ -30,7 +31,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from greenlight_ai import announcements, scopes
+from greenlight_ai import announcements, scopes, value_report
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
@@ -51,6 +52,7 @@ from greenlight_ai.checks.expressions import (
 )
 from greenlight_ai.checks import guides
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
+from greenlight_ai.config import store as config_store
 from greenlight_ai.checks import field_labels
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.db import catalog, models, repository, versions
@@ -2288,6 +2290,49 @@ def _percentile(values: Sequence[int], fraction: float) -> int:
     ordered = sorted(values)
     index = min(len(ordered) - 1, int(round(fraction * (len(ordered) - 1))))
     return ordered[index]
+
+
+@router.get("/value-report", response_model=wire.ValueReportOut)
+def value_report_for(
+    start: dt.date = Query(...),
+    end: dt.date = Query(...),
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.ValueReportOut:
+    """What the tool displaced between two dates (Phase 6.16).
+
+    Counted from the run records: distinct orders finalized in the period, multiplied
+    by the hours an administrator says a manual check takes. Orders rather than runs,
+    because an order checked three times displaced one manual check.
+
+    Args:
+        start: First day to count, inclusive.
+        end: Last day to count, inclusive.
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The report.
+
+    Raises:
+        HTTPException: 422 when the period ends before it starts.
+    """
+    if end < start:
+        raise HTTPException(HTTP_422, "the period ends before it starts")
+    hours = int(config_store.resolve(session, "value.hours_per_order").value)
+    report = value_report.build(session, start, end, hours)
+    return wire.ValueReportOut(
+        start=report.start,
+        end=report.end,
+        days=report.days,
+        runs=report.runs,
+        orders=report.orders,
+        customers=report.customers,
+        repeat_runs=report.repeat_runs,
+        hours_per_order=report.hours_per_order,
+        hours_saved=report.hours_saved,
+        working_weeks=report.working_weeks,
+    )
 
 
 @router.get("/usage", response_model=wire.UsageOut)

@@ -395,6 +395,7 @@ def _add_proposals(
                 ),
                 leg=source.leg,
                 rule_id=source.rule_id,
+                engine="model",
                 evidence=source.evidence,
             )
         )

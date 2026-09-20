@@ -98,6 +98,10 @@ export interface RunSummary {
   finished_at: string | null;
   /** Who submitted the run. The seeded placeholder's name while login is off (ADR-022). */
   submitted_by: string;
+  /** The delivery programme's code, or empty when the submitter did not say. */
+  scope: string;
+  /** The programme's name, e.g. "Account Monitoring". */
+  scope_label: string;
   high: number;
   medium: number;
   low: number;

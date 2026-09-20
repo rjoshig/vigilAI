@@ -643,6 +643,7 @@ def _run_judgment_check(
             leg="config_reports",
             rule_ref=ref,
             shadow=shadow,
+            engine="model",
             evidence=Evidence(report_value=rendered),
         )
     )

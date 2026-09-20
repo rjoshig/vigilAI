@@ -205,3 +205,26 @@
     animation: none;
   }
 }
+
+/* The value report prints on its own (Phase 6.16).
+   Printing is the browser's job rather than a second renderer: one less thing to keep
+   in step with the screen, and it works wherever the console does. Everything but the
+   report is hidden, so the PDF is the figures and the assumption behind them. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .value-report,
+  .value-report * {
+    visibility: visible;
+  }
+  .value-report {
+    position: absolute;
+    inset: 0;
+    border: none;
+    box-shadow: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

@@ -40,6 +40,7 @@ import type {
   TestResult,
   TrainingConfig,
   Usage,
+  ValueReport,
   DefinitionVersion,
   GuideEntry,
   Correction,
@@ -414,6 +415,10 @@ export const api = {
 
   /** Read the dashboard numbers. */
   getUsage: (): Promise<Usage> => request<Usage>("/usage"),
+
+  /** What the tool displaced between two dates, counted from the run records. */
+  getValueReport: (start: string, end: string): Promise<ValueReport> =>
+    request<ValueReport>(`/value-report?start=${start}&end=${end}`),
 
   /* ----------------------------------------------- The training loop (ADR-021) */
 

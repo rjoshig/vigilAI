@@ -10,6 +10,7 @@
 import * as React from "react";
 
 import { Explain } from "@/components/explain";
+import { ValueReportCard } from "@/components/value-report-card";
 import { Sparkline } from "@/components/sparkline";
 import {
   Card,
@@ -68,6 +69,10 @@ export default function UsagePage() {
         title="Usage"
         description="Tool health and cost. Every number comes from the run tables; no prompts or content are stored."
       />
+
+      <div className="mb-4">
+        <ValueReportCard onError={setError} />
+      </div>
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Runs" value={fmtInt(usage.runs_total)} />

@@ -333,6 +333,12 @@ class Finding(Base):
     title: Mapped[str] = mapped_column(sa.Text)
     detail: Mapped[str] = mapped_column(sa.Text, default="")
     leg: Mapped[str] = mapped_column(sa.String(30), default="osl_config")
+    #: ``code`` or ``model`` — which path produced this finding (Phase 6.16).
+    #: Not who decided it: code decides every severity (ADR-001). It says whether
+    #: a comparison reached the answer on its own, or the model read something
+    #: first, so the cost and the reliability of each path are visible rather than
+    #: inferred from a token count.
+    engine: Mapped[str] = mapped_column(sa.String(10), default="code", index=True)
     rule_ref: Mapped[str] = mapped_column(sa.String(40), default="")
     #: True while the rule behind it is in shadow: stored and counted, shown to
     #: nobody, which is how a new rule's precision is measured before it starts

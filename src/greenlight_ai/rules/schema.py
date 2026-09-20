@@ -391,6 +391,11 @@ class Finding(BaseModel):
             stored and counted and shown to nobody, which is where a new rule's
             precision becomes knowable before it starts interrupting a reviewer
             (ADR-021).
+        engine: What produced this finding — ``code`` when a comparison decided it,
+            ``model`` when the model read something first and code turned the answer
+            into a severity. Never the model deciding: ADR-001 is unchanged, and
+            this says which path was taken rather than who had the last word
+            (Phase 6.16). Stage 6 is the first place both happen.
         rule_ref: Which stored rule produced it, as ``kind:id``, so a finding can
             explain itself and a rule's precision can be measured from its findings.
         review_status: The reviewer's decision.
@@ -415,6 +420,7 @@ class Finding(BaseModel):
     evidence: Evidence = Evidence()
     rules_version: int = 1
     shadow: bool = False
+    engine: Literal["code", "model"] = "code"
     rule_ref: str = ""
     review_status: ReviewStatus = "undecided"
     review_note: str = ""
