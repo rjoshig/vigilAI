@@ -9,6 +9,7 @@
 import { KeyRound, Plus } from "lucide-react";
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -102,6 +103,16 @@ export default function UsersPage() {
   return (
     <>
       <PageHeader
+        explain={
+          <Explain label="When accounts matter">
+            Accounts exist only when login is switched on; with it off there is one placeholder user
+            and everything still records a name.
+            <br />
+            <br />
+            Who may do what in the tool is deliberately thin: who ought to be consulted before a
+            decision is a matter for the delivery process, not a permission here.
+          </Explain>
+        }
         title="Users"
         description="Every account is created here, for both the admin console and the user app. Accounts are deactivated rather than deleted, so past runs, reviews, and approvals stay attributed."
       />

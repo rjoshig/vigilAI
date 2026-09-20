@@ -10,6 +10,7 @@
 import { EyeOff, History, Scale, Search } from "lucide-react";
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -231,6 +232,17 @@ export default function RulesPage() {
   return (
     <>
       <PageHeader
+        explain={
+          <Explain label="What this screen shows">
+            Every rule the tool holds, whatever its origin — written here, learned from an
+            observation, or compiled from a validation guide — with how often each fires and how
+            often it is dismissed.
+            <br />
+            <br />
+            This is where a rule earns its place: a shadow rule runs silently and is counted, and
+            you activate it when the numbers say it is worth showing to a reviewer.
+          </Explain>
+        }
         title="Rules"
         description="Every rule the tool runs, whatever its origin. A shadow rule runs and is counted but no reviewer sees its findings; deleting is reversible for as long as the restore window lasts."
       />

@@ -482,6 +482,17 @@ export default function SettingsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
+                    {group.name === "Availability" ? (
+                      <p className="border-b py-3 text-xs text-muted-foreground">
+                        Four switches with different intents. <b>Hold the queue</b> keeps accepting
+                        work and starts none of it — what is waiting runs the moment you release it.{" "}
+                        <b>Stop accepting submissions</b> refuses new runs and finishes the backlog.{" "}
+                        <b>Maintenance mode</b> does both and shows the user app a maintenance page;
+                        this console keeps working, so you can always switch it back off. Work
+                        already running always finishes, because stopping a run halfway leaves a
+                        half-validated delivery nobody can tell from a whole one.
+                      </p>
+                    ) : null}
                     {group.settings.map((setting) => (
                       <SettingRow key={setting.key} setting={setting} onChanged={onChanged} />
                     ))}

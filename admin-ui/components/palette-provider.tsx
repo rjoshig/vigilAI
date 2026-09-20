@@ -32,6 +32,12 @@ interface PaletteContextValue {
   tooltips: boolean;
   /** The line under the mark in the sidebar (Phase 6.14h). */
   tagline: string;
+  /** Whether the user app should show a maintenance page (Phase 6.14j). */
+  maintenance: boolean;
+  /** Whether a new run may be submitted right now. */
+  accepting: boolean;
+  /** What to tell somebody who is turned away. */
+  unavailableMessage: string;
   setPalette: (palette: Palette) => void;
   step: (direction: 1 | -1) => void;
 }
@@ -113,10 +119,13 @@ export function PaletteProvider({
       locked: appearance.locked,
       tooltips: appearance.tooltips,
       tagline: appearance.tagline,
+      maintenance: appearance.maintenance,
+      accepting: appearance.accepting,
+      unavailableMessage: appearance.unavailableMessage,
       setPalette,
       step: (direction) => setPalette(nextPalette(palette, direction)),
     }),
-    [palette, appearance.locked, appearance.tooltips, appearance.tagline, setPalette]
+    [palette, appearance, setPalette]
   );
 
   return <PaletteContext.Provider value={value}>{children}</PaletteContext.Provider>;

@@ -19,6 +19,7 @@
 import { BookOpen, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import { EVERYWHERE, ScopePicker, scopeIsComplete, scopeLabel } from "@/components/scope-picker";
 import {
   Badge,
@@ -469,6 +470,17 @@ export default function ExamplesPage() {
   return (
     <div className="space-y-4">
       <PageHeader
+        explain={
+          <Explain label="What worked examples do">
+            A &ldquo;this wording means this requirement&rdquo; pair that shows the model the shape
+            of a good answer. Examples <b>show, they never instruct</b>: nothing here can make the
+            model do anything, and every comparison is still made by code.
+            <br />
+            <br />
+            At most four per stage — a prompt that is mostly examples stops being a prompt. The
+            built-ins above the library are read-only.
+          </Explain>
+        }
         title="Worked examples"
         description="What a good answer looks like, in your own deliveries. Examples show the model the shape of an answer; they are never rules — a rule is a check, a compliance rule or a field constraint, and code evaluates it."
       />

@@ -27,6 +27,8 @@ from greenlight_ai.db.types import utcnow
 __all__ = [
     "KEEP_VERSIONS",
     "VersionKind",
+    "field_label_snapshot",
+    "record_field_label_version",
     "VersionError",
     "artifact_snapshot",
     "current_versions",
@@ -49,7 +51,13 @@ _LOG: Final = logging.getLogger(__name__)
 #: How many versions the console lists per object (user decision, Phase 6.8).
 KEEP_VERSIONS: Final[int] = 10
 
-VersionKind = Literal["artifact_type", "programme_rules", "meaning", "example"]
+VersionKind = Literal[
+    "artifact_type",
+    "programme_rules",
+    "meaning",
+    "example",
+    "field_label",
+]
 
 #: Artifact-type fields an administrator edits, in snapshot order.
 _ARTIFACT_FIELDS: Final[tuple[str, ...]] = (
@@ -178,6 +186,99 @@ def _latest(session: Session, kind: str, key: str) -> models.DefinitionVersion |
         .order_by(models.DefinitionVersion.version.desc())
         .limit(1)
     ).scalar_one_or_none()
+
+
+#: The columns of a field label that a version restores. The author and the moment
+#: it was created are history rather than definition, so they are not restored.
+_FIELD_LABEL_FIELDS: Final[tuple[str, ...]] = ("canonical", "label", "scope", "is_active")
+
+
+def field_label_snapshot(session: Session, canonical: str) -> dict[str, Any]:
+    """Capture what a delivery calls one checked field (Phase 6.14b).
+
+    Versioned per canonical field rather than per row, the way worked examples are
+    versioned per stage: the useful question is "what did we call the credit date last
+    month", not "what happened to row 14".
+
+    Args:
+        session: An open session.
+        canonical: The field, e.g. ``credit_date``.
+
+    Returns:
+        A JSON-ready dictionary.
+    """
+    rows = session.execute(
+        sa.select(models.FieldLabel)
+        .where(models.FieldLabel.canonical == canonical)
+        .order_by(models.FieldLabel.id)
+    ).scalars()
+    return {
+        "canonical": canonical,
+        "labels": [
+            {"id": row.id, **{name: getattr(row, name) for name in _FIELD_LABEL_FIELDS}}
+            for row in rows
+        ],
+    }
+
+
+def record_field_label_version(
+    session: Session, canonical: str, actor: str, summary: str = ""
+) -> models.DefinitionVersion:
+    """Snapshot one field's labels after a change (Phase 6.14b).
+
+    Args:
+        session: An open session.
+        canonical: The field whose labels changed.
+        actor: Who changed them.
+        summary: What changed, when the caller knows; derived otherwise.
+
+    Returns:
+        The version written, or the latest when nothing changed.
+    """
+    session.flush()
+    return _record(
+        session, "field_label", canonical, field_label_snapshot(session, canonical), actor, summary
+    )
+
+
+def _restore_field_labels(session: Session, canonical: str, snapshot: dict[str, Any]) -> str:
+    """Write a label snapshot over the live rows; returns what changed.
+
+    Args:
+        session: An open session.
+        canonical: The field being restored.
+        snapshot: The stored snapshot.
+
+    Returns:
+        A sentence describing what the revert did.
+    """
+    wanted = {int(entry["id"]): entry for entry in snapshot.get("labels", [])}
+    rows = {
+        row.id: row
+        for row in session.execute(
+            sa.select(models.FieldLabel).where(models.FieldLabel.canonical == canonical)
+        ).scalars()
+    }
+    restored = 0
+    for label_id, entry in wanted.items():
+        row = rows.get(label_id)
+        if row is None:
+            row = models.FieldLabel(id=label_id, canonical=canonical)
+            session.add(row)
+        for name in _FIELD_LABEL_FIELDS:
+            if name in entry:
+                setattr(row, name, entry[name])
+        restored += 1
+    removed = 0
+    for label_id, row in rows.items():
+        if label_id not in wanted:
+            session.delete(row)
+            removed += 1
+    session.flush()
+    parts = [f"{restored} label{'' if restored == 1 else 's'} restored"]
+    if removed:
+        parts.append(f"{removed} added since then removed")
+    return "; ".join(parts)
 
 
 def _record(
@@ -425,6 +526,9 @@ def revert(
     elif kind == "example":
         summary = _restore_examples(session, key, target.snapshot)
         snapshot = example_snapshot(session, key)
+    elif kind == "field_label":
+        summary = _restore_field_labels(session, key, target.snapshot)
+        snapshot = field_label_snapshot(session, key)
     else:
         summary = _restore_programme(session, key, target.snapshot)
         snapshot = programme_snapshot(session, key)
