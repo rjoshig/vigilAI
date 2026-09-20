@@ -130,6 +130,7 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   independent lenses at stage 8 merged by code, a benchmark harness (specified, not started)
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
+- [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
 - [`docs/llm-privacy.md`](docs/llm-privacy.md) — what may and may not reach the LLM, the cache, fixture policy
 - [`docs/deployment.md`](docs/deployment.md) — running it: docker-compose, `.env`, volumes, retention

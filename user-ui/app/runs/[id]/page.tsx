@@ -645,6 +645,10 @@ function FindingCard({
 
   return (
     <Card
+      data-testid="finding-card"
+      data-severity={finding.severity}
+      data-finding={finding.finding_id}
+      data-review-status={finding.review_status}
       className={cn(
         "cursor-pointer p-3.5 transition-colors hover:border-primary/50",
         decided && (ok ? "border-l-4 border-l-success" : "border-l-4 border-l-destructive")

@@ -109,6 +109,19 @@ imports `pipeline`.
 7. **Report renderer** — templates + a renderer function; the review screen and the final
    report draw on the same findings data.
 
+## Browser tests
+
+`e2e/` holds Playwright tests over both apps against a real API, a real worker and a
+throwaway SQLite database seeded by `scripts/seed_demo.py`. They cover what a unit test
+cannot: that a screen renders what the API returned, that a decision reaches the server,
+and that the finalize gate refuses in a browser and not only in a test client. The
+scripted stand-in answers every model call, so they need no network
+([`e2e/README.md`](../e2e/README.md)).
+
+A finding card carries `data-testid`, `data-severity`, `data-finding` and
+`data-review-status` so a test can assert an outcome rather than a message that appears
+and clears.
+
 ## Privacy boundary
 
 PII may exist only in the uploaded files on the volume and in masked form in the DB. It

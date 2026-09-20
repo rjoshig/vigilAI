@@ -91,8 +91,26 @@ export function CoverageCard({ runId, onChange, editable = true }: CoverageCardP
     }
   }
 
-  if (error) return null;
-  if (!coverage) return <Skeleton className="mb-4 h-12" />;
+  if (error) {
+    // Never silent. A panel that vanishes on a failed request tells the reviewer that
+    // there was nothing to check, which is the one thing it must never imply.
+    return (
+      <Card className="mb-4" data-testid="coverage-card">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4" /> What was checked
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-3 text-xs">
+          <p className="text-destructive">{error}</p>
+          <Button variant="outline" size="xs" className="mt-2" onClick={() => void load()}>
+            Try again
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (!coverage) return <Skeleton className="mb-4 h-12" data-testid="coverage-loading" />;
   if (coverage.reason) {
     return (
       <Card className="mb-4" data-testid="coverage-card">

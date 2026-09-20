@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 is complete.** Next: browser tests in CI, then the small items left open in 6.1, 6.2, 6.4 and 6.5 |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 is complete, and browser tests are in CI.** Next: the small items left open in 6.1, 6.2, 6.4 and 6.5 |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,48 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (browser tests in CI)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete — 26 browser tests green,
+twice in a row, plus every existing gate.
+
+`e2e/` holds Playwright tests over both apps against a real API, a real worker and a
+throwaway database seeded by `scripts/seed_demo.py`. Playwright starts the API and both
+apps; the worker has no URL to poll, so global setup starts it and teardown stops it.
+The scripted stand-in answers every model call, so the suite needs no network. A new
+`browser` job runs it in the manual-dispatch workflow and uploads the report on failure.
+
+Covered: the runs list in every lifecycle state, the matrix and coverage panel, the
+three decisions, Not OK refused on a high finding without a comment, the evidence
+drawer, the frozen report, drift; the whole finalize gate end to end; every admin
+screen loading without a page error, the typed-word confirmation, a setting's layer;
+the four palettes and two screens at phone width.
+
+### Found on the way
+
+**A real defect, fixed.** The coverage panel returned `null` when its request failed,
+so a reviewer would see no panel and no explanation — the panel whose entire purpose is
+to say that the absence of a finding is not a pass would have vanished silently. It now
+shows the error and offers to retry. The browser suite found it because the panel
+disappeared under a request raced by a navigation.
+
+**Three test-quality lessons**, written into `e2e/README.md` so the next suite starts
+there: assert outcomes rather than transient text (a finding card carries
+`data-review-status`, so a decision is confirmed by state and not by a message that
+clears); do not count elements before a list has loaded, and do not hold a locator that
+re-resolves as state changes; and the screens read their run when they mount, so a test
+that changes state reloads rather than asserting a live update the app never promised.
+
+### Next concrete action
+
+The small items left open in closed phases: the frozen report naming its submitter and
+reviewer (6.2), the standalone sample-exploration screen and anchoring by OSL section or
+configuration path (6.1), flagging a contradicting observation when it is written
+(6.1), the open configuration-note test (6.4), and the deployment production checklist
+(6.2).
 
 ---
 
