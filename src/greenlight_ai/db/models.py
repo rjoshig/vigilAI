@@ -725,6 +725,36 @@ class CoverageAcknowledgement(Base):
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
+class FieldLabel(Base):
+    """What a delivery calls one of the fields the tool checks (Phase 6.14b).
+
+    The credit date is written *as-of date*, *data date*, *cycle date* or *extract
+    date* depending on who built the report. These are document labels, not data
+    attributes, so they are not ``attribute_aliases``: that table resolves attribute
+    names and loads as global-plus-customer only, and is the one table that never
+    adopted the scope vocabulary (ADR-029). These use it.
+    """
+
+    __tablename__ = "field_labels"
+    __table_args__ = (sa.UniqueConstraint("canonical", "label", "scope", name="uq_field_label"),)
+
+    id: Mapped[int] = _pk()
+    #: Which field this names. A closed set; ``credit_date`` is the first.
+    canonical: Mapped[str] = mapped_column(sa.String(40), index=True)
+    #: The label as it appears in a document, e.g. ``"As-of date"``. Matched with
+    #: punctuation and case ignored, so one spelling covers several.
+    label: Mapped[str] = mapped_column(sa.String(200))
+    #: Where it applies, as a scope token (``everywhere``, ``programme:CODE``,
+    #: ``customer:NAME``, ``config:ID``).
+    scope: Mapped[str] = mapped_column(sa.String(120), default="everywhere", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
 class ArtifactMismatch(Base):
     """The artifacts disagreed with what the submitter typed (ADR-041).
 

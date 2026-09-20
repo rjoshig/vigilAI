@@ -15,6 +15,7 @@ from typing import Final
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
+from greenlight_ai.checks import field_labels
 from greenlight_ai.checks.guides import GuideEntry, guide_lines
 from greenlight_ai.meaning.render import effective_entries, meaning_lines
 from greenlight_ai.db import catalog, models, repository, versions
@@ -183,6 +184,13 @@ def build_context(
         ),
         guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
+        credit_date_labels=field_labels.resolve_labels(
+            session,
+            field_labels.CREDIT_DATE,
+            customer=run.customer_name,
+            programme=run.scope,
+            configuration_id=run.configuration_id,
+        ),
         examples=repository.load_prompt_examples(
             session, run.customer_name, run.configuration_id, run.scope or ""
         ),

@@ -170,23 +170,32 @@ who knows the product can turn them off.
       **finalize is not blocked by an accepted
       mismatch**.
 
-### 6.14b — The credit date, resolved by label · ⬜ not started
+### 6.14b — The credit date, resolved by label · 🟡 in progress
 
-- [ ] A `field_labels` table: canonical field (a closed set, `credit_date` first), label,
-      scope token via `scopes.py`, active flag, author, versioned like every other
-      definition. Seeded with the spellings named above.
-- [ ] `resolve_labels(session, canonical, scope)` returns the labels in force for a run,
+- [~] A `field_labels` table: canonical field (a closed set, `credit_date` first), label,
+      scope token via `scopes.py`, active flag, author. The built-in spellings live in
+      `DEFAULT_LABELS` and are always appended after the configured ones, so a
+      deployment that configures none checks exactly as it did before the table
+      existed. **Outstanding:** version history and revert, which every other
+      definition has (ADR-029).
+- [x] `resolve_labels(session, canonical, scope)` returns the labels in force for a run,
       most specific scope first, exactly as examples and samples already resolve.
-- [ ] The stage-7 check finds a cell whose label resolves to `credit_date`, reads the
+- [x] The stage-7 check finds a cell whose label resolves to `credit_date`, reads the
       value, and compares it with the submitter's date using the existing
       `_date_spellings`. Outcomes: match (no finding), mismatch (medium, naming both
       dates and where the label was found), no labelled cell (falls back to today's
       search, and the finding says the fallback was used).
 - [ ] The artifact match check in 6.14a uses the same resolution, so the date is checked once,
       before the model runs, and stage 7 keeps only what needs parsed reports.
+      **Outstanding:** the gate compares the configuration id and the customer, both of
+      which come from the one small JSON it already decodes. Moving the credit date
+      forward means parsing every report at submit — worth doing, and worth measuring
+      the added latency first rather than assuming it.
 - [ ] Admin console: the label set under Reference data, with the scope picker every
-      other scoped definition uses.
-- [ ] Tests: resolution honours scope precedence; a mismatch is reported with both dates;
+      other scoped definition uses. **Outstanding:** the table and its resolution work
+      and are tested; there is no screen for them yet, so a new label is a database
+      row today.
+- [x] Tests: resolution honours scope precedence; a mismatch is reported with both dates;
       an unlabelled report still gets the fallback and says so; an unparseable submitted
       date disables the check loudly rather than silently (the smaller defect listed in
       `docs/phase-6.13.md`).
