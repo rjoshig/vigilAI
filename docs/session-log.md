@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036).** Next: Phase 6.12 |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036).** Now: Phase 6.12 — 6.12a one scope vocabulary, then 6.12b the front door |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
