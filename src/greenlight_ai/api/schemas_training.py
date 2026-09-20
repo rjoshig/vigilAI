@@ -129,6 +129,10 @@ class CandidateOut(BaseModel):
     conflicts: list[dict[str, Any]] = Field(default_factory=list)
     #: What this rule would have changed on the golden set and recent runs.
     replay: dict[str, Any] = Field(default_factory=dict)
+    #: What the critique pass said about the first draft (Phase 6.11g).
+    critique: dict[str, Any] = Field(default_factory=dict)
+    #: The rule after one redraft, when the critique asked for one.
+    redraft: dict[str, Any] = Field(default_factory=dict)
     created_by: str = ""
     decided_by: str = ""
     created_at: dt.datetime
@@ -144,6 +148,10 @@ class CandidateDecision(BaseModel):
     scope: str | None = None
     #: Approve straight to active rather than into shadow. Rarely the right answer.
     activate_now: bool = False
+    #: What to do about an overlap with an existing rule: ``supersede`` disables the
+    #: rule it overlaps, ``keep_both`` says they cover different ground. Required when
+    #: the candidate has conflicts (Phase 6.11g).
+    resolution: Literal["", "supersede", "keep_both"] = ""
 
 
 class RuleOut(BaseModel):

@@ -12,10 +12,12 @@ import logging
 from typing import Final, Sequence
 
 from greenlight_ai.llm.client import LLMError
+from greenlight_ai.llm.prompts.s8_coverage import COVERAGE_PROMPT
 from greenlight_ai.llm.prompts.s8_lenses import LENS_LABEL, lens_prompt
 from greenlight_ai.llm.prompts.s8_programme import PROGRAMME_PROMPT
 from greenlight_ai.llm.prompts import VERIFY_PROMPT
 from greenlight_ai.llm.prompts.schemas import (
+    CoverageGapResponse,
     LensResponse,
     MissedItem,
     ProgrammeRulesResponse,
@@ -44,6 +46,7 @@ def run(context: RunContext) -> None:
             whose findings this may add review items to.
     """
     _read_programme_rules(context)
+    _read_coverage_gaps(context)
 
     lenses = tuple(context.verify_lenses)
     if not lenses:
@@ -156,6 +159,86 @@ def run(context: RunContext) -> None:
         context.run_id,
         sum(1 for f in verified if f.verified),
         disputed,
+    )
+
+
+def _read_coverage_gaps(context: RunContext) -> None:
+    """Ask which unchecked requirements read like obligations (Phase 6.11f).
+
+    Code decides which requirements no report evidenced; this asks only which of those
+    look like something someone must obey. What comes back is a review item, never a
+    graded finding: there is no evidence behind it to grade, which is the whole reason
+    it is on the list (ADR-034).
+
+    Args:
+        context: The run context, whose ``findings`` this may append to.
+    """
+    if not context.verify_lenses:
+        return
+    coverage = context.coverage
+    if coverage is None or not coverage.unresolved:
+        return
+
+    by_id = {entry.rule_id: entry for entry in coverage.unresolved}
+    listed = "\n".join(
+        f"- {entry.rule_id} ({entry.osl_ref or 'no reference'}): {entry.summary}"
+        for entry in coverage.unresolved
+    )[:6000]
+
+    try:
+        result = context.client.complete(
+            COVERAGE_PROMPT.system,
+            preamble(context.guidance) + COVERAGE_PROMPT.render(requirements=listed),
+            COVERAGE_PROMPT.schema,
+            stage=COVERAGE_PROMPT.stage,
+            prompt_version=COVERAGE_PROMPT.version,
+        )
+        answer = result.parsed(CoverageGapResponse)
+    except LLMError as exc:
+        _LOG.warning(
+            "run %s: the unchecked requirements were not read (%s)",
+            context.run_id,
+            type(exc).__name__,
+        )
+        context.notices.append(
+            f"The {len(coverage.unresolved)} requirement(s) no report evidenced were not "
+            "read for obligations: the model could not be reached. They are listed in the "
+            "coverage panel either way."
+        )
+        return
+
+    raised = 0
+    for gap in answer.gaps:
+        entry = by_id.get(gap.rule_id)
+        if entry is None:
+            # A requirement id the prompt never listed is invention, and inventions are
+            # dropped rather than shown (ADR-026's rule, applied here).
+            _LOG.info("run %s: ignoring invented requirement id %r", context.run_id, gap.rule_id)
+            continue
+        if gap.confidence < _PROPOSAL_CONFIDENCE_FLOOR:
+            continue
+        raised += 1
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="coverage_gap",
+                severity="review",
+                title=f"Nothing evidenced {entry.rule_id}, which reads like an obligation",
+                detail=(
+                    f"{gap.reason} No report check reached this requirement, so nothing "
+                    "here says the delivery breaks it — only that nothing shows it was "
+                    "applied. A person decides."
+                ),
+                leg="osl_reports",
+                rule_id=entry.rule_id,
+                evidence=Evidence(osl_ref=entry.osl_ref, osl_text=entry.summary),
+            )
+        )
+    _LOG.info(
+        "run %s: %d of %d unchecked requirement(s) read as obligations",
+        context.run_id,
+        raised,
+        len(coverage.unresolved),
     )
 
 

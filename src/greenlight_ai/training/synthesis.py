@@ -17,9 +17,14 @@ from sqlalchemy.orm import Session
 
 from greenlight_ai.checks.field_constraints import CONSTRAINT_KINDS
 from greenlight_ai.db import models
-from greenlight_ai.llm.client import LLMClient, LLMResponseError
+from greenlight_ai.llm.client import LLMClient, LLMError, LLMResponseError
 from greenlight_ai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
-from greenlight_ai.llm.prompts.schemas import SynthesisResponse, SynthesizedRule
+from greenlight_ai.llm.prompts.synthesize_critique import CRITIQUE_PROMPT
+from greenlight_ai.llm.prompts.schemas import (
+    CritiqueResponse,
+    SynthesisResponse,
+    SynthesizedRule,
+)
 from greenlight_ai.training.lifecycle import set_state
 
 __all__ = [
@@ -227,6 +232,104 @@ def find_conflicts(
     return conflicts
 
 
+def _critique_once(
+    session: Session,
+    client: LLMClient,
+    rule: Any,
+    statements: str,
+    known_fields: Sequence[str],
+    scope: str,
+) -> tuple[Any, dict[str, Any]]:
+    """Read a drafted rule back against the statements, and redraft at most once.
+
+    The model checks the draft, never the data. A redraft that fails validation is
+    thrown away and the first draft stands, because a worse second attempt is not an
+    improvement and an administrator should see the better of the two.
+
+    Args:
+        session: An open session, for the existing rules the draft might overlap.
+        client: The model adapter.
+        rule: The drafted rule.
+        statements: What people wrote, as the synthesis prompt carried it.
+        known_fields: Attribute names the tool knows.
+        scope: The scope the candidate will carry.
+
+    Returns:
+        The rule to store (the redraft when there is a good one, otherwise the
+        original) and what the critique said, empty when it could not run.
+    """
+    existing = find_conflicts(session, rule.target_kind, _body(rule), scope)
+    existing_text = (
+        "; ".join(f'"{c.get("name", "")}" ({c.get("summary", "")})' for c in existing) or "none"
+    )
+    draft_text = _draft_text(rule)
+
+    try:
+        result = client.complete(
+            CRITIQUE_PROMPT.system,
+            CRITIQUE_PROMPT.render(statements=statements, existing=existing_text, draft=draft_text),
+            CritiqueResponse,
+            stage="training_critique",
+            prompt_version=CRITIQUE_PROMPT.version,
+        )
+        answer = result.parsed(CritiqueResponse)
+    except (LLMError, LLMResponseError) as exc:
+        # The critique is an improvement, not a gate: a draft nobody could check is
+        # still a draft a person reads.
+        _LOG.info("critique could not run (%s); the first draft stands", type(exc).__name__)
+        return rule, {}
+
+    critique = answer.model_dump(mode="json")
+    if answer.faithful:
+        return rule, critique
+
+    try:
+        second = client.complete(
+            SYNTHESIZE_PROMPT.system,
+            SYNTHESIZE_PROMPT.render(
+                statements=(
+                    f"{statements}\n\nA previous draft was rejected because: "
+                    f"{answer.problem} Draft the rule again, fixing exactly that."
+                ),
+                attributes=", ".join(known_fields) or "none recorded",
+                report_types="none recorded",
+            ),
+            SynthesisResponse,
+            stage="training_synthesize",
+            prompt_version=SYNTHESIZE_PROMPT.version,
+        )
+        redrafted = second.parsed(SynthesisResponse)
+    except (LLMError, LLMResponseError) as exc:
+        _LOG.info("redraft could not run (%s); the first draft stands", type(exc).__name__)
+        return rule, critique
+
+    if not redrafted.rules:
+        return rule, critique
+    candidate_rule = redrafted.rules[0]
+    if validate_rule(candidate_rule, known_fields):
+        # A redraft that does not validate is worse than what it replaces.
+        return rule, critique
+    critique["redrafted"] = True
+    return candidate_rule, critique
+
+
+def _draft_text(rule: Any) -> str:
+    """Render a drafted rule for the critique prompt.
+
+    Args:
+        rule: The drafted rule.
+
+    Returns:
+        One line naming its kind and what it asserts.
+    """
+    body = _body(rule)
+    parts = [f"{rule.target_kind}"]
+    for key in ("field", "constraint", "expression", "value", "report_kinds"):
+        if body.get(key) not in (None, "", [], {}):
+            parts.append(f"{key}={body[key]}")
+    return " ".join(str(part) for part in parts)
+
+
 def synthesize(
     session: Session,
     client: LLMClient,
@@ -296,6 +399,15 @@ def synthesize(
     for rule in parsed.rules:
         problem = validate_rule(rule, known_fields)
         body = _body(rule)
+        critique: dict[str, Any] = {}
+        first_draft = rule.model_dump(mode="json")
+        if not problem:
+            # One bounded revision. A well-formed rule that says something the person
+            # did not is the failure an administrator cannot see from an expression,
+            # and it is the one worth a second call (Phase 6.11g).
+            rule, critique = _critique_once(session, client, rule, statements, known_fields, scope)
+            problem = validate_rule(rule, known_fields)
+            body = _body(rule)
         candidate = models.RuleCandidate(
             name=rule.name.strip(),
             target_kind=rule.target_kind,
@@ -306,7 +418,9 @@ def synthesize(
             source_observation_ids=source_ids,
             status="rejected" if problem else "draft",
             admin_note=problem,
-            model_draft=rule.model_dump(mode="json"),
+            model_draft=first_draft,
+            redraft=rule.model_dump(mode="json") if critique else {},
+            critique=critique,
             model_used=result.model,
             prompt_version=SYNTHESIZE_PROMPT.version,
             conflicts=[] if problem else find_conflicts(session, rule.target_kind, body, scope),
@@ -398,6 +512,7 @@ def approve(
     actor: str = "",
     user_id: int | None = None,
     note: str = "",
+    resolution: str = "",
 ) -> Any:
     """Turn a candidate into a rule the pipeline runs.
 
@@ -412,16 +527,31 @@ def approve(
         actor: Who approved it.
         user_id: Their account id.
         note: Anything worth recording about the decision.
+        resolution: What to do about an overlap with an existing rule:
+            ``"supersede"`` disables the rule it overlaps, naming this one as its
+            successor, or ``"keep_both"`` when the administrator has looked and says
+            they cover different ground. Required when the candidate has conflicts.
 
     Returns:
         The created rule row.
 
     Raises:
-        SynthesisError: When the candidate has already been decided, or its target
-            kind is not something the engine runs.
+        SynthesisError: When the candidate has already been decided, its target kind
+            is not something the engine runs, or it overlaps an existing rule and the
+            administrator has not said what to do about that.
     """
     if candidate.status != "draft":
         raise SynthesisError(f"this candidate is already {candidate.status}")
+
+    conflicts = list(candidate.conflicts or [])
+    if conflicts and resolution not in ("supersede", "keep_both"):
+        # Overlapping rules accumulate quietly and are very hard to untangle later, so
+        # the decision is taken once, here, by the person approving (ADR-021).
+        names = ", ".join(str(c.get("name", "")) for c in conflicts if c.get("name"))
+        raise SynthesisError(
+            f"this candidate overlaps {len(conflicts)} existing rule(s) ({names}). "
+            "Say whether it supersedes them or whether both should run."
+        )
 
     effective_scope = scope or candidate.scope
     body = dict(candidate.body or {})
@@ -485,7 +615,54 @@ def approve(
         user_id=user_id,
         note=note or f"approved from candidate {candidate.id}",
     )
+
+    if conflicts and resolution == "supersede":
+        _supersede(session, candidate, conflicts, row.id, actor=actor, user_id=user_id)
+
     _LOG.info(
         "candidate %d approved as %s %d in %s", candidate.id, candidate.target_kind, row.id, state
     )
     return row
+
+
+def _supersede(
+    session: Session,
+    candidate: models.RuleCandidate,
+    conflicts: Sequence[dict[str, Any]],
+    successor_id: int,
+    *,
+    actor: str = "",
+    user_id: int | None = None,
+) -> None:
+    """Disable the rules a newly approved rule replaces.
+
+    Disabled rather than deleted: a superseded rule is reversible at any time, and its
+    findings on old runs still have something to point at (ADR-021).
+
+    Args:
+        session: An open session.
+        candidate: The candidate that was approved.
+        conflicts: The overlaps recorded on it.
+        successor_id: The rule that replaces them.
+        actor: Who approved it.
+        user_id: Their account id.
+    """
+    for conflict in conflicts:
+        rule_id = conflict.get("id")
+        if not isinstance(rule_id, int):
+            continue
+        try:
+            set_state(
+                session,
+                candidate.target_kind,
+                rule_id,
+                "disabled",
+                actor=actor,
+                user_id=user_id,
+                note=(
+                    f"superseded by {candidate.target_kind} {successor_id}, approved from "
+                    f"candidate {candidate.id}"
+                ),
+            )
+        except Exception as exc:  # pragma: no cover - a rule deleted between the two steps
+            _LOG.warning("could not supersede %s %s: %s", candidate.target_kind, rule_id, exc)

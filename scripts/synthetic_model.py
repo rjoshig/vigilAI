@@ -402,6 +402,36 @@ def synthesize_responder(_system: str, user: str) -> str:
     return json.dumps({"rules": rules, "notes": ""})
 
 
+def critique_responder(_system: str, user: str) -> str:
+    """Read a drafted rule back against the statements it came from (Phase 6.11g).
+
+    The stand-in agrees unless a statement carries the word "every", which is the
+    shape of an over-broad draft and gives a test something deterministic to script
+    against without a network.
+
+    Args:
+        _system: The system prompt, unused.
+        user: The rendered user prompt.
+
+    Returns:
+        The critique, as JSON.
+    """
+    too_broad = "report kinds []" in user and "file" in user.lower()
+    return json.dumps(
+        {
+            "faithful": not too_broad,
+            "problem": (
+                "The statement names one report and the draft applies to every report."
+                if too_broad
+                else ""
+            ),
+            "overlaps": False,
+            "overlaps_with": "",
+            "confidence": 0.9,
+        }
+    )
+
+
 def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClient:
     """Build a mock client wired with the scripted responders.
 
@@ -420,5 +450,14 @@ def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClie
         "s8_verify", json.dumps({"agreed": True, "reason": "Confirmed.", "confidence": 0.9})
     )
     client.register("training_synthesize", synthesize_responder)
+    client.register("training_critique", critique_responder)
     client.register("admin_map_requirement", map_responder)
+    # Every lens answers like the single second opinion, so a run with the lenses on
+    # behaves the same as one without unless a test scripts a disagreement.
+    for lens in ("delivery", "compliance", "requirements"):
+        client.register_text(
+            f"s8_lens_{lens}",
+            json.dumps({"agreed": True, "reason": "Confirmed.", "confidence": 0.9, "missed": []}),
+        )
+    client.register_text("s8_coverage", json.dumps({"gaps": []}))
     return client

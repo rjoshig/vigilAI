@@ -777,6 +777,13 @@ class RuleCandidate(Base):
     conflicts: Mapped[Any] = mapped_column(Json, default=list)
     #: What a replay against the golden set and recent runs would have changed.
     replay: Mapped[Any] = mapped_column(Json, default=dict)
+    #: What the critique pass said about the first draft (Phase 6.11g): whether it
+    #: said what the statements said, and whether it overlaps a rule that exists.
+    critique: Mapped[Any] = mapped_column(Json, default=dict)
+    #: The rule after at most one redraft, when the critique asked for one. Empty
+    #: when the first draft stood. ``model_draft`` is always the first attempt, so
+    #: the distance between them is visible.
+    redraft: Mapped[Any] = mapped_column(Json, default=dict)
 
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
         sa.ForeignKey("users.id"), nullable=True

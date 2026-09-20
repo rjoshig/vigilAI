@@ -22,6 +22,7 @@ PIPELINE_STAGES = {
     "s3_describe",
     "s4_trace",
     "s8_programme",
+    "s8_coverage",
     "s8_verify",
     "s8_lens_delivery",
     "s8_lens_compliance",
@@ -35,7 +36,7 @@ ADMIN_STAGES = {"admin_draft_check", "admin_judgment", "admin_map_requirement"}
 
 #: Turning what reviewers wrote into a candidate rule, once, when an administrator
 #: asks for it (ADR-021). Like drafting, it is authoring-time rather than per-run.
-TRAINING_STAGES = {"training_synthesize"}
+TRAINING_STAGES = {"training_synthesize", "training_critique"}
 
 #: Every registered prompt. The rules below apply to all of them equally.
 LLM_STAGES = PIPELINE_STAGES | ADMIN_STAGES | TRAINING_STAGES
@@ -154,6 +155,7 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("s4_trace", {"requirement", "element"}),
         ("s8_programme", {"programme", "rules", "delivery"}),
         ("s8_verify", {"finding", "evidence"}),
+        ("s8_coverage", {"requirements"}),
         ("s8_lens_delivery", {"finding", "evidence"}),
         ("s8_lens_compliance", {"finding", "evidence"}),
         ("s8_lens_requirements", {"finding", "evidence"}),
@@ -162,6 +164,7 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("admin_judgment", {"instruction", "values"}),
         ("admin_map_requirement", {"section", "blocks", "cells"}),
         ("training_synthesize", {"attributes", "report_types", "statements"}),
+        ("training_critique", {"statements", "existing", "draft"}),
     ],
 )
 def test_each_prompt_takes_exactly_the_inputs_its_stage_supplies(

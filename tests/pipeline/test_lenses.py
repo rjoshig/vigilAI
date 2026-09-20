@@ -14,6 +14,7 @@ import pytest
 
 from greenlight_ai.llm.client import LLMError
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext
+from greenlight_ai.pipeline.coverage import Coverage, RequirementCoverage
 from greenlight_ai.pipeline.run import run_pipeline
 
 MakeContext = Callable[[str], RunContext]
@@ -312,3 +313,122 @@ def test_the_same_question_raised_on_two_findings_is_asked_once(
     assert len(proposed) == 1
     # Every lens that raised it is named, so the reviewer knows how widely it was seen.
     assert "Delivery, Compliance, Requirements owner" in proposed[0].detail
+
+
+# --- the coverage reader (Phase 6.11f) --------------------------------------------------
+
+# No synthetic fixture leaves a requirement unevidenced: every case's requirements are
+# checked against a report. The golden set gains one in 6.11b; until then these build
+# the state directly, which proves the logic without waiting on a fixture.
+
+
+def _with_a_gap(context: RunContext, rule_id: str = "R-OPT") -> RunContext:
+    """Give a run one requirement that no report evidenced."""
+    context.coverage = Coverage(
+        requirements=(
+            RequirementCoverage(
+                rule_id=rule_id,
+                req_type="other",
+                state="manual",
+                osl_ref="OSL section 7",
+                summary="Consumers who opted out of firm offers must be excluded.",
+                reason="A free-text requirement.",
+            ),
+        )
+    )
+    return context
+
+
+def test_an_unchecked_requirement_that_reads_as_an_obligation_becomes_a_review_item(
+    make_context: MakeContext,
+) -> None:
+    context = _with_a_gap(_with_lenses(make_context("score_value_mismatch")))
+    context.client.register_text(  # type: ignore[attr-defined]
+        "s8_coverage",
+        json.dumps(
+            {
+                "gaps": [
+                    {
+                        "rule_id": "R-OPT",
+                        "reason": "Opt-out is a permissible-purpose obligation.",
+                        "confidence": 0.9,
+                    }
+                ]
+            }
+        ),
+    )
+
+    run_pipeline(context, stages=("s8_verify",))
+
+    gaps = [f for f in context.findings if f.type == "coverage_gap"]
+    assert len(gaps) == 1
+    assert gaps[0].severity == "review"
+    assert gaps[0].rule_id == "R-OPT"
+    assert "only that nothing shows it was applied" in gaps[0].detail
+    assert gaps[0].evidence.osl_ref == "OSL section 7"
+
+
+def test_an_invented_requirement_id_is_ignored(make_context: MakeContext) -> None:
+    """A model naming something the prompt never listed is invention, not a finding."""
+    context = _with_a_gap(_with_lenses(make_context("score_value_mismatch")))
+    context.client.register_text(  # type: ignore[attr-defined]
+        "s8_coverage",
+        json.dumps({"gaps": [{"rule_id": "R-999", "reason": "Made up.", "confidence": 0.99}]}),
+    )
+
+    run_pipeline(context, stages=("s8_verify",))
+
+    assert not [f for f in context.findings if f.type == "coverage_gap"]
+
+
+def test_a_low_confidence_gap_is_not_raised(make_context: MakeContext) -> None:
+    context = _with_a_gap(_with_lenses(make_context("score_value_mismatch")))
+    context.client.register_text(  # type: ignore[attr-defined]
+        "s8_coverage",
+        json.dumps({"gaps": [{"rule_id": "R-OPT", "reason": "Perhaps.", "confidence": 0.2}]}),
+    )
+
+    run_pipeline(context, stages=("s8_verify",))
+
+    assert not [f for f in context.findings if f.type == "coverage_gap"]
+
+
+def test_a_reader_that_cannot_run_says_so_rather_than_passing_over_it(
+    make_context: MakeContext,
+) -> None:
+    context = _with_a_gap(_with_lenses(make_context("score_value_mismatch")))
+
+    def explode(_system: str, _user: str) -> str:
+        raise LLMError("the model could not be reached")
+
+    context.client.register("s8_coverage", explode)  # type: ignore[attr-defined]
+
+    run_pipeline(context, stages=("s8_verify",))
+
+    assert any("not read for obligations" in notice for notice in context.notices)
+
+
+def test_the_coverage_reader_is_off_when_verification_is(make_context: MakeContext) -> None:
+    context = _with_a_gap(make_context("score_value_mismatch"))
+    context.verify_lenses = ()
+    before = len(context.client.call_log.records)  # type: ignore[attr-defined]
+
+    run_pipeline(context, stages=("s8_verify",))
+
+    assert len(context.client.call_log.records) == before  # type: ignore[attr-defined]
+    assert not [f for f in context.findings if f.type == "coverage_gap"]
+
+
+def test_a_run_with_nothing_unchecked_makes_no_call(make_context: MakeContext) -> None:
+    context = _with_lenses(make_context("score_value_mismatch"))
+    context.coverage = Coverage()
+    for lens in THREE:
+        context.client.register_text(  # type: ignore[attr-defined]
+            f"s8_lens_{lens}", _answer(True, "Confirmed.")
+        )
+    before = len(context.client.call_log.records)  # type: ignore[attr-defined]
+
+    run_pipeline(context, stages=("s8_verify",))
+
+    log = context.client.call_log  # type: ignore[attr-defined]
+    assert "s8_coverage" not in [record.stage for record in log.records[before:]]

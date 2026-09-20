@@ -44,6 +44,11 @@ def canned_for_stage(stage: str) -> str:
         "s3_describe": '{"elements": []}',
         "s4_trace": '{"verdict": "not_related", "reason": "mock client", "confidence": 0.0}',
         "s8_verify": '{"agreed": true, "reason": "mock client", "confidence": 0.0}',
+        "s8_coverage": '{"gaps": []}',
+        "training_critique": (
+            '{"faithful": true, "problem": "", "overlaps": false, "overlaps_with": "", '
+            '"confidence": 0.0}'
+        ),
         "s8_lens_delivery": (
             '{"agreed": true, "reason": "mock client", "confidence": 0.0, "missed": []}'
         ),

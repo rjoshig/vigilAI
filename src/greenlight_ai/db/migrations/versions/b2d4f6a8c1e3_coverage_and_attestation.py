@@ -60,9 +60,16 @@ def upgrade() -> None:
     with op.batch_alter_table("findings", schema=None) as batch_op:
         batch_op.add_column(sa.Column("lens_opinions", sa.JSON(), nullable=True))
 
+    with op.batch_alter_table("rule_candidates", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("critique", sa.JSON(), nullable=True))
+        batch_op.add_column(sa.Column("redraft", sa.JSON(), nullable=True))
+
 
 def downgrade() -> None:
     """Undo the change."""
+    with op.batch_alter_table("rule_candidates", schema=None) as batch_op:
+        batch_op.drop_column("redraft")
+        batch_op.drop_column("critique")
     with op.batch_alter_table("findings", schema=None) as batch_op:
         batch_op.drop_column("lens_opinions")
     with op.batch_alter_table("final_reports", schema=None) as batch_op:

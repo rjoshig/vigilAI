@@ -140,6 +140,8 @@ def _candidate_out(row: models.RuleCandidate) -> CandidateOut:
         model_used=row.model_used,
         prompt_version=row.prompt_version,
         conflicts=list(row.conflicts or []),
+        critique=dict(row.critique or {}),
+        redraft=dict(row.redraft or {}),
         replay=dict(row.replay or {}),
         created_by=row.created_by,
         decided_by=row.decided_by,
@@ -748,7 +750,9 @@ def approve_candidate(
         The candidate, now approved.
 
     Raises:
-        HTTPException: 404 when it does not exist, 422 when it cannot become a rule.
+        HTTPException: 404 when it does not exist, 422 when it cannot become a rule or
+            when it overlaps an existing rule and no resolution was given
+            (Phase 6.11g).
     """
     row = session.get(models.RuleCandidate, candidate_id)
     if row is None:
@@ -766,6 +770,7 @@ def approve_candidate(
             actor=user.name,
             user_id=user.id,
             note=payload.note,
+            resolution=payload.resolution,
         )
     except synthesis.SynthesisError as exc:
         raise HTTPException(HTTP_422, str(exc)) from exc
