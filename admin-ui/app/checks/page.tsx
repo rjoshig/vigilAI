@@ -32,7 +32,7 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { BulkBar } from "@/components/bulk-bar";
-import { ScopePicker, scopeLabel } from "@/components/scope-picker";
+import { EVERYWHERE, ScopePicker, scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
 import type { Check, CheckIn, DraftResponse, Scope, Severity, TestResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,7 @@ const EMPTY: CheckIn = {
   instruction: "",
   reasoning: "",
   severity: "medium",
-  scope: "all",
+  scope: EVERYWHERE,
   is_active: true,
 };
 

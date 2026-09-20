@@ -468,6 +468,24 @@ export interface Candidate {
   created_at: string;
 }
 
+/** What the front door made of one sentence (Phase 6.12b). */
+export interface FrontDoorResult {
+  /** field_constraint · check · compliance_rule · background · unclear. */
+  surface: string;
+  /** Why the tool read it that way, in one sentence. */
+  reason: string;
+  confidence: number;
+  /** What the tool needs to know, when it could not place the sentence. */
+  question: string;
+  /** What to do next when nothing was created, or what to notice when it was. */
+  note: string;
+  /** The candidate, indistinguishable from one the training queue produced. */
+  candidate: Candidate | null;
+  observation_id: number | null;
+  /** The shape synthesis drafted, which is usually the surface. */
+  drafted_as: string;
+}
+
 /** What an administrator decides about a candidate, beyond approve or reject. */
 export interface CandidateApproval {
   note?: string;

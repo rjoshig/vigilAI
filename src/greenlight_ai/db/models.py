@@ -849,7 +849,7 @@ class FieldConstraint(Base):
     report_kinds: Mapped[Any] = mapped_column(Json, default=list)
     severity: Mapped[str] = mapped_column(sa.String(20), default="medium")
     reasoning: Mapped[str] = mapped_column(sa.Text, default="")
-    #: ``all``, a customer name, or ``programme:CODE``. The narrowest that fits.
+    #: A scope token (:mod:`greenlight_ai.scopes`). The narrowest that fits.
     scope: Mapped[str] = mapped_column(sa.String(200), default="all")
 
     #: draft · shadow · active · disabled · deleted. See RuleLifecycle.

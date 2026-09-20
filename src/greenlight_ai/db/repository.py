@@ -16,6 +16,7 @@ from typing import Any, Final, Iterable, Mapping, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.training.lifecycle import RUNNING_STATES
 from greenlight_ai.checks.definitions import (
@@ -94,7 +95,10 @@ def fingerprint(file_hashes: Iterable[str], check_versions: Iterable[str] = ()) 
 
 
 def load_admin_config(
-    session: Session, customer: str = "", configuration_id: str = ""
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
 ) -> AdminConfig:
     """Load what the admin-ui contributes to a run.
 
@@ -103,6 +107,8 @@ def load_admin_config(
             ``config:<id>`` applies to it and to no other (ADR-024).
         session: An open session.
         customer: The run's customer, used to scope checks and compliance rules.
+        programme_code: The run's delivery programme, so a rule scoped to a programme
+            reaches the pipeline rather than being loaded and never matched.
 
     Returns:
         The admin configuration. Falls back to the shipped reverse-pass categories when
@@ -183,8 +189,8 @@ def load_admin_config(
         for row in session.execute(sa.select(models.NamedValueRow)).scalars()
     )
 
-    # A rule in scope for this customer, whatever its origin. Scope is "all", the
-    # customer's name, or "programme:CODE"; the narrowest that fits is what a learned
+    # A rule in scope for this run, whatever its origin. One module reads a scope
+    # token (:mod:`greenlight_ai.scopes`); the narrowest that fits is what a learned
     # rule gets by default (ADR-021).
     constraint_rows = list(
         session.execute(
@@ -204,7 +210,7 @@ def load_admin_config(
             reasoning=row.reasoning,
         )
         for row in constraint_rows
-        if row.scope in ("all", customer, f"config:{configuration_id}")
+        if scopes.covers(row.scope, customer, programme_code, configuration_id)
     )
 
     # Shadow rules run and are counted; their findings are shown to nobody, so the

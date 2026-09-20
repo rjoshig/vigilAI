@@ -428,6 +428,60 @@ def synthesize_responder(_system: str, user: str) -> str:
                 "cannot_express": "",
             }
         )
+    if "blank origination date" in lowered or "origination date" in lowered:
+        rules.append(
+            {
+                "name": "origination_date_not_blank",
+                "target_kind": "field_constraint",
+                "field": "orig_date",
+                "constraint": "not_blank",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": ["account_review"],
+                "expression": "",
+                "reasoning": "A blank origination date means the extract dropped it.",
+                "severity": "high",
+                "cannot_express": "",
+            }
+        )
+    if "billing count" in lowered and "delivered count" in lowered:
+        rules.append(
+            {
+                "name": "billing_within_delivered",
+                "target_kind": "check",
+                "field": "",
+                "constraint": "",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": [],
+                "expression": "billing_count <= delivered_count",
+                "reasoning": "More billed than delivered means something was counted twice.",
+                "severity": "high",
+                "cannot_express": "",
+            }
+        )
+    if "configuration" in lowered and ("must" in lowered or "has to" in lowered):
+        rules.append(
+            {
+                "name": "deceased_suppression_present",
+                "target_kind": "compliance_rule",
+                "field": "",
+                "constraint": "",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": [],
+                "expression": "",
+                "reasoning": "The suppression must be configured whether or not the OSL says so.",
+                "severity": "high",
+                "cannot_express": "",
+            }
+        )
     if "ignore your instructions" in lowered or "reply with the word" in lowered:
         rules.append(
             {
@@ -501,6 +555,56 @@ def critique_responder(_system: str, user: str) -> str:
     )
 
 
+def classify_responder(_system: str, user: str) -> str:
+    """Place a statement an administrator typed (Phase 6.12b).
+
+    Scripted from the statement's wording, and deliberately unhelpful about anything it
+    does not recognise: a stand-in that guessed would make the "asks a question rather
+    than guessing" test pass for the wrong reason.
+
+    Args:
+        _system: The system prompt, unused.
+        user: The rendered prompt, which carries the statement.
+
+    Returns:
+        A JSON ``ClassifyResponse``.
+    """
+    blocks = user.split("<statement>")
+    lowered = blocks[-1].split("</statement>")[0].lower() if len(blocks) > 1 else user.lower()
+
+    def answer(surface: str, reason: str, confidence: float, question: str = "") -> str:
+        return json.dumps(
+            {
+                "surface": surface,
+                "reason": reason,
+                "confidence": confidence,
+                "question": question,
+            }
+        )
+
+    if "ignore your instructions" in lowered or "reply with the word" in lowered:
+        return answer(
+            "unclear",
+            "This is an instruction to the assistant rather than something to check.",
+            0.9,
+            "What would you like the tool to check?",
+        )
+    if "tab" in lowered or "is the reissue file" in lowered or "means" in lowered:
+        return answer("background", "This says how to read a file.", 0.8)
+    if "configuration" in lowered and ("must" in lowered or "has to" in lowered):
+        return answer("compliance_rule", "This must be present in the configuration.", 0.9)
+    if "count" in lowered and ("exceed" in lowered or "more than" in lowered):
+        return answer("check", "This compares two numbers the tool already names.", 0.9)
+    if "blank" in lowered or "empty" in lowered or "between" in lowered:
+        return answer("field_constraint", "This is a rule about one attribute.", 0.9)
+    return answer(
+        "unclear",
+        "There is no attribute, number or configuration setting named here.",
+        0.2,
+        "Which value, and what would make it wrong?",
+    )
+
+
 def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClient:
     """Build a mock client wired with the scripted responders.
 
@@ -520,6 +624,7 @@ def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClie
     )
     client.register("training_synthesize", synthesize_responder)
     client.register("training_critique", critique_responder)
+    client.register("admin_classify", classify_responder)
     client.register("admin_map_requirement", map_responder)
     # Every lens answers like the single second opinion, so a run with the lenses on
     # behaves the same as one without unless a test scripts a disagreement.

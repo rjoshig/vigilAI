@@ -8,11 +8,14 @@ changing what the pipeline compares.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+from greenlight_ai import scopes
 
 __all__ = [
+    "ScopeToken",
     "NewRunOptions",
     "ArtifactSlot",
     "ScopeOption",
@@ -34,6 +37,27 @@ __all__ = [
     "CloneResult",
     "RecheckResult",
 ]
+
+
+def _canonical_scope(value: object) -> object:
+    """Read any stored or submitted scope form and hand back the canonical token.
+
+    The wire is where the vocabulary is unified (ADR-037): an older form still arrives
+    and is understood, and what goes back out is always the one token, so a console
+    never has to know that four shapes were ever stored.
+
+    Args:
+        value: Whatever arrived on the wire.
+
+    Returns:
+        The canonical token for a string, and the value untouched for anything else,
+        so pydantic reports the type error rather than this function hiding it.
+    """
+    return scopes.token(value) if isinstance(value, str) else value
+
+
+#: A scope on the wire: any form in, the canonical token out.
+ScopeToken = Annotated[str, BeforeValidator(_canonical_scope)]
 
 
 class StageInfo(BaseModel):

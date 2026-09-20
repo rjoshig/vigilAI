@@ -9,12 +9,12 @@ runs them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Final, Literal, Sequence
+from typing import Literal, Sequence
 
+from greenlight_ai import scopes
 from greenlight_ai.rules.schema import Severity
 
 __all__ = [
-    "PROGRAMME_SCOPE_PREFIX",
     "CheckKind",
     "CheckDefinition",
     "ComplianceRule",
@@ -24,29 +24,21 @@ __all__ = [
 
 CheckKind = Literal["expression", "judgment"]
 
-#: A scope that names a delivery programme rather than a customer (Phase 6.8).
-PROGRAMME_SCOPE_PREFIX: Final[str] = "programme:"
-
 
 def in_scope(scope: str, customer: str, programme_code: str = "") -> bool:
     """Decide whether a definition's scope covers a run.
 
     Args:
-        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        scope: Any scope token; :mod:`greenlight_ai.scopes` decides what it means.
         customer: The run's customer name.
         programme_code: The run's delivery programme code, when it has one.
 
     Returns:
-        ``True`` when the scope is everywhere, this customer, or this programme. A
-        programme scope never matches a run of another programme, and never matches a
-        run with no programme.
+        ``True`` when the scope covers the run. The scope string is not interpreted
+        here: one module reads a scope, so a definition cannot be in scope on one
+        screen and out of scope in the pipeline.
     """
-    if scope == "all":
-        return True
-    if scope.startswith(PROGRAMME_SCOPE_PREFIX):
-        code = scope[len(PROGRAMME_SCOPE_PREFIX) :].strip().upper()
-        return bool(code) and code == programme_code.strip().upper()
-    return scope == customer
+    return scopes.covers(scope, customer, programme_code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +53,7 @@ class CheckDefinition:
         instruction: What to judge, for ``"judgment"`` checks.
         reasoning: The plain-English reason shown to users on a failure.
         severity: How serious a failure is.
-        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
         is_active: Whether the check's findings count.
         id: The stored row, so a finding can name the rule behind it.
         state: The lifecycle state (ADR-021). A ``shadow`` check runs and its
@@ -77,7 +69,7 @@ class CheckDefinition:
     instruction: str = ""
     reasoning: str = ""
     severity: Severity = "medium"
-    scope: str = "all"
+    scope: str = scopes.EVERYWHERE
     is_active: bool = True
 
     def applies_to(self, customer: str, programme_code: str = "") -> bool:
@@ -106,7 +98,7 @@ class ComplianceRule:
         name: The rule's identifier.
         json_path_contains: A fragment the implementing config path must contain.
         expected_value: The value the config must set, when there is one.
-        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
         reasoning: Why the rule exists, shown on a finding.
         is_active: Whether the rule is enforced.
     """
@@ -114,7 +106,7 @@ class ComplianceRule:
     name: str
     json_path_contains: str
     expected_value: object = True
-    scope: str = "all"
+    scope: str = scopes.EVERYWHERE
     reasoning: str = ""
     is_active: bool = True
 

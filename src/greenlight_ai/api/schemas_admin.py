@@ -10,6 +10,9 @@ import datetime as dt
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from greenlight_ai import scopes
+from greenlight_ai.api.schemas import ScopeToken
 from greenlight_ai.checks.guides import GuideEntry
 
 __all__ = [
@@ -204,7 +207,7 @@ class CheckIn(BaseModel):
     instruction: str = ""
     reasoning: str = ""
     severity: Severity = "medium"
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     is_active: bool = True
 
 
@@ -264,7 +267,7 @@ class ComplianceRuleIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     json_path_contains: str = Field(min_length=1)
     expected_value: Any = True
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     reasoning: str = ""
     is_active: bool = True
 

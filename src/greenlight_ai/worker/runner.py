@@ -178,7 +178,9 @@ def build_context(
         report_parts=_parts(session, run, data_dir),
         client=client,
         customer=run.customer_name,
-        admin=repository.load_admin_config(session, run.customer_name, run.configuration_id),
+        admin=repository.load_admin_config(
+            session, run.customer_name, run.configuration_id, run.scope or ""
+        ),
         guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
         masked_columns=repository.load_masked_columns(session),

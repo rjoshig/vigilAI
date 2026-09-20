@@ -15,6 +15,7 @@ The prompt versions here are provisional: they have not been validated against a
 model yet, and ADR-014 expects a bump after the first Gemma run.
 """
 
+from greenlight_ai.llm.prompts.admin_classify import CLASSIFY_PROMPT
 from greenlight_ai.llm.prompts.admin_draft import DRAFT_CHECK_PROMPT
 from greenlight_ai.llm.prompts.admin_map import MAP_PROMPT
 from greenlight_ai.llm.prompts.judgment import JUDGMENT_PROMPT
@@ -31,6 +32,7 @@ from greenlight_ai.llm.prompts.s9_summarize import SUMMARIZE_PROMPT
 from greenlight_ai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
 
 __all__ = [
+    "CLASSIFY_PROMPT",
     "DESCRIBE_PROMPT",
     "DRAFT_CHECK_PROMPT",
     "MAP_PROMPT",

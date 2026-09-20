@@ -336,6 +336,7 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | user-ui | Observations | What this person has recorded in Train AI mode and what became of it. Only when the mode is on (ADR-021) |
 | user-ui | Run stats | Stage timings, LLM calls, tokens, cache hits |
 | user-ui | Config history | Captured configs by configuration ID and version, with created and last-modified dates. Copy one into a new run. Same layout as the config history in the compare-file ui2 mock |
+| admin-ui | Tell the tool | One box: write what you want checked in your own words, and the model places it on the surface that already runs it, as a candidate in the ordinary queue. Background is offered to the screen that holds background; a sentence it cannot place comes back as a question and creates nothing (ADR-037) |
 | admin-ui | Artifact types | Define which inputs the tool accepts — the OSL, the config, and each report — with a label, a meaning, an optional sample workbook, model guidance, and an on/off switch. Named values are defined here too |
 | admin-ui | Delivery programmes | AM, AS, Archives, and a catch-all, each with standing instructions that reach the model as background (ADR-020) |
 | admin-ui | Checks | Create, test, version, enable or disable cross-report checks |

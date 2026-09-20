@@ -17,6 +17,7 @@ import type {
   ConfigChange,
   CurrentUser,
   DraftResponse,
+  FrontDoorResult,
   MaskedColumn,
   NamedValue,
   NamedValueIn,
@@ -425,6 +426,14 @@ export const api = {
   /** Turn a candidate down, with the reason the author of its observations sees. */
   rejectCandidate: (id: number, reason: string): Promise<Candidate> =>
     request<Candidate>(`/candidates/${id}/reject`, json("POST", { reason })),
+
+  /**
+   * Say what you want checked in your own words and let the tool place it on the
+   * surface that already runs it (Phase 6.12b). What comes back is an ordinary
+   * candidate, an offer to the surface that holds background, or a question.
+   */
+  tellTheTool: (statement: string, scope: string): Promise<FrontDoorResult> =>
+    request<FrontDoorResult>("/front-door", json("POST", { statement, scope })),
 
   /** Every rule, in the order the server sorted them. Filtered to active by default. */
   listRules: (state: RuleStateFilter = "active", search = ""): Promise<Rule[]> =>

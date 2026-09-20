@@ -97,3 +97,11 @@ because its output becomes a rule applied to every run, and it is handled accord
   to reach.
 - **No report values are sent.** The model sees the sentence, what the person pointed
   at, and the list of attribute names the tool knows. It never sees a cell's contents.
+
+The **front door** (Phase 6.12b) adds one call in front of this, `admin_classify`, and
+no new exposure. It sends the administrator's sentence and the names of the attributes
+and report types the tool knows, inside a `<statement>` block labelled as data, and gets
+back one word from a closed set with a reason and a confidence. It writes nothing: the
+drafting, the validation and the approval are the ones above, so the same tripwire runs
+on the same text at the same moment and the same person still approves whatever runs. A
+sentence the model will not place creates nothing at all.

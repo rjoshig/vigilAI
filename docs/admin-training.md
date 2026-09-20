@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.11 (c–h).
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.12a.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -43,6 +43,48 @@ shows **User**, so the two are never mistaken. Clicking them goes home.
 Under the mark: **Train AI mode on** (green) or **off** (grey). When it is on,
 reviewers can record observations and they arrive in your queue. The switch itself is
 on the Settings screen.
+
+## Tell the tool
+
+The first item in the sidebar, and the one to reach for when you are not sure which of
+the other screens a thing belongs on. Write **one** statement in your own words — "the
+account review file must never have a blank origination date", "billing count must never
+exceed the delivered count" — choose where it applies, and press **Tell the tool**.
+
+What happens next is the training loop, not a new one. The tool decides which existing
+surface the statement belongs on, drafts the rule there, and puts it in the queue as an
+ordinary candidate. **Nothing runs until you approve it**, and an approved rule starts in
+shadow like any other.
+
+Three answers are possible, and two of them create nothing:
+
+- **A candidate.** It names the surface and shows the draft, with a link into the queue
+  where you approve or reject it as usual.
+- **Background.** Some things are worth the tool knowing but are not something a
+  delivery can pass or fail — "the second tab is the reissue file". The tool says so and
+  points you at the artifact type's AI context or the standing instructions. It does not
+  turn it into a rule that would then be wrong.
+- **A question.** When the statement could be two things, or names nothing the tool can
+  check, you get the question back and nothing is created. That is the answer working,
+  not failing: a rule on the wrong surface is a finding nobody can explain.
+
+Occasionally the tool reads a statement one way and drafts it another. It says so
+instead of hiding it, and that is your cue to read the draft carefully before approving.
+
+This screen does not replace the ones below. They are the expert view, they show exactly
+what runs, and they stay the place where things are really managed.
+
+### Which screen holds what
+
+The front door answers this for you most of the time. When you want to go straight to
+the right screen, these are the three groups that genuinely overlap, and what actually
+separates them.
+
+| These all do the same job | And differ in |
+| --- | --- |
+| Validation guides, meaning entries, named values | how they locate a cell in a report |
+| Programme rules, compliance rules, judgment checks | who evaluates "this must hold": the model reading, code comparing, or the configuration being present |
+| An artifact type's AI context, standing instructions, configuration notes | nothing, at the prompt — all three reach the model as background. Choose by how wide it is: one artifact type, one programme, one configuration |
 
 ## Artifact types
 
@@ -144,7 +186,17 @@ compliance rules deleted this way are restorable from the Rules screen for six m
 **Scope.** Every check and compliance rule applies **everywhere**, to **one delivery
 programme**, or to **one customer**. A rule scoped to Account Solicitation is never
 evaluated on an Account Monitoring run, and a run with no programme sees only global
-and customer rules. Pick the scope on the form; the list shows it in words.
+and customer rules. Pick the scope on the form; the list shows it in words, never as a
+stored token.
+
+There is a fourth scope you never pick: a rule learned from a note written against one
+ETL configuration applies to **that configuration** and no other, and the form shows it
+without letting you change it. A scope that names nothing — a programme with no code, a
+customer with no name — covers nothing, so the form will not save one.
+
+Scopes written before the vocabulary was unified still read and still work; nothing was
+rewritten in the database, and a rule becomes canonical the next time somebody saves it
+(ADR-037).
 
 ## The training queue
 

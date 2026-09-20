@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from synthetic_model import build_client
 
+from greenlight_ai import scopes
 from greenlight_ai.db import models
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -106,7 +107,11 @@ def test_confirming_compiles_a_shadow_check_and_a_shadow_compliance_rule(
                 models.CheckDefinitionRow.name == "meaning:global:input_population"
             )
         ).scalar_one()
-        assert (check.state, check.origin, check.scope) == ("shadow", "meaning", "all")
+        assert (check.state, check.origin, check.scope) == (
+            "shadow",
+            "meaning",
+            scopes.EVERYWHERE,
+        )
         assert check.expression == (
             "meaning_global_input_population == meaning_global_input_population_config"
         )

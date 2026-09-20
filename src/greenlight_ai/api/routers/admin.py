@@ -30,6 +30,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
@@ -2051,7 +2052,7 @@ def create_programme_rule(
         text=payload.text.strip(),
         strictness=payload.strictness,
         sort_order=payload.sort_order,
-        scope=f"programme:{code}",
+        scope=scopes.for_programme(code).token,
         created_by=user.name,
     )
     session.add(row)

@@ -32,7 +32,12 @@ PIPELINE_STAGES = {
 
 #: The admin flow's prompts: drafting a check (once, at authoring time) and answering a
 #: judgment check (``docs/design.md`` "Configurable checks").
-ADMIN_STAGES = {"admin_draft_check", "admin_judgment", "admin_map_requirement"}
+ADMIN_STAGES = {
+    "admin_classify",
+    "admin_draft_check",
+    "admin_judgment",
+    "admin_map_requirement",
+}
 
 #: Turning what reviewers wrote into a candidate rule, once, when an administrator
 #: asks for it (ADR-021). Like drafting, it is authoring-time rather than per-run.
@@ -57,8 +62,8 @@ def test_every_llm_stage_has_a_prompt() -> None:
     assert set(PROMPTS) == LLM_STAGES
 
 
-def test_the_admin_flow_has_exactly_two_prompts() -> None:
-    """Drafting happens once per check; everything else in the admin flow is code."""
+def test_the_admin_flow_registers_every_prompt_it_claims() -> None:
+    """Each is authoring-time and happens once; everything else in the admin flow is code."""
     assert set(PROMPTS) & ADMIN_STAGES == ADMIN_STAGES
 
 
@@ -160,6 +165,7 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("s8_lens_compliance", {"finding", "evidence"}),
         ("s8_lens_requirements", {"finding", "evidence"}),
         ("s9_summarize", {"findings", "coverage"}),
+        ("admin_classify", {"attributes", "report_types", "statement"}),
         ("admin_draft_check", {"description", "report_types"}),
         ("admin_judgment", {"instruction", "values"}),
         ("admin_map_requirement", {"section", "blocks", "cells"}),

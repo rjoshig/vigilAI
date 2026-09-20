@@ -1138,3 +1138,53 @@ failure mode of a control that cannot be satisfied is worse than the failure mod
 that is absent, and the honest place to say so is where somebody is deciding. The
 control is narrow enough to be true — one signature, from someone else, over a named
 list — and nothing about it implies the second person re-derived the first's work.
+
+## ADR-037 — One module reads a scope, and the stored columns are left alone
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.12a
+
+**Context:** A check, a compliance rule, a field constraint, a programme rule and a
+learned rule all carry a scope. Four shapes had been stored over the product's life —
+`all`, a bare customer name, `programme:CODE` (Phase 6.8) and `config:ID` (ADR-024) —
+and each reader interpreted the string for itself. The pipeline's `in_scope` knew three
+of them, the field-constraint loader knew a different three, and the two consoles knew a
+fourth set between them. A scope was therefore capable of meaning one thing on the
+screen that defined it and another in the run that used it, which is the failure this
+product exists to prevent, happening inside the product.
+
+There were two obvious answers: rewrite the columns into one form, or leave them and
+unify the reading.
+
+**Decision:**
+
+1. **One module interprets a scope string**, `greenlight_ai/scopes.py`, with a `Scope`
+   value object, a `parse` that accepts every form ever stored, a `token` that renders
+   the canonical one, and a `covers` that answers the only question anyone asks. Nothing
+   else parses a scope. `checks.definitions.in_scope` survives as the name the pipeline
+   calls and decides nothing itself.
+2. **No data migration.** Rewriting three columns across a dozen tables would be the
+   riskiest change in the product for a cosmetic gain, and a half-completed rewrite
+   would leave exactly the ambiguity it was meant to remove. A row becomes canonical the
+   next time somebody saves it, and reads identically until then. The older forms parse
+   forever; that is the contract, not a transitional courtesy.
+3. **The wire is where the vocabulary is unified.** One pydantic type canonicalises a
+   scope in both directions, so any form is accepted on input and the canonical token is
+   what goes back out. The consoles never learn that four shapes exist.
+4. **The canonical token is `everywhere`, `programme:CODE`, `customer:NAME` or
+   `config:ID`.** `all` became `everywhere` because `all` already means something else
+   in the rule schema (`applies_to: all`, meaning every record rather than every run),
+   and a bare customer name gained a prefix because it was the one form indistinguishable
+   from a typo.
+5. **A scope that names nothing covers nothing.** `programme:` with no code, or a
+   customer scope with no name, matches no run. A half-written row must not quietly
+   become a rule that runs everywhere, and the console refuses to save one.
+6. **A configuration scope is not picked, it is inherited.** It comes from a note
+   written against one configuration (ADR-024); the scope control shows it rather than
+   turning it into a customer name.
+
+**Consequences:** A programme-scoped field constraint now actually reaches the pipeline.
+It did not before: the loader compared the stored string against `all`, the customer name
+and `config:ID`, so a rule scoped to a delivery programme was loaded and never matched.
+Found by making one module answer the question. The cost is that two files, one Python
+and one TypeScript, must agree on the vocabulary; both say so at the top, and both are
+tested against the same list of stored forms.

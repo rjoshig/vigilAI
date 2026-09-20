@@ -31,6 +31,7 @@ __all__ = [
     "CoverageGap",
     "CoverageGapResponse",
     "CritiqueResponse",
+    "ClassifyResponse",
 ]
 
 
@@ -328,3 +329,29 @@ class MappingProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     requirements: list[MappingRequirement] = Field(default_factory=list)
+
+
+class ClassifyResponse(BaseModel):
+    """Which surface a statement an administrator typed belongs on (Phase 6.12b).
+
+    The model places the sentence; it never writes the rule here and never decides
+    whether anything passes. ``surface`` is a closed set, so nothing downstream reads
+    prose to find out what to do.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Where it belongs. ``background`` is a statement that is not a rule at all, and
+    #: ``unclear`` is the honest answer when the sentence could be two of the others.
+    surface: Literal[
+        "field_constraint",
+        "check",
+        "compliance_rule",
+        "background",
+        "unclear",
+    ] = "unclear"
+    #: One sentence saying why, shown to the administrator beside what it became.
+    reason: str = ""
+    confidence: Confidence = 0.5
+    #: What the model needs to know when it cannot place the sentence.
+    question: str = ""

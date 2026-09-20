@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036).** Now: Phase 6.12 — 6.12a one scope vocabulary, then 6.12b the front door |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.12**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phases 6.11 and 6.12 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036), one scope vocabulary and the front door built (ADR-037).** Next: open a PR to `dev`; the remaining work is blocked on the target machine |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,66 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.12: one scope vocabulary and one front door)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1135 Python
+tests, 91 user-ui, 84 admin-ui.
+
+Two things, and deliberately not a third. The phase document says what was left out and
+why: the overlapping surfaces are not merged and the sixteen screens are not rewritten,
+because each merge is a migration and a behaviour change, and doing them behind a front
+door that already hides the difference would be paying the risk for something nobody
+sees.
+
+### One module reads a scope (ADR-037)
+
+Four shapes had been stored over the product's life — `all`, a bare customer name,
+`programme:CODE` and `config:ID` — and each reader recognised some of them. `scopes.py`
+is now the only thing that interprets one: `parse` takes every form, `token` renders the
+canonical one, `covers` answers the question, `label` is for a screen. The stored columns
+are untouched; a row becomes canonical the next time somebody saves it, and one pydantic
+type canonicalises the wire in both directions so no router has to remember.
+
+**This found a real bug.** A field constraint scoped to a delivery programme never ran:
+the loader compared the stored string against `all`, the customer name and `config:ID`
+and nothing else, so the rule was loaded on every run and matched on none. It was
+invisible, because a rule that never fires looks exactly like a rule with nothing to say.
+`load_admin_config` now takes the run's programme and asks `scopes.covers`.
+
+`all` became `everywhere` because `all` was already taken: the rule schema's
+`applies_to: "all"` means every **record**, not every **run**, and one of them is in the
+model's output schema.
+
+### The front door
+
+One box, `POST /admin/front-door`, and a **Tell the tool** screen at the top of the admin
+sidebar. One new prompt, `admin_classify`, answers which of the existing surfaces a
+sentence belongs on, from a closed set. Everything after that is `training.synthesis`
+unchanged: the drafting, the validation, the fingerprint, the conflict check, the
+critique pass and the approval. There is no new rule table, no new evaluator and no new
+branch in the approval path, which is the whole point — a front door that added a surface
+would make seventeen.
+
+Two answers create nothing. **Background** ("the second tab is the reissue file") is said
+to be background and offered to the screen that holds background, rather than forced into
+a rule that would then be wrong. **Unclear** comes back with the model's question and
+writes no candidate and no observation.
+
+The classification routes; it does not draft. Passing the chosen surface into the
+synthesis prompt would have meant changing that prompt, bumping its version and
+discarding its cache, to tell it something it works out anyway. When the two readings
+disagree, the answer says so instead of hiding it.
+
+### Tests
+
+14 on the front door, 30 on the scope module, 3 more in the admin console. The three
+statements the phase document names as acceptance criteria are asserted verbatim, and the
+scripted stand-in gained a classifier plus three rule shapes so those assertions mean
+something. The stand-in refuses anything it does not recognise, so "asks a question
+rather than guessing" cannot pass for the wrong reason.
 
 ---
 

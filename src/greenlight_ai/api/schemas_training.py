@@ -11,6 +11,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from greenlight_ai import scopes
+from greenlight_ai.api.schemas import ScopeToken
+
 __all__ = [
     "Anchor",
     "ObservationIn",
@@ -24,6 +27,8 @@ __all__ = [
     "RuleStateChangeOut",
     "TrainingConfigOut",
     "ConfigNoteIn",
+    "FrontDoorIn",
+    "FrontDoorOut",
 ]
 
 AnchorKind = Literal["report_cell", "report_field", "osl_section", "config_path", "finding"]
@@ -122,7 +127,7 @@ class CandidateOut(BaseModel):
     body: dict[str, Any] = Field(default_factory=dict)
     reasoning: str = ""
     severity: str = "medium"
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     status: str = "draft"
     admin_note: str = ""
     source_observation_ids: list[int] = Field(default_factory=list)
@@ -149,7 +154,7 @@ class CandidateDecision(BaseModel):
 
     note: str = ""
     #: Narrower than the candidate proposed, when the administrator wants it so.
-    scope: str | None = None
+    scope: ScopeToken | None = None
     #: Approve straight to active rather than into shadow. Rarely the right answer.
     activate_now: bool = False
     #: What to do about an overlap with an existing rule: ``supersede`` disables the
@@ -167,7 +172,7 @@ class RuleOut(BaseModel):
     summary: str = ""
     reasoning: str = ""
     severity: str = "medium"
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     state: str = "active"
     origin: str = "admin"
     #: Statistics that say whether the rule is earning its place.
@@ -246,3 +251,37 @@ class RulesBulkResult(BaseModel):
 
     changed: int = 0
     failed: list[str] = Field(default_factory=list)
+
+
+class FrontDoorIn(BaseModel):
+    """One thing an administrator wants the tool to check, in their own words."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: What they wrote. It reaches the model inside a delimited block, as data.
+    statement: str = Field(min_length=1, max_length=2000)
+    #: Where it applies. Everywhere when omitted.
+    scope: ScopeToken = scopes.EVERYWHERE
+
+
+class FrontDoorOut(BaseModel):
+    """What became of a sentence: a candidate, an offer, or a question."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: field_constraint · check · compliance_rule · background · unclear.
+    surface: str
+    #: Why the tool read it that way, in one sentence.
+    reason: str = ""
+    confidence: float = 0.0
+    #: What the tool needs to know, when it could not place the sentence.
+    question: str = ""
+    #: What an administrator should do next, when nothing was created — and, when
+    #: something was, anything about it worth noticing before approving it.
+    note: str = ""
+    #: The candidate, indistinguishable from one the training queue produced.
+    candidate: CandidateOut | None = None
+    #: The observation the statement was filed as, when it became one.
+    observation_id: int | None = None
+    #: The shape synthesis drafted, which is usually the surface.
+    drafted_as: str = ""

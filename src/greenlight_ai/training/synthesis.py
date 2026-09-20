@@ -15,6 +15,7 @@ from typing import Any, Final, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import CONSTRAINT_KINDS
 from greenlight_ai.db import models
 from greenlight_ai.llm.client import LLMClient, LLMError, LLMResponseError
@@ -478,8 +479,8 @@ def _scope_for(observations: Sequence[models.TrainingObservation]) -> str:
         observations: The group being synthesized.
 
     Returns:
-        ``all``, a customer name, or ``programme:CODE``. The narrowest that fits is
-        the default because the most common cause of a noisy rule is an assumption
+        A canonical scope token (:mod:`greenlight_ai.scopes`). The narrowest that fits
+        is the default because the most common cause of a noisy rule is an assumption
         that holds for most records and not all; widening on evidence is easy, and
         narrowing after the complaints is not.
     """
@@ -487,7 +488,7 @@ def _scope_for(observations: Sequence[models.TrainingObservation]) -> str:
     if configs and len(configs) == 1 and all(o.kind == "config_note" for o in observations):
         # A rule learned from a configuration note applies to that configuration and
         # no other; that is the whole point of writing the note there (ADR-024).
-        return f"config:{configs.pop()}"
+        return scopes.for_configuration(configs.pop()).token
     hints = {observation.scope_hint for observation in observations}
     customers = {
         observation.customer_name for observation in observations if observation.customer_name
@@ -495,12 +496,12 @@ def _scope_for(observations: Sequence[models.TrainingObservation]) -> str:
     programmes = {observation.scope_code for observation in observations if observation.scope_code}
 
     if hints == {"customer"} and len(customers) == 1:
-        return customers.pop()
+        return scopes.for_customer(customers.pop()).token
     if hints == {"programme"} and len(programmes) == 1:
-        return f"programme:{programmes.pop()}"
+        return scopes.for_programme(programmes.pop()).token
     if len(customers) == 1 and "global" not in hints:
-        return customers.pop()
-    return "all"
+        return scopes.for_customer(customers.pop()).token
+    return scopes.EVERYWHERE
 
 
 def approve(
