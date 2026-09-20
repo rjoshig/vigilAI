@@ -710,13 +710,9 @@ function SampleStrip({
   onChanged: () => void;
   onError: (message: string) => void;
 }) {
-  const [label, setLabel] = React.useState("");
-  const [scope, setScope] = React.useState("");
   const [working, setWorking] = React.useState(false);
   const [preview, setPreview] = React.useState<SamplePreview | null>(null);
   const [sheet, setSheet] = React.useState("");
-  const fileInput = React.useRef<HTMLInputElement>(null);
-  const full = type.samples.filter((s) => (s.scope_code || "") === scope).length >= MAX_SAMPLES;
 
   async function run(what: string, action: () => Promise<unknown>) {
     setWorking(true);
@@ -749,136 +745,82 @@ function SampleStrip({
 
   const shown = preview?.sheets.find((one) => one.name === sheet) ?? preview?.sheets[0] ?? null;
   const disabled = busy || working;
+  // One group per scope: the global samples first, then every programme, so a variant
+  // of the OSL or the configuration for one programme has its own place.
+  const groups: { code: string; title: string; hint: string }[] = [
+    {
+      code: "",
+      title: "Global",
+      hint: "Read for every programme that has no sample of its own.",
+    },
+    ...(programmes ?? [])
+      .filter(
+        (programme) =>
+          programme.is_active || type.samples.some((s) => s.scope_code === programme.code)
+      )
+      .map((programme) => ({
+        code: programme.code,
+        title: `${programme.label} (${programme.code})`,
+        hint: `Read instead of the global samples on ${programme.label} runs and mappings.`,
+      })),
+  ];
 
   return (
-    <div className="py-1">
-      <div className="flex flex-wrap items-start gap-2">
-        {type.samples.length === 0 ? (
-          <span className="py-2 text-xs text-muted-foreground">
-            No samples yet. Named values resolve against these, so a pointer cannot be tested until
-            one is here.
-          </span>
-        ) : null}
-
-        {type.samples.map((sample) => (
-          <div key={sample.id} className="min-w-[15rem] max-w-xs rounded-md border bg-card p-2">
-            <div className="text-xs font-semibold">{sample.label || sample.filename}</div>
-            <div
-              className="mono truncate text-[0.7rem] text-muted-foreground"
-              title={sample.filename}
-            >
-              {sample.filename} · {sizeOf(sample.size_bytes)}
+    <div className="grid gap-2 py-1">
+      {groups.map((group) => {
+        const samples = type.samples.filter((s) => (s.scope_code || "") === group.code);
+        return (
+          <div
+            key={group.code || "global"}
+            className={cn(
+              "rounded-md border p-2",
+              group.code ? "border-l-4 border-l-primary bg-accent/10" : "bg-muted/20"
+            )}
+            data-testid={`samples-${type.key}-${group.code || "global"}`}
+          >
+            <div className="mb-1.5 flex flex-wrap items-baseline gap-2">
+              <span className="text-xs font-semibold">{group.title}</span>
+              <span className="text-[0.7rem] text-muted-foreground">
+                {group.hint} {samples.length} of {MAX_SAMPLES}.
+              </span>
             </div>
-            <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
-              {sample.sheets.length > 0
-                ? sample.sheets.join(", ")
-                : type.kind === "report"
-                  ? "no sheets read"
-                  : type.kind === "osl"
-                    ? "Word or PDF, read section by section"
-                    : "JSON, read block by block"}
-            </div>
-            <div className="text-[0.7rem] text-muted-foreground">
-              uploaded by {sample.uploaded_by || "—"}
-              {sample.scope_code ? (
-                <Badge tone="outline" className="ml-1">
-                  {sample.scope_code}
-                </Badge>
+            <div className="flex flex-wrap items-start gap-2">
+              {samples.map((sample) => (
+                <SampleCard
+                  key={sample.id}
+                  type={type}
+                  sample={sample}
+                  disabled={disabled}
+                  previewing={preview?.sample_id === sample.id}
+                  onView={() => void view(sample)}
+                  onSave={(patch) =>
+                    run("save the sample", () => api.updateSample(type.key, sample.id, patch))
+                  }
+                  onDelete={(confirm) =>
+                    run("remove the sample", () => api.deleteSample(type.key, sample.id, confirm))
+                  }
+                />
+              ))}
+              {samples.length < MAX_SAMPLES ? (
+                <AddSample
+                  type={type}
+                  scope={group.code}
+                  disabled={disabled}
+                  onAdd={(file, label, notes) =>
+                    run("add the sample", () =>
+                      api.addSample(type.key, file, label, notes, group.code)
+                    )
+                  }
+                />
               ) : (
-                <Badge tone="muted" className="ml-1">
-                  global
-                </Badge>
+                <p className="self-center text-[0.7rem] text-muted-foreground">
+                  Three is the limit here; remove one before adding another.
+                </p>
               )}
             </div>
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              <Button
-                variant="outline"
-                size="xs"
-                disabled={disabled}
-                onClick={() => void view(sample)}
-              >
-                <Eye className="h-3.5 w-3.5" />
-                {preview?.sample_id === sample.id ? "Hide" : "View"}
-              </Button>
-              {/* A plain link, so the browser streams the workbook to disk rather than
-                  the page holding the whole file in memory. */}
-              <a
-                href={api.sampleDownloadUrl(type.key, sample.id)}
-                download={sample.filename}
-                className="inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-[0.7rem] font-medium hover:bg-accent"
-              >
-                <Download className="h-3.5 w-3.5" /> Download
-              </a>
-              <DeleteButton
-                label={`sample ${sample.label || sample.filename}`}
-                busy={disabled}
-                onDelete={(confirm) =>
-                  run("remove the sample", () => api.deleteSample(type.key, sample.id, confirm))
-                }
-              />
-            </div>
           </div>
-        ))}
-
-        <div className="min-w-[13rem] rounded-md border border-dashed p-2">
-          {full ? (
-            <p className="text-[0.7rem] text-muted-foreground">
-              Three samples is the limit. Remove one before adding another.
-            </p>
-          ) : (
-            <>
-              <Label htmlFor={`sample-label-${type.key}`}>Label</Label>
-              <Input
-                id={`sample-label-${type.key}`}
-                className="mt-1 h-7 text-xs"
-                placeholder="what tells it apart"
-                value={label}
-                onChange={(event) => setLabel(event.target.value)}
-              />
-              <Label htmlFor={`sample-scope-${type.key}`} className="mt-1.5 block">
-                Belongs to
-              </Label>
-              <Select
-                id={`sample-scope-${type.key}`}
-                className="mt-1 h-7 text-xs"
-                value={scope}
-                onChange={(event) => setScope(event.target.value)}
-              >
-                <option value="">Global (every programme)</option>
-                {(programmes ?? []).map((programme) => (
-                  <option key={programme.code} value={programme.code}>
-                    {programme.label} ({programme.code})
-                  </option>
-                ))}
-              </Select>
-              <input
-                ref={fileInput}
-                type="file"
-                accept={acceptFor(type.kind)}
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (!file) return;
-                  void run("add the sample", async () => {
-                    await api.addSample(type.key, file, label.trim(), "", scope);
-                    setLabel("");
-                  });
-                }}
-              />
-              <Button
-                className="mt-1.5"
-                variant="outline"
-                size="xs"
-                disabled={disabled}
-                onClick={() => fileInput.current?.click()}
-              >
-                <Upload className="h-3.5 w-3.5" /> Add sample
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+        );
+      })}
 
       {preview ? (
         <div className="mt-2 rounded-md border bg-card p-2">
@@ -926,6 +868,186 @@ function SampleStrip({
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** One stored sample: what it is, its notes, view / download / edit / delete. */
+function SampleCard({
+  type,
+  sample,
+  disabled,
+  previewing,
+  onView,
+  onSave,
+  onDelete,
+}: {
+  type: ArtifactType;
+  sample: Sample;
+  disabled: boolean;
+  previewing: boolean;
+  onView: () => void;
+  onSave: (patch: { label?: string; notes?: string }) => void;
+  onDelete: (confirm: string) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [label, setLabel] = React.useState(sample.label);
+  const [notes, setNotes] = React.useState(sample.notes);
+
+  return (
+    <div className="min-w-[15rem] max-w-sm rounded-md border bg-card p-2">
+      {editing ? (
+        <div className="grid gap-1">
+          <Label htmlFor={`sl-${sample.id}`}>Label</Label>
+          <Input
+            id={`sl-${sample.id}`}
+            className="h-7 text-xs"
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+          />
+          <Label htmlFor={`sn-${sample.id}`}>Notes for the model and the team</Label>
+          <Textarea
+            id={`sn-${sample.id}`}
+            rows={3}
+            className="text-xs"
+            placeholder="How this variant differs; what to look for in it."
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+          <div className="flex gap-1">
+            <Button
+              size="xs"
+              disabled={disabled}
+              onClick={() => {
+                onSave({ label: label.trim(), notes: notes.trim() });
+                setEditing(false);
+              }}
+            >
+              Save
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="text-xs font-semibold">{sample.label || sample.filename}</div>
+          <div
+            className="mono truncate text-[0.7rem] text-muted-foreground"
+            title={sample.filename}
+          >
+            {sample.filename} · {sizeOf(sample.size_bytes)}
+          </div>
+          <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
+            {sample.sheets.length > 0
+              ? sample.sheets.join(", ")
+              : type.kind === "report"
+                ? "no sheets read"
+                : type.kind === "osl"
+                  ? "Word or PDF, read section by section"
+                  : "JSON, read block by block"}
+          </div>
+          {sample.notes ? (
+            <p className="mt-1 whitespace-pre-wrap text-[0.7rem]">{sample.notes}</p>
+          ) : (
+            <p className="mt-1 text-[0.7rem] italic text-muted-foreground">
+              No notes yet. Notes reach the model when it maps this scope.
+            </p>
+          )}
+          <div className="text-[0.7rem] text-muted-foreground">
+            uploaded by {sample.uploaded_by || "—"}
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            <Button variant="outline" size="xs" disabled={disabled} onClick={onView}>
+              <Eye className="h-3.5 w-3.5" />
+              {previewing ? "Hide" : "View"}
+            </Button>
+            {/* A plain link, so the browser streams the workbook to disk rather than
+                the page holding the whole file in memory. */}
+            <a
+              href={api.sampleDownloadUrl(type.key, sample.id)}
+              download={sample.filename}
+              className="inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-[0.7rem] font-medium hover:bg-accent"
+            >
+              <Download className="h-3.5 w-3.5" /> Download
+            </a>
+            <Button variant="ghost" size="xs" disabled={disabled} onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+            <DeleteButton
+              label={`sample ${sample.label || sample.filename}`}
+              busy={disabled}
+              onDelete={onDelete}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The add form for one scope: a label, notes, and the file. */
+function AddSample({
+  type,
+  scope,
+  disabled,
+  onAdd,
+}: {
+  type: ArtifactType;
+  scope: string;
+  disabled: boolean;
+  onAdd: (file: File, label: string, notes: string) => void;
+}) {
+  const [label, setLabel] = React.useState("");
+  const [notes, setNotes] = React.useState("");
+  const fileInput = React.useRef<HTMLInputElement>(null);
+  const id = `${type.key}-${scope || "global"}`;
+
+  return (
+    <div className="min-w-[13rem] max-w-sm rounded-md border border-dashed p-2">
+      <Label htmlFor={`sample-label-${id}`}>Label</Label>
+      <Input
+        id={`sample-label-${id}`}
+        className="mt-1 h-7 text-xs"
+        placeholder="what tells it apart"
+        value={label}
+        onChange={(event) => setLabel(event.target.value)}
+      />
+      <Label htmlFor={`sample-notes-${id}`} className="mt-1.5 block">
+        Notes
+      </Label>
+      <Textarea
+        id={`sample-notes-${id}`}
+        rows={2}
+        className="mt-1 text-xs"
+        placeholder="How this variant differs; what the model should know about it."
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+      />
+      <input
+        ref={fileInput}
+        type="file"
+        accept={acceptFor(type.kind)}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (!file) return;
+          onAdd(file, label.trim(), notes.trim());
+          setLabel("");
+          setNotes("");
+        }}
+      />
+      <Button
+        className="mt-1.5"
+        variant="outline"
+        size="xs"
+        disabled={disabled}
+        onClick={() => fileInput.current?.click()}
+      >
+        <Upload className="h-3.5 w-3.5" /> Add {scope ? `for ${scope}` : "global"} sample
+      </Button>
     </div>
   );
 }

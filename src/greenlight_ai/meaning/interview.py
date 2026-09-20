@@ -177,6 +177,9 @@ def propose(
     reports = {k: v for k, v in samples.items() if k not in ("osl", "config")}
     cells = _cells_text(reports, data_dir)
     value_columns = _value_columns(reports, data_dir)
+    if config[0].notes.strip():
+        blocks += f"\nAdministrator's notes on this configuration: {config[0].notes.strip()[:500]}"
+    osl_notes = osl[0].notes.strip()[:500]
 
     existing = {
         row.key: row
@@ -191,7 +194,12 @@ def propose(
         result.sections += 1
         answer = client.complete(
             MAP_PROMPT.system,
-            MAP_PROMPT.render(section=section.as_text(), blocks=blocks, cells=cells),
+            MAP_PROMPT.render(
+                section=(f"Administrator's notes on this OSL: {osl_notes}\n\n" if osl_notes else "")
+                + section.as_text(),
+                blocks=blocks,
+                cells=cells,
+            ),
             MAP_PROMPT.schema,
             stage="admin_map_requirement",
             prompt_version=MAP_PROMPT.version,

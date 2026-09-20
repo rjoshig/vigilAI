@@ -191,3 +191,46 @@ def test_bulk_delete_needs_the_word_and_bulk_reject_does_not(client: TestClient,
     )
     assert done.json() == {"changed": 3, "missing": [999]}
     assert client.get(f"{api}/admin/meaning").json() == []
+
+
+def test_sample_notes_reach_the_interview(
+    client: TestClient,
+    api: str,
+    fixtures_root: Path,
+    cases: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The administrator's words about a sample are the one thing the model cannot read from it."""
+    import greenlight_ai.api.routers.meaning as meaning_router
+
+    seen: list[str] = []
+
+    def _build(settings: Any, cache: Any = None, **_: Any) -> Any:
+        mock = build_client(settings, cache=cache)
+        original = mock.complete
+
+        def complete(system: str, user: str, *args: Any, **kwargs: Any) -> Any:
+            seen.append(user)
+            return original(system, user, *args, **kwargs)
+
+        mock.complete = complete  # type: ignore[method-assign]
+        return mock
+
+    monkeypatch.setattr(meaning_router, "build_client", _build)
+    _upload(client, api, fixtures_root, cases["baseline_match"])
+    types = {t["key"]: t for t in client.get(f"{api}/admin/artifact-types").json()}
+    for key, notes in (
+        ("osl", "Solicitation OSLs put geography in section 3."),
+        ("config", "filters[0] is always the state list."),
+    ):
+        sample_id = types[key]["samples"][0]["id"]
+        assert (
+            client.patch(
+                f"{api}/admin/artifact-types/{key}/samples/{sample_id}", json={"notes": notes}
+            ).status_code
+            == 200
+        )
+    assert client.post(f"{api}/admin/meaning/propose", json={"scope_code": ""}).status_code == 200
+    assert seen
+    assert all("Administrator's notes on this OSL: Solicitation OSLs" in prompt for prompt in seen)
+    assert all("filters[0] is always the state list" in prompt for prompt in seen)
