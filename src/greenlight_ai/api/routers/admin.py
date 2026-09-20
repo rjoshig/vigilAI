@@ -56,6 +56,8 @@ from greenlight_ai.config import store as config_store
 from greenlight_ai.checks import field_labels
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.db import catalog, models, repository, versions
+from greenlight_ai.checks import programme_match
+from greenlight_ai.pipeline import guidance
 from greenlight_ai.training import demotion, lifecycle
 from greenlight_ai.llm.cache import LLMCache
 from greenlight_ai.llm.client import LLMError
@@ -3339,4 +3341,173 @@ def demotion_report(
             if row.state == demotion.BLOCKED
         ],
         shadow=True,
+    )
+
+
+@router.get("/keyword-suggestions", response_model=wire.KeywordSuggestionsOut)
+def keyword_suggestions(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.KeywordSuggestionsOut:
+    """Words that would have matched a delivery's declared programme (Phase 6.18f).
+
+    Each one comes from a run where the keyword check found none of the declared
+    programme's words and the model, asked once, read the delivery as that programme
+    anyway. That is a gap in a word list rather than a defect in the delivery, and it
+    recurs on every delivery from that customer until somebody closes it.
+
+    **Nothing here is in force.** A suggestion is a suggestion until an administrator
+    accepts it (ADR-021).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        Every pending suggestion, most-seen first, with the runs it came from.
+    """
+    listed = {
+        scope.code: {programme_match.normalized_key(word) for word in scope.keywords}
+        for scope in catalog.load_scopes(session)
+    }
+
+    seen: dict[tuple[str, str], list[int]] = {}
+    rows = session.execute(
+        sa.select(models.Run.id, models.Run.keyword_suggestions).where(
+            models.Run.keyword_suggestions.is_not(None)
+        )
+    ).all()
+    for run_id, suggestions in rows:
+        for code, phrases in (suggestions or {}).items():
+            for phrase in phrases:
+                seen.setdefault((str(code), str(phrase)), []).append(int(run_id))
+
+    out = [
+        wire.KeywordSuggestionOut(
+            scope_code=code,
+            phrase=phrase,
+            seen=len(run_ids),
+            run_ids=sorted(run_ids)[-10:],
+            already_listed=programme_match.normalized_key(phrase) in listed.get(code, set()),
+        )
+        for (code, phrase), run_ids in seen.items()
+    ]
+    out.sort(key=lambda row: (row.already_listed, -row.seen, row.phrase))
+    return wire.KeywordSuggestionsOut(suggestions=out)
+
+
+@router.post("/keyword-suggestions/accept", response_model=wire.ScopeOut)
+def accept_keyword_suggestion(
+    payload: wire.AcceptKeywordIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.ScopeOut:
+    """Add one suggested word to a programme's list.
+
+    The act that closes the loop: from here the keyword check matches this customer's
+    vocabulary in code, and the model is not asked again (ADR-045).
+
+    Args:
+        payload: The programme and the phrase.
+        session: The request's session.
+        user: The caller, recorded in the audit log.
+
+    Returns:
+        The programme, with its new word.
+
+    Raises:
+        HTTPException: 404 when the programme does not exist.
+    """
+    scope = session.execute(
+        sa.select(models.RunScope).where(models.RunScope.code == payload.scope_code)
+    ).scalar_one_or_none()
+    if scope is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no programme {payload.scope_code!r}")
+
+    phrase = " ".join(payload.phrase.split())
+    existing = list(scope.keywords)
+    key = programme_match.normalized_key(phrase)
+    if key not in {programme_match.normalized_key(word) for word in existing}:
+        scope.keywords = existing + [phrase]
+        repository.audit(
+            session,
+            "scope.keyword_accepted",
+            None,
+            f"{scope.code} += {phrase!r}",
+            user_id=user.id,
+            actor=user.name,
+        )
+        _LOG.info("keyword %r accepted into programme %s", phrase, scope.code)
+    session.flush()
+    return wire.ScopeOut(
+        id=scope.id,
+        code=scope.code,
+        label=scope.label,
+        description=scope.description,
+        standing_instructions=scope.standing_instructions,
+        is_active=scope.is_active,
+        sort_order=scope.sort_order,
+        second_approver=scope.second_approver,
+        keywords=list(scope.keywords or []),
+        version=versions.latest_version(session, "programme_rules", scope.code),
+    )
+
+
+@router.get("/prompt-budget", response_model=wire.PromptBudgetOut)
+def prompt_budget(
+    scope_code: str = Query(default=""),
+    configuration_id: str = Query(default=""),
+    artifact_key: str = Query(default=""),
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.PromptBudgetOut:
+    """How much of a prompt's context allowance is already spent (Phase 6.17b).
+
+    A field that states its cap tells an administrator the rule. This is what lets one
+    tell them what is *left*, which is the thing they can act on — the eleventh
+    configuration note on a configuration is trimmed whether or not anybody knew the
+    rule, and its author finds out afterwards, if at all.
+
+    Counted over exactly the lines a prompt carries, by the same function that builds
+    them, so the number shown is the number that decides what gets dropped.
+
+    Args:
+        scope_code: The delivery programme whose standing instructions to include.
+        configuration_id: The configuration whose notes to include.
+        artifact_key: The artifact whose guidance to include, when asking about one.
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The caps, what is used, and what is left.
+    """
+    scope = None
+    if scope_code:
+        scope = session.execute(
+            sa.select(models.RunScope).where(models.RunScope.code == scope_code)
+        ).scalar_one_or_none()
+
+    context = guidance.RunGuidance(
+        scope_code=scope_code,
+        scope_label=scope.label if scope is not None else "",
+        scope_instructions=scope.standing_instructions if scope is not None else "",
+        config_notes=(
+            tuple(repository.active_config_notes(session, configuration_id))
+            if configuration_id
+            else ()
+        ),
+        artifact_context={
+            artifact.key: artifact.ai_context
+            for artifact in catalog.load_artifacts(session)
+            if artifact.ai_context.strip()
+        },
+    )
+    found = guidance.budget(context, artifact_key)
+    return wire.PromptBudgetOut(
+        per_field_cap=found.per_field_cap,
+        block_cap=found.block_cap,
+        used=found.used,
+        remaining=found.remaining,
+        lines=found.lines,
+        trimmed=found.trimmed,
     )

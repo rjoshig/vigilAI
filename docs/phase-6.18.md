@@ -3,7 +3,9 @@
 **Status:** 🟡 **in progress** — specified 2026-09-20 from the product goal the user
 stated directly: *a reviewer should not have to look at every validation point; as the
 tool learns, they should see only the real ones.* **6.18a is built and running in
-shadow**; everything it decides is recorded and acted on by nobody, which is the point.
+shadow** — everything it decides is recorded and acted on by nobody, which is the point
+— **and 6.18f is built**, closing the last false high-severity finding 6.17a measured.
+6.18b, c, d and e wait on real verdicts, which is [`phase-7.1.md`](phase-7.1.md).
 
 **This is the phase that decides what the product is worth.** Everything up to here
 makes the tool correct. This makes it *usable at volume* — the difference between a
@@ -173,23 +175,42 @@ you the tool has drifted stops arriving. You find out from the customer.
       and it is automatic in the safe direction only: **the tool may revoke its own
       trust; it may never grant it.**
 
-### 6.18f — The first worked instance: the programme check · ⬜ not started
+### 6.18f — The first worked instance: the programme check · ✅ complete
 
-Phase 6.17a measured the programme keyword check and found it brittle. Its deterministic
-repair lands in 6.17a. The *learning* half belongs here, and it is the smallest complete
-example of the whole phase.
+Built 2026-09-20. ADR-045 holds the decisions; the shape is `phase-6.15.md` option A's,
+applied to a second surface.
 
-- [ ] When the keyword check flags a delivery and a reviewer answers *"no, this is
-      Account Solicitation — we call it a promotional acquisition campaign"*, that phrase
-      is offered to an administrator as an addition to the programme's word list.
-- [ ] Approved, it becomes an ordinary keyword. **The next run matches it in code** —
-      no model, no flag, nobody asked. The tool stopped asking because it now knows.
-- [ ] Where the words still miss, the model is consulted **once**, after the code check
-      has failed, and is asked *which programme does this read like, and which words say
-      so* — never *is this the right programme*, which is a comparison and is code's
-      (ADR-001). This is 6.15 option A's shape, applied to a second surface.
-- [ ] The model's answer never silently clears the flag. Code compares it to what was
-      declared and decides the severity, exactly as the compliance locator does.
+Phase 6.17a repaired the keyword check deterministically and took its false
+high-severity findings from five to one. The one left was never a spelling problem, so
+no normalising rule could reach it: a *promotional acquisition mailing* that suppresses
+`existing accounts` carries two of Account Monitoring's words and none of its own, and
+what makes them innocent is that they appear under *suppress*. That is meaning.
+
+- [x] The keyword check runs first and a hit costs **no model call**, which is what
+      makes asking affordable: one call per delivery, only where the keywords missed.
+- [x] The model is asked *which of these programmes do these documents read like, and
+      which words say so* — **never** whether the submitter was right, which is a
+      comparison and is code's (ADR-001). The prompt says the deterministic match has
+      already failed and that `unclear` is a good answer.
+- [x] Code refuses a programme nobody offered, an answer below a confidence floor, an
+      unparseable reply, and no reply. Each falls back to the deterministic answer, so
+      **asking is never worse than not asking**.
+- [x] Code decides what a believable answer means. The model disagreeing is the
+      high-severity finding the check exists for. The model agreeing where code had
+      only *"none of its words appear"* is silent, because that was a word-list gap and
+      not a reviewer's problem.
+- [x] **The model may soften a high-severity finding and may never erase one.** Where
+      code had enough to name a different programme, agreement drops it to review
+      severity rather than silence: a model agreeing with the submitter is the one
+      answer that could hide a real mismatch, so it buys a question. Its own test.
+- [x] When the model agrees, the phrases it quoted are recorded on the run and offered
+      on the programme's card in the console. Accepting one adds it to the word list,
+      after which **the check matches in code and the model is not asked again** — the
+      tool stops asking because code now knows, not because the model grew confident.
+- [x] Nothing is applied by the run (ADR-021), with a test saying so.
+- [x] `docs/model-context.md` records that a delivery's own words now reach a model at
+      stage 7, capped, never a data row, and that the prompt is told not to quote a
+      phrase containing a person's details.
 
 ## Acceptance criteria · ⬜ not started
 

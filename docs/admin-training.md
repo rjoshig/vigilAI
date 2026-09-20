@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 6.14.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.18.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -206,6 +206,15 @@ Each programme also carries **keywords** and **rules**. The keywords are what th
 tool greps the OSL, configuration, and report headers for to confirm a run really is
 that programme; a run declared as one programme with none of its words gets a
 finding.
+
+**The AI is a second pass, not the first.** When none of a programme's words appear in
+a delivery, the tool reads the documents once and says which programme they sound like.
+It is never asked whether the submitter was right — code compares its reading with what
+was declared and decides what to do. If it agrees with the submitter, the finding is
+either dropped or reduced to a question, and **the words it quoted appear on the
+programme's card as suggestions**. Clicking one adds it to the word list, and from then
+on the match is made in code and the AI is not asked again for that wording. Nothing is
+added until you click.
 
 **Two things about keywords are worth knowing before you edit them.** Matching is
 forgiving of spelling but not of vocabulary: `existing accounts` finds *existing

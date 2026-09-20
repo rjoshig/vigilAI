@@ -1566,3 +1566,67 @@ The narrower option — sending the programme label but not the administrator's 
 steering an answer. Running that measurement needs a real model, since the mock always
 answers `absent`; it is worth doing if the locator is ever seen to be too generous, and
 is not worth blocking on now.
+
+## ADR-045 — The model reads a delivery for its programme only where the keywords failed, and may soften a finding but never erase one
+
+**Status:** accepted 2026-09-20 (Phase 6.18f, user decision).
+
+**Context:** Phase 6.17a measured the programme classification check, found it brittle,
+and repaired it deterministically: false high-severity findings fell from five to one.
+The one left is not a spelling problem. A delivery that calls itself a *promotional
+acquisition mailing* and says *suppress existing accounts* carries two of Account
+Monitoring's words and none of Account Solicitation's. **Nothing is misspelled** — the
+words really are the other programme's, and what makes them innocent is that they
+appear under *suppress* and *removes*. That is meaning, and no normalising rule reaches
+it.
+
+The user asked for both paths — *"consult the AI after checking programmatically"* —
+which is the shape `phase-6.15.md` option A already established for compliance rules.
+
+**Decision:** Code first, the model once, code decides.
+
+1. **The keyword match runs first.** A hit anywhere and the check is silent, free and
+   explainable. The common case costs nothing, which is what makes asking affordable at
+   all: this is one call per delivery, and only on deliveries the keywords missed.
+2. **The model is asked one narrow question** — *which of these programmes do these
+   documents read like, and which words say so?* It is **never** asked whether the
+   submitter was right; that is a comparison, and comparisons are code's (ADR-001). The
+   prompt tells it that the deterministic match has already failed, and that "unclear"
+   is a good answer, because unfamiliar vocabulary is more common than a mis-declared
+   delivery.
+3. **Code refuses what it cannot believe**: a programme code nobody offered, an answer
+   below a confidence floor, an unparseable reply, or no reply. Each falls back to the
+   deterministic answer, which is what the check would have had anyway — so asking is
+   never worse than not asking.
+4. **Code decides what a believable answer means**, and this is the rule that keeps it
+   safe:
+   - The model **disagrees** with the declaration → the high-severity finding the check
+     exists for, now with a reason a person can read.
+   - The model **agrees**, and code had only *"none of its words appear"* → silent. That
+     finding was a word-list gap, which is an administrator's problem and not a
+     reviewer's, and raising it on every delivery from that customer forever is the
+     noise Phase 6.18 exists to remove.
+   - The model **agrees**, and code had enough to name a different programme → the
+     finding **drops to review severity**. It is not erased. A model agreeing with the
+     submitter is the one answer that could hide a real mismatch, so it buys a question
+     rather than a silence — the same line the compliance locator holds.
+   - The model is **unclear** → review severity, and it never raises one.
+
+**And the loop closes in code, not in the model.** When the model agrees, the phrases it
+quoted are recorded on the run and offered to an administrator on the programme's card.
+Accepting one adds it to the keyword list; from then on the check matches that
+customer's vocabulary deterministically and **the model is not asked again**. The tool
+stops asking because code now knows, not because the model grew confident — which is the
+distinction this product keeps everywhere (ADR-043). Nothing is applied without a person
+(ADR-021).
+
+**Consequences:** One new prompt, `programme_reading`, versioned and cached like every
+other. `Run.keyword_suggestions` holds what was quoted. `docs/model-context.md` records
+that a delivery's own words now reach a model at stage 7, capped, and never a data row
+(ADR-003) — the prompt is told not to quote a phrase containing a person's details, and
+the tripwire scans it like every other.
+
+The cost is one model call per delivery whose keywords missed, falling to zero for a
+customer as their vocabulary is accepted. The benefit is that the last measured false
+high-severity finding in the classification check has an answer, and that a customer
+who writes about their work in their own words stops being asked about it every month.

@@ -384,3 +384,30 @@ class ClassifyResponse(BaseModel):
     confidence: Confidence = 0.5
     #: What the model needs to know when it cannot place the sentence.
     question: str = ""
+
+
+class ProgrammeReading(BaseModel):
+    """Which delivery programme a set of artifacts reads like (Phase 6.18f).
+
+    Asked only where the keyword check has already failed to find the declared
+    programme's words. The model is **not** asked whether the submitter was right:
+    that is a comparison, and comparisons are code's (ADR-001). It is asked what the
+    documents sound like, and code compares its answer with what was declared.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The code of the programme the artifacts read like, from the list supplied in the
+    #: prompt, or empty with ``verdict`` ``unclear``. Code checks the code was one it
+    #: offered before believing it.
+    programme_code: str = ""
+    #: ``reads_like`` when the documents plainly describe one of the listed programmes,
+    #: ``unclear`` when they do not settle it. Prefer ``unclear`` to a guess: the
+    #: keyword check has already failed, so unfamiliar vocabulary is the likely truth
+    #: and a confident wrong answer here contradicts a person who was probably right.
+    verdict: Literal["reads_like", "unclear"] = "unclear"
+    #: The words in the documents that say so, quoted from them. Code shows these to
+    #: the reviewer and offers them as keywords, so a guess costs an administrator time.
+    phrases: list[str] = Field(default_factory=list, max_length=5)
+    reason: str = ""
+    confidence: Confidence = 0.5

@@ -161,6 +161,11 @@ class Run(Base):
     #: Which delivery programme this run belongs to: the ``code`` of a
     #: :class:`RunScope`, or empty when the submitter did not say (ADR-020).
     scope: Mapped[str] = mapped_column(sa.String(20), default="", index=True)
+    #: Words the model quoted from this delivery that would have matched its declared
+    #: programme, by programme code (Phase 6.18f, ADR-045). A suggestion, never an
+    #: application: an administrator adds them to the word list, or does not. Kept on
+    #: the run because that is where the evidence for them is.
+    keyword_suggestions: Mapped[Any] = mapped_column(Json, default=dict)
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)

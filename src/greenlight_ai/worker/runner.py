@@ -79,6 +79,7 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
             ).scalars()
         ),
         programme_keywords={s.code: tuple(s.keywords) for s in catalog.load_scopes(session)},
+        programme_labels={s.code: s.label for s in catalog.load_scopes(session)},
         artifact_context={
             artifact.key: artifact.ai_context
             for artifact in catalog.load_artifacts(session)

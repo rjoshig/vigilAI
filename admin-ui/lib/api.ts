@@ -19,6 +19,8 @@ import type {
   ConfigChange,
   CurrentUser,
   DemotionReport,
+  KeywordSuggestions,
+  PromptBudget,
   DraftResponse,
   FrontDoorResult,
   MaskedColumn,
@@ -416,6 +418,26 @@ export const api = {
 
   /** Read the dashboard numbers. */
   getUsage: (): Promise<Usage> => request<Usage>("/usage"),
+
+  /** How much of a prompt's context allowance is already spent (Phase 6.17b). */
+  getPromptBudget: (scopeCode = "", configurationId = ""): Promise<PromptBudget> => {
+    const query = new URLSearchParams();
+    if (scopeCode) query.set("scope_code", scopeCode);
+    if (configurationId) query.set("configuration_id", configurationId);
+    const suffix = query.toString();
+    return request<PromptBudget>(`/prompt-budget${suffix ? `?${suffix}` : ""}`);
+  },
+
+  /** Words the model quoted that would have matched a programme (Phase 6.18f). */
+  getKeywordSuggestions: (): Promise<KeywordSuggestions> =>
+    request<KeywordSuggestions>("/keyword-suggestions"),
+
+  /** Add one suggested word to a programme's list. */
+  acceptKeyword: (scopeCode: string, phrase: string): Promise<Scope> =>
+    request<Scope>("/keyword-suggestions/accept", {
+      method: "POST",
+      body: JSON.stringify({ scope_code: scopeCode, phrase }),
+    }),
 
   /** What demotion would do, while it still does nothing (Phase 6.18a). */
   getDemotionReport: (customer = "", scope = ""): Promise<DemotionReport> => {

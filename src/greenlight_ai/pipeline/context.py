@@ -240,6 +240,11 @@ class RunContext:
     elements: list[ConfigElement] = field(default_factory=list)
     traces: list[Trace] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
+    #: Words the model quoted from a delivery that would have matched its declared
+    #: programme, by programme code (Phase 6.18f). Never applied by the run: they are
+    #: offered to an administrator, who decides whether they belong in the word list.
+    #: Nothing activates without a person (ADR-021).
+    keyword_suggestions: dict[str, tuple[str, ...]] = field(default_factory=dict)
     summary: str = ""
     top_issues: tuple[str, ...] = ()
 
@@ -342,6 +347,33 @@ class RunContext:
         stamped = finding.model_copy(update={"rules_version": self.rules_version})
         self.findings.append(stamped)
         return stamped
+
+    def add_keyword_suggestion(self, scope_code: str, phrases: Sequence[str]) -> None:
+        """Record words that would have matched this delivery's declared programme.
+
+        The keyword check missed a delivery that the model then read as the programme
+        it claimed to be. That is a gap in a word list rather than a defect in the
+        delivery, so nothing is reported — but the gap will recur on every delivery
+        from this customer until somebody closes it, and they can only close it if
+        they are told what to add.
+
+        Args:
+            scope_code: The programme whose word list the phrases belong to.
+            phrases: What the model quoted. Blank and duplicate entries are dropped,
+                and the order is kept so the most telling phrase stays first.
+        """
+        if not scope_code:
+            return
+        seen = {word.lower() for word in self.keyword_suggestions.get(scope_code, ())}
+        kept = list(self.keyword_suggestions.get(scope_code, ()))
+        for phrase in phrases:
+            cleaned = " ".join(phrase.split())
+            if not cleaned or cleaned.lower() in seen:
+                continue
+            seen.add(cleaned.lower())
+            kept.append(cleaned)
+        if kept:
+            self.keyword_suggestions[scope_code] = tuple(kept)
 
     def resume_from(self) -> StageName:
         """Decide where a retried run should restart.

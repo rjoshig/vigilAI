@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 6.14.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.18.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -121,7 +121,12 @@ administrator you can still open it, but nothing in it will let you change anyth
    Choose the **delivery programme**: Account Monitoring, Account Solicitation,
    Archives, or Other. Choose carefully: the tool checks that your inputs read like
    that programme and raises a finding if they do not, and it holds the delivery to
-   the programme's rules. Say whether **suppressions were applied**; the default is No,
+   the programme's rules. It checks this in two passes, so **writing about your work in
+   your own words is not a problem**: first it looks for the programme's known words,
+   forgiving plurals, hyphens and reordered phrases; only if it finds none does it read
+   the documents properly to see what they describe. If that reading agrees with you,
+   the tool says nothing and quietly offers your wording to your administrator so it
+   matches next time without being asked. Say whether **suppressions were applied**; the default is No,
    because assuming Yes would let a missing suppression pass unremarked.
 2. **Delivery notes** (optional). Anything about this delivery the OSL does not
    say. **Every field on the form says whether the model sees it.** Customer, order,
@@ -204,6 +209,12 @@ compared against it.
   check can express it, or the check for it could not be run.
 - The panel also warns when a report arrived and **no check examined it**, which
   usually means that report type has no guide, meaning entry or named value yet.
+- **"Declared as X; some words point to Y"** is the tool saying it is unsure which
+  programme this delivery is, not that you were wrong. It appears when none of your
+  programme's usual words are in the documents and a few of another programme's are —
+  which happens honestly, for instance when a solicitation says it excludes existing
+  accounts. Confirm the programme is right and mark it OK; if it keeps happening for a
+  customer, ask your administrator to add that customer's wording to the programme.
 - **Notices** appear here too: a second opinion the model could not give, a programme
   reading that did not run. They are not findings, and you should know about them.
 - Every requirement nothing evidenced, and every check that could not be evaluated,

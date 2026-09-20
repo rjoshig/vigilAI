@@ -53,6 +53,7 @@ __all__ = [
     "fold",
     "found",
     "hits",
+    "normalized_key",
     "tokens",
 ]
 
@@ -176,6 +177,23 @@ def found(keyword: str, haystack: str, folded: Sequence[str]) -> bool:
     return _near(wanted, where)
 
 
+def normalized_key(keyword: str) -> str:
+    """One keyword reduced to the form two spellings of it share.
+
+    Used wherever a keyword is compared with another keyword rather than with a
+    document — checking whether a programme already lists a word, and whether two
+    programmes claim the same one — so ``Firm Offer`` and ``firm-offer`` never both end
+    up in a list.
+
+    Args:
+        keyword: A keyword as somebody wrote it.
+
+    Returns:
+        Lowercased with punctuation folded to single spaces, and trimmed.
+    """
+    return _normalized(keyword).strip()
+
+
 def discriminating(code: str, keywords: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
     """A programme's keywords that only that programme claims.
 
@@ -200,12 +218,9 @@ def discriminating(code: str, keywords: Mapping[str, Sequence[str]]) -> tuple[st
     """
     mine = keywords.get(code, ())
     elsewhere = {
-        _normalized(word).strip()
-        for other, words in keywords.items()
-        if other != code
-        for word in words
+        normalized_key(word) for other, words in keywords.items() if other != code for word in words
     }
-    return tuple(word for word in mine if _normalized(word).strip() not in elsewhere)
+    return tuple(word for word in mine if normalized_key(word) not in elsewhere)
 
 
 def hits(haystack_parts: Iterable[str], keywords: Sequence[str]) -> list[str]:

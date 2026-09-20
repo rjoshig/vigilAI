@@ -330,6 +330,32 @@ export interface Usage {
   decisions: Record<string, number>;
 }
 
+/** A word the model quoted that would have matched a programme (Phase 6.18f). */
+export interface KeywordSuggestion {
+  scope_code: string;
+  phrase: string;
+  /** How many deliveries the model quoted it from. */
+  seen: number;
+  run_ids: number[];
+  already_listed: boolean;
+}
+
+/** Every pending suggestion. */
+export interface KeywordSuggestions {
+  suggestions: KeywordSuggestion[];
+}
+
+/** What one prompt's context allowance has left (Phase 6.17b). */
+export interface PromptBudget {
+  per_field_cap: number;
+  block_cap: number;
+  used: number;
+  remaining: number;
+  lines: number;
+  /** True when the block is already over and losing its oldest lines. */
+  trimmed: boolean;
+}
+
 /* ----------------------------------------------------- What a reviewer stops seeing */
 
 /** One recurring finding and what people have decided about it (Phase 6.18a). */

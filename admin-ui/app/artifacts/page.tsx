@@ -33,6 +33,7 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { BulkBar } from "@/components/bulk-bar";
+import { CapMeter } from "@/components/cap-meter";
 import { Explain, FieldEffect } from "@/components/explain";
 import { DeleteButton } from "@/components/confirm-delete";
 import { GuideEditor } from "@/components/guide-editor";
@@ -669,8 +670,9 @@ function ArtifactEditor({
         />
         <FieldEffect
           kind="model"
-          note="Read at extraction, description, tracing and verification. Capped at 1,500 characters, and 6,000 across everything an administrator contributes to one prompt."
+          note="Read at extraction, description, tracing and verification. The counter below says what is left rather than what the limit is."
         />
+        <CapMeter value={context} />
       </div>
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-1.5 text-xs">

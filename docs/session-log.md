@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **6.17 is closed except its two standing touchpoints** — 6.17a measured and repaired, 6.17c answered (ADR-044). **6.18 is specified and 6.18a is built, running in shadow** (ADR-043): the tool now works out which recurring findings reviewers have stopped needing to see, records it with the evidence, and **acts on none of it**. **Next concrete action: leave 6.18a running, then open the Review load screen and ask what the banner asks** — *it would have hidden these; was any of them real?* That answer decides whether 6.18b is built as specified. 6.17b (the cap countdown) and the two touchpoints remain open and unblocking |
+| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **Phase 6.17 is complete**, both standing touchpoints included. **6.18a and 6.18f are built**; 6.18b–e wait on real verdicts, which is the new dormant [`phase-7.1.md`](phase-7.1.md). **Next concrete action: nothing in this repository.** 6.18b cannot be built honestly until stage 3 of the rollout has produced real verdicts and the Review load question has been answered in writing. What remains needs the user or the target machine: the retention ADR and security sign-off, `docker compose up --build` once, the in-house gateway and golden-set run, and whether a data dictionary exists to seed aliases from |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -103,6 +103,72 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (6.18f, 6.17b, the touchpoints, and phase 7.1)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.17 complete, 6.18a and
+6.18f built, gates green at 1514 tests and all five admin-ui gates.
+
+**6.18f — the model reads a delivery for its programme.** ADR-045. Code first: a keyword
+hit costs no model call, which is what makes asking affordable. Where the keywords miss,
+the model is asked once *which of these programmes do these documents read like, and
+which words say so* — never whether the submitter was right, which is a comparison and
+is code's. Code refuses a programme nobody offered, an answer below a confidence floor,
+an unparseable reply and no reply, each falling back to the deterministic answer, so
+**asking is never worse than not asking**.
+
+Then code decides, and the rule that keeps it safe is that **the model may soften a
+high-severity finding and may never erase one**. Agreement where code had only *"none of
+its words appear"* is silent, because that was a word-list gap and an administrator's
+problem. Agreement where code had named a different programme drops to review severity —
+a model agreeing with the submitter is the one answer that could hide a real mismatch, so
+it buys a question. That is the compliance locator's line, held on a second surface.
+
+The loop closes in code: the phrases the model quoted appear on the programme's card, and
+accepting one adds it to the word list, after which the check matches in code and the
+model is not asked again. The case 6.17a could not close — a *promotional acquisition
+mailing* that suppresses `existing accounts` — now drops from high to a question.
+
+**6.17b — the cap countdown**, deferred twice and cheap once `preamble` was split so the
+number could be measured from the text a prompt actually carries. `GET
+/admin/prompt-budget` and a `<CapMeter>` that counts down on the two fields that spend
+the budget. Exact for what is saved, an estimate while typing, which is the honest way
+round.
+
+**The two standing touchpoints, both done.** `gd-rollout-plan.md` re-read and dated:
+stage 1 gained keyword-vocabulary and locator items, and **stage 3's gate now requires
+the Review load question to be answered in writing**. Both training documents realigned
+and re-dated to 6.18 — the user document explains the finding a reviewer now sees when
+the tool is unsure which programme a delivery is, and says plainly that writing in your
+own words is not a problem.
+
+**`phase-7.1.md`, dormant.** The thing this repository cannot manufacture is real
+verdicts from real reviewers, and that is exactly what 6.18a's shadow evidence needs.
+Written as a dormant phase that runs during rollout stage 3, with the question to ask,
+what each answer means, and the three things about real data that could change what it
+measures — above all whether `element_ref` is populated, since an empty one collapses a
+rule's findings into a single signature.
+
+**Synthetic evidence for the screen**, so it is not empty in a demo: `seed_demo.py`
+builds four signatures through the production path — one that would be hidden, one still
+gathering, one blocked by a single escalation among eight dismissals, and one blocked at
+high severity despite twelve. Deliberately synthetic and deliberately not evidence.
+
+**Caught by the suite:** a new prompt stage that the prompt registry test knew about and
+I had not registered. Worth noting because it is the second time this session that a test
+written for one purpose caught something unrelated — the first being the migration chain.
+
+**One convention drift to raise.** `CLAUDE.md` says `api/` never imports `pipeline/`. The
+budget endpoint imports `pipeline.guidance`, a pure leaf that imports only `logging`.
+**The rule was already broken twice before this** — `api/routers/runs.py` imports
+`s4_trace` and `api/gate.py` imports `coverage`, both for the same reason: a pure
+function that lives under `pipeline/`. Either the rule should say what it means (the API
+may import pure pipeline helpers, never the stages) or all three should move. **A
+decision for the user; I have not changed the rule unilaterally.**
+
+**Next concrete action:** nothing here. 6.18b waits on `phase-7.1.md`.
 
 ---
 

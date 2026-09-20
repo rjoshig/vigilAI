@@ -672,3 +672,45 @@ class DemotionReportOut(BaseModel):
     blocked: list[SignatureStateOut] = Field(default_factory=list)
     #: True while nothing acts on any of this, which is the whole of 6.18a.
     shadow: bool = True
+
+
+class KeywordSuggestionOut(BaseModel):
+    """A word the model quoted that would have matched a programme (Phase 6.18f)."""
+
+    scope_code: str = ""
+    phrase: str = ""
+    #: How many deliveries the model quoted it from. A phrase seen repeatedly is the
+    #: customer's vocabulary; one seen once may be a turn of phrase.
+    seen: int = 0
+    #: The runs it came from, so an administrator can read the delivery before
+    #: accepting a word into the list that decides what the tool believes.
+    run_ids: list[int] = Field(default_factory=list)
+    #: True when the programme already lists it, matching how the check compares.
+    already_listed: bool = False
+
+
+class KeywordSuggestionsOut(BaseModel):
+    """Every pending suggestion, grouped by programme."""
+
+    suggestions: list[KeywordSuggestionOut] = Field(default_factory=list)
+
+
+class AcceptKeywordIn(BaseModel):
+    """Add one suggested word to a programme's list."""
+
+    scope_code: str = Field(min_length=1)
+    phrase: str = Field(min_length=1)
+
+
+class PromptBudgetOut(BaseModel):
+    """What one prompt's context allowance has left (Phase 6.17b)."""
+
+    per_field_cap: int = 0
+    block_cap: int = 0
+    #: What the configured context takes today, counted the way the trimmer counts it.
+    used: int = 0
+    remaining: int = 0
+    lines: int = 0
+    #: True when the block is already over and losing its oldest lines. A field should
+    #: say so rather than let somebody write an eleventh note that never arrives.
+    trimmed: bool = False

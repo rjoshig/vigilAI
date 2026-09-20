@@ -16,6 +16,7 @@
 import { Pencil, Plus } from "lucide-react";
 import * as React from "react";
 
+import { CapMeter } from "@/components/cap-meter";
 import { Explain, FieldEffect } from "@/components/explain";
 import {
   Badge,
@@ -37,6 +38,7 @@ import { DeleteButton } from "@/components/confirm-delete";
 import { api, ApiError } from "@/lib/api";
 import { versionLabel } from "@/lib/versions";
 import type {
+  KeywordSuggestion,
   ProgrammeRule,
   ProgrammeRuleIn,
   RuleActionWord,
@@ -226,6 +228,74 @@ export default function ScopesPage() {
   );
 }
 
+/**
+ * Words the model quoted that would have matched this programme (Phase 6.18f).
+ *
+ * Each one comes from a delivery where the keyword check found none of this
+ * programme's words and the model, asked once, read the delivery as this programme
+ * anyway. That is a gap in the word list rather than a defect in the delivery, and it
+ * recurs on every delivery from that customer until somebody closes it.
+ *
+ * Accepting one is the act that closes the loop: from then on the check matches this
+ * customer's vocabulary in code, and the model is not asked again. Nothing is in force
+ * until somebody clicks (ADR-021).
+ */
+function KeywordSuggestionsStrip({ code, onAccepted }: { code: string; onAccepted: () => void }) {
+  const [rows, setRows] = React.useState<KeywordSuggestion[]>([]);
+  const [busy, setBusy] = React.useState("");
+
+  const load = React.useCallback(async () => {
+    try {
+      const found = await api.getKeywordSuggestions();
+      setRows(found.suggestions.filter((row) => row.scope_code === code && !row.already_listed));
+    } catch (caught) {
+      // A suggestion nobody could fetch is not worth an error state on a form.
+      if (!(caught instanceof ApiError)) throw caught;
+    }
+  }, [code]);
+
+  React.useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-1 rounded-md border border-dashed border-info/40 bg-info/5 p-2">
+      <p className="text-[0.7rem] text-muted-foreground">
+        The AI read these deliveries as {code} although none of its words appeared. Adding a phrase
+        means the check matches it in code next time, and the AI is not asked again.
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {rows.map((row) => (
+          <Button
+            key={row.phrase}
+            size="sm"
+            variant="outline"
+            disabled={busy === row.phrase}
+            onClick={async () => {
+              setBusy(row.phrase);
+              try {
+                await api.acceptKeyword(code, row.phrase);
+                await load();
+                onAccepted();
+              } finally {
+                setBusy("");
+              }
+            }}
+          >
+            <Plus className="h-3 w-3" aria-hidden />
+            {row.phrase}
+            {row.seen > 1 ? (
+              <span className="text-muted-foreground"> · seen {row.seen}×</span>
+            ) : null}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** What a card needs to run a request through the page's busy and error handling. */
 type Act = (what: string, run: () => Promise<unknown>) => Promise<void>;
 
@@ -336,6 +406,7 @@ function ScopeCard({
             ignored when deciding what a delivery looks like, and a word the business uses generally
             (snapshot, historical, monthly) belongs in no list at all.
           </span>
+          <KeywordSuggestionsStrip code={scope.code} onAccepted={onChanged} />
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1">
@@ -362,6 +433,7 @@ function ScopeCard({
             kind="model"
             note="Background for every run in this programme. It never makes anything pass or fail; the OSL stays the source of truth."
           />
+          <CapMeter value={instructions} scopeCode={scope.code} />
         </div>
         <div className="flex flex-col gap-1">
           <label className="flex items-center gap-2 text-xs">

@@ -19,6 +19,7 @@ from greenlight_ai.llm.prompts.admin_classify import CLASSIFY_PROMPT
 from greenlight_ai.llm.prompts.admin_draft import DRAFT_CHECK_PROMPT
 from greenlight_ai.llm.prompts.admin_map import MAP_PROMPT
 from greenlight_ai.llm.prompts.compliance_locate import COMPLIANCE_LOCATE_PROMPT
+from greenlight_ai.llm.prompts.programme_reading import PROGRAMME_READING_PROMPT
 from greenlight_ai.llm.prompts.judgment import JUDGMENT_PROMPT
 from greenlight_ai.llm.prompts.registry import PROMPTS, Prompt, get_prompt, prompt_versions
 from greenlight_ai.llm.prompts.s2_extract import EXTRACT_PROMPT
@@ -38,6 +39,7 @@ __all__ = [
     "DRAFT_CHECK_PROMPT",
     "MAP_PROMPT",
     "COMPLIANCE_LOCATE_PROMPT",
+    "PROGRAMME_READING_PROMPT",
     "JUDGMENT_PROMPT",
     "EXTRACT_PROMPT",
     "PROGRAMME_PROMPT",

@@ -14,7 +14,7 @@ things deliberately left, each with the reason it was left and what would settle
 
 ## The work, in the order worth doing it
 
-### 6.17a — Measure the programme keyword check, and repair it · 🟡 in progress
+### 6.17a — Measure the programme keyword check, and repair it · ✅ complete
 
 **Measured 2026-09-20, and repaired the same day.** The answer was that it is brittle,
 and that it fails the way compliance rules did — at HIGH severity — not the way named
@@ -150,27 +150,33 @@ this correct*, which stays code's (ADR-001).
 - [x] Fix the seeded keywords — a data change, and the structural guard behind it.
 - [x] Normalize before matching.
 - [x] Do not name a programme on words that carry no programme meaning.
-- [ ] **Deferred to 6.18f, not dropped:** the model as a second opinion after the code
-      check fails. The deterministic repair took the false-high count from five to one,
-      so this is now one case rather than a class — and the one case is a meaning
-      problem, which is what the model is for.
+- [x] **Done in 6.18f**, the same day. The deterministic repair took the false-high
+      count from five to one, and the one left was a meaning problem rather than a
+      spelling one — so the model reads the delivery once, after the code check has
+      failed, and code decides what its answer means (ADR-045). The case that started
+      this now drops from high severity to a question, and the customer's own words are
+      offered to an administrator so the question stops recurring.
 
-### 6.17b — The live cap countdown · ⬜ not started
+### 6.17b — The live cap countdown · ✅ complete
 
-Deferred twice by the user as a nice-to-have, and still is.
+Built 2026-09-20, after being deferred twice as a nice-to-have. It was cheap once the
+preamble was split so the number could be measured from the text a prompt actually
+carries rather than from a second implementation that would drift from it.
 
-An administrator writing background context sees the cap stated — *"1,500 characters,
-and 6,000 across everything that reaches one prompt"* — but not how much is left. The
-eleventh configuration note on a configuration is silently trimmed, and the person
-writing it finds out afterwards, if at all.
+- [x] `GET /admin/prompt-budget` reports what a programme's and a configuration's
+      context already spends of the 6,000, and what is left. Counted over the lines
+      `preamble` renders, by the same function that renders them, and the way the
+      trimmer counts them — so the number shown is the number that decides what gets
+      dropped.
+- [x] `<CapMeter>` on the standing-instructions and AI-context fields counts **down**:
+      *"1,240 characters left in this field · 4,760 left across everything in this
+      prompt"*, and says plainly when the block is already over and losing its oldest
+      lines. The artifact field's note no longer recites the two constants.
 
-- [ ] The API reports a run's remaining prompt budget, or a configuration's, so a field
-      can show what is left rather than the limit.
-- [ ] The marker counts down instead of stating a constant.
-
-**Why it has stayed deferred:** the caps are stated honestly and the trimming tells the
-model what was left out, so nothing is silently wrong — it is only less helpful than it
-could be. Worth doing when somebody hits it, not before.
+**What it does not do:** count a configuration's notes live as somebody types a
+*different* configuration's note, because the two are written on different screens. The
+number is exact for what is saved and an estimate for what is being typed, which is the
+honest way round.
 
 ### 6.17c — How scope reaches the compliance locator · ✅ complete
 
@@ -205,32 +211,25 @@ doing if the locator is ever seen to be too generous; not worth blocking on.
 
 ## Standing touchpoints, which are nobody's phase and everybody's problem
 
-These are in `CLAUDE.md` as recurring obligations. They are listed here because two
+These are in `CLAUDE.md` as recurring obligations. They were listed here because two
 phases closed without them and that is how they decay.
 
-- [ ] **`docs/gd-rollout-plan.md` has not been re-read since 6.13.** `CLAUDE.md` says to
-      re-read it at every milestone and update the readiness checklist. Three milestones
-      have closed since.
-- [ ] **The training documents say "after Phase 6.14."** 6.15 and 6.16 have shipped, and
-      6.16 changed a screen a user looks at every day — the runs list.
+- [x] **`docs/gd-rollout-plan.md` re-read** (2026-09-20, dated in the document). Stage 1
+      gained two readiness items the recent phases created — matching each programme's
+      keywords to the customer's vocabulary against the two rules 6.17a established, and
+      a decision on the compliance locator's model call — and a line saying the Review
+      load screen is understood before stage 3 and left alone until then. Stage 3 gained
+      the item that matters most: **its gate now requires the Review load question to be
+      answered in writing**, because that stage is the first time the tool has real
+      verdicts and [`phase-7.1.md`](phase-7.1.md) is how they are read.
+- [x] **The training documents re-aligned** and re-dated. `admin-training.md` gained the
+      keyword rules, the Review load screen, and the AI's second reading of a delivery's
+      programme; `user-training.md` gained what a reviewer now sees when the tool is
+      unsure which programme a delivery is.
 
-## What is deliberately not here
+## What is left
 
-**Option B from 6.15** — a rule carrying what it looks like in each artifact. Measured
-in 6.16d and **should not be built**: what looked like one problem was two with
-different severities, and the severe one was closed by 6.15's options C and A. See
-`docs/phase-6.15.md` for the reasoning. Reopen it only with a case the measurement does
-not already answer.
-
-**Phase 7** stays dormant. It runs only when the user asks, on the machine holding the
-real files, and it is not a prerequisite for anything (ADR-019).
-
-## Where things stand, for whoever picks this up
-
-- `main` is at the merge of PR #52. `dev` and `main` agree.
-- **1412 tests pass.** `black`, `flake8`, `mypy`, both UI gates and
-  `scripts/check_docs.sh` are clean.
-- The tool has been run end to end on a real commercial model (Claude Haiku 4.5): a full
-  run in 33 seconds for about five cents, reproducing the planted findings exactly.
-- **Start with `docs/session-log.md`.** Its "Resume here" block is the entry point, and
-  this document is what it points at.
+Nothing in this phase. What remains in the product is in
+[`phase-6.18.md`](phase-6.18.md) b–e, which wait on real verdicts
+([`phase-7.1.md`](phase-7.1.md)), and the standing items that need the user or the
+target machine, listed in [`session-log.md`](session-log.md).

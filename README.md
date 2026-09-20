@@ -156,6 +156,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   maturity level an administrator sets, and the sample that keeps the whole thing honest
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
+- [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and
+  the one thing this repository cannot manufacture — real verdicts from real reviewers,
+  gathered during the rollout's stage 3, which is what 6.18b waits on
 - [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
 - [`docs/llm-privacy.md`](docs/llm-privacy.md) — what may and may not reach the LLM, the cache, fixture policy
