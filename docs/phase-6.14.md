@@ -1,7 +1,10 @@
 # Phase 6.14 — The artifacts belong together, and the console says why
 
-**Status:** ⬜ **not started** — specified 2026-09-20 from a review that ran the product
-against a deliberately mismatched submission and watched it pass.
+**Status:** 🟡 **all but one item complete** — 2026-09-21. Specified 2026-09-20 from a
+review that ran the product against a deliberately mismatched submission and watched it
+pass; every acceptance criterion is met and tested. The one thing left is the live cap
+countdown in 6.14c, deferred by the user as a nice-to-have and carried into
+[`phase-6.17.md`](phase-6.17.md).
 
 **What the review found.** The tool validates a delivery thoroughly and says nothing
 about whether the delivery is the one the submitter claims. A run submitted with the
@@ -266,25 +269,29 @@ who knows the product can turn them off.
       runs the backlog; that a cancelled run never starts; that the console survives
       maintenance; and the window itself, which the rest of the suite switches off.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · ✅ complete
 
-- [ ] A run whose submitted configuration id, customer or credit date disagrees with the
+- [x] A run whose submitted configuration id, customer or credit date disagrees with the
       artifacts is **held before any model call**, and the person sees both values.
-- [ ] A held run cannot be executed by the worker until every mismatch is accepted with a
+- [x] A held run cannot be executed by the worker until every mismatch is accepted with a
       reason. Any user who can submit can accept; the tool enforces no role.
-- [ ] Acceptance never requires re-uploading a file.
-- [ ] Accepted mismatches appear on the review screen and on the frozen report, with who
+- [x] Acceptance never requires re-uploading a file.
+- [x] Accepted mismatches appear on the review screen and on the frozen report, with who
       and why, and **do not block the finalize gate** (ADR-041).
-- [ ] A run with no mismatch behaves exactly as it does today, including its cache keys:
+- [x] A run with no mismatch behaves exactly as it does today, including its cache keys:
       **configuring nothing changes nothing** (ADR-020's standing rule).
-- [ ] The credit-date check reports a *mismatch* where it can, not only an absence, and
+- [x] The credit-date check reports a *mismatch* where it can, not only an absence, and
       says when it fell back to the old search.
-- [ ] Every field that reaches the model is marked as such in both apps, in one wording,
+- [x] Every field that reaches the model is marked as such in both apps, in one wording,
       and `docs/model-context.md` agrees with the call sites.
-- [ ] Tooltips are on by default and can be turned off from the console.
-- [ ] The theme is locked by default in both apps.
-- [ ] `black`, `flake8`, `mypy`, `pytest`, both UI gates and `scripts/check_docs.sh` pass.
-- [ ] The golden set is unchanged: this phase adds no model call and alters no prompt.
+- [x] Tooltips are on by default and can be turned off from the console.
+- [x] The theme is locked by default in both apps.
+- [x] `black`, `flake8`, `mypy`, `pytest`, both UI gates and `scripts/check_docs.sh` pass.
+- [x] The golden set is unchanged: **this phase** adds no model call and alters no
+      prompt. (Phase 6.15 later did add one, in stage 6. The golden set was re-run
+      then and was unchanged; the claim is kept scoped to 6.14 rather than widened,
+      because a criterion that quietly grows to cover later work stops being a
+      criterion.)
 
 ## Deferred, on purpose
 
