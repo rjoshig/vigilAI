@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11a and 6.11c–h are complete**; **6.11b, the benchmark harness, is deferred** and is the next thing owed. Browser tests in CI follow it |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 is complete.** Next: browser tests in CI, then the small items left open in 6.1, 6.2, 6.4 and 6.5 |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,52 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.11b: the benchmark harness — 6.11 complete)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1066 Python
+tests, 88 user-ui, 81 admin-ui.
+
+`scripts/golden_set.py` now reports **coverage and model calls** beside precision and
+recall, **per programme** as well as per finding type, and takes a **`--lenses` switch**
+so a change to stage 8 is compared rather than argued. A case whose coverage drifts from
+its oracle fails even when its findings are right: a run that finds nothing because it
+compared nothing used to score perfectly.
+
+**Three new golden cases**, not the two the phase doc planned:
+
+- `unevidenced_requirement` — an `other` clause the configuration implements and no
+  report check can reach. Its findings list is empty and its coverage is not, which is
+  the whole point of Phase 6.11.
+- `report_nothing_checks` — a report type nothing examines.
+- `credit_date_not_in_reports` — **the first case in the set to produce a low-severity
+  finding.** Nothing had, which is why the bulk-OK defect fixed in 6.11a went untested.
+
+**The lens comparison, and what it settled.** Both variants score identically on the
+synthetic set: 15/15, 100% precision and recall, the same coverage, 323 calls against
+345. That is not evidence the lenses are pointless — the scripted stand-in returns the
+same canned agreement to every lens, so the comparison measures the fixtures, which is
+ADR-028's lesson over again. It does establish that the three cost about 7% more rather
+than three times more, and that turning them on changes no finding when the readers
+agree. **`LLM_VERIFY_LENSES` stays at `single`**; the comparison that decides it runs on
+the target environment. Written up in `docs/benchmarks/README.md`.
+
+### Found on the way
+
+The stand-in needed teaching to read free-text OSL clauses as `other` requirements and
+to describe a policy configuration block as one, or the new case could not exist. Two
+clauses in one case both linked to the same configuration element, leaving the other
+orphaned as a spurious finding; one clause makes the case say what it means.
+
+### Next concrete action
+
+**Browser tests in CI** on this branch: Playwright over both apps against the seeded
+stack with the scripted model, wired into the manual-dispatch workflow. Cover submit,
+review and finalize, the coverage panel and acknowledge, the PDF, login on, the training
+queue, a setting change, a rule action with the typed word, Map on Meaning, the
+palettes, a narrow viewport.
 
 ---
 

@@ -133,6 +133,22 @@ class Case:
     unexplained_loss: int = 0
     expected_findings: tuple[str, ...] = ()
     notes: str = ""
+    #: The delivery programme this case belongs to, so the benchmark can report per
+    #: programme (Phase 6.11b). Empty means unscoped, which most cases are.
+    programme: str = ""
+    #: Free-text clauses added to the OSL that no check can express. They extract as
+    #: ``other`` requirements and so land in coverage as "verified by hand": the case
+    #: for a requirement nothing in the reports evidences.
+    free_text_requirements: tuple[str, ...] = ()
+    #: An extra workbook of a kind no check covers, written and uploaded like any
+    #: other. It should appear in coverage with zero checks applied.
+    unchecked_report_kind: str = ""
+    #: A credit date that appears in the OSL and in no report, which is a
+    #: low-severity finding. No fixture produced one before, so nothing exercised the
+    #: low-severity path (found in 6.11a).
+    credit_date: str = ""
+    #: How many requirements the run should leave unevidenced, as the oracle.
+    expected_unevidenced: int = 0
 
 
 def _baseline_criteria(score_config: float | None = 755.0) -> tuple[Criterion, ...]:
@@ -390,6 +406,85 @@ CASES: Final[tuple[Case, ...]] = (
         step_removals=(700_000, 150_000, 3_905, 1_204, 2_109),
         expected_findings=("rule_missing_in_config",),
     ),
+    # --- the cases Phase 6.11 added ---------------------------------------------------
+    Case(
+        name="unevidenced_requirement",
+        description=(
+            "Everything the checks can compare agrees, and the OSL carries a clause "
+            "no check can express. A clean findings list over an incomplete check."
+        ),
+        customer=CUSTOMERS[0],
+        order_number="ORD-10020",
+        configuration_id="CFG-SYNTH-UNEVIDENCED-20",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        programme="AS",
+        free_text_requirements=(
+            "Consumers who have opted out of firm offers of credit must be excluded "
+            "from every delivery under this order.",
+        ),
+        expected_findings=(),
+        expected_unevidenced=1,
+        notes=(
+            "The point of this case: the findings list is empty and the delivery has "
+            "not been fully checked. Coverage is the only thing that says so."
+        ),
+    ),
+    Case(
+        name="report_nothing_checks",
+        description=(
+            "A report type the tool accepts and no check covers, delivered alongside "
+            "the usual set."
+        ),
+        customer=CUSTOMERS[1],
+        order_number="ORD-10021",
+        configuration_id="CFG-SYNTH-UNCHECKED-REPORT-21",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        programme="AM",
+        unchecked_report_kind="segment_summary",
+        expected_findings=(),
+        notes="Coverage should show segment_summary with no check applied.",
+    ),
+    Case(
+        name="credit_date_not_in_reports",
+        description=(
+            "The credit date appears in the OSL and in no report, which is a "
+            "low-severity finding. Before this, no fixture produced one at all."
+        ),
+        customer=CUSTOMERS[2],
+        order_number="ORD-10022",
+        configuration_id="CFG-SYNTH-CREDIT-DATE-22",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        credit_date="2026-07-15",
+        expected_findings=("credit_date_missing",),
+        notes="The low-severity path the bulk-OK test needed (found in 6.11a).",
+    ),
 )
 
 
@@ -466,6 +561,18 @@ def write_osl(case: Case, path: Path) -> None:
     document.add_paragraph("Exclude any consumer on the OFAC list.")
     document.add_paragraph("Exclude any consumer recorded as deceased.")
 
+    if case.credit_date:
+        document.add_heading("8 Credit date", level=1)
+        document.add_paragraph(
+            f"The delivery is cut as of {case.credit_date}. Every report must be "
+            "produced from the same extract."
+        )
+
+    if case.free_text_requirements:
+        document.add_heading("9 Additional requirements", level=1)
+        for clause in case.free_text_requirements:
+            document.add_paragraph(clause)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     document.save(str(path))
 
@@ -514,6 +621,27 @@ def _format_number(value: float) -> str:
 # --------------------------------------------------------------------------------------
 
 
+def _suppressions(case: Case) -> dict[str, object]:
+    """The suppressions block, including one entry per free-text clause.
+
+    A free-text clause the configuration implements is the case coverage exists for:
+    it traces, nothing disagrees with it, and no report check can reach it, so the
+    findings list is empty and part of the delivery was never compared. Leaving it
+    unimplemented would instead make it an ordinary missing-rule finding, which is a
+    different and already-covered case.
+
+    Args:
+        case: The scenario.
+
+    Returns:
+        The suppressions mapping.
+    """
+    block: dict[str, object] = {"ofac": True, "deceased": True}
+    for index, clause in enumerate(case.free_text_requirements, start=1):
+        block[f"policy_{index}"] = {"enabled": True, "describes": clause}
+    return block
+
+
 def write_config(case: Case, path: Path) -> None:
     """Write the synthetic ETL config for a case.
 
@@ -549,7 +677,7 @@ def write_config(case: Case, path: Path) -> None:
         "input": {"count": case.input_count},
         "filters": filters,
         "rules": rules,
-        "suppressions": {"ofac": True, "deceased": True},
+        "suppressions": _suppressions(case),
         "dedupe": {"key": ["SSN", "ZIP"]},
         "output": {"fields": list(case.config_attributes)},
         "pipeline": {"steps": list(case.config_waterfall or case.waterfall)},
@@ -706,6 +834,20 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
     workbook.save(path)
     written["billing"] = path
 
+    if case.unchecked_report_kind:
+        # A workbook of a type the tool accepts and no check covers. It parses, it is
+        # counted, and nothing asks it anything — which is exactly the silence
+        # coverage exists to make loud (Phase 6.11c).
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Summary"
+        sheet.append(["Label", "Value"])
+        sheet.append(["Segment", "A"])
+        sheet.append(["Records", flow.accepts])
+        path = directory / f"{case.unchecked_report_kind}.xlsx"
+        workbook.save(path)
+        written[case.unchecked_report_kind] = path
+
     return written
 
 
@@ -751,7 +893,10 @@ def generate(case: Case, root: Path) -> dict[str, object]:
             "input_count": case.input_count,
             "reconciles": flow.accepts + flow.rejects == case.input_count,
             "findings": list(case.expected_findings),
+            "unevidenced": case.expected_unevidenced,
         },
+        "programme": case.programme,
+        "credit_date": case.credit_date,
     }
 
 

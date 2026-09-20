@@ -1,10 +1,10 @@
 # Phase 6.11 — Nothing slips: coverage, a fail-closed review, and independent lenses
 
-**Status:** 🟡 **in progress** — specified 2026-09-20 after a review of the product as
-built through Phase 6.10. **6.11a and 6.11c–h are complete**; **6.11b, the benchmark
-harness, is deferred at the user's direction** and carries with it the one measurement
-6.11e wants. The decisions are in the table at the foot; the review that led to them is
-in `docs/session-log.md` (session of 2026-09-20).
+**Status:** ✅ **complete** (2026-09-20). Built a, then c–h, then b, at the user's
+direction. The one thing left open is not work: `LLM_VERIFY_LENSES` stays at `single`
+because the synthetic set cannot decide it, and the comparison that can runs on the
+target environment (`docs/benchmarks/README.md`). The decisions are in the table at the
+foot; the review that led to them is in `docs/session-log.md` (session of 2026-09-20).
 
 **Goal:** a compliance error must not be able to leave the tool as a clean report
 because nobody noticed it was never checked, and a reviewer's click must not be able to
@@ -98,7 +98,7 @@ whether verification ran.
 | Synthesis detects overlap with existing rules and stores it on the candidate; approving a conflicting candidate is not blocked. | Approving a candidate with an unresolved conflict requires choosing **supersede** the old rule or **reject** the new one. A critique pass runs once after the draft. |
 | The golden set reports pass/fail per case. | The golden set reports precision and recall per finding type per programme, with a pipeline-variant switch so any stage change can be compared against the default. |
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.11a — Review defects and decision quality · ✅ complete
 
@@ -120,25 +120,30 @@ whether verification ran.
 - [x] Finalize uses `components/confirm-dialog.tsx`, with the severity counts and what
       freezing means as its body. The attestation block replaces that body in 6.11d.
 
-### 6.11b — Benchmark harness · ⬜ not started
+### 6.11b — Benchmark harness · ✅ complete
 
-**Deferred at the user's direction (2026-09-20)**: c–h were built first. Two things
-wait on it — the golden case that leaves a requirement unevidenced, and the measurement
-that would move `LLM_VERIFY_LENSES` off `single`.
+Built after c–h, at the user's direction.
 
-- [ ] Golden-set fixtures carry **expected findings** (type, leg, the value or member
+- [x] Golden-set fixtures carry **expected findings** (type, leg, the value or member
       that differs) beside the expected rules they carry today.
-- [ ] `scripts/golden_set.py` reports **precision and recall per finding type and per
-      programme**, plus extraction accuracy as today, and writes the table to
-      `docs/benchmarks/`. Shadow findings are excluded on both sides.
-- [ ] A **pipeline variant** switch (`LLM_PIPELINE_VARIANT`, default `default`) that the
-      stages read where they branch, so a change can be run beside the default on the
-      same fixtures and the two tables compared. The variant name is part of every
-      cache key it affects (ADR-005).
-- [ ] Two new golden cases: a requirement no report can evidence (an `other` clause
-      and a `quantity` with no counts report), and a custom report type with no guide,
-      no meaning entry, and no named value. Both must appear in coverage, not as
-      silence.
+- [x] `scripts/golden_set.py` reports **precision and recall per finding type and per
+      programme**, and writes the tables to `docs/benchmarks/`. It also reports
+      **coverage** and **model calls**: precision and recall say how often the tool is
+      right about what it looked at, coverage says how much it looked at, and a case
+      whose coverage drifts from its oracle fails even when its findings are right.
+- [x] A **variant switch**, `--lenses`, so a change to stage 8 runs beside the default
+      on the same fixtures and the two tables are compared. It landed as an argument to
+      the harness rather than the proposed `LLM_PIPELINE_VARIANT` environment variable:
+      the only branch a variant needed to reach is the one `LLM_VERIFY_LENSES` already
+      controls, and each lens prompt carries its own version, so the cache keys are
+      already distinct (ADR-005). A second knob meaning the same thing would be one to
+      keep in step.
+- [x] **Three** new golden cases, not two. `unevidenced_requirement`: an `other`
+      clause the configuration implements and no report check can reach, so its
+      findings list is empty and its coverage is not. `report_nothing_checks`: a report
+      type nothing examines. `credit_date_not_in_reports`: the first case in the set to
+      produce a **low-severity** finding, which nothing had, and which is why the
+      bulk-OK defect in 6.11a went untested for so long.
 
 ### 6.11c — Coverage · ✅ complete
 
@@ -176,7 +181,7 @@ that would move `LLM_VERIFY_LENSES` off `single`.
       `final_reports.attestation` (JSON), rendered in the frozen report.
 - [x] ADR-035 amends ADR-015 with the wider gate.
 
-### 6.11e — Independent lenses at stage 8 · 🟡 in progress
+### 6.11e — Independent lenses at stage 8 · ✅ complete
 
 - [x] Three registered prompts (`llm/prompts/s8_lens_delivery.py`,
       `s8_lens_compliance.py`, `s8_lens_requirements.py`) sharing one schema:
@@ -202,12 +207,14 @@ that would move `LLM_VERIFY_LENSES` off `single`.
 - [x] Stage 4 receives `preamble(guidance, "config")` beside the guide block. A total
       cap on preamble plus guide block, with the oldest configuration notes dropped
       first and the count logged.
-- [ ] Measured: the golden set under `default` and under the lenses, both tables in
-      `docs/benchmarks/`, before the lenses become the default in `.env.example`.
-      **Deferred with 6.11b**, at the user's direction: the harness comes later, so
-      the lenses ship built, tested and switchable with `LLM_VERIFY_LENSES=single` —
-      today's behaviour, call for call — as the default. Turning them on is one line
-      once the numbers exist.
+- [x] Measured: the golden set under `single` and under the three lenses, both tables
+      in `docs/benchmarks/`. **The synthetic set cannot settle the default**, and says
+      so in `docs/benchmarks/README.md`: the scripted stand-in returns the same canned
+      agreement to every lens, so the comparison measures the fixtures (ADR-028's
+      lesson, again). What it does establish is that the three cost about 7% more calls
+      rather than three times more, and that turning them on changes no finding when
+      the readers agree. `LLM_VERIFY_LENSES` stays at `single`; the comparison that
+      decides it runs on the target environment with a real model.
 
 ### 6.11f — The coverage reader · ✅ complete
 
@@ -252,7 +259,7 @@ that would move `LLM_VERIFY_LENSES` off `single`.
       approved without supersede or reject; the harness reports precision and recall
       on the synthetic set and the two coverage cases appear.
 
-## Acceptance criteria · 🟡 in progress
+## Acceptance criteria · ✅ complete
 
 1. [x] "Mark all low OK" on a run with only low findings, then finalize, gives a report
    whose verdict is OK and whose findings all read OK.
@@ -267,12 +274,11 @@ that would move `LLM_VERIFY_LENSES` off `single`.
    lowest confidence; one they split on goes to review with each lens's reason visible
    in the evidence panel; the severities code set are unchanged in both cases.
 6. [x] `LLM_VERIFY_LENSES=single` reproduces today's stage 8 call for call.
-7. [ ] The golden set prints precision and recall per finding type under `default` and
-   under the lenses, and the two tables are in `docs/benchmarks/`. **Deferred with
-   6.11b**, at the user's direction.
+7. [x] The golden set prints precision and recall per finding type under `single` and
+   under the lenses, and the two tables are in `docs/benchmarks/`.
 8. [x] A candidate rule that overlaps an active rule cannot be approved without
    choosing supersede or keep-both.
-9. [x] Every existing test still passes: 1058.
+9. [x] Every existing test still passes: 1066.
 
 ## Decisions (2026-09-20)
 
@@ -319,7 +325,11 @@ phase rather than losing in a commit message.
 ## Still open
 
 - The confidence floor under which a `coverage_gap` stays in the list rather than
-  becoming a finding: start at the existing 0.5 breach floor and tune on the harness.
+  becoming a finding: it is the existing 0.5 breach floor, to be tuned against a real
+  model rather than the stand-in.
+- **Whether `LLM_VERIFY_LENSES` moves to the three lenses.** Built, tested, switchable,
+  and left at `single`: the decision belongs to the target environment, with the Phase 2
+  benchmark that waits there for the same reason (ADR-028, ADR-034).
 - Whether `traced_unchecked` should split "no check exists for this type" from "a
   check exists and did not reach this report", once the real report layouts are seen
   (Phase 7).

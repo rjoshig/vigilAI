@@ -123,6 +123,24 @@ def extract_responder(_system: str, user: str) -> str:
             }
         )
 
+    if "Additional requirements" in section:
+        # Free-text clauses. A competent model returns these as ``other``: they carry
+        # a requirement and no check can express one, which is what puts them in
+        # coverage as "verified by hand" (Phase 6.11b).
+        for line in section.splitlines():
+            clause = line.strip()
+            if len(clause) < 20 or clause.startswith("9 ") or "Additional requirements" in clause:
+                continue
+            requirements.append(
+                {
+                    "req_type": "other",
+                    "action": "pass",
+                    "applies_to": "all",
+                    "source_text": clause,
+                    "confidence": 0.85,
+                }
+            )
+
     return json.dumps({"requirements": requirements})
 
 
@@ -163,6 +181,16 @@ def describe_responder(_system: str, user: str) -> str:
                 "description": f"Bounds {value.get('field')} at {bound}.",
             }
         )
+    elif isinstance(value, dict) and "describes" in value:
+        # A policy the configuration carries that no threshold expresses. A competent
+        # reader calls it ``other``: it is a requirement, and no check can compare it
+        # against a report (Phase 6.11b).
+        element.update(
+            {
+                "req_type": "other",
+                "description": f"A policy setting: {value['describes']}",
+            }
+        )
     elif isinstance(value, dict) and "fields" in value:
         element.update(
             {
@@ -198,6 +226,28 @@ def describe_responder(_system: str, user: str) -> str:
 #: that two items are about the same thing.
 _SINGLE_SUBJECT_TYPES = ("geography", "waterfall", "quantity", "attributes")
 
+#: Words too ordinary to mean two free-text items are about the same thing.
+_COMMON_WORDS = frozenset(
+    {
+        "other",
+        "setting",
+        "policy",
+        "every",
+        "which",
+        "these",
+        "after",
+        "under",
+        "their",
+        "order",
+        "record",
+        "records",
+        "consumer",
+        "consumers",
+        "delivery",
+        "deliveries",
+    }
+)
+
 #: Attributes the synthetic cases constrain, used to tell one criteria rule from another.
 _SUBJECTS = ("score", "age", "util", "trades", "state")
 
@@ -212,6 +262,25 @@ def trace_responder(_system: str, user: str) -> str:
     requirement = user.split("Requirement: ")[-1].split("\n")[0].lower()
     element = user.split("Element: ")[-1].split("\n")[0].lower()
     req_type = requirement.split(" — ")[0].strip()
+
+    if req_type == "other":
+        # Two free-text items are about the same thing when they share an uncommon
+        # word. Deliberately crude: the point is to exercise the path, not to be a
+        # model.
+        words = {w for w in re.findall(r"[a-z]{5,}", requirement)} & {
+            w for w in re.findall(r"[a-z]{5,}", element)
+        }
+        if words - _COMMON_WORDS:
+            return json.dumps(
+                {
+                    "verdict": "implemented",
+                    "reason": "The configuration carries this policy.",
+                    "confidence": 0.8,
+                }
+            )
+        return json.dumps(
+            {"verdict": "not_related", "reason": "Different subjects.", "confidence": 0.8}
+        )
 
     if req_type in _SINGLE_SUBJECT_TYPES and req_type in element:
         return json.dumps(

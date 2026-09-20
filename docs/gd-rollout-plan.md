@@ -69,10 +69,10 @@ The platform team, with the administrator.
 - [ ] Phase 6.11 landed before UAT: the bulk-OK defect fixed, the finalize gate
       fail-closed with the attestation, coverage on the review screen and the report,
       and the benchmark harness reporting precision and recall per finding type.
-      Stage 2's benchmark is that harness run against the manual check. Built so far:
-      the review defects (6.11a), coverage and the gate (6.11c–d), the stage-8 lenses
-      and the coverage reader (6.11e–f), and the critique pass (6.11g). **The harness
-      (6.11b) is the piece still owed**, and stage 2 cannot be measured without it.
+      Stage 2's benchmark is that harness run against the manual check. **Phase 6.11 is
+      complete**: the harness reports precision, recall, coverage and model calls per
+      finding type and per programme, and takes a `--lenses` switch so a change to
+      stage 8 is compared rather than argued.
 - [ ] A decision on `LLM_VERIFY_LENSES` for this deployment. It ships at `single`,
       today's single second opinion. Moving it to the three lenses is one line and
       should follow the harness's numbers, not precede them (ADR-034).
