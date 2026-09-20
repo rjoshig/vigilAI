@@ -12,16 +12,21 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final, Literal, Mapping, Sequence
+from typing import TYPE_CHECKING, Final, Literal, Mapping, Sequence
 
 from greenlight_ai.checks.definitions import AdminConfig
 from greenlight_ai.llm.client import LLMClient
+from greenlight_ai.llm.examples import LibraryExample
 from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.schema import ConfigElement, Finding, Rule, Trace
 
+if TYPE_CHECKING:  # pragma: no cover - the import exists for the annotation only
+    from greenlight_ai.pipeline.coverage import Coverage
+
 __all__ = [
+    "CoverageRecord",
     "StageName",
     "StageStatus",
     "StageRecord",
@@ -120,6 +125,52 @@ class StageRecord:
 
 
 @dataclass
+class CoverageRecord:
+    """What stage 7 evaluated, tallied as it works (Phase 6.11c).
+
+    It lives here rather than in :mod:`greenlight_ai.pipeline.coverage` because the
+    context carries it and coverage reads it; the other way round would be a cycle.
+
+    Attributes:
+        checked_rule_ids: Requirements a report check gave a verdict on.
+        unevaluated_rule_ids: Requirements whose report check could not be evaluated.
+        checks_by_report: How many checks produced a verdict against each report kind.
+    """
+
+    checked_rule_ids: set[str] = field(default_factory=set)
+    unevaluated_rule_ids: set[str] = field(default_factory=set)
+    checks_by_report: dict[str, int] = field(default_factory=dict)
+
+    def clear(self) -> None:
+        """Forget everything, so a re-check starts from nothing."""
+        self.checked_rule_ids.clear()
+        self.unevaluated_rule_ids.clear()
+        self.checks_by_report.clear()
+
+    def checked(self, rule_id: str, report_kind: str = "") -> None:
+        """Record a check that produced a verdict.
+
+        Args:
+            rule_id: The requirement behind it, empty for a check with none (an admin
+                expression check, a field constraint).
+            report_kind: The report it read, empty when it read none.
+        """
+        if rule_id:
+            self.checked_rule_ids.add(rule_id)
+        if report_kind:
+            self.checks_by_report[report_kind] = self.checks_by_report.get(report_kind, 0) + 1
+
+    def unevaluated(self, rule_id: str) -> None:
+        """Record a check that could not be evaluated.
+
+        Args:
+            rule_id: The requirement behind it.
+        """
+        if rule_id:
+            self.unevaluated_rule_ids.add(rule_id)
+
+
+@dataclass
 class RunContext:
     """Everything one run accumulates as it moves through the stages.
 
@@ -141,6 +192,9 @@ class RunContext:
             delivery programme, its standing instructions, and per-artifact guidance
             (ADR-020). Empty by default, in which case prompts are unchanged.
         aliases: The attribute alias table, from the admin-ui in later phases.
+        examples: The administrator's worked examples, by stage, already scoped to
+            this run and capped (ADR-038). A stage with none renders exactly as it
+            always did.
         masked_columns: Header patterns masked at parse time (ADR-003).
         osl: The parsed OSL, set by stage 1.
         config: The parsed config, set by stage 1.
@@ -164,6 +218,7 @@ class RunContext:
     admin: AdminConfig = field(default_factory=AdminConfig)
     guidance: RunGuidance = field(default_factory=RunGuidance)
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
+    examples: Mapping[str, tuple[LibraryExample, ...]] = field(default_factory=dict)
     masked_columns: tuple[str, ...] = ()
 
     osl: OslDocument | None = None
@@ -184,6 +239,26 @@ class RunContext:
 
     stages: dict[StageName, StageRecord] = field(default_factory=dict)
     rules_version: int = 1
+
+    #: What stage 7 evaluated, which :mod:`greenlight_ai.pipeline.coverage` turns into
+    #: the run's coverage. Stage 7 clears it before it starts, so a re-check counts
+    #: this pass and not the last one.
+    coverage_record: CoverageRecord = field(default_factory=lambda: CoverageRecord())
+    #: What the run checked and what it did not, computed by stage 7 from the record
+    #: above (Phase 6.11c). ``None`` before stage 7 has run.
+    coverage: "Coverage | None" = None
+    #: Which lenses read a high-severity finding in stage 8 (Phase 6.11e).
+    #: ``("single",)`` is the one second opinion the tool has always made; naming
+    #: lenses has each read the same evidence independently, never each other's
+    #: answers, with code merging them. Empty turns verification off.
+    verify_lenses: tuple[str, ...] = ("single",)
+    #: A ceiling on lens calls for the whole run, beside the token budget. Past it the
+    #: remaining findings are left unverified and the run says so.
+    max_lens_calls: int = 150
+    #: Run-level things a reviewer must be told that are not findings: a verification
+    #: that could not run, a stage that stopped early. Appended by the stages,
+    #: surfaced beside the coverage panel and recorded in the attestation (6.11c).
+    notices: list[str] = field(default_factory=list)
 
     def record(self, stage: StageName) -> StageRecord:
         """Get or create the record for a stage.

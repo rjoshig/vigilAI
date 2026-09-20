@@ -168,6 +168,29 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "cannot spend a day's budget.",
     ),
     SettingSpec(
+        key="llm.verify_lenses",
+        env="LLM_VERIFY_LENSES",
+        label="Second-opinion lenses",
+        group="Model",
+        kind="str",
+        default="single",
+        help="Which readers check a high-severity finding at stage 8: 'single', or a "
+        "comma-separated list of delivery, compliance, requirements. Each is one call per "
+        "finding; code merges what they say and none can raise a severity (ADR-034).",
+    ),
+    SettingSpec(
+        key="llm.max_lens_calls_per_run",
+        env="LLM_MAX_LENS_CALLS_PER_RUN",
+        label="Lens calls per run",
+        group="Model",
+        kind="int",
+        default=150,
+        minimum=0,
+        maximum=10000,
+        help="A ceiling on stage-8 lens calls beside the token budget. Past it, the "
+        "remaining findings are left unverified and the run says so.",
+    ),
+    SettingSpec(
         key="llm.pii_tripwire",
         env="LLM_PII_TRIPWIRE",
         label="PII tripwire",
@@ -219,8 +242,9 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         default=25,
         minimum=0,
         maximum=500,
-        help="How many finalized runs a candidate rule is tested against before "
-        "approval. Zero replays the golden set alone and never reads a real run.",
+        help="How many recent finalized runs a candidate rule is evaluated against "
+        "before approval. Their stored reports are parsed again and the rule is run "
+        "over them; zero skips the replay entirely.",
     ),
     # --- login ----------------------------------------------------------------------
     SettingSpec(

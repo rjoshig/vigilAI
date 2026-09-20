@@ -34,7 +34,12 @@ def _actions(factory: sessionmaker[Session]) -> set[str]:
 
 
 def test_every_action_phase_6_lists_is_audited(
-    submit: Submit, worker: Worker, client: TestClient, api: str, factory: sessionmaker[Session]
+    submit: Submit,
+    worker: Worker,
+    client: TestClient,
+    api: str,
+    factory: sessionmaker[Session],
+    clear_gate: Callable[..., None],
 ) -> None:
     """Report view, download, review decision, requirement edit, rerun reason."""
     client.app.state.pdf_renderer = _FakePdf()  # type: ignore[attr-defined]
@@ -57,6 +62,7 @@ def test_every_action_phase_6_lists_is_audited(
     )
     worker.run_once()
 
+    clear_gate(run_id)
     client.post(f"{api}/runs/{run_id}/finalize")
     client.get(f"{api}/runs/{run_id}/report")
     client.get(f"{api}/runs/{run_id}/report.pdf")

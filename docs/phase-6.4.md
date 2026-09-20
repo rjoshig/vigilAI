@@ -34,7 +34,7 @@ pass or fail. If an administrator wants it to *enforce* something, the note is a
 observation in the queue, and the ordinary loop turns it into a rule a person approves
 (ADR-021). One mechanism for context, one for rules, and the note feeds both.
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.4a — The mode indicator · ✅ complete
 
@@ -87,16 +87,17 @@ field holds.
       `all`, a customer name, and `programme:CODE`, so a rule learned from a
       configuration note applies only to runs of that configuration.
 
-### 6.4c — Documentation and tests · 🟡 in progress
+### 6.4c — Documentation and tests · ✅ complete
 
 - [x] ADR-024, written before the code: a configuration note is guidance and an
       observation at once, never a rule on its own.
 - [x] `design.md`, `architecture.md`, `glossary.md` (configuration note), and the
       user-ui and admin-ui READMEs.
-- [~] Tests: the preamble carries a note only for runs of that configuration; the note
+- [x] Tests: the preamble carries a note only for runs of that configuration; the note
       appears in the queue; a rule scoped `config:<id>` applies to that configuration and
-      no other; the frozen report shows the note. **Outstanding:** a rendered test that
-      the indicator shows both states; the UI suites cover the client only.
+      no other; the frozen report shows the note. The indicator is now covered rendered,
+      in both states, by `user-ui/components/train-ai-indicator.test.tsx`: the suites
+      covered the client that reads the switch but never the thing a person looks at.
 
 ## Acceptance criteria · ✅ complete
 

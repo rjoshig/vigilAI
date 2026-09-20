@@ -36,7 +36,7 @@ where a term maps to code, the subpackage is named.
 | --- | --- |
 | **Finding** | One potential issue: type, severity (High / Medium / Low / Review), title, detail, and three evidence pointers (OSL location + text, config JSON path + value, report name + sheet + cell). |
 | **Review** (severity) | A finding kept for a human look: low-confidence extraction (< 0.7) or a verify-stage disagreement. |
-| **Review status** | The user's decision on a finding: OK / Not OK with a comment; also confirmed / false positive / accepted risk for accuracy tracking. |
+| **Review status** | The reviewer's decision on a finding, one of three: **false positive** (not a real problem), **accepted risk** (real, accepted anyway, always with a comment), or **confirmed** — shown as **Not OK**, meaning the delivery has to change. Undecided until they choose. |
 | **Traceability matrix** | The main review view: one row per requirement, three columns (OSL, config, reports), status match / mismatch / partial / missing / extra. |
 | **Re-check** | Re-running stages 5–7 after a rule or trace edit. Seconds, no LLM. |
 | **Finalize / final report** | Generating the frozen one-page HTML report after review. Stored once, never regenerated; PDF rendered from it. |
@@ -47,9 +47,25 @@ where a term maps to code, the subpackage is named.
 | --- | --- |
 | **Report template** | A sample Excel uploaded for one report type; documents where values live. |
 | **Named value** | A pointer into a report: report type, sheet, and a cell (`H9`) or a **label lookup** (the row where column A says "Billing count"). Label lookup preferred. |
-| **Check** (expression) | An expression over named values (`billing_count <= delivered_count`) with severity, message, and reasoning. Runs in code at no token cost. Versioned; can be disabled; scoped to all customers or one. |
-| **Judgment check** | A check a formula cannot express: an instruction + examples; the LLM sees only the named values and returns pass / fail / review. Use sparingly. |
+| **Check** (expression) | An expression over named values (`billing_count <= delivered_count`) with severity, message, and reasoning. Runs in code at no token cost. Versioned; can be disabled; carries a **scope**. |
+| **Replay** | Evaluating a drafted rule against the last few finalized runs before it is approved: their stored reports are parsed again and the pipeline's own evaluator runs the rule over them, in a worker job. Firing means it would have raised a finding, not that the finding would have been right. |
+| **Worked example** | A pair an administrator stores for one prompt stage: what the model would be shown, and a good answer. Validated against that stage's schema on save, scoped like any definition, at most four active per stage, and rendered after the prompt's own examples under a line saying they show a shape and are not rules (ADR-038). |
+| **Promotion** | Turning a decision a person already made — a confirmed mapping, a requirement a reviewer rewrote, an approved candidate — into a worked example. It always takes a click; nothing is promoted on its own. |
+| **Judgment check** | A check a formula cannot express: an instruction plus the named values the model may see. The model sees only those values, never a report, and returns pass / fail / review; code sets the severity and a low-confidence answer goes to a person (ADR-039). One model call per run in scope; use sparingly. |
 | **Masked columns** | The admin-maintained list of sensitive columns masked at parse time. |
+| **Scope** | Where a definition applies, as one token: `everywhere`, `programme:CODE`, `customer:NAME` or `config:ID`. One module reads it (`greenlight_ai/scopes.py`); the older forms `all` and a bare customer name still parse and are never rewritten (ADR-037). |
+
+### Coverage and lenses (Phase 6.11)
+
+| Term | Meaning |
+| --- | --- |
+| **Coverage** | What a run actually checked: one state per requirement — **checked** (a report check compared it), **traced but unchecked** (it reached the configuration and no report evidenced it), **untraced** (nothing implements it), **verified by hand** (free text, or a check that could not be evaluated) — plus how many checks touched each uploaded report. Code, no model (ADR-035). |
+| **Acknowledgement** | A person's record that they saw a coverage gap before the report was frozen. Not a decision that the delivery is fine; the gate wants one for every unevidenced requirement and every check that could not be evaluated. |
+| **Attestation** | What a reviewer confirms when they freeze a report: the coverage counts, the gaps acknowledged, the shadow rules and definition versions in force, and the run's notices. Stored on the report and rendered in it. |
+| **Second approver** | A programme's optional rule that someone other than the reviewer signs off findings the reviewer waved through that the programme treats as serious. Off by default, and inert while login is off, because both people would be the same placeholder account (ADR-036). |
+| **Notice** | Something a run must tell the reviewer that is not a finding: a second opinion that could not be obtained, a programme reading that did not run, a call cap reached. |
+| **Lens** | One of stage 8's readers — delivery, compliance, requirements owner — each given the same finding and evidence and none given another's answer. Code merges them. A lens changes confidence, never severity (ADR-034). |
+| **Critique pass** | One call that reads a drafted rule back against the statements it came from, allowing at most one redraft. Authoring time, once per candidate (Phase 6.11g). |
 
 ## Runs and operations
 
@@ -76,6 +92,10 @@ uses them yet.
 | **Observation** | One thing a person knows, in their own words, anchored to what they mean. The raw material of a learned rule; it never runs. |
 | **Anchor** | The typed selection an observation points at: a report cell or label, an OSL section, or a config JSON path. What makes synthesis reliable rather than a guess. |
 | **Candidate rule** | A rule the model drafted from one or more observations, validated by code and waiting for an administrator. It never runs. |
+| **Origin** (of a finding) | Where it came from: `built_in` when code produced it from the OSL and the configuration alone, else the origin of the rule behind it — `admin`, `guide`, `meaning` or `learned`. Shown on the review screen and in the evidence drawer (Phase 6.13b). |
+| **Outcome** (of an observation) | What became of it, read from the rule tables each time: waiting · drafted · approved (the rule is in shadow) · live · disabled · rejected. Never stored, so never stale. |
+| **Front door** | One box in the admin console where an administrator writes what they want checked. The model places the sentence on an existing surface; the drafting, the validation and the approval are the training loop's, unchanged. It adds no surface and no evaluator (ADR-037). |
+| **Surface** | One of the places an administrator can tell the tool something: an artifact type's AI context, a validation guide, a meaning entry, a named value, a check, a compliance rule, a programme rule, a standing instruction, a configuration note, a field constraint, an alias, a masked column, a reverse-pass category. |
 | **Shadow** | A rule state: it runs on every run and its findings are counted but shown to nobody, so its precision can be measured before it interrupts a reviewer. |
 | **Replay** | Running a candidate rule against the golden set and recent finalized runs to see what it would have changed, before approving it. |
 | **Dismissal rate** | The share of a rule's findings that reviewers marked OK. The measure of whether a rule is earning its place. |

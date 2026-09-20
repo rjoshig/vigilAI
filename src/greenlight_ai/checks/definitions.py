@@ -2,19 +2,20 @@
 
 Cross-report number checks are defined by admins as data, not code: the LLM helps write
 a check once, and code runs it on every request at no token cost (``docs/design.md``
-"Configurable checks"). This module holds the definitions; :mod:`greenlight_ai.checks.runner`
-runs them.
+"Configurable checks"). This module holds the definitions; stage 6 evaluates the
+compliance rules and stage 7 the checks (:mod:`greenlight_ai.pipeline.s6_reverse`,
+:mod:`greenlight_ai.pipeline.s7_reports`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Final, Literal, Sequence
+from typing import Literal, Sequence
 
+from greenlight_ai import scopes
 from greenlight_ai.rules.schema import Severity
 
 __all__ = [
-    "PROGRAMME_SCOPE_PREFIX",
     "CheckKind",
     "CheckDefinition",
     "ComplianceRule",
@@ -24,29 +25,21 @@ __all__ = [
 
 CheckKind = Literal["expression", "judgment"]
 
-#: A scope that names a delivery programme rather than a customer (Phase 6.8).
-PROGRAMME_SCOPE_PREFIX: Final[str] = "programme:"
-
 
 def in_scope(scope: str, customer: str, programme_code: str = "") -> bool:
     """Decide whether a definition's scope covers a run.
 
     Args:
-        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        scope: Any scope token; :mod:`greenlight_ai.scopes` decides what it means.
         customer: The run's customer name.
         programme_code: The run's delivery programme code, when it has one.
 
     Returns:
-        ``True`` when the scope is everywhere, this customer, or this programme. A
-        programme scope never matches a run of another programme, and never matches a
-        run with no programme.
+        ``True`` when the scope covers the run. The scope string is not interpreted
+        here: one module reads a scope, so a definition cannot be in scope on one
+        screen and out of scope in the pipeline.
     """
-    if scope == "all":
-        return True
-    if scope.startswith(PROGRAMME_SCOPE_PREFIX):
-        code = scope[len(PROGRAMME_SCOPE_PREFIX) :].strip().upper()
-        return bool(code) and code == programme_code.strip().upper()
-    return scope == customer
+    return scopes.covers(scope, customer, programme_code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,9 +52,11 @@ class CheckDefinition:
         kind: ``"expression"`` for a formula, ``"judgment"`` for one the LLM answers.
         expression: The formula, for ``"expression"`` checks.
         instruction: What to judge, for ``"judgment"`` checks.
+        value_names: For a judgment check, the named values the model is shown and
+            nothing else (ADR-039).
         reasoning: The plain-English reason shown to users on a failure.
         severity: How serious a failure is.
-        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
         is_active: Whether the check's findings count.
         id: The stored row, so a finding can name the rule behind it.
         state: The lifecycle state (ADR-021). A ``shadow`` check runs and its
@@ -75,9 +70,10 @@ class CheckDefinition:
     kind: CheckKind = "expression"
     expression: str = ""
     instruction: str = ""
+    value_names: tuple[str, ...] = ()
     reasoning: str = ""
     severity: Severity = "medium"
-    scope: str = "all"
+    scope: str = scopes.EVERYWHERE
     is_active: bool = True
 
     def applies_to(self, customer: str, programme_code: str = "") -> bool:
@@ -106,17 +102,22 @@ class ComplianceRule:
         name: The rule's identifier.
         json_path_contains: A fragment the implementing config path must contain.
         expected_value: The value the config must set, when there is one.
-        scope: ``"all"``, a customer name, or ``programme:CODE``.
+        scope: Where it applies, as a :mod:`greenlight_ai.scopes` token.
         reasoning: Why the rule exists, shown on a finding.
         is_active: Whether the rule is enforced.
+        id: The stored row, so a finding can name the rule behind it.
+        state: The lifecycle state (ADR-021). A ``shadow`` rule runs and its findings
+            are recorded and shown to nobody.
     """
 
     name: str
     json_path_contains: str
     expected_value: object = True
-    scope: str = "all"
+    scope: str = scopes.EVERYWHERE
     reasoning: str = ""
     is_active: bool = True
+    id: int | None = None
+    state: str = "active"
 
     def applies_to(self, customer: str, programme_code: str = "") -> bool:
         """Whether this rule is enforced for a run.
@@ -126,9 +127,12 @@ class ComplianceRule:
             programme_code: The run's delivery programme code.
 
         Returns:
-            ``True`` when the rule is active and in scope.
+            ``True`` when the rule is active or in shadow, and in scope. Until 6.13a
+            this demanded ``is_active`` alone, so a learned compliance rule sat in
+            shadow forever with nothing to show for it.
         """
-        return self.is_active and in_scope(self.scope, customer, programme_code)
+        runs = self.is_active or self.state == "shadow"
+        return runs and in_scope(self.scope, customer, programme_code)
 
 
 @dataclass(frozen=True, slots=True)

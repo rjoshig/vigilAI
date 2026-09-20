@@ -15,6 +15,7 @@ The prompt versions here are provisional: they have not been validated against a
 model yet, and ADR-014 expects a bump after the first Gemma run.
 """
 
+from greenlight_ai.llm.prompts.admin_classify import CLASSIFY_PROMPT
 from greenlight_ai.llm.prompts.admin_draft import DRAFT_CHECK_PROMPT
 from greenlight_ai.llm.prompts.admin_map import MAP_PROMPT
 from greenlight_ai.llm.prompts.judgment import JUDGMENT_PROMPT
@@ -22,12 +23,16 @@ from greenlight_ai.llm.prompts.registry import PROMPTS, Prompt, get_prompt, prom
 from greenlight_ai.llm.prompts.s2_extract import EXTRACT_PROMPT
 from greenlight_ai.llm.prompts.s3_describe import DESCRIBE_PROMPT
 from greenlight_ai.llm.prompts.s4_trace import TRACE_PROMPT
+from greenlight_ai.llm.prompts.s8_coverage import COVERAGE_PROMPT
+from greenlight_ai.llm.prompts.synthesize_critique import CRITIQUE_PROMPT
+from greenlight_ai.llm.prompts.s8_lenses import LENSES, LENS_LABEL, LENS_PROMPTS, lens_prompt
 from greenlight_ai.llm.prompts.s8_programme import PROGRAMME_PROMPT
 from greenlight_ai.llm.prompts.s8_verify import VERIFY_PROMPT
 from greenlight_ai.llm.prompts.s9_summarize import SUMMARIZE_PROMPT
 from greenlight_ai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
 
 __all__ = [
+    "CLASSIFY_PROMPT",
     "DESCRIBE_PROMPT",
     "DRAFT_CHECK_PROMPT",
     "MAP_PROMPT",
@@ -39,7 +44,13 @@ __all__ = [
     "SUMMARIZE_PROMPT",
     "SYNTHESIZE_PROMPT",
     "TRACE_PROMPT",
+    "COVERAGE_PROMPT",
+    "CRITIQUE_PROMPT",
     "VERIFY_PROMPT",
+    "LENSES",
+    "LENS_LABEL",
+    "LENS_PROMPTS",
+    "lens_prompt",
     "get_prompt",
     "prompt_versions",
 ]

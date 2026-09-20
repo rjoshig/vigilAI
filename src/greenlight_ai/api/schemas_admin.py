@@ -10,6 +10,9 @@ import datetime as dt
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from greenlight_ai import scopes
+from greenlight_ai.api.schemas import ScopeToken
 from greenlight_ai.checks.guides import GuideEntry
 
 __all__ = [
@@ -20,8 +23,16 @@ __all__ = [
     "TemplateOut",
     "NamedValueIn",
     "NamedValueOut",
+    "BuiltInExample",
+    "CorrectionOut",
     "CheckIn",
     "CheckOut",
+    "ExampleFieldOut",
+    "ExampleIn",
+    "ExampleOut",
+    "ExamplePatch",
+    "ExampleStageOut",
+    "PromoteIn",
     "DraftRequest",
     "DraftResponse",
     "TestRequest",
@@ -138,6 +149,10 @@ class ScopeIn(BaseModel):
     standing_instructions: str = ""
     is_active: bool = True
     sort_order: int = 100
+    #: Whether a run in this programme needs a second person to approve before it can
+    #: be frozen, when the reviewer waved through something this programme treats as
+    #: serious. Off by default, and meaningless with login off (ADR-036).
+    second_approver: bool = False
     #: Words that mark a delivery as this programme's; the classification check
     #: scans the inputs for them (ADR-026).
     keywords: list[str] = Field(default_factory=list)
@@ -198,9 +213,12 @@ class CheckIn(BaseModel):
     kind: Literal["expression", "judgment"] = "expression"
     expression: str = ""
     instruction: str = ""
+    #: For a judgment check: the named values the model may see (ADR-039). Empty for
+    #: an expression check, which code evaluates without a model.
+    value_names: list[str] = Field(default_factory=list)
     reasoning: str = ""
     severity: Severity = "medium"
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     is_active: bool = True
 
 
@@ -260,7 +278,7 @@ class ComplianceRuleIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     json_path_contains: str = Field(min_length=1)
     expected_value: Any = True
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     reasoning: str = ""
     is_active: bool = True
 
@@ -418,3 +436,112 @@ class SamplePatch(BaseModel):
     label: Optional[str] = None
     notes: Optional[str] = None
     scope_code: Optional[str] = None
+
+
+class ExampleIn(BaseModel):
+    """A worked example an administrator gives the model (Phase 6.13d, ADR-038)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage: str = Field(min_length=1, max_length=40)
+    scope: ScopeToken = scopes.EVERYWHERE
+    #: What the model would be shown, keyed by the stage's field names.
+    given: dict[str, str] = Field(default_factory=dict)
+    #: A good answer. Validated against the stage's own schema before it is stored.
+    answer: dict[str, Any] = Field(default_factory=dict)
+    #: Why it is here. For the next administrator; never rendered into a prompt.
+    note: str = ""
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class ExamplePatch(BaseModel):
+    """An edit to a stored example; every field is optional."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scope: Optional[ScopeToken] = None
+    given: Optional[dict[str, str]] = None
+    answer: Optional[dict[str, Any]] = None
+    note: Optional[str] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class ExampleOut(ExampleIn):
+    """A stored example, with where it came from and who wrote it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    #: ``admin``, or ``promoted:<kind>:<id>`` when a person promoted a decision.
+    origin: str = "admin"
+    created_by: str = ""
+    created_at: dt.datetime
+    updated_by: str = ""
+    updated_at: dt.datetime
+
+
+class ExampleFieldOut(BaseModel):
+    """One part of what a stage shows the model."""
+
+    name: str
+    label: str
+    shape: str
+
+
+class BuiltInExample(BaseModel):
+    """An example that ships in the prompt, shown read-only above the library."""
+
+    number: int
+    shown: str
+    answer: str
+
+
+class ExampleStageOut(BaseModel):
+    """One stage an administrator may add examples to."""
+
+    stage: str
+    label: str
+    description: str
+    fields: list[ExampleFieldOut] = Field(default_factory=list)
+    built_in: list[BuiltInExample] = Field(default_factory=list)
+    #: How many library examples this stage may carry.
+    max_examples: int = 4
+
+
+class CorrectionOut(BaseModel):
+    """A requirement a reviewer rewrote, offered as an extraction example (ADR-038).
+
+    A correction is the model being told it read a section wrongly, which is exactly
+    what a worked example is for. It is shown here so an administrator can decide to
+    teach it; nothing is promoted without their click.
+    """
+
+    run_id: int
+    rule_id: str
+    customer: str = ""
+    #: The wording the requirement quotes, which is what the model would be shown.
+    source_text: str = ""
+    summary: str = ""
+    edited_by: str = ""
+    edited_at: Optional[dt.datetime] = None
+    #: Whether this correction has already been promoted.
+    promoted: bool = False
+
+
+class PromoteIn(BaseModel):
+    """Turn a decision a person already confirmed into a worked example (ADR-038).
+
+    Nothing is promoted without this call, which a person makes by clicking.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["meaning", "requirement", "candidate"]
+    #: The meaning entry, the candidate, or the run whose requirement was corrected.
+    id: int
+    #: For a corrected requirement: which one, e.g. ``"R-003"``.
+    rule_id: str = ""
+    scope: ScopeToken = scopes.EVERYWHERE
+    note: str = ""

@@ -4,6 +4,7 @@
 
 import {
   ExternalLink,
+  FileSearch,
   FileText,
   FolderGit2,
   LayoutList,
@@ -55,10 +56,21 @@ const TRAINING_NAV: NavItem = {
 };
 
 /**
+ * Explore a sample (Phase 6.1e). Always available: looking at an example of what the
+ * tool accepts is useful whatever the mode says, and it is where a reviewer goes to
+ * point at something the tool has not raised.
+ */
+const EXPLORE_NAV: NavItem = {
+  href: "/explore",
+  label: "Explore a sample",
+  icon: FileSearch,
+};
+
+/**
  * The mode indicator (6.4a). Drawn in both states, because "off" is a fact a person
  * should be able to see and not merely the absence of a control.
  */
-function TrainingModeLine({ enabled }: { enabled: boolean }) {
+export function TrainingModeLine({ enabled }: { enabled: boolean }) {
   return (
     <div
       className="flex items-center gap-1.5 px-4 pb-3 text-[0.6875rem] text-muted-foreground"
@@ -110,7 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Null while login is off, which is the shipped default, so the footer stays as it was.
   const { user, signOut } = useAuth();
   const trainingEnabled = useTrainingEnabled();
-  const nav = trainingEnabled ? [...NAV, TRAINING_NAV] : NAV;
+  const nav = trainingEnabled ? [...NAV, EXPLORE_NAV, TRAINING_NAV] : [...NAV, EXPLORE_NAV];
 
   return (
     <div className="flex min-h-screen">

@@ -178,11 +178,18 @@ def build_context(
         report_parts=_parts(session, run, data_dir),
         client=client,
         customer=run.customer_name,
-        admin=repository.load_admin_config(session, run.customer_name, run.configuration_id),
+        admin=repository.load_admin_config(
+            session, run.customer_name, run.configuration_id, run.scope or ""
+        ),
         guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
+        examples=repository.load_prompt_examples(
+            session, run.customer_name, run.configuration_id, run.scope or ""
+        ),
         masked_columns=repository.load_masked_columns(session),
         rules_version=run.rules_version,
+        verify_lenses=llm_settings.verify_lenses,
+        max_lens_calls=llm_settings.max_lens_calls_per_run,
     )
 
     for row in session.execute(

@@ -9,14 +9,19 @@ resolved produces a "could not evaluate" finding; the run never skips a check si
 from __future__ import annotations
 
 import logging
-from typing import Any, Final, cast
+from typing import Any, Final, Mapping, cast
 
-from greenlight_ai.checks.definitions import AdminConfig
+from greenlight_ai.checks.definitions import AdminConfig, CheckDefinition
 from greenlight_ai.checks.expressions import ExpressionError, UnresolvedValue, evaluate
 from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.checks.field_constraints import evaluate as evaluate_constraints
 from greenlight_ai.checks.reports import REPORT_CHECKED_KINDS, CheckOutcome, run_derived_check
+from greenlight_ai.llm.client import LLMError
+from greenlight_ai.llm.prompts import JUDGMENT_PROMPT
+from greenlight_ai.llm.prompts.schemas import JudgmentResponse
+from greenlight_ai.pipeline.guidance import preamble
+from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.rules.derive import derive_checks
 from greenlight_ai.rules.schema import Evidence, Finding, Severity
@@ -40,6 +45,9 @@ def run(context: RunContext) -> None:
     settings = context.admin
     customer = context.customer
     before = len(context.findings)
+    # A re-check runs this stage again; counting both passes would report twice the
+    # coverage of a run that did the same work once (Phase 6.11c).
+    context.coverage_record.clear()
 
     for rule in context.rules:
         for check in derive_checks(rule):
@@ -53,6 +61,10 @@ def run(context: RunContext) -> None:
             # uploaded.
             for documents, part_name in _views(context):
                 outcome = run_derived_check(check, documents, context.aliases)
+                if outcome.passed is None:
+                    context.coverage_record.unevaluated(rule.rule_id)
+                else:
+                    context.coverage_record.checked(rule.rule_id, outcome.report_kind or "")
                 if outcome.passed is True:
                     continue
                 suffix = f" ({part_name})" if part_name else ""
@@ -93,6 +105,11 @@ def run(context: RunContext) -> None:
     _run_field_constraints(context)
     _run_admin_checks(context, settings, customer)
 
+    # Coverage is settled here, where every check that was going to run has run. It
+    # is not a stage of its own: it computes nothing new, it reports what the stage
+    # just did (Phase 6.11c).
+    context.coverage = coverage_module.compute(context)
+
     _LOG.info(
         "run %s stage 7: %d findings from report checks",
         context.run_id,
@@ -116,6 +133,8 @@ def _run_field_constraints(context: RunContext) -> None:
         return
 
     for outcome in evaluate_constraints(specs, context.reports, context.aliases):
+        if outcome.passed is not None:
+            context.coverage_record.checked("", outcome.report_kind)
         if outcome.passed is True:
             continue
         ref = f"field_constraint:{outcome.spec.id}"
@@ -445,6 +464,127 @@ def _evidence(rule: object, outcome: CheckOutcome) -> Evidence:
     )
 
 
+#: Below this the model's own confidence sends a judgment to a person rather than
+#: recording a failure (ADR-039).
+_JUDGMENT_CONFIDENCE_FLOOR: Final[float] = 0.5
+
+
+def _run_judgment_check(
+    context: RunContext,
+    check: CheckDefinition,
+    values: Mapping[str, object],
+    homes: Mapping[str, str],
+    ref: str,
+    shadow: bool,
+) -> None:
+    """Ask the model whether the named values satisfy a rule no formula can express.
+
+    This is the one place the design lets the model judge values, and it is held to
+    ADR-001's discipline: the model sees the administrator's instruction and the named
+    values the administrator listed — nothing else, never a report — and answers pass,
+    fail or review. Code decides what a verdict becomes and sets the severity. It was
+    definable and never ran until Phase 6.13c.
+
+    Args:
+        context: The run context.
+        check: The judgment check.
+        values: Every resolved named value on this run.
+        homes: Which report each named value reads, for coverage.
+        ref: The check's rule reference.
+        shadow: Whether the check is in shadow.
+    """
+    if not check.value_names:
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="could_not_evaluate",
+                severity="review",
+                title=f"Check {check.name!r} names no values for the model to judge",
+                detail=(
+                    "A judgment check lists the named values the model may see. This one "
+                    f"lists none, so there is nothing to judge. {check.reasoning}"
+                ),
+                leg="config_reports",
+                rule_ref=ref,
+                shadow=shadow,
+            )
+        )
+        return
+
+    missing = [name for name in check.value_names if name not in values]
+    if missing:
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="could_not_evaluate",
+                severity="review",
+                title=f"Check {check.name!r} could not be evaluated",
+                detail=(
+                    f"The named value(s) {', '.join(repr(m) for m in missing)} could not be "
+                    f"resolved in the reports supplied. {check.reasoning}"
+                ),
+                leg="config_reports",
+                rule_ref=ref,
+                shadow=shadow,
+                evidence=Evidence(report_value=", ".join(missing)),
+            )
+        )
+        return
+
+    shown = {name: values[name] for name in check.value_names}
+    rendered = ", ".join(f"{name} = {value}" for name, value in shown.items())
+    try:
+        result = context.client.complete(
+            JUDGMENT_PROMPT.system,
+            preamble(context.guidance)
+            + JUDGMENT_PROMPT.render_with_examples(
+                context.examples.get("admin_judgment", ()),
+                instruction=check.instruction.strip(),
+                values=rendered,
+            ),
+            JudgmentResponse,
+            stage="admin_judgment",
+            prompt_version=JUDGMENT_PROMPT.version,
+        )
+        answer = result.parsed(JudgmentResponse)
+    except LLMError as exc:
+        # A judgment that could not run is said, never assumed: silence here would read
+        # as a pass, which is the one thing a check must not do.
+        context.notices.append(
+            f"Judgment check {check.name!r} could not be evaluated: the model did not answer."
+        )
+        _LOG.warning("judgment check %r skipped: %s", check.name, type(exc).__name__)
+        return
+
+    for name in check.value_names:
+        context.coverage_record.checked("", homes.get(name, ""))
+    if answer.verdict == "pass" and answer.confidence >= _JUDGMENT_CONFIDENCE_FLOOR:
+        return
+
+    unsure = answer.verdict == "review" or answer.confidence < _JUDGMENT_CONFIDENCE_FLOOR
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="judgment_failed",
+            severity="review" if unsure else check.severity,
+            title=(
+                f"Check {check.name!r} needs a person to judge"
+                if unsure
+                else f"Check {check.name!r} failed"
+            ),
+            detail=(
+                f"{check.reasoning} The model read {rendered} against the instruction and "
+                f"said: {answer.reason or answer.verdict}."
+                + (" It was not confident, so this is for a person to decide." if unsure else "")
+            ),
+            leg="config_reports",
+            rule_ref=ref,
+            shadow=shadow,
+            evidence=Evidence(report_value=rendered),
+        )
+    )
+
+
 def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) -> None:
     """Evaluate every in-scope admin expression check.
 
@@ -457,6 +597,9 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
     if not admin.checks:
         return
     values = resolve_all(named, context.reports, context.config)
+    # Which report each named value reads, so an evaluated check counts towards the
+    # coverage of every report it actually touched (Phase 6.11c).
+    homes = {value.name: str(value.report_kind) for value in named if value.kind != "config"}
 
     for check in admin.checks:
         if not check.applies_to(customer, context.guidance.scope_code):
@@ -464,9 +607,7 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
         ref = f"check:{check.id}" if check.id is not None else ""
         shadow = bool(ref) and ref in admin.shadow_rule_refs
         if check.kind == "judgment":
-            # Judgment checks are answered by the model in stage 8's style, and are out
-            # of scope for Phase 2 (``docs/design.md``: "use sparingly").
-            _LOG.info("skipping judgment check %r: not implemented in Phase 2", check.name)
+            _run_judgment_check(context, check, values, homes, ref, shadow)
             continue
 
         try:
@@ -503,6 +644,9 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
                 )
             )
             continue
+
+        for name in result.resolved:
+            context.coverage_record.checked("", homes.get(name, ""))
 
         if result.passed:
             continue

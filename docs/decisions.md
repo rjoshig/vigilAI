@@ -509,7 +509,10 @@ matters.
    false-positive flood costs reviewer trust that takes months to earn back. A fixed
    threshold was considered and rejected: a rule that fires rarely would wait forever
    for a sample it never gets, so the judgement is a person's and the evidence is
-   shown rather than summarised.
+   shown rather than summarised. *Amended 2026-09-20:* "in front of them" was a
+   promise without a screen until Phase 6.13b. The shadow findings are now listed per
+   rule on the administrator's Rules screen with a dismissal control; that is what the
+   dismissal rate is made of, and reviewers never see them (ADR-040).
 9. **The narrowest scope that fits.** A learned rule applies to the customer or
    programme its observation came from; going global is a separate action. The most
    common cause of a noisy rule is an assumption that holds for most records and not
@@ -990,3 +993,339 @@ OSL type.
 **Consequences:** An administrator defines what a delivery means once per programme
 from real samples, on the target machine, without a developer. The model's role is
 bounded to reading; nothing counts until a person confirms and then activates.
+
+## ADR-034 — Several lenses read a finding independently; code merges them, and no lens grades
+
+**Status:** accepted 2026-09-20 (user decision, Phase 6.11e)
+
+**Context:** The question put to this phase was whether two or three agents with
+different roles, given the same submission, should discuss it for a few rounds before
+the tool answers. The instinct behind it is right: different lenses catch different
+classes of error. A delivery lead reads a report asking whether the output matches what
+was configured; a compliance officer asks which obligation a discrepancy touches; the
+requirements owner asks whether this is what the specification asked for. One prompt
+cannot hold all three stances at once, and stage 8's single second opinion has held one.
+
+**Decision:** Build the lenses. Leave out the conversation.
+
+1. **Independent readers, merged by code.** Each lens receives the finding and its
+   evidence and nothing else, answers the same schema, and never sees another lens's
+   answer. Code merges: every answering lens agrees and the finding is verified at the
+   lowest confidence offered; any disagreement downgrades it to `review` with each
+   dissenting lens's reason attached. This is sectioning, not debate.
+2. **No debate, for four reasons that hold here specifically.** *Cost*: three agents
+   over three rounds is up to nine times the calls at that stage, on an in-house 20–40B
+   model where a run already takes five to fifteen minutes, and the cache stops helping
+   because each round's input contains the last round's output. *Convergence*: agents
+   that see each other's answers drift toward the most confident one, which removes the
+   independence that made a second reader worth having; published debate results show
+   modest gains on open reasoning and almost none where the truth is deterministic.
+   *Auditability*: a QC record must say "this finding exists because rule X, evidence
+   Y", and "three personas argued for two rounds" is neither reproducible nor
+   defensible to an auditor. *Authority*: the model may not compare or grade (ADR-001,
+   ADR-026), so the only thing the agents could debate is meaning, which stages 2, 3, 4
+   and 8 already isolate into narrow schema-bound questions.
+3. **A lens changes confidence, never severity.** It can send a finding to a person and
+   it can raise a question from the same evidence, which becomes a `review` item. It
+   cannot make anything more serious, and it cannot delete anything. The severities
+   code set stand.
+4. **A lens that does not answer counts as neither.** Two lenses that agree still
+   verify. No lens answering leaves the finding exactly as the checks produced it, and
+   the run says so as a notice rather than passing over it.
+5. **The same question asked once.** One lens reads every high-severity finding, so the
+   same observation arrives several times; a reviewer needs it once with the readings
+   that raised it named. A proposal repeated five times is five times the noise.
+6. **Switchable, capped, and measured before it is the default.** `LLM_VERIFY_LENSES`
+   stays at `single` — today's behaviour, call for call — until the golden-set
+   benchmark compares the three against it. What reviewers see changes on evidence, not
+   on argument. A per-run call cap sits beside the token budget, and empty turns
+   verification off, which the run reports.
+7. **The same discipline, twice more, off the run path.** A coverage reader labels the
+   requirements code found unevidenced (Phase 6.11f), proposing only. A critique pass
+   reads a drafted rule back against the statements it came from and allows one redraft
+   (Phase 6.11g), once per candidate at authoring time.
+
+**Consequences:** Each lens's answer is cached under its own key, so a re-run costs
+nothing and the record of what each said is complete and replayable. Verification costs
+three calls per high-severity finding when the lenses are on, which is the reason for
+the cap and the reason the default waits for a measurement. The alternative — one
+prompt asked to hold three stances — was rejected because a prompt that asks for
+everything reliably returns the average.
+
+## ADR-035 — The finalize gate fails closed, and freezing carries an attestation
+
+**Status:** accepted 2026-09-20 (user decision, Phase 6.11d). Amends ADR-015.
+
+**Context:** ADR-015 set the gate at "every high-severity finding has a decision". That
+reads the absence of a finding as a pass. It says nothing about a `review`-severity
+finding, which is precisely the one the model was unsure about; nothing about a
+requirement no report could evidence; nothing about a check that was defined and could
+not be evaluated; and nothing about a verification that failed and was logged. A
+reviewer who opens a run with three findings, decides them, and freezes the report has
+no way to learn that nine requirements were never compared against anything. That is how
+a compliance error leaves the tool as a clean report.
+
+**Decision:**
+
+1. **Coverage is a first-class output.** After stage 7, code records one state per
+   requirement — checked, traced but unchecked, untraced, verified by hand — with the
+   reason, and how many checks touched each uploaded report. Pure code, no model
+   (ADR-001). It is stored on the run, shown on the review screen and in the frozen
+   report, and given to the summary prompt as counts so the summary cannot call a
+   delivery clean when part of it was never examined.
+2. **The gate widens.** Every high **and** every `review` finding needs a decision, and
+   every requirement no report evidenced and every check that could not be evaluated
+   needs an **acknowledgement**. An acknowledgement is not a decision that the delivery
+   is fine; it is the record that the gap was in front of somebody before the report was
+   frozen. An untraced requirement needs none: it is already a high-severity finding.
+3. **The gate is one implementation.** `api/gate.py` answers both "can this be frozen"
+   for the screen and "may this be frozen" at finalize, so what a reviewer is shown and
+   what the API enforces cannot drift apart. Refused with 409, not merely greyed out.
+4. **Freezing asks once, with the numbers.** The confirmation carries the coverage
+   counts, the gaps acknowledged, the checks that could not be evaluated, the shadow
+   rules and definition versions in force, and the run's notices. The same block is
+   stored on the final report and rendered in it, because a report that is evidence of a
+   review should say what the reviewer was shown.
+5. **A run from before coverage existed is unaffected.** An empty coverage column reads
+   as nothing to acknowledge, so an old run's gate is exactly what it was.
+
+**Consequences:** Some runs that would have been frozen in three clicks now need a
+person to look at what was never checked, which is the point and is the cost. The
+attestation makes the frozen report meaningfully stronger evidence: it states the
+limits of what was verified rather than implying there were none. Two fixtures showed
+the hole while this was built — every synthetic case, the clean baseline included,
+carries two checks that could not be evaluated and used to pass through undecided.
+
+## ADR-036 — A second approver is a programme's choice, and stands down when login is off
+
+**Status:** accepted 2026-09-20. Deferred from Phase 6.11 and built after it.
+
+**Context:** ADR-035 made the finalize gate fail closed, but every decision on it is
+still one person's. Some findings are not: a breach of a rule a programme calls `must`,
+and a compliance rule the configuration does not implement, are things a programme
+decided in advance that nobody waves through alone. The question was whether to build
+four-eyes at all, and if so how narrow to make it.
+
+**Decision:**
+
+1. **The programme decides, not the product.** A delivery programme carries a
+   `second_approver` switch, off by default. Programmes differ in how much a waved-through
+   compliance finding costs, and a global rule would be wrong for most of them.
+2. **Only what was waved through.** The rule triggers on a `programme_rule_violation`
+   or a `rule_missing_in_config` the reviewer marked **OK** — false positive or accepted
+   risk. Deciding one Not OK is the delivery being corrected, which needs no second
+   signature. Seriousness alone is not the trigger; waving it through is.
+3. **A signature, not a re-review.** The second person is not asked to redo the review.
+   They are shown what was waved through and they sign that the run can be frozen. That
+   is the whole of what this control asserts, and claiming more of it would be a lie
+   about what actually happened.
+4. **From someone else.** The approver must be a different account from the reviewer
+   who made those decisions, refused with a 422 otherwise. A signature from the person
+   who made the decision is not a second pair of eyes.
+5. **Inert while login is off.** With login off every action belongs to the same
+   placeholder account (ADR-022), so a second approver would be the same person and the
+   gate could never be passed: every affected run would be unfinalizable forever. The
+   rule therefore stands down entirely rather than deadlocking. **A gate nobody can
+   pass is worse than no gate** — it teaches people to look for a way round, and the way
+   round is usually turning the whole thing off. The admin console says this beside the
+   switch, and the deployment checklist says it beside login.
+6. **The gate reads the settings the app is running with**, passed in rather than
+   re-read from the environment. An app built with login on must not be told it is off.
+7. **It reaches the frozen report.** The attestation records who approved, when, what
+   they covered and any note, because a report that is evidence of a review should say
+   whose approval it carries.
+
+**Consequences:** A programme that switches this on and runs without login gets nothing,
+silently in the gate and loudly in the console. That asymmetry is deliberate: the
+failure mode of a control that cannot be satisfied is worse than the failure mode of one
+that is absent, and the honest place to say so is where somebody is deciding. The
+control is narrow enough to be true — one signature, from someone else, over a named
+list — and nothing about it implies the second person re-derived the first's work.
+
+## ADR-037 — One module reads a scope, and the stored columns are left alone
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.12a
+
+**Context:** A check, a compliance rule, a field constraint, a programme rule and a
+learned rule all carry a scope. Four shapes had been stored over the product's life —
+`all`, a bare customer name, `programme:CODE` (Phase 6.8) and `config:ID` (ADR-024) —
+and each reader interpreted the string for itself. The pipeline's `in_scope` knew three
+of them, the field-constraint loader knew a different three, and the two consoles knew a
+fourth set between them. A scope was therefore capable of meaning one thing on the
+screen that defined it and another in the run that used it, which is the failure this
+product exists to prevent, happening inside the product.
+
+There were two obvious answers: rewrite the columns into one form, or leave them and
+unify the reading.
+
+**Decision:**
+
+1. **One module interprets a scope string**, `greenlight_ai/scopes.py`, with a `Scope`
+   value object, a `parse` that accepts every form ever stored, a `token` that renders
+   the canonical one, and a `covers` that answers the only question anyone asks. Nothing
+   else parses a scope. `checks.definitions.in_scope` survives as the name the pipeline
+   calls and decides nothing itself.
+2. **No data migration.** Rewriting three columns across a dozen tables would be the
+   riskiest change in the product for a cosmetic gain, and a half-completed rewrite
+   would leave exactly the ambiguity it was meant to remove. A row becomes canonical the
+   next time somebody saves it, and reads identically until then. The older forms parse
+   forever; that is the contract, not a transitional courtesy.
+3. **The wire is where the vocabulary is unified.** One pydantic type canonicalises a
+   scope in both directions, so any form is accepted on input and the canonical token is
+   what goes back out. The consoles never learn that four shapes exist.
+4. **The canonical token is `everywhere`, `programme:CODE`, `customer:NAME` or
+   `config:ID`.** `all` became `everywhere` because `all` already means something else
+   in the rule schema (`applies_to: all`, meaning every record rather than every run),
+   and a bare customer name gained a prefix because it was the one form indistinguishable
+   from a typo.
+5. **A scope that names nothing covers nothing.** `programme:` with no code, or a
+   customer scope with no name, matches no run. A half-written row must not quietly
+   become a rule that runs everywhere, and the console refuses to save one.
+6. **A configuration scope is not picked, it is inherited.** It comes from a note
+   written against one configuration (ADR-024); the scope control shows it rather than
+   turning it into a customer name.
+
+**Consequences:** A programme-scoped field constraint now actually reaches the pipeline.
+It did not before: the loader compared the stored string against `all`, the customer name
+and `config:ID`, so a rule scoped to a delivery programme was loaded and never matched.
+Found by making one module answer the question. The cost is that two files, one Python
+and one TypeScript, must agree on the vocabulary; both say so at the top, and both are
+tested against the same list of stored forms.
+
+## ADR-039 — A judgment check shows the model named values and an instruction, and code sets the severity
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.13c
+
+**Context:** The design has always allowed a second kind of administrator check, for a
+rule a formula cannot express: *the billed volume should be in line with the delivered
+volume*. The console could define one, the database stored it, the loader scoped it, and
+stage 7 skipped it with a log line. It was the one place the product lets the model
+judge values rather than read text, and ADR-001 says code does every comparison, so the
+question was whether to remove it or to finish it in a way that keeps that rule.
+
+**Decision:** Finish it, narrowly.
+
+1. **The model sees the administrator's instruction and the named values the
+   administrator listed, and nothing else.** A judgment check carries `value_names`; a
+   check that names none is refused at save. Stage 7 resolves only those values and
+   renders `name = value` lines. No sheet, no row, no report reaches the prompt. An
+   unresolved value is a `could_not_evaluate` finding, as it is for an expression check,
+   and the model is not asked.
+2. **The model answers pass, fail or review with a reason and a confidence; code decides
+   what each becomes.** `fail` is a `judgment_failed` finding at the severity the
+   administrator set on the check. `review`, or a `fail` below a fixed confidence floor,
+   is a review-severity item that says a person must judge. `pass` records nothing. The
+   model never sets a severity and never sees the check's.
+3. **Silence is not a pass.** A model that does not answer leaves a run notice naming the
+   check. A check that quietly recorded nothing on an error would be the one thing a
+   check must not do.
+4. **It is a model call like every other.** It goes through the one adapter, is cached on
+   the rendered prompt and the prompt version, counts toward the run's token budget, and
+   coverage records the reports the values came from. A judgment check in shadow produces
+   a hidden finding, so its precision is measured the same way as any learned rule.
+5. **Use sparingly stays.** The console says what the check costs: one model call per run
+   it is in scope for.
+
+**Consequences:** ADR-001 holds. The model reads the values and the sentence and
+expresses a reading; it computes nothing, and the values it reads were resolved by the
+same code that resolves them for an expression check. The evidence on a judgment finding
+is the rendered lines, so a reviewer sees exactly what the model saw. The cost is one
+call per check per run, which is why the check requires the administrator to say which
+values it needs rather than offering every named value.
+
+## ADR-040 — Shadow findings are visible to administrators only, and dismissible
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.13b
+
+**Context:** ADR-021 says an approved rule runs in shadow until an administrator
+activates it "with its fired count, its dismissal rate, and its shadow findings in front
+of them". Until Phase 6.13b the findings were stored with `shadow = true`, hidden from
+every list, and shown to nobody; the dismissal rate was always zero because nothing could
+be dismissed. Precision in shadow was a promise, not a measurement.
+
+Two audiences could have seen them: the reviewers who judge findings on a run, or the
+administrators who decide whether a rule goes live.
+
+**Decision:**
+
+1. **Reviewers never see a shadow finding.** They carry the review load already, and a
+   rule in shadow is by definition one nobody has yet trusted. The review screen names a
+   shadow rule as *running silently* under *Rules applied to this run*, and shows nothing
+   of what it found.
+2. **Administrators see them per rule** on the Rules screen: the most recent findings a
+   shadow rule produced, each with the run it came from and a *Not a real problem*
+   control. That control records `review_status = false_positive` on the finding, through
+   the same endpoint a reviewer's decision uses.
+3. **The dismissal rate is made of those decisions.** The Rules screen's fired and
+   dismissed counts come from the finding rows, so a rule's precision in shadow is the
+   fraction an administrator judged wrong. There is still no threshold; the numbers are
+   shown and a person decides (ADR-021, item 6).
+4. **A finding says where it came from.** Every finding carries an origin (built-in,
+   administrator, guide, meaning, learned) and a one-line summary of the rule behind it,
+   resolved from its `rule_ref` at read time. A reviewer who sees a finding from a
+   learned rule sees that it was learned. An observation's outcome (waiting, drafted,
+   approved, live, disabled, rejected) is derived the same way, from the candidate and the
+   rule's current state, so it cannot go stale.
+
+**Consequences:** "Shadow before it counts" now has the evidence it always claimed. The
+cost is one more list on the Rules screen and one more flag on the finding endpoint. A
+shadow finding dismissed by an administrator is a finding row like any other, so it
+survives the rule's activation and stays in the record.
+
+## ADR-038 — An administrator's examples show the model a shape, and are never rules
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.13d
+
+**Context:** Every prompt ships with worked examples written in Python, and they are
+what makes a mid-size model reliable on a narrow task. An administrator could teach the
+model a great deal — background prose per programme and per artifact, the validation
+guides, the meaning map — and could not add a single worked example: not one *this
+wording means this requirement* pair drawn from the deliveries they actually see. The
+one thing that most improves how a model reads their documents was the one thing only a
+developer could change.
+
+The risk in letting an administrator write into a prompt is obvious: a sentence in an
+example can read as an instruction, and a model told to do something else stops doing
+the job. The decision is about what makes that safe rather than whether to allow it.
+
+**Decision:**
+
+1. **An example is a pair, not a sentence.** It names a stage, what the model would be
+   shown, and a good answer. There is no free-text field that reaches a prompt. The
+   block is rendered under one line saying the examples show the shape of a good answer
+   and are not rules.
+2. **The answer is validated against the stage's own schema before it is stored**, which
+   is the same check the prompt suite applies to the built-in examples. An example the
+   schema would reject teaches a shape the pipeline then refuses to parse, so it is
+   refused at the console with the field named rather than discovered at run time.
+3. **The built-ins stay as the floor.** The library is added after them, numbered on
+   from them, and never replaces one. A stage with no library examples renders exactly
+   as it always did.
+4. **At most four per stage, narrowest scope first**, and the console refuses to store a
+   fifth *active* one. A cap that silently dropped the fifth would leave a row that looks
+   live and reaches nothing, which is the class of defect this phase exists to remove.
+   Scope is the one vocabulary (ADR-037), so an example can belong to one programme,
+   one customer, one configuration, or everywhere.
+5. **Examples are inserted into the rendered prompt, never substituted into it.** What
+   an administrator wrote is never read as a template placeholder, and because the text
+   is part of what is hashed, adding an example refreshes exactly the calls it changes
+   and nothing else (ADR-005). No separate cache-key field was needed.
+6. **The personal-data tripwire runs on save.** An example is text somebody pasted from
+   a real delivery, and save is the last moment the person who pasted it can take it
+   out (ADR-003).
+7. **Promotion needs a person's click.** The three places somebody has already corrected
+   the model — a confirmed requirement mapping, a requirement a reviewer rewrote, an
+   approved candidate — each offer a *Use as example* control, and each stored example
+   records where it came from. Nothing is promoted automatically: a correction is
+   evidence that one reading was wrong, not evidence that it generalises.
+8. **Examples are versioned like every other definition** (ADR-029), per stage, with the
+   same ten-deep list and revert.
+
+**Consequences:** The tool can now be taught to read a customer's documents the way
+their people read them, by the people who know. What it cannot be taught this way is a
+rule: ADR-001 is untouched, an example changes only how the model reads, and every
+comparison is still made by code against a rule in the rule tables. The cost is a
+prompt that grows by up to four examples per stage, which the cap bounds, and one more
+thing to keep true: a library example that stops matching the deliveries is as
+misleading as a stale document, which is why each one records why it is there.
+

@@ -13,6 +13,9 @@ import { cn } from "@/lib/utils";
 export const TRAIN_AI_HINT =
   "What you write in the training controls is recorded and reviewed by an administrator before it changes anything.";
 
+/** The tag's text, shared so a test names it once. */
+export const TRAIN_AI_TAG_LABEL = "Train AI";
+
 export interface TrainAiTagProps {
   className?: string;
 }
@@ -24,7 +27,7 @@ export function TrainAiTag({ className }: TrainAiTagProps) {
       title={TRAIN_AI_HINT}
       className={cn("px-1.5 py-0 text-[0.625rem] uppercase tracking-wide", className)}
     >
-      Train AI
+      {TRAIN_AI_TAG_LABEL}
     </Badge>
   );
 }

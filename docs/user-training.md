@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.10.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.13.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -102,6 +102,19 @@ you hit one, the message says so and asks you to try again shortly.
 while it waits. A run moves through nine stages; the run page shows which stage it is
 on and refreshes itself. **Needs review** means it is ready for you.
 
+## Explore a sample
+
+**Explore a sample** shows an example of every artifact the tool accepts: a report
+workbook cell by cell with the label beside each one, an OSL by section, a
+configuration by JSON path. Values are masked exactly as they are on a real run.
+
+It is there for two reasons. One is to see what the tool is reading. The other matters
+more: with Train AI mode on, every cell, section and path has a **What should this
+check?** button, so you can tell the tool about something it has never raised. Until
+now you could only do that from a finding, which meant you could only talk about what
+the tool had already noticed — and what you know is usually about what it said nothing
+about.
+
 ## Reviewing findings
 
 The run page shows the **traceability matrix** and the **findings**, worst first.
@@ -109,10 +122,42 @@ The run page shows the **traceability matrix** and the **findings**, worst first
 - Each finding has a **severity** (high, medium, low, or review), a title that says
   what disagrees with what, the evidence from all three artefacts side by side, and
   an OK / Not OK decision with a comment.
-- **OK** means the finding is not a problem (a false positive or an accepted risk).
-  **Not OK** means the delivery has to change. A comment is expected on Not OK.
-- Low-severity findings can be decided in bulk. High-severity ones never can:
-  every one must be decided by hand before the report can be generated.
+- There are three decisions. **False positive** means the finding is not a real
+  problem. **Accepted risk** means it is real and the delivery goes ahead anyway, and
+  it always needs a comment saying why. **Not OK** means the delivery has to change,
+  and on a high or review finding it needs a comment too. The tool says so before it
+  records anything, so nothing you typed is lost.
+- Low-severity findings can be marked OK in bulk, as false positives. High-severity
+  ones never can: every one must be decided by hand before the report can be generated.
+- **Generate final report asks once**, showing the finding counts and reminding you
+  that freezing is permanent: the report is stored once, never regenerated, and the
+  findings can no longer be re-reviewed.
+
+## What was checked
+
+Above the findings is a panel headed **What was checked**. It exists because a short
+findings list cannot tell a clean delivery from one nobody examined, and that is how a
+compliance requirement slips through: nothing disagreed with it because nothing was
+compared against it.
+
+- Every requirement is in one of four states. **Checked against a report** means a
+  check compared it with the delivery. **Traced, no report evidenced it** means it
+  reached the configuration and no report shows it was applied. **Not traced** means
+  nothing implements it, which is already a finding. **Verified by hand** means no
+  check can express it, or the check for it could not be run.
+- The panel also warns when a report arrived and **no check examined it**, which
+  usually means that report type has no guide, meaning entry or named value yet.
+- **Notices** appear here too: a second opinion the model could not give, a programme
+  reading that did not run. They are not findings, and you should know about them.
+- Every requirement nothing evidenced, and every check that could not be evaluated,
+  needs **I have seen this** before the report can be frozen. That is not you saying
+  the delivery is fine. It is the record that the gap was in front of you, and it goes
+  into the frozen report with your name on it. Add a note if you raised it with
+  someone.
+
+If several readers looked at a finding, the evidence panel shows **how it was read**:
+each reader, whether it agreed, and why. They each saw the same evidence and none saw
+the others.
 - If a requirement was extracted wrongly, edit it and press **Re-check**. Only the
   comparison stages re-run; nothing is re-asked of the model that has not changed.
 - **Configuration notes given to the model** appear above the findings when the
@@ -143,18 +188,40 @@ next run and keeps the text.
 ## Train AI mode
 
 When the sidebar line is green, the tool is collecting what reviewers know so it can
-get better. Nothing you write here runs; an administrator reads it, has the model
-draft a rule from it, and approves that rule, which then runs silently for a while
-before it starts producing findings. You will hear back either way.
+get better. It is aimed at the senior associates who know a programme well enough to
+say what should always be true of it, though anyone may write. Nothing you write here
+runs: an administrator reads it, has the model draft a rule from it, and approves that
+rule, which then runs silently against real deliveries for a while before it starts
+producing findings anyone sees. You will hear back either way.
 
-- **What should this check?** appears on the run page and on every finding. Use it
-  when you know something the tool did not check, or when a finding fired and you
-  know why it should not have. Say what you expect, how serious a breach would be,
-  and how far it applies: this customer, this programme, or everywhere. The control
-  pre-fills what you were looking at, which is what makes your note usable.
-- **My observations** lists what you have written and what became of it: waiting,
-  synthesized into a rule, or rejected with the administrator's reason. You can edit
-  an observation until an administrator picks it up.
+- **What should this check?** is wherever you form the opinion: on every finding card,
+  in the evidence drawer, on every row of the traceability matrix, beside **I have seen
+  this** on every coverage gap, and on the run as a whole. Use it when you know something
+  the tool did not check, or when a finding fired and you know why it should not have.
+  The form asks for one sentence first, then what you expect to see; kind, seriousness
+  and scope sit under **Details** with sensible defaults. The control pre-fills what you
+  were looking at, shown as chips you can remove, which is what makes your note usable.
+- **A coverage gap is the best place to write.** When the panel says a requirement was
+  traced but no report evidenced it, the tool is telling you it did not check something.
+  If you know what should have been checked, say so there.
+- **Findings from learned rules say so.** A card marked **Learned from an observation**
+  exists because a colleague wrote a sentence and an administrator approved the rule it
+  became; the evidence drawer names the rule. **Rules applied to this run**, above the
+  findings, lists every administrator-written, guide, meaning-map and learned rule that
+  produced a finding, and names the rules running silently in shadow.
+- **Saving twice rewords, it does not duplicate.** After a save the form stays open on
+  the observation you just wrote; change anything and press **Save changes** to reword
+  it. If the tool answers that **a rule already covers this**, or that a running rule
+  **says the opposite**, each rule it names carries a **Say this rule is wrong** button,
+  which starts a correction pointed at that rule. That correction is the most useful
+  thing you can tell an administrator.
+- **My observations** lists what you have written and where it has got to, as a chain:
+  **Waiting → Drafted → In shadow → Live**, or **Switched off**, or **Not taken forward**
+  with the administrator's reason. Once a rule exists the card names it. The chain is
+  read from the rule itself each time, so it is never stale. You can edit an observation
+  until an administrator picks it up. Configuration notes are not listed here: a note
+  already reaches the model on every run of its configuration, and it lives on the
+  configuration's own screen.
 - **Do not paste account numbers, names, or any personal data.** The tool refuses to
   save text that looks like it, and tells you so, because the only moment it can be
   removed is before it is saved.

@@ -72,6 +72,24 @@ export function isOk(status: ReviewStatus): boolean {
   return status === "false_positive" || status === "accepted_risk";
 }
 
+/** Severities on which Not OK must say why. Mirrors the API (Phase 6.11a). */
+const NOTE_REQUIRED_FOR_NOT_OK: ReadonlySet<string> = new Set(["high", "review"]);
+
+/**
+ * Why a decision cannot be recorded as it stands, or "" when it is complete.
+ *
+ * The same rule runs in the API, which is what enforces it; this copy exists so the
+ * reviewer is told before the request rather than by a rejection.
+ */
+export function decisionProblem(severity: string, status: ReviewStatus, note: string): string {
+  if (note.trim()) return "";
+  if (status === "accepted_risk") return "Accepting a risk needs a comment saying why.";
+  if (status === "confirmed" && NOTE_REQUIRED_FOR_NOT_OK.has(severity)) {
+    return `Not OK on a ${severity}-severity finding needs a comment saying what is wrong.`;
+  }
+  return "";
+}
+
 /** The matrix status for one requirement, from its trace and its findings. */
 export type MatrixStatus = "match" | "mismatch" | "partial" | "missing" | "extra";
 
@@ -121,6 +139,7 @@ export const FINDING_LABEL: Record<string, string> = {
   report_violates_rule: "Report violates rule",
   count_does_not_reconcile: "Count does not reconcile",
   cross_report_disagreement: "Cross-report disagreement",
+  judgment_failed: "Judgment check failed",
   profile_anomaly: "Profile anomaly",
   low_confidence_extraction: "Low-confidence extraction",
   could_not_evaluate: "Could not evaluate",
@@ -131,4 +150,23 @@ export const LEG_LABEL: Record<string, string> = {
   osl_config: "OSL ↔ config",
   config_reports: "config ↔ reports",
   osl_reports: "OSL ↔ reports",
+};
+
+/** Where a finding came from, in words a reviewer can act on (Phase 6.13b). */
+export const ORIGIN_LABEL: Record<string, string> = {
+  built_in: "From the OSL and the configuration",
+  admin: "Administrator's rule",
+  guide: "From a validation guide",
+  meaning: "From the meaning map",
+  learned: "Learned from an observation",
+};
+
+/** What became of an observation, to its author (Phase 6.13b). */
+export const OUTCOME_LABEL: Record<string, string> = {
+  waiting: "Waiting for an administrator to look at it",
+  drafted: "The model has drafted a rule from it, for an administrator to approve",
+  approved: "Approved: the rule runs in shadow, counted but shown to nobody yet",
+  live: "Live: the rule produces findings on every run in its scope",
+  disabled: "The rule was switched off; nothing in the training record is deleted",
+  rejected: "Not taken forward",
 };

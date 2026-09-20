@@ -121,3 +121,31 @@ def seed_aliases(factory: sessionmaker[Session]) -> None:
         for canonical, aliases in FIXTURE_ALIASES.canonical_by_alias.items():
             session.add(models.AttributeAlias(canonical_name=aliases, alias=canonical))
         session.commit()
+
+
+@pytest.fixture()
+def clear_gate(client: TestClient, api: str) -> Callable[..., None]:
+    """Satisfy the finalize gate on a run (ADR-035).
+
+    The gate wants every high and ``review`` finding decided **and** every coverage
+    gap and unevaluated check acknowledged. Deciding findings alone no longer opens
+    it, so tests that only want a finalized run say so in one call.
+    """
+
+    def _clear(
+        run_id: int, decision: str = "false_positive", note: str = "reviewed by a test"
+    ) -> None:
+        for finding in client.get(f"{api}/runs/{run_id}/findings").json():
+            if finding["review_status"] == "undecided":
+                client.patch(
+                    f"{api}/findings/{finding['id']}",
+                    json={"review_status": decision, "review_note": note},
+                )
+        outstanding = client.get(f"{api}/runs/{run_id}/coverage").json()["outstanding"]
+        if outstanding:
+            client.post(
+                f"{api}/runs/{run_id}/coverage/acknowledge",
+                json={"targets": outstanding, "note": note},
+            )
+
+    return _clear

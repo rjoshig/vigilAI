@@ -32,6 +32,14 @@ _DEFAULTS: Final[Mapping[str, str]] = {
     "LLM_LOG_PROMPTS": "false",
     "LLM_PII_TRIPWIRE": "true",
     "LLM_PROMPT_VERSION": "1",
+    # Stage 8 reads a high-severity finding through these lenses, independently
+    # (Phase 6.11e). "single" is the one second opinion the tool has always made, and
+    # it stays the default until the benchmark harness (6.11b) measures the three
+    # against it on the golden set: a change to what reviewers see has to be a
+    # measured change. An empty value turns verification off entirely, which the run
+    # reports as a notice rather than passing over in silence.
+    "LLM_VERIFY_LENSES": "single",
+    "LLM_MAX_LENS_CALLS_PER_RUN": "150",
 }
 
 
@@ -58,6 +66,13 @@ class LLMSettings(BaseModel):
             refuse to send it on a match. On by default and left on: it is the backstop
             for masking, and a prompt already sent cannot be recalled.
         prompt_version: The global prompt-set version, part of every cache key.
+        verify_lenses: Which lenses read a high-severity finding in stage 8
+            (Phase 6.11e). ``("single",)`` is the one second opinion the tool has
+            always made; naming lenses (``delivery``, ``compliance``,
+            ``requirements``) has each read the same evidence independently and code
+            merge the answers. Empty turns verification off, which the run reports.
+        max_lens_calls_per_run: A ceiling on lens calls, beside the token budget. Past
+            it the remaining findings are left unverified and the run says so.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", protected_namespaces=())
@@ -74,6 +89,8 @@ class LLMSettings(BaseModel):
     log_prompts: bool = False
     pii_tripwire: bool = True
     prompt_version: str = "1"
+    verify_lenses: tuple[str, ...] = ("single",)
+    max_lens_calls_per_run: int = Field(default=150, ge=0)
 
     @field_validator("base_url")
     @classmethod
@@ -146,6 +163,9 @@ class LLMSettings(BaseModel):
                 return False
             raise ConfigError(f"{key} must be a boolean, got {raw!r}")
 
+        def lenses(key: str) -> tuple[str, ...]:
+            return parse_lenses(get(key), key)
+
         provider = get("LLM_PROVIDER").lower()
         if provider not in ("openai", "anthropic", "mock"):
             raise ConfigError(
@@ -166,9 +186,48 @@ class LLMSettings(BaseModel):
                 log_prompts=boolean("LLM_LOG_PROMPTS"),
                 pii_tripwire=boolean("LLM_PII_TRIPWIRE"),
                 prompt_version=get("LLM_PROMPT_VERSION"),
+                verify_lenses=lenses("LLM_VERIFY_LENSES"),
+                max_lens_calls_per_run=integer("LLM_MAX_LENS_CALLS_PER_RUN"),
             )
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
+
+
+#: The lenses a deployment may switch on (Phase 6.11e). ``single`` is the one-prompt
+#: second opinion and stands alone.
+LENS_NAMES: Final[frozenset[str]] = frozenset({"single", "delivery", "compliance", "requirements"})
+
+
+def parse_lenses(raw: str, key: str = "LLM_VERIFY_LENSES") -> tuple[str, ...]:
+    """Read a comma-separated lens list, from the environment or the console.
+
+    One parser for both layers, because the console and ``.env`` must agree on what a
+    valid value is: a lens list the console accepted and the worker refused would be a
+    setting that lies (ADR-023).
+
+    Args:
+        raw: The value as written, e.g. ``"delivery,compliance"``.
+        key: What to call it in an error.
+
+    Returns:
+        The lens names, in the order given. Empty when nothing was written, which stage 8
+        reads as verification switched off.
+
+    Raises:
+        ConfigError: When a name is unknown, or ``single`` is combined with another.
+    """
+    lowered = raw.strip().lower()
+    if not lowered:
+        return ()
+    names = tuple(part.strip() for part in lowered.split(",") if part.strip())
+    unknown = [name for name in names if name not in LENS_NAMES]
+    if unknown:
+        raise ConfigError(
+            f"{key} may name only {', '.join(sorted(LENS_NAMES))}; got {', '.join(unknown)}"
+        )
+    if "single" in names and len(names) > 1:
+        raise ConfigError(f"{key}: 'single' is the one-prompt mode and stands alone")
+    return names
 
 
 def resolved_llm_settings(session: Any, environ: Mapping[str, str] | None = None) -> LLMSettings:
@@ -204,4 +263,8 @@ def resolved_llm_settings(session: Any, environ: Mapping[str, str] | None = None
         log_prompts=bool(value("llm.log_prompts")),
         pii_tripwire=bool(value("llm.pii_tripwire")),
         prompt_version=LLMSettings.from_env(environ).prompt_version,
+        # Both were built in 6.11e and dropped here, so a deployment with the database
+        # reachable ran with the lenses pinned to ``single`` whatever ``.env`` said.
+        verify_lenses=parse_lenses(str(value("llm.verify_lenses")), "llm.verify_lenses"),
+        max_lens_calls_per_run=int(value("llm.max_lens_calls_per_run")),
     )

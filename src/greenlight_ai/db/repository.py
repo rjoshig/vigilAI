@@ -16,6 +16,7 @@ from typing import Any, Final, Iterable, Mapping, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.training.lifecycle import RUNNING_STATES
 from greenlight_ai.checks.definitions import (
@@ -28,7 +29,9 @@ from greenlight_ai.checks.definitions import (
 from greenlight_ai.checks.named_values import NamedValue
 from greenlight_ai.db import models
 from greenlight_ai.db.types import utcnow
+from greenlight_ai.llm import examples as example_library
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
+from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, Trace
@@ -37,6 +40,7 @@ __all__ = [
     "load_admin_config",
     "load_aliases",
     "load_masked_columns",
+    "load_prompt_examples",
     "save_context",
     "load_findings",
     "fingerprint",
@@ -93,7 +97,10 @@ def fingerprint(file_hashes: Iterable[str], check_versions: Iterable[str] = ()) 
 
 
 def load_admin_config(
-    session: Session, customer: str = "", configuration_id: str = ""
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
 ) -> AdminConfig:
     """Load what the admin-ui contributes to a run.
 
@@ -102,6 +109,8 @@ def load_admin_config(
             ``config:<id>`` applies to it and to no other (ADR-024).
         session: An open session.
         customer: The run's customer, used to scope checks and compliance rules.
+        programme_code: The run's delivery programme, so a rule scoped to a programme
+            reaches the pipeline rather than being loaded and never matched.
 
     Returns:
         The admin configuration. Falls back to the shipped reverse-pass categories when
@@ -117,6 +126,7 @@ def load_admin_config(
             kind=row.kind,  # type: ignore[arg-type]
             expression=row.expression,
             instruction=row.instruction,
+            value_names=tuple(str(v) for v in (row.value_names or [])),
             reasoning=row.reasoning,
             severity=row.severity,  # type: ignore[arg-type]
             scope=row.scope,
@@ -139,6 +149,8 @@ def load_admin_config(
 
     compliance = tuple(
         ComplianceRule(
+            id=row.id,
+            state=row.state,
             name=row.name,
             json_path_contains=str((row.requirement or {}).get("json_path_contains", "")),
             expected_value=(row.requirement or {}).get("expected_value", True),
@@ -182,8 +194,8 @@ def load_admin_config(
         for row in session.execute(sa.select(models.NamedValueRow)).scalars()
     )
 
-    # A rule in scope for this customer, whatever its origin. Scope is "all", the
-    # customer's name, or "programme:CODE"; the narrowest that fits is what a learned
+    # A rule in scope for this run, whatever its origin. One module reads a scope
+    # token (:mod:`greenlight_ai.scopes`); the narrowest that fits is what a learned
     # rule gets by default (ADR-021).
     constraint_rows = list(
         session.execute(
@@ -203,7 +215,7 @@ def load_admin_config(
             reasoning=row.reasoning,
         )
         for row in constraint_rows
-        if row.scope in ("all", customer, f"config:{configuration_id}")
+        if scopes.covers(row.scope, customer, programme_code, configuration_id)
     )
 
     # Shadow rules run and are counted; their findings are shown to nobody, so the
@@ -213,6 +225,20 @@ def load_admin_config(
         f"check:{row.id}"
         for row in session.execute(
             sa.select(models.CheckDefinitionRow).where(models.CheckDefinitionRow.state == "shadow")
+        ).scalars()
+    }
+    # Compliance and programme rules have the same lifecycle and were missing here, so a
+    # shadow compliance rule never ran and a shadow programme rule interrupted reviewers.
+    shadow_refs |= {
+        f"compliance_rule:{row}"
+        for row in session.execute(
+            sa.select(models.ComplianceRuleRow.id).where(models.ComplianceRuleRow.state == "shadow")
+        ).scalars()
+    }
+    shadow_refs |= {
+        f"programme_rule:{row}"
+        for row in session.execute(
+            sa.select(models.ProgrammeRule.id).where(models.ProgrammeRule.state == "shadow")
         ).scalars()
     }
 
@@ -267,6 +293,51 @@ def load_aliases(session: Session, customer: str = "") -> AliasTable:
     return AliasTable.from_mapping(mapping)
 
 
+def load_prompt_examples(
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
+) -> dict[str, tuple[example_library.LibraryExample, ...]]:
+    """Load the administrator's worked examples, by stage (Phase 6.13d, ADR-038).
+
+    Args:
+        session: An open session.
+        customer: The run's customer, so a customer-scoped example applies.
+        configuration_id: The run's ETL configuration.
+        programme_code: The run's delivery programme.
+
+    Returns:
+        Active examples in scope, at most :data:`MAX_PER_STAGE` per stage, narrowest
+        scope first. A stage nobody has written an example for is absent, and the
+        prompt then renders exactly as it always did.
+    """
+    rows = session.execute(
+        sa.select(models.PromptExample)
+        .where(models.PromptExample.is_active.is_(True))
+        .order_by(models.PromptExample.sort_order, models.PromptExample.id)
+    ).scalars()
+
+    by_stage: dict[str, list[example_library.LibraryExample]] = {}
+    for row in rows:
+        if row.stage not in example_library.STAGE_FIELDS:
+            continue
+        if not scopes.covers(row.scope, customer, programme_code, configuration_id):
+            continue
+        by_stage.setdefault(row.stage, []).append(
+            example_library.LibraryExample(
+                id=row.id,
+                stage=row.stage,
+                scope=row.scope,
+                given={str(k): str(v) for k, v in dict(row.given or {}).items()},
+                answer=dict(row.answer or {}),
+                note=row.note,
+                sort_order=row.sort_order,
+            )
+        )
+    return {stage: example_library.select(found) for stage, found in by_stage.items()}
+
+
 def load_masked_columns(session: Session) -> tuple[str, ...]:
     """Load the masked-column patterns.
 
@@ -307,6 +378,13 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
     run.rules_version = context.rules_version
     run.summary = context.summary
     run.top_issues = list(context.top_issues)
+    if context.coverage is not None:
+        run.coverage = coverage_module.as_rows(context.coverage)
+        run.report_coverage = [
+            {"kind": entry.kind, "checks_applied": entry.checks_applied}
+            for entry in context.coverage.reports
+        ]
+    run.notices = list(context.notices)
 
 
 def _replace_rules(session: Session, run: models.Run, rules: Sequence[Rule]) -> None:
@@ -422,6 +500,7 @@ def _replace_findings(session: Session, run: models.Run, findings: Sequence[Find
                 shadow=finding.shadow,
                 verified=finding.verified,
                 verify_agreed=finding.verify_agreed,
+                lens_opinions=list(finding.lens_opinions),
             )
         )
 
@@ -490,6 +569,7 @@ def load_findings(session: Session, run_id: int) -> list[Finding]:
             review_note=row.review_note,
             verified=row.verified,
             verify_agreed=row.verify_agreed,
+            lens_opinions=tuple(row.lens_opinions or []),
         )
         for row in rows
     ]

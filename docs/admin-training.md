@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.10.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.13d.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -43,6 +43,49 @@ shows **User**, so the two are never mistaken. Clicking them goes home.
 Under the mark: **Train AI mode on** (green) or **off** (grey). When it is on,
 reviewers can record observations and they arrive in your queue. The switch itself is
 on the Settings screen.
+
+## Tell the tool
+
+The first item in the sidebar, and the one to reach for when you are not sure which of
+the other screens a thing belongs on. Write **one** statement in your own words — "the
+account review file must never have a blank origination date", "billing count must never
+exceed the delivered count" — choose where it applies, and press **Tell the tool**.
+
+What happens next is the training loop, not a new one. The tool decides which existing
+surface the statement belongs on, drafts the rule there, and puts it in the queue as an
+ordinary candidate. **Nothing runs until you approve it**, and an approved rule starts in
+shadow like any other.
+
+Three answers are possible, and two of them create nothing:
+
+- **A candidate.** It names the surface and shows the draft, with a link into the queue
+  where you approve or reject it as usual.
+- **Background.** Some things are worth the tool knowing but are not something a
+  delivery can pass or fail — "the second tab is the reissue file". The tool says so and
+  points you at the artifact type's AI context or the standing instructions. It does not
+  turn it into a rule that would then be wrong.
+- **A question.** When the statement could be two things, or names nothing the tool can
+  check, you get the question back and nothing is created. That is the answer working,
+  not failing: a rule on the wrong surface is a finding nobody can explain.
+
+Occasionally the tool reads a statement one way and drafts it another. It says so
+instead of hiding it, and that is your cue to read the draft carefully before approving.
+
+This screen does not replace the ones below. They are the expert view, they show exactly
+what runs, and they stay the place where things are really managed.
+
+### Which screen holds what
+
+The front door answers this for you most of the time. When you want to go straight to
+the right screen, these are the three groups that genuinely overlap, and what actually
+separates them.
+
+| These all do the same job | And differ in |
+| --- | --- |
+| Validation guides, meaning entries, named values | how they locate a cell in a report |
+| Programme rules, compliance rules, judgment checks | who evaluates "this must hold": the model reading, code comparing, or the configuration being present |
+| An artifact type's AI context, standing instructions, configuration notes | nothing, at the prompt — all three reach the model as background. Choose by how wide it is: one artifact type, one programme, one configuration |
+| An artifact type's AI context, a worked example | whether you are telling the model something about this work, or showing it a finished answer to copy the shape of. Neither is a rule |
 
 ## Artifact types
 
@@ -141,10 +184,74 @@ bumps the version). **Every delete asks you to type `delete`**, and long lists h
 checkbox per row and a bar that deletes the selection under one typed word. Checks and
 compliance rules deleted this way are restorable from the Rules screen for six months.
 
+**Judgment checks run.** A check can be a **formula**, which code evaluates for free on
+every run, or a **judgment**: an instruction in plain words plus the named values the
+model may see. The model reads only those values — never a report, never a row — and
+answers pass, fail or review; code records the verdict at the severity you set, and an
+answer the model is not confident about goes to a person as a review item. A judgment
+check costs one model call on every run in its scope, so the form says *use sparingly*
+and asks which named values to show before it lets you activate it. Until 6.13c a
+judgment check was accepted and never ran.
+
 **Scope.** Every check and compliance rule applies **everywhere**, to **one delivery
 programme**, or to **one customer**. A rule scoped to Account Solicitation is never
 evaluated on an Account Monitoring run, and a run with no programme sees only global
-and customer rules. Pick the scope on the form; the list shows it in words.
+and customer rules. Pick the scope on the form; the list shows it in words, never as a
+stored token.
+
+There is a fourth scope you never pick: a rule learned from a note written against one
+ETL configuration applies to **that configuration** and no other, and the form shows it
+without letting you change it. A scope that names nothing — a programme with no code, a
+customer with no name — covers nothing, so the form will not save one.
+
+Scopes written before the vocabulary was unified still read and still work; nothing was
+rewritten in the database, and a rule becomes canonical the next time somebody saves it
+(ADR-037).
+
+## Worked examples
+
+**What this screen is for.** Every prompt in the tool ships with worked examples: a
+section of a requirements document and the requirements it states, a pair of things and
+whether one implements the other. They are what makes a mid-size model reliable on a
+narrow task. This screen is where you add yours, drawn from the deliveries you actually
+see, when the model reads something the way your documents do not.
+
+**An example is a pair, never an instruction.** You give what the model would be shown
+and a good answer, in the JSON that stage returns. There is no box here that tells the
+model what to do. The block reaches the prompt after the built-in examples, under a line
+saying the examples show the shape of a good answer and are not rules (ADR-038).
+
+**What it is not.** An example is not a rule. It changes how the model *reads*; it
+cannot make anything pass or fail. Every comparison is still made by code against a
+check, a compliance rule or a field constraint. If what you want is a rule, use Tell the
+tool.
+
+**The six stages.** Reading the OSL, describing the configuration, tracing a requirement
+to the configuration, judging named values, placing a statement, and drafting a rule from
+observations. Open a stage to see the examples that ship in the prompt, read-only, above
+your own.
+
+**What the console refuses.**
+
+- An answer that is not valid for that stage is refused with the field named. An example
+  the pipeline could not parse would teach the model a shape it then rejects.
+- A fifth active example on one stage is refused. A prompt carries four, so a fifth
+  would look live and reach nothing; take one out of use first.
+- An example that looks like it carries personal data is refused on save, not later.
+
+**Scope.** An example is scoped like every other definition: everywhere, one delivery
+programme, one customer, or one configuration. The narrowest scopes are shown to the
+model first.
+
+**Teaching from a correction.** Under the stages, the screen lists the two places
+somebody has already corrected the model: requirements reviewers rewrote, and rules you
+approved from what reviewers wrote. **Use as example** turns one into a worked example.
+A confirmed mapping on the Meaning screen has the same button. Nothing is promoted on
+its own — a correction says one reading was wrong, not that it generalises, and that
+judgement is yours.
+
+**Versions.** Each stage keeps its last ten versions with revert, like any other
+definition.
 
 ## The training queue
 
@@ -168,10 +275,17 @@ promote it. For any observation you may:
 **Candidates.** Each shows the drafted rule, its reasoning, its source observations,
 and any **conflicts** with rules that already exist. Before approving:
 
-- **Replay** it. The tool counts how many recent finalized runs the rule touches and
-  how many of those findings reviewers already dismissed. A rule that would have
-  fired on thirty runs that were all fine is a bad rule, and this is where that
-  shows rather than next month.
+- **Replay** it. Each of the last few finalized runs has its stored reports parsed
+  again and this rule run over them, by the same evaluator the pipeline uses. You are
+  told which runs it would have fired on and what it would have said. A rule that
+  would have fired on thirty runs that were all fine is a bad rule, and this is where
+  that shows rather than next month. Reading the files takes a moment, so the replay
+  is queued and the card fills in when it finishes.
+
+  Two things it does not claim. Firing means the rule would have raised a finding, not
+  that the finding would have been right. And the count of related findings reviewers
+  already dismissed is an estimate: the rule has produced no findings yet, so the
+  nearest honest signal is what they judged about the same attribute.
 - **Approve** it. The rule is created in **shadow**: it runs on every run and its
   findings are counted, but no reviewer sees them. Narrow the scope if the candidate
   proposed a wider one than the evidence supports; the default is the narrowest that
@@ -221,7 +335,7 @@ changed what and from what.
   configured. **Test connection** makes one cheap call with the saved settings; do
   this before a run fails at stage two.
 - **Training.** The Train AI switch, whether approvals go into shadow (leave it on),
-  and how many recent runs a replay reads.
+  and how many recent finalized runs a replay evaluates the rule against.
 - **Login.** Both switches, session lifetime, idle timeout, minimum password length,
   and the lockout rules. Turning admin login off asks for a second click, because it
   leaves the console open to anyone who can reach it.
@@ -250,6 +364,75 @@ reaches the model. Add to it whenever a new layout carries personal data.
 Runs per day, tokens, cache hit rate, and the per-rule statistics. The cache hit rate
 is the number to watch: identical content is never sent to the model twice, and a rate
 that drops means something is changing prompts or inputs on every run.
+
+
+## What the model reads, and how much of it (Phase 6.11)
+
+**Three lenses, or one.** Stage 8 reads each high-severity finding a second time.
+**Second-opinion lenses** on the Settings screen (or `LLM_VERIFY_LENSES` in `.env`) decides who does the reading, and **Lens calls per run** caps what it may cost. `single`, the default, is the one
+second opinion the tool has always asked for. Naming lenses —
+`delivery,compliance,requirements` — has three readers see the same evidence
+independently, never each other's answers, with code merging them: all agree and the
+finding is verified; any disagreement sends it to a person with each reason shown on
+the evidence panel. A lens can lower confidence and can raise a question from the same
+evidence, which becomes a Review item. It can never make a finding more serious.
+
+They do not talk to each other, deliberately (ADR-034). Three readers over three rounds
+would cost up to nine times the calls, would converge on whichever answer sounded most
+confident, and would leave a record nobody could replay.
+
+Leave it at `single` until the golden-set benchmark compares the three against it. What
+reviewers see should change on evidence. Setting it empty turns verification off, which
+each run then reports as a notice.
+
+**A candidate rule is checked before you see it.** Synthesis drafts a rule, then reads
+it back against the statements it came from: does it say what they said, and does it
+overlap a rule that already exists. At most one redraft follows, and both versions are
+kept on the candidate, so the distance between the model's first attempt and what you
+approve is visible.
+
+**Approving a candidate that overlaps an existing rule asks which.** The overlap names
+the rule it found, and the card offers two buttons in place of one: **Approve — replace
+the older rule** disables the rule it replaces, naming this one as its successor;
+**Approve — keep both** says you have looked and they cover different ground. Overlaps
+are found again at the moment you approve, so a rule created since the draft was made
+is not missed. Overlapping rules accumulate quietly and are very hard to untangle later.
+
+**A shadow rule's findings are yours to see.** Reviewers never see them, which kept the
+review queue clean and left nobody able to say a shadow finding was wrong, so every shadow
+rule showed a dismissal rate of zero. The Rules screen now carries **Shadow findings** on
+any rule in shadow or that has fired: what it found, on which run, and a **Not a real
+problem** button that records a dismissal. That dismissal rate is what decides whether to
+activate the rule (ADR-040).
+
+**Every rule kind now runs in shadow and carries statistics.** A learned compliance rule
+names the configuration path it looks for, runs in shadow like a check, and its findings
+count on the Rules screen; a programme rule put in shadow stays hidden from reviewers.
+**Last fired** is the date of the run the rule fired on, not the date somebody reviewed
+it. A compliance rule with an expected value is checked for that value, not just for the
+path being present.
+
+
+## Asking for a second approver (ADR-036)
+
+Each delivery programme has a **second approver** switch, off by default. With it on, a
+run in that programme cannot be frozen when the reviewer marked **OK** something the
+programme treats as serious — a breach of a rule you called `must`, or a compliance
+rule the configuration does not implement — until somebody else signs.
+
+Three things about it are worth knowing before you turn it on.
+
+- **It is a signature, not a re-review.** The second person is shown what was waved
+  through and says the run can be frozen. Nothing claims they redid the work.
+- **It has to be someone else.** An approval from the reviewer who made those decisions
+  is refused. That is the whole of what the control asserts.
+- **It does nothing while login is off.** Everyone is then the same placeholder
+  account, so a "second" approver is the same person and no affected run could ever be
+  frozen. Rather than deadlock, the rule stands down. If you want this control, turn
+  login on first (see the deployment checklist). A gate nobody can pass is worse than
+  no gate.
+
+Who approved, when, and what they covered are recorded on the frozen report.
 
 ## A weekly routine that keeps the tool honest
 

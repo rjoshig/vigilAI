@@ -66,6 +66,16 @@ The platform team, with the administrator.
       Then **Meaning** run on the real samples: Map each programme, confirm the
       mappings, and let the compiled checks run in shadow through UAT (Phase 6.10);
       a validation guide per report type for the cells that need it (Phase 6.8).
+- [ ] Phase 6.11 landed before UAT: the bulk-OK defect fixed, the finalize gate
+      fail-closed with the attestation, coverage on the review screen and the report,
+      and the benchmark harness reporting precision and recall per finding type.
+      Stage 2's benchmark is that harness run against the manual check. **Phase 6.11 is
+      complete**: the harness reports precision, recall, coverage and model calls per
+      finding type and per programme, and takes a `--lenses` switch so a change to
+      stage 8 is compared rather than argued.
+- [ ] A decision on `LLM_VERIFY_LENSES` for this deployment. It ships at `single`,
+      today's single second opinion. Moving it to the three lenses is one line and
+      should follow the harness's numbers, not precede them (ADR-034).
 - [ ] Masked columns populated from the real DIRT layout. The PII tripwire on.
 - [ ] Retention agreed and recorded as an ADR; security and compliance sign-off on
       retention and PII handling recorded as an ADR.
@@ -115,9 +125,18 @@ queue goes quiet.
       is recorded as an observation or a configuration note, anchored to what they
       were looking at.
 - [ ] The administrator works the queue **twice a week**: rejects with reasons,
-      synthesizes the rest, replays every candidate, and approves into shadow.
-- [ ] Shadow rules reviewed weekly with their fired and dismissal counts. Activate
-      the ones that earn it; narrow the ones that fire on the wrong population.
+      synthesizes the rest, replays every candidate against recent finalized runs (the
+      replay evaluates the rule against their stored reports, so what it says the rule
+      would have done is what it would have done), and approves into shadow.
+- [ ] Shadow rules reviewed weekly on the Rules screen with their fired and dismissal
+      counts **and the findings themselves**, which no reviewer sees. Mark the ones
+      that are not real problems: the dismissal rate is made of those decisions, and it
+      is what says whether a rule has earned activation. Narrow the ones firing on the
+      wrong population.
+- [ ] **Worked examples** added as the seniors correct the model: a section it read
+      wrongly and the requirement it should have found, a mapping they confirmed, a
+      rule they approved. Four per stage, scoped to the programme they came from. An
+      example teaches the model to read; it is never a rule.
 - [ ] Standing instructions written for each programme from what the seniors say is
       always true of it, and artifact guidance written for each report type from
       what they say they look at.
@@ -127,8 +146,9 @@ queue goes quiet.
       check, and lists what is still missing.
 
 **Gate:** the queue has gone quiet, meaning a week with fewer than a handful of new
-observations; the re-run benchmark is at or above stage 2 on every programme; and the
-seniors have signed off.
+observations; every shadow rule has either been activated or narrowed, with its
+dismissal rate looked at rather than assumed; the re-run benchmark is at or above
+stage 2 on every programme; and the seniors have signed off.
 
 ### Stage 4 — General rollout
 

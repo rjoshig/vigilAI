@@ -17,6 +17,7 @@ from typing import Any, Optional
 import sqlalchemy as sa
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from greenlight_ai import scopes
 from greenlight_ai.db.types import Json, Utc, utcnow
 
 __all__ = [
@@ -180,6 +181,17 @@ class Run(Base):
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
 
+    #: What the run checked and what it did not: one entry per requirement with its
+    #: state and the reason (Phase 6.11c). Absence of a finding is not a pass, and
+    #: this is the column that says so.
+    coverage: Mapped[Any] = mapped_column(Json, default=list)
+    #: How many checks produced a verdict against each uploaded report. A report with
+    #: none arrived and was asked nothing.
+    report_coverage: Mapped[Any] = mapped_column(Json, default=list)
+    #: Run-level things the reviewer must be told that are not findings: a second
+    #: opinion that could not be obtained, a programme reading that did not run.
+    notices: Mapped[Any] = mapped_column(Json, default=list)
+
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
     started_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     finished_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
@@ -338,6 +350,9 @@ class Finding(Base):
     reviewed_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     verified: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     verify_agreed: Mapped[Optional[bool]] = mapped_column(sa.Boolean, nullable=True)
+    #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
+    #: the single second opinion.
+    lens_opinions: Mapped[Any] = mapped_column(Json, default=list)
 
     run: Mapped[Run] = relationship(back_populates="findings")
 
@@ -548,6 +563,38 @@ class RunScope(Base):
     standing_instructions: Mapped[str] = mapped_column(sa.Text, default="")
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+    #: Whether a run in this programme needs a **second** person to approve before it
+    #: can be frozen, when the first reviewer waved through something the programme
+    #: treats as serious: a `must` programme-rule breach or a compliance finding
+    #: marked OK. Off by default, and meaningless with login off, since both people
+    #: would be the same placeholder account (ADR-036).
+    second_approver: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+
+
+class SecondApproval(Base):
+    """A second person has looked at what the first waved through (ADR-036).
+
+    Not a re-review. The first reviewer decided; this records that somebody else, who
+    is not them, saw the decisions the programme treats as serious and agreed the run
+    can be frozen. It is the lightest form of the control that is worth anything: a
+    signature from a different person.
+    """
+
+    __tablename__ = "second_approvals"
+    __table_args__ = (sa.UniqueConstraint("run_id", name="uq_second_approval_run"),)
+
+    id: Mapped[int] = _pk()
+    run_id: Mapped[int] = mapped_column(
+        sa.ForeignKey("runs.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    actor: Mapped[str] = mapped_column(sa.String(200), default="")
+    actor_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    #: What they were shown: the finding ids the programme treats as serious that the
+    #: first reviewer marked OK. Stored so the record says what was approved, not
+    #: merely that something was.
+    covered: Mapped[Any] = mapped_column(Json, default=list)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
 class NamedValueRow(Base):
@@ -575,6 +622,10 @@ class CheckDefinitionRow(Base):
     kind: Mapped[str] = mapped_column(sa.String(20), default="expression")
     expression: Mapped[str] = mapped_column(sa.Text, default="")
     instruction: Mapped[str] = mapped_column(sa.Text, default="")
+    #: For a judgment check: the named values the model may see, and nothing else
+    #: (Phase 6.13c, ADR-039). The model judges those values against the instruction;
+    #: code records the verdict.
+    value_names: Mapped[Any] = mapped_column(Json, default=list, nullable=True)
     reasoning: Mapped[str] = mapped_column(sa.Text, default="")
     severity: Mapped[str] = mapped_column(sa.String(20), default="medium")
     scope: Mapped[str] = mapped_column(sa.String(200), default="all")
@@ -634,11 +685,41 @@ class FinalReport(Base):
     pdf_path: Mapped[str] = mapped_column(sa.String(500), default="")
     html_sha256: Mapped[str] = mapped_column(sa.String(64))
     verdict: Mapped[str] = mapped_column(sa.String(20))
+    #: What the person confirmed when they froze it (Phase 6.11d): the coverage
+    #: counts, the unevaluated checks, the shadow rules and definition versions in
+    #: force, and the run's notices. Stored because a report that is evidence of a
+    #: review should say what the reviewer was shown.
+    attestation: Mapped[Any] = mapped_column(Json, default=dict)
     generated_by: Mapped[str] = mapped_column(sa.String(200), default="")
     generated_by_user_id: Mapped[Optional[int]] = mapped_column(
         sa.ForeignKey("users.id"), nullable=True
     )
     generated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class CoverageAcknowledgement(Base):
+    """A person has seen that something was not checked (Phase 6.11d).
+
+    The finalize gate needs one of these for every requirement no report evidenced and
+    every check that could not be evaluated. It is not a decision that the delivery is
+    fine; it is the record that the gap was in front of somebody before the report was
+    frozen.
+    """
+
+    __tablename__ = "coverage_acknowledgements"
+    __table_args__ = (sa.UniqueConstraint("run_id", "target", name="uq_coverage_ack_run_target"),)
+
+    id: Mapped[int] = _pk()
+    run_id: Mapped[int] = mapped_column(sa.ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    #: A requirement id for a coverage gap, a finding id for a check that could not be
+    #: evaluated. One column for both, because the gate asks the same question of each.
+    target: Mapped[str] = mapped_column(sa.String(40))
+    #: ``requirement`` or ``finding``.
+    kind: Mapped[str] = mapped_column(sa.String(20), default="requirement")
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    actor: Mapped[str] = mapped_column(sa.String(200), default="")
+    actor_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
 class TrainingObservation(Base):
@@ -686,7 +767,7 @@ class TrainingObservation(Base):
     customer_name: Mapped[str] = mapped_column(sa.String(200), default="", index=True)
     scope_code: Mapped[str] = mapped_column(sa.String(20), default="")
 
-    #: new · queued · synthesized · rejected · superseded. Forward only.
+    #: new · synthesized · rejected. Forward only.
     status: Mapped[str] = mapped_column(sa.String(20), default="new", index=True)
     status_note: Mapped[str] = mapped_column(sa.Text, default="")
     #: Which candidate it fed, set when it is synthesized. The row itself is untouched.
@@ -729,10 +810,19 @@ class RuleCandidate(Base):
     model_draft: Mapped[Any] = mapped_column(Json, default=dict)
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
-    #: Overlaps with an active rule, found by fingerprint at approval time.
+    #: Overlaps with an existing rule, found by fingerprint at synthesis and found again
+    #: at approval, because a rule created in between is exactly what the gate is for.
     conflicts: Mapped[Any] = mapped_column(Json, default=list)
-    #: What a replay against the golden set and recent runs would have changed.
+    #: What the rule would have done to recent finalized runs, evaluated against
+    #: their stored reports and configuration rather than estimated (Phase 6.13e).
     replay: Mapped[Any] = mapped_column(Json, default=dict)
+    #: What the critique pass said about the first draft (Phase 6.11g): whether it
+    #: said what the statements said, and whether it overlaps a rule that exists.
+    critique: Mapped[Any] = mapped_column(Json, default=dict)
+    #: The rule after at most one redraft, when the critique asked for one. Empty
+    #: when the first draft stood. ``model_draft`` is always the first attempt, so
+    #: the distance between them is visible.
+    redraft: Mapped[Any] = mapped_column(Json, default=dict)
 
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
         sa.ForeignKey("users.id"), nullable=True
@@ -766,7 +856,7 @@ class FieldConstraint(Base):
     report_kinds: Mapped[Any] = mapped_column(Json, default=list)
     severity: Mapped[str] = mapped_column(sa.String(20), default="medium")
     reasoning: Mapped[str] = mapped_column(sa.Text, default="")
-    #: ``all``, a customer name, or ``programme:CODE``. The narrowest that fits.
+    #: A scope token (:mod:`greenlight_ai.scopes`). The narrowest that fits.
     scope: Mapped[str] = mapped_column(sa.String(200), default="all")
 
     #: draft · shadow · active · disabled · deleted. See RuleLifecycle.
@@ -852,6 +942,42 @@ class MeaningEntry(Base):
     confirmed_by: Mapped[str] = mapped_column(sa.String(200), default="")
     confirmed_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
+
+
+class PromptExample(Base):
+    """One worked example an administrator gives the model (Phase 6.13d, ADR-038).
+
+    The built-in examples in :mod:`greenlight_ai.llm.prompts` are the floor; these are
+    added after them, at most four per stage, most specific scope first. The answer was
+    validated against the stage's own schema before this row was written, because an
+    example the schema rejects teaches the model a shape the pipeline cannot parse.
+
+    An example shows; it never instructs. Nothing here is a rule: the rules the engine
+    runs live in the rule tables and are evaluated by code (ADR-001).
+    """
+
+    __tablename__ = "prompt_examples"
+
+    id: Mapped[int] = _pk()
+    #: A stage from :data:`greenlight_ai.llm.examples.EXAMPLE_STAGES`.
+    stage: Mapped[str] = mapped_column(sa.String(40), index=True)
+    #: Where it applies, as a scope token (ADR-037).
+    scope: Mapped[str] = mapped_column(sa.String(120), default=scopes.EVERYWHERE, index=True)
+    #: What the model would be shown, keyed by the stage's field names.
+    given: Mapped[Any] = mapped_column(Json, default=dict)
+    #: The answer to teach, as the stage's schema dumps it.
+    answer: Mapped[Any] = mapped_column(Json, default=dict)
+    #: Why it is here. For the next administrator; never rendered into a prompt.
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    #: ``admin``, or ``promoted:<kind>:<id>`` when it came from a decision a person
+    #: had already confirmed. Nothing is promoted without somebody clicking.
+    origin: Mapped[str] = mapped_column(sa.String(60), default="admin", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=0)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    updated_by: Mapped[str] = mapped_column(sa.String(200), default="")
     updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
 
 

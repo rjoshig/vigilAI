@@ -57,7 +57,10 @@ def run(context: RunContext) -> None:
 
         result = context.client.complete(
             DESCRIBE_PROMPT.system,
-            preamble(context.guidance, CONFIG_KIND) + DESCRIBE_PROMPT.render(block=block.as_text()),
+            preamble(context.guidance, CONFIG_KIND)
+            + DESCRIBE_PROMPT.render_with_examples(
+                context.examples.get("s3_describe", ()), block=block.as_text()
+            ),
             DESCRIBE_PROMPT.schema,
             stage="s3_describe",
             prompt_version=DESCRIBE_PROMPT.version,

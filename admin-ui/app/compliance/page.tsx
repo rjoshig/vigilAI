@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/primitives";
 import { BulkBar } from "@/components/bulk-bar";
 import { DeleteButton } from "@/components/confirm-delete";
-import { ScopePicker, scopeLabel } from "@/components/scope-picker";
+import { EVERYWHERE, ScopePicker, scopeIsComplete, scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
 import type { Category, ComplianceRule, Scope } from "@/lib/types";
 
@@ -47,7 +47,7 @@ export default function CompliancePage() {
     name: "",
     json_path_contains: "",
     reasoning: "",
-    scope: "all",
+    scope: EVERYWHERE,
   });
 
   const load = React.useCallback(async () => {
@@ -77,11 +77,11 @@ export default function CompliancePage() {
         name: draft.name.trim(),
         json_path_contains: draft.json_path_contains.trim(),
         expected_value: true,
-        scope: draft.scope.trim() || "all",
+        scope: draft.scope,
         reasoning: draft.reasoning,
         is_active: true,
       });
-      setDraft({ name: "", json_path_contains: "", reasoning: "", scope: "all" });
+      setDraft({ name: "", json_path_contains: "", reasoning: "", scope: EVERYWHERE });
       await load();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not save the rule.");
@@ -98,7 +98,7 @@ export default function CompliancePage() {
         name: editing.name.trim(),
         json_path_contains: editing.json_path_contains.trim(),
         expected_value: editing.expected_value,
-        scope: editing.scope.trim() || "all",
+        scope: editing.scope,
         reasoning: editing.reasoning,
         is_active: editing.is_active,
       });
@@ -337,7 +337,7 @@ export default function CompliancePage() {
               disabled={
                 !draft.name.trim() ||
                 !draft.json_path_contains.trim() ||
-                (draft.scope !== "all" && !draft.scope.trim()) ||
+                !scopeIsComplete(draft.scope) ||
                 busy
               }
               onClick={() => void addRule()}

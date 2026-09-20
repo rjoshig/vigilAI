@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from greenlight_ai.checks.named_values import NamedValue, resolve
 from greenlight_ai.db import models
+from greenlight_ai import scopes
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.meaning.samples import samples_in_scope
 from greenlight_ai.parsers.base import ParseError
@@ -31,7 +32,7 @@ MEANING_ORIGIN: Final[str] = "meaning"
 
 
 def _scope_token(scope_code: str) -> str:
-    return f"programme:{scope_code}" if scope_code else "all"
+    return (scopes.for_programme(scope_code) if scope_code else scopes.everywhere()).token
 
 
 def _slug(scope_code: str) -> str:

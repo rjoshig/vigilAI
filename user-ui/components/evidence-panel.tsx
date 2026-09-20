@@ -8,20 +8,41 @@
  * control, so none is rendered.
  */
 
-import { FileJson, FileText, Sheet, X } from "lucide-react";
+import { FileJson, FileText, Lightbulb, Sheet, X } from "lucide-react";
 
+import { TrainAiTag } from "@/components/train-ai-tag";
 import { Badge, Button } from "@/components/ui/primitives";
-import { FINDING_LABEL, LEG_LABEL, SEVERITY_LABEL, SEVERITY_TONE } from "@/lib/display";
+import {
+  FINDING_LABEL,
+  LEG_LABEL,
+  ORIGIN_LABEL,
+  SEVERITY_LABEL,
+  SEVERITY_TONE,
+} from "@/lib/display";
 import type { Finding } from "@/lib/types";
 
 export interface EvidencePanelProps {
   finding: Finding | null;
   onClose: () => void;
+  /**
+   * Record what the reviewer knows about this finding, from the place they form that
+   * opinion (Phase 6.13b). Absent when Train AI mode is off.
+   */
+  onObserve?: ((finding: Finding) => void) | null;
 }
 
-export function EvidencePanel({ finding, onClose }: EvidencePanelProps) {
+/** How each lens is named to a reviewer. Matches the server's labels. */
+const LENS_LABEL: Record<string, string> = {
+  single: "Second opinion",
+  delivery: "Delivery",
+  compliance: "Compliance",
+  requirements: "Requirements owner",
+};
+
+export function EvidencePanel({ finding, onClose, onObserve }: EvidencePanelProps) {
   if (!finding) return null;
   const { evidence } = finding;
+  const origin = finding.origin ?? "built_in";
 
   return (
     <>
@@ -37,9 +58,23 @@ export function EvidencePanel({ finding, onClose }: EvidencePanelProps) {
             <div className="mono text-xs text-muted-foreground">{finding.finding_id}</div>
             <h3 className="mt-0.5 text-sm font-semibold">{finding.title}</h3>
           </div>
-          <Button variant="ghost" size="icon" aria-label="Close evidence" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {onObserve ? (
+              <Button
+                variant="outline"
+                size="sm"
+                title="Turn what you know into something the tool can check"
+                onClick={() => onObserve(finding)}
+                data-testid="drawer-observe"
+              >
+                <Lightbulb className="h-4 w-4" /> What should this check?
+                <TrainAiTag />
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="icon" aria-label="Close evidence" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -52,6 +87,16 @@ export function EvidencePanel({ finding, onClose }: EvidencePanelProps) {
           </div>
 
           <p className="text-xs leading-relaxed text-muted-foreground">{finding.detail}</p>
+
+          {origin !== "built_in" ? (
+            <p className="rounded-md border bg-muted/40 px-2.5 py-1.5 text-[0.7rem]">
+              <span className="font-semibold">{ORIGIN_LABEL[origin] ?? origin}.</span>{" "}
+              {finding.rule_name ? <span>Rule: {finding.rule_name}</span> : null}
+              {finding.rule_summary ? (
+                <span className="mono text-muted-foreground"> · {finding.rule_summary}</span>
+              ) : null}
+            </p>
+          ) : null}
 
           {evidence.osl_text ? (
             <section>
@@ -94,7 +139,35 @@ export function EvidencePanel({ finding, onClose }: EvidencePanelProps) {
             </section>
           ) : null}
 
-          {finding.verified ? (
+          {finding.lens_opinions && finding.lens_opinions.length > 1 ? (
+            <section>
+              <h3 className="mb-1 text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                How it was read
+              </h3>
+              <p className="mb-1.5 text-[0.7rem] text-muted-foreground">
+                Each reader saw the same evidence and none saw the others. Code merged what they
+                said.
+              </p>
+              <ul className="space-y-1">
+                {finding.lens_opinions.map((opinion) => (
+                  <li key={opinion.lens} className="flex items-start gap-2 text-[0.7rem]">
+                    <Badge
+                      tone={
+                        !opinion.answered ? "muted" : opinion.agreed ? "success" : "destructive"
+                      }
+                    >
+                      {LENS_LABEL[opinion.lens] ?? opinion.lens}
+                    </Badge>
+                    <span>
+                      {!opinion.answered
+                        ? "did not answer"
+                        : `${opinion.agreed ? "agreed" : "disagreed"} — ${opinion.reason || "no reason given"}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : finding.verified ? (
             <p className="text-[0.7rem] text-muted-foreground">
               {finding.verify_agreed
                 ? "A second opinion agreed with this finding."

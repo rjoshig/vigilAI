@@ -4,10 +4,12 @@
 
 import {
   BookMarked,
+  BookOpen,
   ClipboardCheck,
   Gauge,
   GraduationCap,
   Layers,
+  Lightbulb,
   Moon,
   LogOut,
   Scale,
@@ -37,6 +39,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { href: "/tell", label: "Tell the tool", icon: Lightbulb },
   { href: "/artifacts", label: "Artifact types", icon: BookMarked },
   { href: "/scopes", label: "Delivery programmes", icon: Layers },
   { href: "/meaning", label: "Meaning", icon: Waypoints },
@@ -44,6 +47,7 @@ const NAV: NavItem[] = [
   { href: "/compliance", label: "Compliance rules", icon: ShieldCheck },
   { href: "/rules", label: "Rules", icon: Scale },
   { href: "/training", label: "Training", icon: GraduationCap },
+  { href: "/examples", label: "Examples", icon: BookOpen },
   { href: "/reference", label: "Reference data", icon: Settings },
   { href: "/usage", label: "Usage", icon: Gauge },
   { href: "/users", label: "Users", icon: UserCog },

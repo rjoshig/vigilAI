@@ -90,6 +90,7 @@ describe("the admin API client", () => {
       kind: "expression",
       expression: "billing_count <= delivered_count",
       instruction: "",
+      value_names: [],
       reasoning: "Billing must not exceed delivered.",
       severity: "high",
       scope: "all",
@@ -98,6 +99,30 @@ describe("the admin API client", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body).expression).toBe("billing_count <= delivered_count");
+  });
+
+  it("sends a worked example, answer and all", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, stage: "s2_extract" }));
+    await api.saveExample({
+      stage: "s2_extract",
+      scope: "everywhere",
+      given: { section: "9 Channel\nDeliver by SFTP only." },
+      answer: { requirements: [{ req_type: "other" }] },
+      note: "",
+      is_active: true,
+      sort_order: 0,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/examples");
+    expect(JSON.parse(init.body).answer.requirements[0].req_type).toBe("other");
+  });
+
+  it("promotes a decision somebody already confirmed", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 2, stage: "s4_trace" }));
+    await api.promoteExample({ source: "meaning", id: 7 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/examples/promote");
+    expect(JSON.parse(init.body)).toEqual({ source: "meaning", id: 7 });
   });
 
   it("toggles a check with a query parameter", async () => {
@@ -316,6 +341,18 @@ describe("the admin API client", () => {
       jsonResponse({ detail: "observation 3 is already synthesized" }, 409)
     );
     await expect(api.synthesize([3])).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("sends one statement and its scope to the front door", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ surface: "check", candidate: null }));
+    await api.tellTheTool("Billing count must never exceed the delivered count.", "everywhere");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/front-door");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      statement: "Billing count must never exceed the delivered count.",
+      scope: "everywhere",
+    });
   });
 
   it("lists draft candidates by default", async () => {

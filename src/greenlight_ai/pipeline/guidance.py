@@ -19,9 +19,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Sequence
 
-__all__ = ["guide_block", "RunGuidance", "preamble", "MAX_CONTEXT_CHARS"]
+__all__ = [
+    "guide_block",
+    "RunGuidance",
+    "preamble",
+    "MAX_BLOCK_CHARS",
+    "MAX_CONTEXT_CHARS",
+]
 
 _LOG: Final = logging.getLogger(__name__)
 
@@ -29,6 +35,13 @@ _LOG: Final = logging.getLogger(__name__)
 #: really describing a requirement, which belongs in the OSL or in a check, and a
 #: prompt that is mostly preamble reads worse than one with none.
 MAX_CONTEXT_CHARS: Final[int] = 1500
+
+#: The ceiling on everything the administrator contributes to one prompt, across all
+#: its fields (Phase 6.11e). ``MAX_CONTEXT_CHARS`` caps each field on its own, which
+#: left the total unbounded in the number of configuration notes: ten notes were ten
+#: times the cap. A prompt that is mostly preamble reads worse than one with none, so
+#: the block is trimmed as a whole and the model is told what was left out.
+MAX_BLOCK_CHARS: Final[int] = 6000
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +130,41 @@ def _clip(text: str) -> str:
     return f"{cut}…"
 
 
+def _fit(lines: Sequence[str], what: str, bullet: bool = True) -> str:
+    """Render lines within the whole-block ceiling.
+
+    The oldest lines go first when there are too many, because the newest note is the
+    one someone wrote most recently about this configuration. What was dropped is said
+    out loud rather than silently omitted: a model told nine of ten notes should not
+    believe it has ten.
+
+    Args:
+        lines: The lines to render, oldest first.
+        what: What a dropped line is called, for the note that replaces it.
+        bullet: Whether to prefix each line with a dash.
+
+    Returns:
+        The rendered block.
+    """
+    rendered = [f"- {line}" if bullet else line for line in lines]
+    total = sum(len(line) + 1 for line in rendered)
+    if total <= MAX_BLOCK_CHARS:
+        return "\n".join(rendered)
+
+    kept: list[str] = []
+    used = 0
+    for line in reversed(rendered):
+        if used + len(line) + 1 > MAX_BLOCK_CHARS:
+            break
+        kept.append(line)
+        used += len(line) + 1
+    kept.reverse()
+    dropped = len(rendered) - len(kept)
+    _LOG.info("guidance block trimmed: %d of %d %s(s) dropped", dropped, len(rendered), what)
+    marker = f"({dropped} older {what}(s) omitted to keep this prompt short.)"
+    return "\n".join([f"- {marker}" if bullet else marker, *kept])
+
+
 def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
     """Build the context block that goes above a prompt's task.
 
@@ -168,7 +216,7 @@ def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
 
     return (
         "Context, which is background rather than a requirement. Requirements come only "
-        "from the document itself.\n" + "\n".join(f"- {line}" for line in lines) + "\n\n"
+        "from the document itself.\n" + _fit(lines, "context line") + "\n\n"
     )
 
 
@@ -185,7 +233,8 @@ def guide_block(guidance: RunGuidance | None) -> str:
     """
     if guidance is None or not guidance.validation_guides:
         return ""
-    lines = ["Background from the administrator. Read it for meaning; do not compare values."]
+    header = "Background from the administrator. Read it for meaning; do not compare values."
+    lines: list[str] = []
     for guide in guidance.validation_guides:
         lines.extend(guide)
-    return "\n".join(lines) + "\n\n"
+    return header + "\n" + _fit(lines, "guide line", bullet=False) + "\n\n"

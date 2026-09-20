@@ -8,11 +8,14 @@ changing what the pipeline compares.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+from greenlight_ai import scopes
 
 __all__ = [
+    "ScopeToken",
     "NewRunOptions",
     "ArtifactSlot",
     "ScopeOption",
@@ -20,6 +23,8 @@ __all__ = [
     "RunDetail",
     "StageInfo",
     "FindingOut",
+    "RunRuleOut",
+    "RunRulesOut",
     "FindingPatch",
     "RuleOut",
     "TraceOut",
@@ -34,6 +39,27 @@ __all__ = [
     "CloneResult",
     "RecheckResult",
 ]
+
+
+def _canonical_scope(value: object) -> object:
+    """Read any stored or submitted scope form and hand back the canonical token.
+
+    The wire is where the vocabulary is unified (ADR-037): an older form still arrives
+    and is understood, and what goes back out is always the one token, so a console
+    never has to know that four shapes were ever stored.
+
+    Args:
+        value: Whatever arrived on the wire.
+
+    Returns:
+        The canonical token for a string, and the value untouched for anything else,
+        so pydantic reports the type error rather than this function hiding it.
+    """
+    return scopes.token(value) if isinstance(value, str) else value
+
+
+#: A scope on the wire: any form in, the canonical token out.
+ScopeToken = Annotated[str, BeforeValidator(_canonical_scope)]
 
 
 class StageInfo(BaseModel):
@@ -95,12 +121,120 @@ class RunDetail(RunSummary):
     #: The configuration notes in force when the run was submitted (ADR-024).
     config_notes: list[str] = Field(default_factory=list)
     can_finalize: bool = False
+    #: Why not, when ``can_finalize`` is false: one sentence naming what is
+    #: outstanding (Phase 6.11d). Empty when the gate is satisfied.
+    finalize_blocked_by: str = ""
     finalized: bool = False
     #: Whether this deployment can render a PDF at all. False when the optional [pdf]
     #: extra is not installed, which is a deployment fact, not a per-run one.
     pdf_available: bool = False
     stages: list[StageInfo] = Field(default_factory=list)
     files: dict[str, str] = Field(default_factory=dict)
+
+
+class RequirementCoverageOut(BaseModel):
+    """How far one requirement got (Phase 6.11c)."""
+
+    rule_id: str
+    req_type: str = ""
+    state: str
+    osl_ref: str = ""
+    summary: str = ""
+    reason: str = ""
+    #: Whether a person has recorded that they saw this gap.
+    acknowledged: bool = False
+    acknowledged_by: str = ""
+    acknowledgement_note: str = ""
+
+
+class ReportCoverageOut(BaseModel):
+    """How many checks touched one uploaded report."""
+
+    kind: str
+    checks_applied: int = 0
+
+
+class UnevaluatedCheckOut(BaseModel):
+    """A check that was defined and could not be run."""
+
+    finding_id: str
+    title: str = ""
+    acknowledged: bool = False
+    acknowledged_by: str = ""
+    acknowledgement_note: str = ""
+
+
+class CoverageOut(BaseModel):
+    """What the run checked and what it did not."""
+
+    requirements: list[RequirementCoverageOut] = Field(default_factory=list)
+    reports: list[ReportCoverageOut] = Field(default_factory=list)
+    unevaluated: list[UnevaluatedCheckOut] = Field(default_factory=list)
+    notices: list[str] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+    #: Requirement ids and finding ids still waiting for an acknowledgement.
+    outstanding: list[str] = Field(default_factory=list)
+    #: Empty for a run processed before coverage existed, which the screen says
+    #: rather than showing an empty panel.
+    reason: str = ""
+
+
+class SecondApprovalPayload(BaseModel):
+    """A second person signing off what the first waved through (ADR-036)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str = ""
+
+
+class SecondApprovalOut(BaseModel):
+    """What the four-eyes rule is waiting on, and who has signed."""
+
+    #: Whether this run's programme asks for a second approver at all.
+    required: bool = False
+    #: Serious findings the reviewer marked OK. Empty when nothing was waved through.
+    findings: list[str] = Field(default_factory=list)
+    #: Whether the signature that is needed is still outstanding.
+    outstanding: bool = False
+    approved_by: str = ""
+    approved_at: Optional[dt.datetime] = None
+    note: str = ""
+
+
+class AcknowledgePayload(BaseModel):
+    """Recording that a person has seen a gap."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    targets: list[str] = Field(min_length=1)
+    note: str = ""
+
+
+class ExploreSampleOut(BaseModel):
+    """One sample a reviewer can look at (Phase 6.1e).
+
+    Deliberately smaller than the admin console's view: a reviewer is choosing
+    something to point at, not maintaining the catalog.
+    """
+
+    id: int
+    label: str = ""
+    filename: str = ""
+    sheets: list[str] = Field(default_factory=list)
+    notes: str = ""
+    #: The programme it belongs to; empty for a global sample.
+    scope_code: str = ""
+
+
+class ExploreArtifactOut(BaseModel):
+    """An artifact type and the samples stored for it."""
+
+    key: str
+    label: str = ""
+    #: ``osl``, ``config`` or a report kind. It decides what a preview looks like:
+    #: sections, JSON paths, or cells.
+    kind: str = ""
+    samples: list[ExploreSampleOut] = Field(default_factory=list)
 
 
 class FindingOut(BaseModel):
@@ -123,6 +257,17 @@ class FindingOut(BaseModel):
     review_note: str = ""
     verified: bool = False
     verify_agreed: Optional[bool] = None
+    #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
+    #: the single second opinion.
+    lens_opinions: list[dict[str, Any]] = Field(default_factory=list)
+    #: Where the finding came from (Phase 6.13b): ``built_in`` when code produced it
+    #: from the OSL and the configuration alone, else the origin of the rule behind it —
+    #: ``admin`` · ``guide`` · ``meaning`` · ``learned``. A reviewer deserves to know
+    #: that a finding exists because a colleague wrote a sentence.
+    origin: str = "built_in"
+    rule_name: str = ""
+    rule_summary: str = ""
+    run_id: int = 0
 
 
 class FindingPatch(BaseModel):
@@ -373,3 +518,28 @@ class DriftOut(BaseModel):
     config: list[DriftConfigChange] = Field(default_factory=list)
     previous_config_version: Optional[int] = None
     config_version: Optional[int] = None
+    #: OSL references a report evidenced last time and evidences no longer.
+    newly_unchecked: list[str] = Field(default_factory=list)
+
+
+class RunRuleOut(BaseModel):
+    """One rule that touched a run (Phase 6.13b)."""
+
+    rule_ref: str
+    kind: str
+    name: str
+    summary: str = ""
+    origin: str = "admin"
+    state: str = "active"
+    #: How many findings it produced on this run. Zero for a shadow rule, whose
+    #: findings are counted for the administrator and shown to nobody (ADR-021).
+    findings: int = 0
+    shadow: bool = False
+
+
+class RunRulesOut(BaseModel):
+    """The rules applied to a run, as a reviewer may see them."""
+
+    applied: list[RunRuleOut] = Field(default_factory=list)
+    #: Rules that ran in shadow on this run, named and nothing more.
+    running_silently: list[RunRuleOut] = Field(default_factory=list)

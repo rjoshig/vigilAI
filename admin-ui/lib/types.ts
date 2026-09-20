@@ -114,6 +114,13 @@ export interface ScopeIn {
   keywords: string[];
   is_active: boolean;
   sort_order: number;
+  /**
+   * Whether a run in this programme needs a second person to approve before it can be
+   * frozen, when the reviewer waved through something this programme treats as
+   * serious. Off by default, and inert while login is off, because both people would
+   * then be the same placeholder account (ADR-036).
+   */
+  second_approver: boolean;
 }
 
 export interface Scope extends ScopeIn {
@@ -176,6 +183,8 @@ export interface CheckIn {
   kind: CheckKind;
   expression: string;
   instruction: string;
+  /** For a judgment check: the named values the model may see, and nothing else. */
+  value_names: string[];
   reasoning: string;
   severity: Severity;
   scope: string;
@@ -363,7 +372,8 @@ export interface ProviderTestResult {
 
 /* ------------------------------------------------- The training loop (ADR-021) */
 
-export type AnchorKind = "report_cell" | "report_field" | "osl_section" | "config_path" | "finding";
+export type AnchorKind =
+  "report_cell" | "report_field" | "osl_section" | "config_path" | "finding" | "rule" | "run";
 
 /**
  * What an observation points at. The anchor is what makes reliable synthesis
@@ -426,6 +436,8 @@ export interface Observation {
 export interface CandidateConflict {
   rule_kind: string;
   id: number;
+  /** What the overlapping rule is called, so the choice is between named things. */
+  name: string;
   summary: string;
   scope: string;
   state: string;
@@ -434,8 +446,18 @@ export interface CandidateConflict {
 
 /** What a candidate would have changed, had it been running already. */
 export interface CandidateReplay {
+  /** `running` while the worker job is queued; absent once the result has landed. */
+  status?: string;
+  /** True when the rule was evaluated against the runs, rather than estimated. */
+  evaluated?: boolean;
   runs_examined?: number;
-  related_findings?: number;
+  runs_available?: number;
+  /** Runs whose stored files could not be read back. */
+  unreadable?: number;
+  /** The runs the rule would have raised a finding on. */
+  would_fire_on?: number[];
+  /** A few of the things it would have said, one per run. */
+  examples?: string[];
   previously_dismissed?: number;
   note?: string;
 }
@@ -461,6 +483,24 @@ export interface Candidate {
   created_at: string;
 }
 
+/** What the front door made of one sentence (Phase 6.12b). */
+export interface FrontDoorResult {
+  /** field_constraint · check · compliance_rule · background · unclear. */
+  surface: string;
+  /** Why the tool read it that way, in one sentence. */
+  reason: string;
+  confidence: number;
+  /** What the tool needs to know, when it could not place the sentence. */
+  question: string;
+  /** What to do next when nothing was created, or what to notice when it was. */
+  note: string;
+  /** The candidate, indistinguishable from one the training queue produced. */
+  candidate: Candidate | null;
+  observation_id: number | null;
+  /** The shape synthesis drafted, which is usually the surface. */
+  drafted_as: string;
+}
+
 /** What an administrator decides about a candidate, beyond approve or reject. */
 export interface CandidateApproval {
   note?: string;
@@ -468,6 +508,12 @@ export interface CandidateApproval {
   scope?: string;
   /** Straight to active rather than into shadow. Rarely the right answer. */
   activate_now?: boolean;
+  /**
+   * What to do about an overlap with a rule that already exists: replace it, or keep
+   * both because they cover different ground. Required when the candidate has
+   * conflicts; the API refuses without it (Phase 6.11g).
+   */
+  resolution?: "supersede" | "keep_both";
 }
 
 export type RuleState = "active" | "shadow" | "disabled" | "deleted" | "draft";
@@ -508,7 +554,7 @@ export interface RuleStateChange {
 }
 
 /** Which definitions keep ten versions with revert (ADR-029). */
-export type VersionKind = "artifact-type" | "programme" | "meaning";
+export type VersionKind = "artifact-type" | "programme" | "meaning" | "example";
 
 /** One retained version of an artifact type or a programme's rule set. */
 export interface DefinitionVersion {
@@ -647,4 +693,93 @@ export interface ProposeResult {
   skipped_confirmed: number;
   calls: number;
   cached: number;
+}
+
+/** A finding a shadow rule produced, as the administrator sees it (ADR-040). */
+export interface ShadowFinding {
+  id: number;
+  run_id: number;
+  finding_id: string;
+  type: string;
+  severity: string;
+  title: string;
+  detail: string;
+  review_status: string;
+  review_note: string;
+  rule_ref: string;
+}
+
+/**
+ * One worked example an administrator gives the model (Phase 6.13d, ADR-038).
+ *
+ * The built-in examples in the prompts are the floor; these are added after them, at
+ * most four per stage, narrowest scope first. The answer is validated against the
+ * stage's own schema before it is stored, because an example the schema rejects teaches
+ * a shape the pipeline cannot parse. An example shows; it is never a rule.
+ */
+export interface PromptExampleIn {
+  stage: string;
+  scope: string;
+  /** What the model would be shown, keyed by the stage's field names. */
+  given: Record<string, string>;
+  /** A good answer, in the stage's own JSON shape. */
+  answer: Record<string, unknown>;
+  note: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface PromptExample extends PromptExampleIn {
+  id: number;
+  /** `admin`, or `promoted:<kind>:<id>` when somebody promoted a decision. */
+  origin: string;
+  created_by: string;
+  created_at: string;
+  updated_by: string;
+  updated_at: string;
+}
+
+/** One part of what a stage shows the model. */
+export interface ExampleField {
+  name: string;
+  label: string;
+  shape: "line" | "block" | "tag";
+}
+
+/** An example that ships inside the prompt, shown read-only above the library. */
+export interface BuiltInExample {
+  number: number;
+  shown: string;
+  answer: string;
+}
+
+/** A stage an administrator may add examples to. */
+export interface ExampleStage {
+  stage: string;
+  label: string;
+  description: string;
+  fields: ExampleField[];
+  built_in: BuiltInExample[];
+  max_examples: number;
+}
+
+/** A requirement a reviewer rewrote, offered as an extraction example (ADR-038). */
+export interface Correction {
+  run_id: number;
+  rule_id: string;
+  customer: string;
+  source_text: string;
+  summary: string;
+  edited_by: string;
+  edited_at: string | null;
+  promoted: boolean;
+}
+
+/** Turn a decision a person already confirmed into a worked example. */
+export interface PromoteExample {
+  source: "meaning" | "requirement" | "candidate";
+  id: number;
+  rule_id?: string;
+  scope?: string;
+  note?: string;
 }

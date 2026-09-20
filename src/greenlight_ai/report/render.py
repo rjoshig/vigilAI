@@ -191,6 +191,9 @@ def render_report(
     generated_by: str = "",
     now: dt.datetime | None = None,
     drift: Drift | None = None,
+    attestation: dict[str, Any] | None = None,
+    submitted_by: str = "",
+    reviewers: Sequence[str] = (),
 ) -> RenderedReport:
     """Render the frozen report.
 
@@ -203,6 +206,16 @@ def render_report(
         calls: Its model-call records.
         generated_by: Who finalized it.
         now: The generation time; injectable so a test can assert a stable hash.
+        drift: What changed since the previous finalized run (ADR-030).
+        submitted_by: Who submitted the run. A report that is evidence of a review
+            should say who asked for it and who reviewed it (Phase 6.2d), and the two
+            are often not the same person.
+        reviewers: Who decided the findings, each named once. Empty when nobody did,
+            which the report says rather than implying a review that never happened.
+        attestation: What the person confirmed when they froze it (Phase 6.11d): the
+            coverage counts, the gaps they acknowledged, the shadow rules and
+            definition versions in force, and the run's notices. A report that is
+            evidence of a review should say what the reviewer was shown.
 
     Returns:
         The document and its hash.
@@ -262,7 +275,10 @@ def render_report(
             verdict=verdict_for(findings),
             generated_at=generated,
             generated_by=generated_by,
+            submitted_by=submitted_by,
+            reviewers=list(reviewers),
             drift=drift,
+            attestation=attestation or {},
             stats={
                 "duration": _duration(stages),
                 "calls": len(calls),

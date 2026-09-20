@@ -22,9 +22,35 @@ import {
   PageHeader,
   Skeleton,
 } from "@/components/ui/primitives";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { CoverageCard } from "@/components/coverage-card";
 import { api, ApiError } from "@/lib/api";
-import type { RunDetail } from "@/lib/types";
+import type { Coverage, RunDetail } from "@/lib/types";
 import { saveBlob } from "@/lib/utils";
+
+/**
+ * What the person is confirming when they freeze the report (Phase 6.11d).
+ *
+ * The same facts the API stores on the report, said in one paragraph: freezing is
+ * permanent, this is what was found, and this is what was never checked.
+ */
+function attestation(run: RunDetail, coverage: Coverage | null): string {
+  const findings =
+    `${run.high} high, ${run.medium} medium, ${run.low} low and ${run.review} review ` +
+    `findings were raised, and every high and review one has a decision.`;
+  if (!coverage || coverage.reason) {
+    return `This freezes run VR-${String(run.id).padStart(4, "0")}: the report is stored once, never regenerated, and the findings can no longer be re-reviewed. ${findings}`;
+  }
+  const counts = coverage.counts;
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  const unevidenced = (counts.traced_unchecked ?? 0) + (counts.manual ?? 0);
+  const gaps =
+    unevidenced > 0
+      ? ` ${counts.checked ?? 0} of ${total} requirements were checked against a report; ${unevidenced} that no report evidenced have been acknowledged.`
+      : ` All ${total} requirements were checked against a report.`;
+  const notices = coverage.notices.length > 0 ? ` ${coverage.notices.length} notice(s) apply.` : "";
+  return `This freezes run VR-${String(run.id).padStart(4, "0")}: the report is stored once, never regenerated, and the findings can no longer be re-reviewed. ${findings}${gaps}${notices}`;
+}
 
 export default function ReportPage() {
   const params = useParams<{ id: string }>();
@@ -35,6 +61,8 @@ export default function ReportPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
+  const [confirming, setConfirming] = React.useState(false);
+  const [coverage, setCoverage] = React.useState<Coverage | null>(null);
 
   const load = React.useCallback(async () => {
     try {
@@ -48,6 +76,13 @@ export default function ReportPage() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  React.useEffect(() => {
+    api
+      .getCoverage(runId)
+      .then(setCoverage)
+      .catch(() => setCoverage(null));
+  }, [runId, run?.can_finalize]);
 
   /**
    * Download the PDF through the client so a failure is shown rather than saved.
@@ -75,6 +110,7 @@ export default function ReportPage() {
     setBusy(true);
     try {
       await api.finalize(runId);
+      setConfirming(false);
       await load();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not generate the final report.");
@@ -147,16 +183,19 @@ export default function ReportPage() {
         </div>
       ) : null}
 
+      {!run.finalized ? <CoverageCard runId={runId} onChange={() => void load()} /> : null}
+
       {!run.finalized ? (
         <Card>
           <CardContent className="flex flex-col items-start gap-3 p-6">
             <h2 className="text-base font-semibold">This run has not been finalized</h2>
             <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
               The report is generated once from the reviewed findings, stored, and never
-              regenerated. Every high-severity finding needs a decision first.
+              regenerated. Every high and review finding needs a decision, and every requirement no
+              report evidenced needs acknowledging, first.
               {run.can_finalize
-                ? " They all have one, so it can be generated now."
-                : " Some still do not have one."}
+                ? " That is all done, so it can be generated now."
+                : ` Not yet: ${run.finalize_blocked_by}`}
             </p>
             <div className="flex gap-2">
               <Link href={`/runs/${runId}`}>
@@ -164,7 +203,7 @@ export default function ReportPage() {
                   Back to review
                 </Button>
               </Link>
-              <Button disabled={!run.can_finalize || busy} onClick={() => void finalize()}>
+              <Button disabled={!run.can_finalize || busy} onClick={() => setConfirming(true)}>
                 <Lock className="h-4 w-4" />
                 {busy ? "Generating…" : "Generate final report"}
               </Button>
@@ -188,6 +227,16 @@ export default function ReportPage() {
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirming}
+        title="Generate the final report?"
+        detail={attestation(run, coverage)}
+        confirmLabel="Yes, generate it"
+        busy={busy}
+        onConfirm={finalize}
+        onCancel={() => setConfirming(false)}
+      />
     </>
   );
 }
