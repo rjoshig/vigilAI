@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.10.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.11 (c–h).
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -250,6 +250,37 @@ reaches the model. Add to it whenever a new layout carries personal data.
 Runs per day, tokens, cache hit rate, and the per-rule statistics. The cache hit rate
 is the number to watch: identical content is never sent to the model twice, and a rate
 that drops means something is changing prompts or inputs on every run.
+
+
+## What the model reads, and how much of it (Phase 6.11)
+
+**Three lenses, or one.** Stage 8 reads each high-severity finding a second time.
+`LLM_VERIFY_LENSES` decides who does the reading. `single`, the default, is the one
+second opinion the tool has always asked for. Naming lenses —
+`delivery,compliance,requirements` — has three readers see the same evidence
+independently, never each other's answers, with code merging them: all agree and the
+finding is verified; any disagreement sends it to a person with each reason shown on
+the evidence panel. A lens can lower confidence and can raise a question from the same
+evidence, which becomes a Review item. It can never make a finding more serious.
+
+They do not talk to each other, deliberately (ADR-034). Three readers over three rounds
+would cost up to nine times the calls, would converge on whichever answer sounded most
+confident, and would leave a record nobody could replay.
+
+Leave it at `single` until the golden-set benchmark compares the three against it. What
+reviewers see should change on evidence. Setting it empty turns verification off, which
+each run then reports as a notice.
+
+**A candidate rule is checked before you see it.** Synthesis drafts a rule, then reads
+it back against the statements it came from: does it say what they said, and does it
+overlap a rule that already exists. At most one redraft follows, and both versions are
+kept on the candidate, so the distance between the model's first attempt and what you
+approve is visible.
+
+**Approving a candidate that overlaps an existing rule now asks which.** **Supersede**
+disables the rule it replaces, naming this one as its successor; **keep both** says you
+have looked and they cover different ground. Approve alone is refused, because
+overlapping rules accumulate quietly and are very hard to untangle later.
 
 ## A weekly routine that keeps the tool honest
 

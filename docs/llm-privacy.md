@@ -11,6 +11,7 @@ ADR-003, ADR-004, ADR-005.
 | OSL text (headings, sentences, criteria tables) | Sample rows from the DIRT sample tab, masked or not |
 | Config JSON blocks and their JSON paths | Any cell value from a report that is not an aggregate (min, max, mean, count, null count, distinct keys) |
 | Canonical rules, trace pairs, findings (field names, thresholds, aggregate stats) | Customer identifiers beyond what the OSL itself contains |
+| A lens's finding and evidence; the list of requirements no report evidenced, as text and references; a drafted rule with the statements it came from | Any report value or configuration value not already in a finding's evidence |
 | Named values and the reasoning behind an admin check | Uploaded file contents verbatim |
 
 The model never needs sample rows to do its job. If a stage seems to need one, that is a

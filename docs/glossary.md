@@ -51,6 +51,17 @@ where a term maps to code, the subpackage is named.
 | **Judgment check** | A check a formula cannot express: an instruction + examples; the LLM sees only the named values and returns pass / fail / review. Use sparingly. |
 | **Masked columns** | The admin-maintained list of sensitive columns masked at parse time. |
 
+### Coverage and lenses (Phase 6.11)
+
+| Term | Meaning |
+| --- | --- |
+| **Coverage** | What a run actually checked: one state per requirement — **checked** (a report check compared it), **traced but unchecked** (it reached the configuration and no report evidenced it), **untraced** (nothing implements it), **verified by hand** (free text, or a check that could not be evaluated) — plus how many checks touched each uploaded report. Code, no model (ADR-035). |
+| **Acknowledgement** | A person's record that they saw a coverage gap before the report was frozen. Not a decision that the delivery is fine; the gate wants one for every unevidenced requirement and every check that could not be evaluated. |
+| **Attestation** | What a reviewer confirms when they freeze a report: the coverage counts, the gaps acknowledged, the shadow rules and definition versions in force, and the run's notices. Stored on the report and rendered in it. |
+| **Notice** | Something a run must tell the reviewer that is not a finding: a second opinion that could not be obtained, a programme reading that did not run, a call cap reached. |
+| **Lens** | One of stage 8's readers — delivery, compliance, requirements owner — each given the same finding and evidence and none given another's answer. Code merges them. A lens changes confidence, never severity (ADR-034). |
+| **Critique pass** | One call that reads a drafted rule back against the statements it came from, allowing at most one redraft. Authoring time, once per candidate (Phase 6.11g). |
+
 ## Runs and operations
 
 | Term | Meaning |

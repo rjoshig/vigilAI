@@ -990,3 +990,105 @@ OSL type.
 **Consequences:** An administrator defines what a delivery means once per programme
 from real samples, on the target machine, without a developer. The model's role is
 bounded to reading; nothing counts until a person confirms and then activates.
+
+## ADR-034 — Several lenses read a finding independently; code merges them, and no lens grades
+
+**Status:** accepted 2026-09-20 (user decision, Phase 6.11e)
+
+**Context:** The question put to this phase was whether two or three agents with
+different roles, given the same submission, should discuss it for a few rounds before
+the tool answers. The instinct behind it is right: different lenses catch different
+classes of error. A delivery lead reads a report asking whether the output matches what
+was configured; a compliance officer asks which obligation a discrepancy touches; the
+requirements owner asks whether this is what the specification asked for. One prompt
+cannot hold all three stances at once, and stage 8's single second opinion has held one.
+
+**Decision:** Build the lenses. Leave out the conversation.
+
+1. **Independent readers, merged by code.** Each lens receives the finding and its
+   evidence and nothing else, answers the same schema, and never sees another lens's
+   answer. Code merges: every answering lens agrees and the finding is verified at the
+   lowest confidence offered; any disagreement downgrades it to `review` with each
+   dissenting lens's reason attached. This is sectioning, not debate.
+2. **No debate, for four reasons that hold here specifically.** *Cost*: three agents
+   over three rounds is up to nine times the calls at that stage, on an in-house 20–40B
+   model where a run already takes five to fifteen minutes, and the cache stops helping
+   because each round's input contains the last round's output. *Convergence*: agents
+   that see each other's answers drift toward the most confident one, which removes the
+   independence that made a second reader worth having; published debate results show
+   modest gains on open reasoning and almost none where the truth is deterministic.
+   *Auditability*: a QC record must say "this finding exists because rule X, evidence
+   Y", and "three personas argued for two rounds" is neither reproducible nor
+   defensible to an auditor. *Authority*: the model may not compare or grade (ADR-001,
+   ADR-026), so the only thing the agents could debate is meaning, which stages 2, 3, 4
+   and 8 already isolate into narrow schema-bound questions.
+3. **A lens changes confidence, never severity.** It can send a finding to a person and
+   it can raise a question from the same evidence, which becomes a `review` item. It
+   cannot make anything more serious, and it cannot delete anything. The severities
+   code set stand.
+4. **A lens that does not answer counts as neither.** Two lenses that agree still
+   verify. No lens answering leaves the finding exactly as the checks produced it, and
+   the run says so as a notice rather than passing over it.
+5. **The same question asked once.** One lens reads every high-severity finding, so the
+   same observation arrives several times; a reviewer needs it once with the readings
+   that raised it named. A proposal repeated five times is five times the noise.
+6. **Switchable, capped, and measured before it is the default.** `LLM_VERIFY_LENSES`
+   stays at `single` — today's behaviour, call for call — until the golden-set
+   benchmark compares the three against it. What reviewers see changes on evidence, not
+   on argument. A per-run call cap sits beside the token budget, and empty turns
+   verification off, which the run reports.
+7. **The same discipline, twice more, off the run path.** A coverage reader labels the
+   requirements code found unevidenced (Phase 6.11f), proposing only. A critique pass
+   reads a drafted rule back against the statements it came from and allows one redraft
+   (Phase 6.11g), once per candidate at authoring time.
+
+**Consequences:** Each lens's answer is cached under its own key, so a re-run costs
+nothing and the record of what each said is complete and replayable. Verification costs
+three calls per high-severity finding when the lenses are on, which is the reason for
+the cap and the reason the default waits for a measurement. The alternative — one
+prompt asked to hold three stances — was rejected because a prompt that asks for
+everything reliably returns the average.
+
+## ADR-035 — The finalize gate fails closed, and freezing carries an attestation
+
+**Status:** accepted 2026-09-20 (user decision, Phase 6.11d). Amends ADR-015.
+
+**Context:** ADR-015 set the gate at "every high-severity finding has a decision". That
+reads the absence of a finding as a pass. It says nothing about a `review`-severity
+finding, which is precisely the one the model was unsure about; nothing about a
+requirement no report could evidence; nothing about a check that was defined and could
+not be evaluated; and nothing about a verification that failed and was logged. A
+reviewer who opens a run with three findings, decides them, and freezes the report has
+no way to learn that nine requirements were never compared against anything. That is how
+a compliance error leaves the tool as a clean report.
+
+**Decision:**
+
+1. **Coverage is a first-class output.** After stage 7, code records one state per
+   requirement — checked, traced but unchecked, untraced, verified by hand — with the
+   reason, and how many checks touched each uploaded report. Pure code, no model
+   (ADR-001). It is stored on the run, shown on the review screen and in the frozen
+   report, and given to the summary prompt as counts so the summary cannot call a
+   delivery clean when part of it was never examined.
+2. **The gate widens.** Every high **and** every `review` finding needs a decision, and
+   every requirement no report evidenced and every check that could not be evaluated
+   needs an **acknowledgement**. An acknowledgement is not a decision that the delivery
+   is fine; it is the record that the gap was in front of somebody before the report was
+   frozen. An untraced requirement needs none: it is already a high-severity finding.
+3. **The gate is one implementation.** `api/gate.py` answers both "can this be frozen"
+   for the screen and "may this be frozen" at finalize, so what a reviewer is shown and
+   what the API enforces cannot drift apart. Refused with 409, not merely greyed out.
+4. **Freezing asks once, with the numbers.** The confirmation carries the coverage
+   counts, the gaps acknowledged, the checks that could not be evaluated, the shadow
+   rules and definition versions in force, and the run's notices. The same block is
+   stored on the final report and rendered in it, because a report that is evidence of a
+   review should say what the reviewer was shown.
+5. **A run from before coverage existed is unaffected.** An empty coverage column reads
+   as nothing to acknowledge, so an old run's gate is exactly what it was.
+
+**Consequences:** Some runs that would have been frozen in three clicks now need a
+person to look at what was never checked, which is the point and is the cost. The
+attestation makes the frozen report meaningfully stronger evidence: it states the
+limits of what was verified rather than implying there were none. Two fixtures showed
+the hole while this was built — every synthetic case, the clean baseline included,
+carries two checks that could not be evaluated and used to pass through undecided.

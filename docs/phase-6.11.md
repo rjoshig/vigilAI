@@ -1,9 +1,10 @@
 # Phase 6.11 — Nothing slips: coverage, a fail-closed review, and independent lenses
 
 **Status:** 🟡 **in progress** — specified 2026-09-20 after a review of the product as
-built through Phase 6.10; **6.11a complete** the same day. The decisions are in the
-table at the foot; the review that led to them is in `docs/session-log.md` (session of
-2026-09-20).
+built through Phase 6.10. **6.11a and 6.11c–h are complete**; **6.11b, the benchmark
+harness, is deferred at the user's direction** and carries with it the one measurement
+6.11e wants. The decisions are in the table at the foot; the review that led to them is
+in `docs/session-log.md` (session of 2026-09-20).
 
 **Goal:** a compliance error must not be able to leave the tool as a clean report
 because nobody noticed it was never checked, and a reviewer's click must not be able to
@@ -121,6 +122,10 @@ whether verification ran.
 
 ### 6.11b — Benchmark harness · ⬜ not started
 
+**Deferred at the user's direction (2026-09-20)**: c–h were built first. Two things
+wait on it — the golden case that leaves a requirement unevidenced, and the measurement
+that would move `LLM_VERIFY_LENSES` off `single`.
+
 - [ ] Golden-set fixtures carry **expected findings** (type, leg, the value or member
       that differs) beside the expected rules they carry today.
 - [ ] `scripts/golden_set.py` reports **precision and recall per finding type and per
@@ -135,105 +140,109 @@ whether verification ran.
       no meaning entry, and no named value. Both must appear in coverage, not as
       silence.
 
-### 6.11c — Coverage · ⬜ not started
+### 6.11c — Coverage · ✅ complete
 
-- [ ] `pipeline/coverage.py`: after stage 7, each requirement is one of `checked`
+- [x] `pipeline/coverage.py`: after stage 7, each requirement is one of `checked`
       (at least one report check evaluated it), `traced_unchecked` (traced to the
       configuration, no report check reached it), `untraced` (no configuration element),
       `manual` (`req_type` `other`, or a check that returned `could_not_evaluate`). Each
       report gets the number of checks that applied. Pure code, no model call.
-- [ ] Stored on the run (`run_coverage`, one row per requirement plus per-report
+- [x] Stored on the run (`run_coverage`, one row per requirement plus per-report
       counts) and returned by `GET /runs/{id}/coverage`.
-- [ ] A run-level **notices** list on the run: stage-8 verification failed or was
+- [x] A run-level **notices** list on the run: stage-8 verification failed or was
       skipped for N findings; the programme reading failed; the token budget stopped a
       stage. Reviewers see them; the attestation records them.
-- [ ] Review screen: a **Coverage** panel above the findings with the four counts, the
+- [x] Review screen: a **Coverage** panel above the findings with the four counts, the
       unchecked and manual requirements listed with their OSL reference, and a warning
       per report with zero checks. The matrix gains a coverage column.
-- [ ] Frozen report: a **Coverage** section, computed at finalize and frozen.
-- [ ] The stage-9 summary receives the coverage counts as data and is told to name
+- [x] Frozen report: a **Coverage** section, computed at finalize and frozen.
+- [x] The stage-9 summary receives the coverage counts as data and is told to name
       what was not checked. It still adds, drops, and re-ranks nothing.
-- [ ] Drift (6.9) gains "requirements newly unchecked since the previous run".
+- [x] Drift (6.9) gains "requirements newly unchecked since the previous run".
 
-### 6.11d — The fail-closed gate and the attestation · ⬜ not started
+### 6.11d — The fail-closed gate and the attestation · ✅ complete
 
-- [ ] `_can_finalize` (`api/routers/runs.py`) requires: every high and every `review`
+- [x] `_can_finalize` (`api/routers/runs.py`) requires: every high and every `review`
       finding decided; every `traced_unchecked` and `manual` requirement
       **acknowledged**; every `could_not_evaluate` finding acknowledged. The gate is
       enforced in the API at finalize time (409), not only in the UI.
-- [ ] **Acknowledge** is a per-item action on the Coverage panel with an optional
+- [x] **Acknowledge** is a per-item action on the Coverage panel with an optional
       note, attributed like a review decision. Bulk acknowledge for the unchecked list
       under one confirm, never for `manual` items.
-- [ ] The **attestation block**: requirements traced / unchecked / untraced / manual;
+- [x] The **attestation block**: requirements traced / unchecked / untraced / manual;
       `could_not_evaluate` count; shadow rules in force (count, with a link on the
       admin side); definition versions in force (6.8 already records them); notices;
       the lenses that ran. Shown in the finalize confirm dialog and stored on
       `final_reports.attestation` (JSON), rendered in the frozen report.
-- [ ] ADR-035 amends ADR-015 with the wider gate.
+- [x] ADR-035 amends ADR-015 with the wider gate.
 
-### 6.11e — Independent lenses at stage 8 · ⬜ not started
+### 6.11e — Independent lenses at stage 8 · 🟡 in progress
 
-- [ ] Three registered prompts (`llm/prompts/s8_lens_delivery.py`,
+- [x] Three registered prompts (`llm/prompts/s8_lens_delivery.py`,
       `s8_lens_compliance.py`, `s8_lens_requirements.py`) sharing one schema:
       `VerifyResponse` plus an optional `missed` list of `{title, reason,
       confidence}`. Each system prompt frames the persona and repeats the rules: judge
       only the evidence shown, never recompute, disagree with a reason. Worked examples
       per lens. Text and aggregates only, never a row (ADR-003).
-- [ ] `s8_verify.py` calls each lens independently on the same rendered evidence,
+- [x] `s8_verify.py` calls each lens independently on the same rendered evidence,
       each cached under its own prompt version. **Code merges**: all agree →
       `verified`, confidence = the minimum; any disagreement → severity `review`, the
       finding's detail names the lens that disagreed and why; the full set of opinions
       is stored on the finding (`lens_opinions` JSON) and shown in the evidence panel.
-- [ ] A `missed` item becomes a new finding of type `lens_proposed`, severity
+- [x] A `missed` item becomes a new finding of type `lens_proposed`, severity
       `review`, leg from the lens, evidence pointing at the same finding's evidence.
       Never graded, never verified again.
-- [ ] `LLM_VERIFY_LENSES` (default the three; `single` restores today's one prompt;
+- [x] `LLM_VERIFY_LENSES` (default the three; `single` restores today's one prompt;
       empty disables verification and produces a notice). A per-run cap on lens calls
       beside the token budget; past the cap, remaining high findings are unverified
       and the notice says so.
-- [ ] A lens that fails (`LLMError`) is recorded in the opinions as "did not answer"
+- [x] A lens that fails (`LLMError`) is recorded in the opinions as "did not answer"
       and counts as neither agreement nor disagreement; two answering lenses that
       agree still verify. Zero answering lenses is a notice.
-- [ ] Stage 4 receives `preamble(guidance, "config")` beside the guide block. A total
+- [x] Stage 4 receives `preamble(guidance, "config")` beside the guide block. A total
       cap on preamble plus guide block, with the oldest configuration notes dropped
       first and the count logged.
 - [ ] Measured: the golden set under `default` and under the lenses, both tables in
       `docs/benchmarks/`, before the lenses become the default in `.env.example`.
+      **Deferred with 6.11b**, at the user's direction: the harness comes later, so
+      the lenses ship built, tested and switchable with `LLM_VERIFY_LENSES=single` —
+      today's behaviour, call for call — as the default. Turning them on is one line
+      once the numbers exist.
 
-### 6.11f — The coverage reader · ⬜ not started
+### 6.11f — The coverage reader · ✅ complete
 
-- [ ] One cached call per run over the `traced_unchecked` and `manual` list: each
+- [x] One cached call per run over the `traced_unchecked` and `manual` list: each
       requirement's type, OSL reference and source text, nothing else. The model says
       which look like obligations (compliance, regulatory, contractual) and why, with a
       confidence. Prompt `s7_coverage.py`, registered and in the prompt suite.
-- [ ] Each becomes a finding of type `coverage_gap`, severity `review`, evidence the
+- [x] Each becomes a finding of type `coverage_gap`, severity `review`, evidence the
       OSL reference. A gap under the confidence floor stays in the coverage list only.
-- [ ] Off when `LLM_VERIFY_LENSES` is empty. Counted in the benchmark as its own
+- [x] Off when `LLM_VERIFY_LENSES` is empty. Counted in the benchmark as its own
       finding type.
 
-### 6.11g — A critique pass in synthesis · ⬜ not started
+### 6.11g — A critique pass in synthesis · ✅ complete
 
-- [ ] After `synthesize()` drafts a candidate, one call (`synthesize_critique.py`)
+- [x] After `synthesize()` drafts a candidate, one call (`synthesize_critique.py`)
       receives the observation statements (as data, delimited as today) and the draft,
       and answers: faithful to the statements or not, with what is missing or added;
       overlaps a listed existing rule or not. At most **one** redraft follows. The
       critique and both drafts are stored on the candidate; the diff at approval
       (ADR-021) is measured against the final draft.
-- [ ] Approving a candidate whose `conflicts` is non-empty requires the administrator
+- [x] Approving a candidate whose `conflicts` is non-empty requires the administrator
       to choose **supersede** (the old rule is disabled with the candidate named as
       its successor) or **reject**. Approve alone is refused by the API.
 
-### 6.11h — Documentation and tests · ⬜ not started
+### 6.11h — Documentation and tests · ✅ complete
 
-- [ ] ADR-034: lenses, not debate; a lens changes confidence only; a lens proposal is
+- [x] ADR-034: lenses, not debate; a lens changes confidence only; a lens proposal is
       a review item; the four reasons above.
-- [ ] ADR-035: the fail-closed gate and the attestation, amending ADR-015.
-- [ ] `design.md` step 8 and "Review and final report"; `architecture.md` stage table
+- [x] ADR-035: the fail-closed gate and the attestation, amending ADR-015.
+- [x] `design.md` step 8 and "Review and final report"; `architecture.md` stage table
       and the `coverage` module; `llm-privacy.md` (five new prompts, text and aggregates
       only); `glossary.md` (lens, coverage, acknowledge, attestation, variant);
       `user-training.md` and `admin-training.md`; `gd-rollout-plan.md` readiness list
       and measurement section (precision and recall now come from the harness).
-- [ ] Tests per module as usual, plus: bulk-OK then finalize gives verdict `ok`; a
+- [x] Tests per module as usual, plus: bulk-OK then finalize gives verdict `ok`; a
       high finding OK without a reason is refused; a run with one unchecked requirement
       cannot finalize until acknowledged, and the attestation names it; three scripted
       lenses agreeing verify a finding and one disagreeing sends it to review with
@@ -249,20 +258,21 @@ whether verification ran.
    whose verdict is OK and whose findings all read OK.
 2. [x] A high finding cannot be marked Not OK without a comment, and an accepted risk
    cannot be recorded without one at any severity, from the screen or the API.
-3. [ ] A run with a requirement no report evidenced shows it in the Coverage panel,
+3. [x] A run with a requirement no report evidenced shows it in the Coverage panel,
    cannot be finalized until it is acknowledged, and the frozen report's attestation
    lists it with the acknowledging person's name.
-4. [ ] A custom report type with no checks defined produces a coverage warning, not
+4. [x] A custom report type with no checks defined produces a coverage warning, not
    silence.
-5. [ ] With the three lenses on, a high finding they all agree on is verified with the
+5. [x] With the three lenses on, a high finding they all agree on is verified with the
    lowest confidence; one they split on goes to review with each lens's reason visible
    in the evidence panel; the severities code set are unchanged in both cases.
-6. [ ] `LLM_VERIFY_LENSES=single` reproduces today's stage 8 call for call.
+6. [x] `LLM_VERIFY_LENSES=single` reproduces today's stage 8 call for call.
 7. [ ] The golden set prints precision and recall per finding type under `default` and
-   under the lenses, and the two tables are in `docs/benchmarks/`.
-8. [ ] A candidate rule that overlaps an active rule cannot be approved without
-   choosing supersede or reject.
-9. [ ] Every existing test still passes.
+   under the lenses, and the two tables are in `docs/benchmarks/`. **Deferred with
+   6.11b**, at the user's direction.
+8. [x] A candidate rule that overlaps an active rule cannot be approved without
+   choosing supersede or keep-both.
+9. [x] Every existing test still passes: 1058.
 
 ## Decisions (2026-09-20)
 

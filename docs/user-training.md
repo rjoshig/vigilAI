@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.11a.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.11 (c–h).
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -119,6 +119,32 @@ The run page shows the **traceability matrix** and the **findings**, worst first
 - **Generate final report asks once**, showing the finding counts and reminding you
   that freezing is permanent: the report is stored once, never regenerated, and the
   findings can no longer be re-reviewed.
+
+## What was checked
+
+Above the findings is a panel headed **What was checked**. It exists because a short
+findings list cannot tell a clean delivery from one nobody examined, and that is how a
+compliance requirement slips through: nothing disagreed with it because nothing was
+compared against it.
+
+- Every requirement is in one of four states. **Checked against a report** means a
+  check compared it with the delivery. **Traced, no report evidenced it** means it
+  reached the configuration and no report shows it was applied. **Not traced** means
+  nothing implements it, which is already a finding. **Verified by hand** means no
+  check can express it, or the check for it could not be run.
+- The panel also warns when a report arrived and **no check examined it**, which
+  usually means that report type has no guide, meaning entry or named value yet.
+- **Notices** appear here too: a second opinion the model could not give, a programme
+  reading that did not run. They are not findings, and you should know about them.
+- Every requirement nothing evidenced, and every check that could not be evaluated,
+  needs **I have seen this** before the report can be frozen. That is not you saying
+  the delivery is fine. It is the record that the gap was in front of you, and it goes
+  into the frozen report with your name on it. Add a note if you raised it with
+  someone.
+
+If several readers looked at a finding, the evidence panel shows **how it was read**:
+each reader, whether it agreed, and why. They each saw the same evidence and none saw
+the others.
 - If a requirement was extracted wrongly, edit it and press **Re-check**. Only the
   comparison stages re-run; nothing is re-asked of the model that has not changed.
 - **Configuration notes given to the model** appear above the findings when the

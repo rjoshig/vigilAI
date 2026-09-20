@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11a is complete**; next is **6.11b, the benchmark harness** — see "Next concrete action". Browser tests in CI follow 6.11 |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11a and 6.11c–h are complete**; **6.11b, the benchmark harness, is deferred** and is the next thing owed. Browser tests in CI follow it |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -86,10 +86,8 @@ Workbook type detection that asks when unsure. And the training loop: a reviewer
 sentence, anchored to what they meant, becomes a candidate rule the model drafts, code
 validates, a replay tests, and a person approves into shadow.
 
-### Outstanding, needs the user### Outstanding, needs the user
+### Outstanding, needs the user
 
-- **Merge the Phase 0 PR and create `dev` from `main`.** Eighteen commits are stacked
-  on one session branch. This is the thing to do first.
 - **A decision on retention for DIRT files** (90 days by default), and **security and
   compliance sign-off** on retention and PII handling. Both are Phase 6 criteria and
   both want an ADR.
@@ -102,6 +100,65 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.11c–h: coverage, the gate, the lenses)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1058 Python
+tests, 88 user-ui tests, `black`/`flake8`/`mypy`/lint/typecheck/format/build clean.
+
+Built in the order the user asked for: c through h, with b (the benchmark harness)
+deferred.
+
+**Coverage (6.11c).** Stage 7 records what it evaluated as it goes; `pipeline/coverage`
+turns that into one state per requirement — checked, traced but unchecked, untraced,
+verified by hand — with the reason, plus how many checks touched each uploaded report.
+Pure code. Stored on the run, served at `GET /runs/{id}/coverage`, a panel on the
+review screen and a "What was checked" section in the frozen report. The summary prompt
+is given the counts (version 2) so it cannot call a delivery clean when part of it was
+never examined. Drift gains what a report evidenced last time and does not now. A
+verification or programme reading that could not run is a notice the reviewer sees.
+
+**The gate fails closed (6.11d, ADR-035).** Every high **and** every `review` finding
+decided, every unevidenced requirement and unevaluated check acknowledged. One
+implementation in `api/gate.py` answers both the screen and finalize, refused with 409.
+Finalizing shows the attestation and stores it on the report.
+
+**Three lenses (6.11e, ADR-034).** Delivery, compliance, requirements owner, each given
+the same finding and evidence and none given another's answer; code merges. Any
+disagreement sends the finding to a person with every reason. A lens may raise a
+question from the same evidence, which becomes a review item, deduplicated across
+findings; it can never raise a severity. A lens that fails counts as neither, so two
+that agree still verify. `LLM_VERIFY_LENSES` **stays at `single`** — today's behaviour,
+call for call — until 6.11b measures the three. Also: stage 4 now receives the
+preamble, and the whole guidance block has a ceiling (it was capped per field, so ten
+configuration notes were ten times the cap).
+
+**The coverage reader (6.11f)** asks which unevidenced requirements read like
+obligations; an invented requirement id is dropped. **The critique pass (6.11g)** reads
+a drafted rule back against the statements with one redraft, keeping both versions, and
+approving a candidate that overlaps an existing rule now requires supersede or
+keep-both.
+
+**Docs:** ADR-034, ADR-035, design, architecture, privacy, glossary, both training
+documents, the rollout readiness list.
+
+### Found on the way
+
+- **No synthetic fixture leaves a requirement unevidenced**, so the coverage-reader
+  tests build the state directly rather than skipping. 6.11b adds the golden case.
+- **The same lens proposal arrives once per finding.** Deduplicated within a run, with
+  every lens that raised it named.
+
+### Next concrete action
+
+**6.11b, the benchmark harness**: expected findings in the golden fixtures, precision
+and recall per finding type and per programme out of `scripts/golden_set.py` into
+`docs/benchmarks/`, the `LLM_PIPELINE_VARIANT` switch, and the new cases (a requirement
+no report can evidence; a custom report with no checks; one that yields a low-severity
+finding). Then the measurement that decides whether `LLM_VERIFY_LENSES` moves off
+`single`. Browser tests in CI follow.
 
 ---
 
