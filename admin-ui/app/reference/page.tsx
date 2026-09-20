@@ -29,6 +29,8 @@ import {
   TR,
   Table,
 } from "@/components/ui/primitives";
+import { BulkBar } from "@/components/bulk-bar";
+import { DeleteButton } from "@/components/confirm-delete";
 import { api, ApiError } from "@/lib/api";
 import type { Alias, MaskedColumn } from "@/lib/types";
 
@@ -43,6 +45,7 @@ export default function ReferencePage() {
     customer: "",
   });
   const [patternDraft, setPatternDraft] = React.useState("");
+  const [selected, setSelected] = React.useState<number[]>([]);
 
   const load = React.useCallback(async () => {
     try {
@@ -96,48 +99,75 @@ export default function ReferencePage() {
               hint="Add one when a run reports that a value could not be evaluated."
             />
           ) : (
-            <Table>
-              <thead>
-                <TR className="hover:bg-transparent">
-                  <TH>Canonical name</TH>
-                  <TH>Aliases</TH>
-                  <TH>Customer</TH>
-                </TR>
-              </thead>
-              <tbody>
-                {Object.entries(grouped).map(([canonical, entries]) => (
-                  <TR key={canonical}>
-                    <TD className="mono">{canonical}</TD>
-                    <TD>
-                      <div className="flex flex-wrap gap-1">
-                        {entries.map((entry) => (
-                          <span
-                            key={entry.id}
-                            className="mono inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-0.5 text-[0.7rem]"
-                          >
-                            {entry.alias}
-                            <button
-                              type="button"
-                              aria-label={`Delete alias ${entry.alias}`}
-                              className="text-muted-foreground hover:text-destructive"
-                              onClick={async () => {
-                                await api.deleteAlias(entry.id);
-                                await load();
-                              }}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    </TD>
-                    <TD className="text-xs text-muted-foreground">
-                      {entries[0].customer_name ?? "All"}
-                    </TD>
+            <>
+              <BulkBar
+                count={selected.length}
+                busy={busy}
+                actions={[{ word: "delete", label: "Delete selected aliases", destructive: true }]}
+                onClear={() => setSelected([])}
+                onAct={async (confirm) => {
+                  await api.bulkDelete("aliases", selected, confirm);
+                  setSelected([]);
+                  await load();
+                }}
+              />
+              <Table>
+                <thead>
+                  <TR className="hover:bg-transparent">
+                    <TH className="w-8" />
+                    <TH>Canonical name</TH>
+                    <TH>Aliases</TH>
+                    <TH>Customer</TH>
                   </TR>
-                ))}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {Object.entries(grouped).map(([canonical, entries]) => (
+                    <TR key={canonical}>
+                      <TD>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select every alias of ${canonical}`}
+                          checked={entries.every((entry) => selected.includes(entry.id))}
+                          onChange={(event) => {
+                            const ids = entries.map((entry) => entry.id);
+                            setSelected((current) =>
+                              event.target.checked
+                                ? [...current, ...ids.filter((id) => !current.includes(id))]
+                                : current.filter((id) => !ids.includes(id))
+                            );
+                          }}
+                        />
+                      </TD>
+                      <TD className="mono">{canonical}</TD>
+                      <TD>
+                        <div className="flex flex-wrap gap-1">
+                          {entries.map((entry) => (
+                            <span
+                              key={entry.id}
+                              className="mono inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-0.5 text-[0.7rem]"
+                            >
+                              {entry.alias}
+                              <DeleteButton
+                                compact
+                                label={`alias ${entry.alias}`}
+                                busy={busy}
+                                onDelete={async (confirm) => {
+                                  await api.deleteAlias(entry.id, confirm);
+                                  await load();
+                                }}
+                              />
+                            </span>
+                          ))}
+                        </div>
+                      </TD>
+                      <TD className="text-xs text-muted-foreground">
+                        {entries[0].customer_name ?? "All"}
+                      </TD>
+                    </TR>
+                  ))}
+                </tbody>
+              </Table>
+            </>
           )}
           <CardContent className="grid gap-3 border-t pt-4 sm:grid-cols-4">
             <div className="flex flex-col gap-1">
@@ -221,17 +251,15 @@ export default function ReferencePage() {
                         default
                       </Badge>
                     ) : (
-                      <button
-                        type="button"
-                        aria-label={`Remove ${column.pattern}`}
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={async () => {
-                          await api.deleteMaskedColumn(column.id);
+                      <DeleteButton
+                        compact
+                        label={`masked column ${column.pattern}`}
+                        busy={busy}
+                        onDelete={async (confirm) => {
+                          await api.deleteMaskedColumn(column.id, confirm);
                           await load();
                         }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      />
                     )}
                   </span>
                 ))}

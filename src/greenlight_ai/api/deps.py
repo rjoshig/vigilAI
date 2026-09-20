@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final, Iterator
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session
 
 from greenlight_ai.auth.accounts import ensure_placeholder
@@ -272,6 +272,28 @@ def current_user(
         is_admin=user.role == "admin",
         must_change_password=user.must_change_password,
     )
+
+
+DELETE_WORD: Final[str] = "delete"
+
+
+def require_delete_word(confirm: str = Query(default="")) -> None:
+    """Refuse a delete unless the caller typed the word (ADR-032).
+
+    Every admin delete asks the person to type ``delete``; the API enforces the same
+    word so a script cannot skip the pause the screen imposes.
+
+    Args:
+        confirm: The ``?confirm=`` query value.
+
+    Raises:
+        HTTPException: 400 when the word was not typed.
+    """
+    if confirm.strip().lower() != DELETE_WORD:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"type {DELETE_WORD!r} to confirm; a delete cannot be undone",
+        )
 
 
 def require_admin(user: CurrentUser = Depends(current_user)) -> CurrentUser:

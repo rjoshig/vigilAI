@@ -113,6 +113,12 @@ values and the expression; you correct it, **test it against the samples**, and
 activate it. **Compliance rules** say what must be present in every configuration in
 scope. Both are versioned; a change never edits an old finding.
 
+**Editing and deleting.** Every rule's wording is edited on its own screen (a
+compliance rule inline, a check through the same dialog that drafted it; each edit
+bumps the version). **Every delete asks you to type `delete`**, and long lists have a
+checkbox per row and a bar that deletes the selection under one typed word. Checks and
+compliance rules deleted this way are restorable from the Rules screen for six months.
+
 **Scope.** Every check and compliance rule applies **everywhere**, to **one delivery
 programme**, or to **one customer**. A rule scoped to Account Solicitation is never
 evaluated on an Account Monitoring run, and a run with no programme sees only global
@@ -157,7 +163,9 @@ Every rule the tool holds, whatever its origin: shipped, written here, learned, 
 compiled from a validation guide.
 Filtered to **active** by default; shadow, disabled, and deleted are one click away.
 Search covers the name, the reasoning, and what the rule checks. This is the screen to
-open when a finding surprises someone: it says what made it fire.
+open when a finding surprises someone: it says what made it fire. **Edit** jumps to
+the screen that owns the rule's wording; a checkbox per row and the bar above the
+table apply one state change to many rules under one typed word.
 
 Each rule shows how often it fired, how often its findings were dismissed, and when it
 last fired. **A high dismissal rate usually means an under-scoped rule, not a wrong

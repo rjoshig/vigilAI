@@ -13,7 +13,7 @@
  * carry the same typed confirmation and history as every other rule.
  */
 
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -32,6 +32,7 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { VersionsPanel } from "@/components/versions-panel";
+import { DeleteButton } from "@/components/confirm-delete";
 import { api, ApiError } from "@/lib/api";
 import { versionLabel } from "@/lib/versions";
 import type {
@@ -208,7 +209,9 @@ export default function ScopesPage() {
               onSave={(changes) =>
                 void act("save the programme", () => api.saveScope({ ...scope, ...changes }))
               }
-              onDelete={() => void act("delete the programme", () => api.deleteScope(scope.code))}
+              onDelete={(confirm) =>
+                void act("delete the programme", () => api.deleteScope(scope.code, confirm))
+              }
               onChanged={() => void load()}
               onAct={act}
             />
@@ -236,7 +239,7 @@ function ScopeCard({
   rules: ProgrammeRule[];
   busy: boolean;
   onSave: (changes: Partial<Scope>) => void;
-  onDelete: () => void;
+  onDelete: (confirm: string) => void;
   onAct: Act;
   onChanged: () => void;
 }) {
@@ -247,11 +250,14 @@ function ScopeCard({
   const [showVersions, setShowVersions] = React.useState(false);
 
   return (
-    <Card>
+    <Card className="border-l-4 border-l-primary bg-accent/20">
       <CardHeader className="flex-row items-center justify-between border-b">
         <div className="flex items-center gap-2">
-          <CardTitle>
-            <span className="mono">{scope.code}</span> · {scope.label}
+          <CardTitle className="flex items-center gap-2">
+            <span className="mono rounded bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
+              {scope.code}
+            </span>
+            {scope.label}
           </CardTitle>
           <Badge tone="outline" title="Version of the rule set">
             {versionLabel(scope.version)}
@@ -278,15 +284,12 @@ function ScopeCard({
             />
             Offered to users
           </label>
-          <Button
-            variant="ghost"
-            size="xs"
-            disabled={busy || scope.runs_using > 0}
-            aria-label={`Delete ${scope.label}`}
-            onClick={onDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <DeleteButton
+            label={`programme ${scope.label}`}
+            busy={busy}
+            disabled={scope.runs_using > 0}
+            onDelete={(confirm) => onDelete(confirm)}
+          />
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 pt-3">

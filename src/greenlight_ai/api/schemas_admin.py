@@ -267,6 +267,8 @@ class ComplianceRuleOut(ComplianceRuleIn):
     """A stored compliance rule."""
 
     id: int
+    #: Bumped on every edit, so a finding can say which wording produced it.
+    version: int = 1
 
 
 class CategoryIn(BaseModel):
@@ -388,3 +390,19 @@ class GuideIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     entries: list[GuideEntry] = Field(default_factory=list)
+
+
+class BulkDeleteIn(BaseModel):
+    """Several ids and the typed word (ADR-032)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[int] = Field(min_length=1, max_length=500)
+    confirm: str = ""
+
+
+class BulkResult(BaseModel):
+    """What a bulk action did."""
+
+    deleted: int = 0
+    missing: list[int] = Field(default_factory=list)

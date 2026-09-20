@@ -190,7 +190,7 @@ def test_a_named_value_a_check_uses_cannot_be_deleted(
     target = next(
         v for v in client.get(f"{api}/admin/named-values").json() if v["name"] == "billing_count"
     )
-    response = client.delete(f"{api}/admin/named-values/{target['id']}")
+    response = client.delete(f"{api}/admin/named-values/{target['id']}?confirm=delete")
     assert response.status_code == 409
     assert "billing_not_above_delivered" in response.json()["detail"]
 
@@ -201,7 +201,9 @@ def test_an_unused_named_value_can_be_deleted(
     target = next(
         v for v in client.get(f"{api}/admin/named-values").json() if v["name"] == "input_count"
     )
-    assert client.delete(f"{api}/admin/named-values/{target['id']}").status_code == 204
+    assert (
+        client.delete(f"{api}/admin/named-values/{target['id']}?confirm=delete").status_code == 204
+    )
 
 
 # --- checks ---------------------------------------------------------------------------
@@ -446,7 +448,10 @@ def test_a_compliance_rule_round_trips(client: TestClient, api: str) -> None:
     assert created["id"] > 0
     listed = client.get(f"{api}/admin/compliance-rules").json()
     assert listed[0]["json_path_contains"] == "suppressions.ofac"
-    assert client.delete(f"{api}/admin/compliance-rules/{created['id']}").status_code == 204
+    assert (
+        client.delete(f"{api}/admin/compliance-rules/{created['id']}?confirm=delete").status_code
+        == 204
+    )
 
 
 def test_categories_fall_back_to_the_shipped_defaults(client: TestClient, api: str) -> None:
@@ -473,7 +478,7 @@ def test_aliases_round_trip(client: TestClient, api: str) -> None:
         f"{api}/admin/aliases", json={"canonical_name": "score", "alias": "SCORE_V3"}
     ).json()
     assert client.get(f"{api}/admin/aliases").json()[0]["alias"] == "SCORE_V3"
-    assert client.delete(f"{api}/admin/aliases/{created['id']}").status_code == 204
+    assert client.delete(f"{api}/admin/aliases/{created['id']}?confirm=delete").status_code == 204
 
 
 def test_masked_columns_fall_back_to_the_shipped_defaults(client: TestClient, api: str) -> None:
