@@ -147,7 +147,10 @@ class CandidateOut(BaseModel):
     #: Overlaps with an active rule, found by fingerprint. Two rules quietly saying
     #: nearly the same thing is how a findings list becomes noise.
     conflicts: list[dict[str, Any]] = Field(default_factory=list)
-    #: What this rule would have changed on the golden set and recent runs.
+    #: What this rule would have done to recent finalized runs, evaluated against
+    #: their stored reports by a worker job: which runs it would have fired on, a
+    #: few examples, and how many related findings reviewers dismissed. Carries
+    #: ``status: running`` while the job is queued (Phase 6.13e).
     replay: dict[str, Any] = Field(default_factory=dict)
     #: What the critique pass said about the first draft (Phase 6.11g).
     critique: dict[str, Any] = Field(default_factory=dict)

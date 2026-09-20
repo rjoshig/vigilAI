@@ -1,6 +1,6 @@
 # Phase 6.13 — The loop closes
 
-**Status:** 🟡 **in progress** — specified 2026-09-20, from a second review of the whole
+**Status:** ✅ **complete** — 2026-09-20. Specified from a second review of the whole
 flow: upload to frozen report, the learning loop, and every Train AI surface in the user
 app. The review traced the code rather than the documents and then verified each sharp
 claim line by line.
@@ -53,7 +53,7 @@ Smaller: `last_fired_at` is the last *review*, not the last firing; observation 
 refreshed at approval; an unparseable credit date silently disables its check;
 `checks/runner.py` is named in a docstring and does not exist.
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.13a — Repairs · ✅ complete
 
@@ -164,50 +164,56 @@ The audience is senior associates. The form gets faster, not wordier.
       named; rendering respects scope and the cap; each promotion round-trips; an
       example that looks like personal data is refused.
 
-### 6.13e — A replay that replays · ⬜ not started
+### 6.13e — A replay that replays · ✅ complete
 
-- [ ] Replay becomes a worker job: for the last `training.replay_runs` finalized runs,
-      re-parse the stored report parts and the captured configuration and evaluate the
-      candidate for real with the evaluators that already exist. Result: which runs it
-      would have fired on, example titles, and how many of those a reviewer dismissed,
-      labelled approximate where it is. "Runs examined" means examined.
-- [ ] `validate_rule` parses a drafted check with `expressions.validate`, so a malformed
+- [x] Replay is a worker job (`replay`): for the last `training.replay_runs` finalized
+      runs it re-parses the stored reports and reads back the configuration, then runs
+      the candidate through the pipeline's own evaluators — field constraints, named
+      values with the expression evaluator, and configuration path presence. Result:
+      which runs it would have fired on, an example line per run, how many stored runs
+      could not be read, and a dismissal count labelled an estimate. "Runs examined"
+      means examined. The console shows *Replaying…* and polls until it lands.
+- [x] `validate_rule` parses a drafted check with `expressions.validate`, so a malformed
       expression is refused at draft time rather than becoming a run-time finding.
-- [ ] The golden-set claim leaves the candidate model, the wire model and the setting's
-      help text.
+- [x] The golden-set claim has left the candidate model, the wire model and the
+      setting's help text.
+- [x] Found while replaying: **an approved field constraint lost its parameter.** See
+      "Found on the way".
 
-### 6.13f — Documentation · 🟡 in progress
+### 6.13f — Documentation · ✅ complete
 
 - [x] ADR-038 (examples are worked examples, never rules; promotion needs a click; a
       per-stage cap; part of the cache key), ADR-039 (judgment checks under ADR-001),
       ADR-040 (shadow findings visible to administrators only, dismissible), and ADR-021's
       item 6 amended to say how precision becomes knowable in shadow. Each landed with the
       milestone it describes.
-- [ ] `design.md`, `architecture.md`, `glossary.md`, `llm-privacy.md`, both training
-      documents (the Train AI section rewritten for senior associates and the status
-      chain), `gd-rollout-plan.md` stage 3.
+- [x] `design.md`, `architecture.md`, `glossary.md`, `llm-privacy.md`, both training
+      documents (the Train AI sections say who they are for and carry the status chain,
+      the worked-example screen and what replay now means), `gd-rollout-plan.md` stage 3
+      (shadow findings reviewed rather than assumed, worked examples added as the
+      seniors correct the model, and a gate that says so).
 
-## Acceptance criteria · 🟡 in progress
+## Acceptance criteria · ✅ complete
 
-1. [ ] `LLM_VERIFY_LENSES=delivery,compliance` in the environment, with the database
+1. [x] `LLM_VERIFY_LENSES=delivery,compliance` in the environment, with the database
    reachable, produces a run whose findings carry those two lens opinions.
-2. [ ] Two files uploaded for one report kind with different contents are two files on
+2. [x] Two files uploaded for one report kind with different contents are two files on
    disk, and a finding names the part it came from.
-3. [ ] A learned compliance rule approved into shadow produces a hidden finding with a
+3. [x] A learned compliance rule approved into shadow produces a hidden finding with a
    `rule_ref` on a configuration that lacks its path, and none on one that has it.
-4. [ ] A senior associate records an observation from a coverage gap, an administrator
+4. [x] A senior associate records an observation from a coverage gap, an administrator
    approves it, and the author's page says *approved*, names the rule, and later says
    *live*.
-5. [ ] A finding produced by a learned rule is marked as such on the review screen.
+5. [x] A finding produced by a learned rule is marked as such on the review screen.
 6. [x] An administrator adds a worked example for extraction; the next run's extraction
    prompt contains it and its cache key differs; an example whose answer fails the schema
    is refused.
 7. [x] A judgment check with two named values produces a finding when the model says
    fail, a review item when it says review, and nothing when it says pass; code sets the
    severity.
-8. [ ] Replay of a field-constraint candidate reports the runs it would have fired on,
+8. [x] Replay of a field-constraint candidate reports the runs it would have fired on,
    computed by evaluating it.
-9. [ ] Every existing test still passes; the golden set is unchanged.
+9. [x] Every existing test still passes; the golden set is unchanged at 15/15.
 
 ## Found on the way
 
@@ -216,6 +222,16 @@ The audience is senior associates. The form gets faster, not wordier.
   reason rather than pretending. The API path is covered by unit tests; giving the
   seeder a run whose requirement no report evidences is a small change that belongs
   with the next seeder edit.
+- **An approved field constraint lost its parameter (found in 6.13e).** Synthesis
+  answers with `values`, `minimum`, `maximum` and `pattern`, named after the constraint
+  so the model's answer stays checkable; approval wrote `body["value"]`, which is not one
+  of them. Every learned allowed-values, forbidden-values, range and format constraint
+  therefore went live with no parameter and evaluated for ever to "no allowed values are
+  configured". One mapping, `synthesis.constraint_value`, is now the only place the two
+  shapes meet, and both approval and replay use it, so they cannot disagree. It was found
+  by replaying a rule and seeing it decline to fire on data that breaks it, which is the
+  argument for the milestone in one line.
+
 - **Promotion lives on the Examples screen, not on every source screen.** The plan put a
   *Use as example* control beside each source. Two of the three have no screen an
   administrator looks at: the training console lists candidates in draft, not approved

@@ -446,8 +446,18 @@ export interface CandidateConflict {
 
 /** What a candidate would have changed, had it been running already. */
 export interface CandidateReplay {
+  /** `running` while the worker job is queued; absent once the result has landed. */
+  status?: string;
+  /** True when the rule was evaluated against the runs, rather than estimated. */
+  evaluated?: boolean;
   runs_examined?: number;
-  related_findings?: number;
+  runs_available?: number;
+  /** Runs whose stored files could not be read back. */
+  unreadable?: number;
+  /** The runs the rule would have raised a finding on. */
+  would_fire_on?: number[];
+  /** A few of the things it would have said, one per run. */
+  examples?: string[];
   previously_dismissed?: number;
   note?: string;
 }

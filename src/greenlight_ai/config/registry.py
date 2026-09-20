@@ -242,8 +242,9 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         default=25,
         minimum=0,
         maximum=500,
-        help="How many finalized runs a candidate rule is tested against before "
-        "approval. Zero replays the golden set alone and never reads a real run.",
+        help="How many recent finalized runs a candidate rule is evaluated against "
+        "before approval. Their stored reports are parsed again and the rule is run "
+        "over them; zero skips the replay entirely.",
     ),
     # --- login ----------------------------------------------------------------------
     SettingSpec(

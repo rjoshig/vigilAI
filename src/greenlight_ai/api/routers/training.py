@@ -15,7 +15,7 @@ import logging
 from typing import Any, Final
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from greenlight_ai.api import provenance
@@ -40,10 +40,12 @@ from greenlight_ai.api.schemas_training import (
 )
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import models, repository
+from greenlight_ai.db.queue import JobQueue
 from greenlight_ai.training import conflicts
 from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.llm.tripwire import PiiDetected, assert_clean
+from greenlight_ai.worker.app import TASK_REPLAY
 from greenlight_ai.training import front_door, lifecycle, synthesis
 
 __all__ = ["router"]
@@ -774,21 +776,25 @@ def list_candidates(
 @router.post("/admin/candidates/{candidate_id}/replay", response_model=CandidateOut)
 def replay_candidate(
     candidate_id: int,
+    request: Request,
     session: Session = Depends(get_session),
     user: CurrentUser = Depends(require_admin),
 ) -> CandidateOut:
-    """Show what this rule would have changed, before anyone approves it.
+    """Ask for this rule to be evaluated against work already finished (Phase 6.13e).
 
-    A rule that would have fired on thirty historical runs that were all fine is a
-    bad rule, and this is where that becomes visible rather than next month.
+    A rule that would have fired on thirty historical runs that were all fine is a bad
+    rule, and this is where that becomes visible rather than next month. The evaluation
+    re-parses each run's stored reports, so it is queued for the worker rather than done
+    inside the request; the console polls the candidate until the result arrives.
 
     Args:
         candidate_id: The candidate.
+        request: The incoming request, carrying the queue backend flag.
         session: The request's session.
         user: The calling administrator.
 
     Returns:
-        The candidate with its replay filled in.
+        The candidate, with its replay marked as running.
 
     Raises:
         HTTPException: 404 when it does not exist.
@@ -796,63 +802,15 @@ def replay_candidate(
     row = session.get(models.RuleCandidate, candidate_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such candidate")
-    row.replay = _replay(session, row)
+    row.replay = {"status": "running", "note": "Evaluating against recent finalized runs."}
+    JobQueue(session, request.app.state.is_sqlite).enqueue(
+        TASK_REPLAY, payload={"candidate_id": candidate_id}
+    )
     session.flush()
     repository.audit(
         session, "training.replayed", detail=str(candidate_id), user_id=user.id, actor=user.name
     )
     return _candidate_out(row)
-
-
-def _replay(session: Session, candidate: models.RuleCandidate) -> dict[str, Any]:
-    """Estimate what a candidate would have done to work already reviewed.
-
-    Args:
-        session: The request's session.
-        candidate: The candidate.
-
-    Returns:
-        A summary the console shows before approval: how many finalized runs were
-        examined and how many carry the field or expression the rule touches. This
-        counts rather than re-runs the pipeline, because re-running it would re-read
-        every stored file and re-ask the model; the count is what answers "is this
-        rule about something that actually occurs".
-    """
-    limit = int(resolve(session, "training.replay_runs").value)
-    runs = list(
-        session.execute(
-            sa.select(models.Run)
-            .where(models.Run.status == "finalized")
-            .order_by(models.Run.created_at.desc())
-            .limit(limit)
-        ).scalars()
-    )
-    body = dict(candidate.body or {})
-    field = str(body.get("field", ""))
-
-    touched = 0
-    already_ok = 0
-    for run in runs:
-        findings = session.execute(
-            sa.select(models.Finding).where(models.Finding.run_id == run.id)
-        ).scalars()
-        for finding in findings:
-            if field and field.lower() in (finding.title or "").lower():
-                touched += 1
-                if finding.review_status == "false_positive":
-                    already_ok += 1
-
-    return {
-        "runs_examined": len(runs),
-        "runs_available": len(runs),
-        "related_findings": touched,
-        "previously_dismissed": already_ok,
-        "note": (
-            "Counts related findings on recent finalized runs. A rule that touches "
-            "many findings reviewers already dismissed is one to narrow before it is "
-            "approved."
-        ),
-    }
 
 
 @router.post("/admin/candidates/{candidate_id}/approve", response_model=CandidateOut)

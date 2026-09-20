@@ -275,10 +275,17 @@ promote it. For any observation you may:
 **Candidates.** Each shows the drafted rule, its reasoning, its source observations,
 and any **conflicts** with rules that already exist. Before approving:
 
-- **Replay** it. The tool counts how many recent finalized runs the rule touches and
-  how many of those findings reviewers already dismissed. A rule that would have
-  fired on thirty runs that were all fine is a bad rule, and this is where that
-  shows rather than next month.
+- **Replay** it. Each of the last few finalized runs has its stored reports parsed
+  again and this rule run over them, by the same evaluator the pipeline uses. You are
+  told which runs it would have fired on and what it would have said. A rule that
+  would have fired on thirty runs that were all fine is a bad rule, and this is where
+  that shows rather than next month. Reading the files takes a moment, so the replay
+  is queued and the card fills in when it finishes.
+
+  Two things it does not claim. Firing means the rule would have raised a finding, not
+  that the finding would have been right. And the count of related findings reviewers
+  already dismissed is an estimate: the rule has produced no findings yet, so the
+  nearest honest signal is what they judged about the same attribute.
 - **Approve** it. The rule is created in **shadow**: it runs on every run and its
   findings are counted, but no reviewer sees them. Narrow the scope if the candidate
   proposed a wider one than the evidence supports; the default is the narrowest that
@@ -328,7 +335,7 @@ changed what and from what.
   configured. **Test connection** makes one cheap call with the saved settings; do
   this before a run fails at stage two.
 - **Training.** The Train AI switch, whether approvals go into shadow (leave it on),
-  and how many recent runs a replay reads.
+  and how many recent finalized runs a replay evaluates the rule against.
 - **Login.** Both switches, session lifetime, idle timeout, minimum password length,
   and the lockout rules. Turning admin login off asks for a second click, because it
   leaves the console open to anyone who can reach it.

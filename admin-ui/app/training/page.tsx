@@ -214,6 +214,15 @@ export default function TrainingPage() {
     }
   }
 
+  // A replay is a worker job now (Phase 6.13e), so the screen waits for it rather than
+  // showing a result the request could not have had.
+  const waiting = candidates.some((candidate) => candidate.replay?.status === "running");
+  React.useEffect(() => {
+    if (!waiting) return undefined;
+    const timer = setInterval(() => void load(), 2000);
+    return () => clearInterval(timer);
+  }, [waiting, load]);
+
   function toggle(id: number) {
     setSelected((current) =>
       current.includes(id) ? current.filter((one) => one !== id) : [...current, id]
@@ -455,7 +464,7 @@ function CandidateCard({
   onAct: (what: string, run: () => Promise<unknown>) => void;
 }) {
   const replay = candidate.replay;
-  const replayed = Object.keys(replay).length > 0;
+  const replayed = replay.evaluated === true;
 
   return (
     <div>
@@ -500,12 +509,31 @@ function CandidateCard({
         </div>
       ) : null}
 
-      {replayed ? (
-        <p className="mt-1.5 text-[0.7rem] text-muted-foreground">
-          Replay: {replay.runs_examined ?? 0} runs examined, {replay.related_findings ?? 0} related
-          findings, {replay.previously_dismissed ?? 0} of them already dismissed.
-          {replay.note ? ` ${replay.note}` : ""}
+      {replay.status === "running" ? (
+        <p className="mt-1.5 text-[0.7rem] text-muted-foreground" data-testid="replay-running">
+          Replaying: each run&apos;s stored reports are being read again and this rule run over
+          them. The result appears here when it finishes.
         </p>
+      ) : replayed ? (
+        <div className="mt-1.5 text-[0.7rem] text-muted-foreground" data-testid="replay-result">
+          <p>
+            Replayed against {replay.runs_examined ?? 0} finalized run
+            {(replay.runs_examined ?? 0) === 1 ? "" : "s"}: it would have fired on{" "}
+            {replay.would_fire_on?.length ?? 0} of them.
+            {replay.unreadable ? ` ${replay.unreadable} could not be read back.` : ""}
+            {` About ${replay.previously_dismissed ?? 0} related finding${
+              (replay.previously_dismissed ?? 0) === 1 ? " was" : "s were"
+            } already dismissed by a reviewer (an estimate).`}
+          </p>
+          {replay.examples && replay.examples.length > 0 ? (
+            <ul className="mono mt-0.5 space-y-0.5">
+              {replay.examples.map((example) => (
+                <li key={example}>{example}</li>
+              ))}
+            </ul>
+          ) : null}
+          {replay.note ? <p className="mt-0.5 italic">{replay.note}</p> : null}
+        </div>
       ) : null}
 
       {candidate.status === "rejected" ? (

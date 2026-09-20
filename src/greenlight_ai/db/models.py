@@ -813,7 +813,8 @@ class RuleCandidate(Base):
     #: Overlaps with an existing rule, found by fingerprint at synthesis and found again
     #: at approval, because a rule created in between is exactly what the gate is for.
     conflicts: Mapped[Any] = mapped_column(Json, default=list)
-    #: What a replay against the golden set and recent runs would have changed.
+    #: What the rule would have done to recent finalized runs, evaluated against
+    #: their stored reports and configuration rather than estimated (Phase 6.13e).
     replay: Mapped[Any] = mapped_column(Json, default=dict)
     #: What the critique pass said about the first draft (Phase 6.11g): whether it
     #: said what the statements said, and whether it overlaps a rule that exists.

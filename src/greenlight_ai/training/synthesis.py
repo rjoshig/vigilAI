@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Final, Sequence
+from typing import Any, Final, Mapping, Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from greenlight_ai import scopes
+from greenlight_ai.checks.expressions import ExpressionError
+from greenlight_ai.checks.expressions import validate as validate_expression
 from greenlight_ai.checks.field_constraints import CONSTRAINT_KINDS
 from greenlight_ai.db import models
 from greenlight_ai.llm.client import LLMClient, LLMError, LLMResponseError
@@ -30,6 +32,7 @@ from greenlight_ai.llm.prompts.schemas import (
 from greenlight_ai.training.lifecycle import set_state
 
 __all__ = [
+    "constraint_value",
     "SynthesisError",
     "ValidationProblem",
     "synthesize",
@@ -62,6 +65,35 @@ class ValidationProblem:
 
     rule_name: str
     reason: str
+
+
+def constraint_value(body: Mapping[str, Any]) -> Any:
+    """The parameter a drafted field constraint carries, in the shape the evaluator reads.
+
+    The model answers with ``values``, ``minimum``, ``maximum`` and ``pattern``, because
+    naming the parameter after the constraint is what keeps its answer checkable. The
+    evaluator reads one ``value`` whose shape depends on the constraint. Mapping between
+    them is done here and nowhere else, so approving a rule and replaying it cannot
+    disagree (Phase 6.13e).
+
+    Args:
+        body: The drafted rule.
+
+    Returns:
+        The parameter: a list for the value-set constraints, a number for a fill rate,
+        a mapping of bounds for a range, a pattern string for a format, and ``None``
+        for a constraint that takes no parameter.
+    """
+    constraint = str(body.get("constraint", ""))
+    if constraint in ("allowed_values", "forbidden_values"):
+        return [str(value) for value in (body.get("values") or [])]
+    if constraint == "fill_rate_min":
+        return body.get("minimum")
+    if constraint == "range":
+        return {"min": body.get("minimum"), "max": body.get("maximum")}
+    if constraint == "format":
+        return str(body.get("pattern") or "")
+    return body.get("value")
 
 
 def validate_rule(rule: SynthesizedRule, known_fields: Sequence[str]) -> str:
@@ -106,6 +138,12 @@ def validate_rule(rule: SynthesizedRule, known_fields: Sequence[str]) -> str:
     if rule.target_kind == "check":
         if not rule.expression.strip():
             return "a check needs an expression"
+        # Parsed here rather than at run time: a malformed expression that reaches a
+        # rule table becomes a finding nobody can explain (Phase 6.13e).
+        try:
+            validate_expression(rule.expression)
+        except ExpressionError as exc:
+            return f"the expression cannot be evaluated: {exc}"
         return ""
 
     if rule.target_kind == "compliance_rule":
@@ -657,7 +695,7 @@ def approve(
         row: Any = models.FieldConstraint(
             field=str(body.get("field", "")),
             constraint=str(body.get("constraint", "")),
-            value=body.get("value"),
+            value=constraint_value(body),
             report_kinds=list(body.get("report_kinds") or []),
             severity=candidate.severity,
             reasoning=candidate.reasoning,

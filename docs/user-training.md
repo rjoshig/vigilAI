@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.11 (c–h).
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.13.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -188,9 +188,11 @@ next run and keeps the text.
 ## Train AI mode
 
 When the sidebar line is green, the tool is collecting what reviewers know so it can
-get better. Nothing you write here runs; an administrator reads it, has the model
-draft a rule from it, and approves that rule, which then runs silently for a while
-before it starts producing findings. You will hear back either way.
+get better. It is aimed at the senior associates who know a programme well enough to
+say what should always be true of it, though anyone may write. Nothing you write here
+runs: an administrator reads it, has the model draft a rule from it, and approves that
+rule, which then runs silently against real deliveries for a while before it starts
+producing findings anyone sees. You will hear back either way.
 
 - **What should this check?** is wherever you form the opinion: on every finding card,
   in the evidence drawer, on every row of the traceability matrix, beside **I have seen

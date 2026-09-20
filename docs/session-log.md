@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.12**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 in progress** (`phase-6.13.md`): 6.13a repairs, 6.13b reviewer loop, 6.13c judgment checks and 6.13d worked examples are complete and pushed. **Next: 6.13e**, a replay that replays — the candidate replay becomes a worker job that re-parses the stored report parts and the captured configuration and evaluates the candidate for real, `validate_rule` parses a drafted check with `expressions.validate`, and the golden-set claim leaves the models and the setting's help text. Then 6.13f (the remaining documents: both training documents' Train AI sections and `gd-rollout-plan.md` stage 3). Two follow-ups: give the demo seed a run with a coverage gap so the browser test runs; the user deletes the old remote branches themselves |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 is complete and pushed** — all six milestones, every acceptance criterion met, the golden set unchanged at 15/15. **Next: nothing is started.** The phase gate says report before beginning anything, so the next session picks the next piece of work with the user. Two follow-ups carried forward: give the demo seed a run with a coverage gap so the browser test for that path runs instead of skipping; the user deletes the old remote branches themselves. A pull request into `dev` has not been opened — the user asks for one when they want it |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,61 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13f and the phase closes)
+
+**Branch:** `feature/loop-closes` · **Status:** phase 6.13 complete, gates green.
+
+The documents the milestones had not already carried. Both training documents say who
+Train AI mode is for and what the screens now do: the user document's Train AI section
+names the senior-associate audience and keeps the status chain; the administrator's gains
+a **Worked examples** section (what an example is, what the console refuses and why, how
+promotion works) and a replay that says what it now measures and what it does not claim.
+`gd-rollout-plan.md` stage 3 asks the seniors to review shadow findings rather than assume
+a dismissal rate, and to add worked examples as they correct the model; its gate says so.
+
+Every acceptance criterion is ticked, each against a test that exists: lens settings reach
+the context, two parts are two files, a shadow compliance rule produces a hidden finding
+with a reference, the author follows an observation from waiting to live, a finding names
+the learned rule behind it, an example is refused unless its answer fits the stage schema,
+a judgment verdict becomes what code decides it becomes, and a replay reports the runs it
+evaluated. 1222 Python tests, 86 admin-ui, 91 user-ui, golden set 15/15.
+
+**Next:** nothing is started. Phase 6.13 closes here; the next piece of work is the
+user's to choose.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13e: a replay that replays)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13e complete, gates green.
+
+Replay counted findings whose titles happened to contain the rule's field name, said
+nothing at all about a check or a compliance rule, and called the result "runs examined".
+It is now a worker job (`replay`): each of the last `training.replay_runs` finalized runs
+has its stored reports parsed again, with the same masking a run uses, and the drafted
+rule is put through the pipeline's own evaluators — field constraints, named values with
+the expression evaluator, configuration path presence. No model is called and nothing is
+written to a run. The console shows *Replaying…* and polls until the result lands.
+
+It is honest about its edges: firing means the rule would have raised a finding, not that
+the finding would have been right, and the dismissal count is an estimate, because the
+candidate has produced no findings of its own yet. Both are said on the card.
+
+`validate_rule` now parses a drafted check with `expressions.validate`, so a malformed
+expression is refused where it is written rather than becoming a run-time finding. The
+golden-set claim has left the candidate model, the wire model and the setting's help.
+
+**Found by replaying:** an approved field constraint lost its parameter. Synthesis answers
+with `values`, `minimum`, `maximum` and `pattern`; approval read `body["value"]`, which is
+not one of them, so every learned allowed-values, range and format constraint went live
+unable to check anything. `synthesis.constraint_value` is now the one mapping between the
+two shapes, used by approval and replay alike. A replay declining to fire on data that
+plainly breaks the rule is what surfaced it.
+
+**Next:** 6.13f, the remaining documents, then the phase closes.
 
 ---
 
