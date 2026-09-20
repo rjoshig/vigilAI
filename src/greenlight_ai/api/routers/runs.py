@@ -1381,11 +1381,24 @@ def run_stats(
         ).where(models.LlmCall.run_id == run_id)
     ).one()
 
+    # Which path produced each finding (Phase 6.16). Counted from the stored
+    # findings rather than inferred from a token count: a run can make model calls
+    # that produce no finding at all, and usually does.
+    by_engine: dict[str, int] = {
+        str(engine): int(count)
+        for engine, count in session.execute(
+            sa.select(models.Finding.engine, sa.func.count())
+            .where(models.Finding.run_id == run_id)
+            .group_by(models.Finding.engine)
+        ).all()
+    }
+
     return schemas.RunStats(
         run_id=run_id,
         total_duration_ms=sum(s.duration_ms for s in stages),
         llm_calls=int(totals[0]),
         cache_hits=int(totals[1]),
+        findings_by_engine=by_engine,
         prompt_tokens=int(totals[2]),
         completion_tokens=int(totals[3]),
         stages=stages,

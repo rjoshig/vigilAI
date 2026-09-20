@@ -408,6 +408,25 @@ class DayCount(BaseModel):
     count: int
 
 
+class ValueReportOut(BaseModel):
+    """What the tool displaced over a chosen period (Phase 6.16)."""
+
+    start: dt.date
+    end: dt.date
+    days: int = 0
+    runs: int = 0
+    #: Distinct order numbers, which is what the hours are based on. An order checked
+    #: three times displaced one manual check, not three.
+    orders: int = 0
+    customers: int = 0
+    repeat_runs: int = 0
+    #: The figure an administrator supplied; carried so a reader can disagree with the
+    #: assumption rather than with the arithmetic.
+    hours_per_order: int = 0
+    hours_saved: int = 0
+    working_weeks: float = 0.0
+
+
 class UsageOut(BaseModel):
     """The admin dashboard numbers, all plain SQL over the run tables."""
 

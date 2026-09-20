@@ -146,6 +146,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.15.md`](docs/phase-6.15.md) — **a compliance rule should survive being
   spelled differently**: what a substring match on config paths costs, measured, with
   the approach left open for discussion
+- [`docs/phase-6.16.md`](docs/phase-6.16.md) — **numbers that mean something**: a
+  thirty-day run count, which engine produced each finding, and a dated report of the
+  manual hours displaced that states the assumption it rests on
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic

@@ -481,6 +481,20 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "you expect to be back, if you know.",
     ),
     SettingSpec(
+        key="value.hours_per_order",
+        env="GREENLIGHT_AI_HOURS_PER_ORDER",
+        label="Hours a manual check takes",
+        group="Availability",
+        kind="int",
+        default=4,
+        minimum=0,
+        maximum=40,
+        help="Roughly how long one order takes to check by hand, in hours. Used to "
+        "report the manual effort the tool has displaced. It is your number, not a "
+        "measurement the tool makes — the report says so, and says which number was "
+        "used, so a reader can judge it.",
+    ),
+    SettingSpec(
         key="ui.tagline",
         env="GREENLIGHT_AI_UI_TAGLINE",
         label="Tagline",

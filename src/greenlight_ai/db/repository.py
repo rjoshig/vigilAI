@@ -501,6 +501,7 @@ def _replace_findings(session: Session, run: models.Run, findings: Sequence[Find
                 review_note=note,
                 reviewed_at=reviewed_at,
                 shadow=finding.shadow,
+                engine=finding.engine,
                 verified=finding.verified,
                 verify_agreed=finding.verify_agreed,
                 lens_opinions=list(finding.lens_opinions),

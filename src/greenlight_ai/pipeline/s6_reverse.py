@@ -230,6 +230,7 @@ def _report_located(
             leg="osl_config",
             rule_ref=ref,
             shadow=shadow,
+            engine="model",
             evidence=Evidence(config_path=located.json_path),
         )
     )

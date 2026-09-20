@@ -132,6 +132,17 @@ the gap is real rather than an unused feature.
 **Cost:** it is the seventeenth-surface risk in its purest form. Needs to reuse 6.13d's
 example shape or it will not be worth what it costs to learn.
 
+**Measured in 6.16d, and the answer was no.** Named values were measured the way
+compliance rules were. They are brittle in the same way — `Delivered_count` did not
+resolve against a pointer configured as `Delivered count` — but the **consequence is
+opposite**: an unresolvable pointer produces `could_not_evaluate` at *review* severity,
+an honest "I could not check this", where compliance produced a false *HIGH*.
+
+So what looked like one problem was two with different severities, and the severe one
+was already closed by C and A. What remained was worth five lines of normalising and an
+alternates list reusing the compliance shape — not a new authoring surface. See
+`docs/phase-6.16.md` §6.16d.
+
 ### C — Broaden the match deterministically before reaching for the model
 
 Path-segment matching rather than substring, the alias table applied to path segments, a
@@ -200,12 +211,16 @@ explicitly rather than asserting behaviour the code does not have.
       severity plus write-back is the current leaning, because it self-corrects.
 - [ ] Does a confirmed location amend the rule **automatically or through the training
       queue**? ADR-021 points at the queue.
-- [ ] **Run statistics should say which engine answered.** When a rule is decided by
+- [x] **Run statistics should say which engine answered.** Built in 6.16b:
+      `Finding.engine` is `code` or `model`, and a run's statistics count them.
+      Original note follows.
+- [ ] (superseded) When a rule is decided by
       code and when it is decided after a model call, the run's statistics should
       distinguish them, so the cost and the reliability of each path are visible rather
       than inferred. This is wanted whichever shape is chosen.
-- [ ] Does the same problem apply to **programme rules and checks**? They are authored
-      the same way and have not been measured.
+- [x] Does the same problem apply to **programme rules and checks**? Named values:
+      measured in 6.16d — brittle, but they fail *safe*, at review severity rather
+      than high. The programme keyword check is still unmeasured.
 - [ ] How does scope interact — global rules, delivery-programme rules, and the
       per-submission context — when the model is asked to locate something?
 
