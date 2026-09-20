@@ -36,6 +36,7 @@ from greenlight_ai.api.schemas_training import (
 )
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import models, repository
+from greenlight_ai.training import conflicts
 from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.llm.tripwire import PiiDetected, assert_clean
@@ -183,7 +184,9 @@ def create_observation(
         user: The author.
 
     Returns:
-        The stored observation. It never runs.
+        The stored observation, carrying any active rules that already cover what it
+        points at. Those are information, not a refusal: an observation contradicting
+        an active rule is often the signal that the old rule is wrong (ADR-021).
 
     Raises:
         HTTPException: 404 when Train AI mode is off, 422 when the text contains
@@ -218,6 +221,10 @@ def create_observation(
     )
     session.add(row)
     session.flush()
+    # Tell the author now what already covers this, while they can still reconsider.
+    # Saying it at the candidate stage says it weeks later, through an administrator,
+    # about a sentence they no longer remember writing (Phase 6.1e).
+    covered = conflicts.covering_rules(session, row.anchors or [], row.statement)
     repository.audit(
         session,
         "training.observation_created",
@@ -226,7 +233,9 @@ def create_observation(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    out = _observation_out(row)
+    out.covered_by = covered
+    return out
 
 
 @router.get("/observations", response_model=list[ObservationOut])

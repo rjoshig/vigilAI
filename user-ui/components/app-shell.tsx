@@ -58,7 +58,7 @@ const TRAINING_NAV: NavItem = {
  * The mode indicator (6.4a). Drawn in both states, because "off" is a fact a person
  * should be able to see and not merely the absence of a control.
  */
-function TrainingModeLine({ enabled }: { enabled: boolean }) {
+export function TrainingModeLine({ enabled }: { enabled: boolean }) {
   return (
     <div
       className="flex items-center gap-1.5 px-4 pb-3 text-[0.6875rem] text-muted-foreground"

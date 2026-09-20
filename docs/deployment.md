@@ -85,6 +85,8 @@ confirmed with a real OSL.
 - [ ] retention window agreed with security / compliance (DIRT files with PII)
 - [ ] load test at ~80 concurrent users
 - [ ] parsers adapted to the real in-house layouts
+- [ ] login decided: both switches on with the bootstrap password changed, or both off
+      deliberately (see "Login and attribution" below)
 
 
 ## Choosing the database (ADR-017)
@@ -144,6 +146,32 @@ be done from a development checkout and are what Phase 6 hands to the platform t
       encrypted at rest. Confirm against the internal standard.
 - [ ] **in-house** Security and compliance have signed off on retention and PII
       handling, recorded as an ADR.
+
+### Login and attribution (ADR-022)
+
+Login is built and ships **off**, so a development checkout behaves exactly as it
+always has. Turning it on is a deployment decision, and these are the three parts of
+it. Leaving any one undone is worse than leaving login off: a half-configured sign-in
+looks like protection and is not.
+
+- [ ] `GREENLIGHT_AI_ADMIN_AUTH=true` and `GREENLIGHT_AI_USER_AUTH=true`. The admin
+      console is the one that reaches every future run, so turn it on first if you
+      stage the change.
+- [ ] **The bootstrap password is changed.** The API refuses to serve a non-loopback
+      deployment while it still stands, which is deliberate: the failure to start is
+      the reminder.
+- [ ] At least two administrator accounts exist. One is a lockout waiting to happen.
+- [ ] TLS terminates at the proxy, so the session cookie is `Secure`. A cookie sent
+      over plain HTTP is a session anyone on the path can take.
+- [ ] Everyone has changed their password at first sign-in; the product forces this and
+      it is worth confirming nobody is still on an administrator-set one.
+- [ ] Spot-check the audit log: sign-in, sign-out, a failed sign-in and a review
+      decision should each name the person. That is the question this phase exists to
+      answer, and the check takes a minute.
+
+With login off, every action is attributed to the seeded placeholder account rather
+than to nobody, so the frozen report still names a submitter and a reviewer. That is
+attribution, not authentication, and it should not be mistaken for it.
 
 ### The model
 

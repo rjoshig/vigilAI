@@ -61,7 +61,7 @@ else, so four things hold it in place.
   and this is the one credential everybody knows. A laptop install is unaffected,
   because loopback is exempt.
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.2a — One identity, whether or not login is on · ✅ complete
 
@@ -129,7 +129,7 @@ both sides.
 - [x] Login pages in both UIs, shown only when the relevant switch is on, plus the
       forced password-change screen. Nothing else in either UI changes.
 
-### 6.2d — Attribution across the product · 🟡 in progress
+### 6.2d — Attribution across the product · ✅ complete
 
 - [x] Every table that records an action gains the actor: `runs.created_by_user_id`,
       the reviewer on a finding decision, the finalizer on a report, the author of a
@@ -142,8 +142,10 @@ both sides.
       sign-in, password change, account creation, deactivation, and password reset all
       become audit events, because "who signed in" is the question this phase exists
       to answer.
-- [ ] The frozen report names the submitter and the reviewer. A report that is evidence
-      of a review should say who reviewed it.
+- [x] The frozen report names the submitter and the reviewer. A report that is evidence
+      of a review should say who reviewed it. Reviewers come from the decisions
+      themselves, so a run nobody decided names nobody rather than implying a review
+      that did not happen.
 
 ### 6.2e — The training record, which is never deleted · ✅ complete
 
@@ -168,11 +170,15 @@ milestone is a no-op.
       candidate** with its own provenance rather than editing the old one, so the
       history of what the model proposed over time survives.
 
-### 6.2f — Documentation and tests · 🟡 in progress
+### 6.2f — Documentation and tests · ✅ complete
 
 - [x] ADR-022 written before the code (it amends ADR-008; both stay in the log).
-- [ ] `docs/deployment.md` gains the production checklist items: turn both switches on,
-      change the bootstrap password, serve over TLS so the cookie is `Secure`.
+- [x] `docs/deployment.md` gains a "Login and attribution" section in the
+      pre-deployment checklist: both switches, the bootstrap password the API refuses
+      to serve past, two administrators rather than one, TLS so the cookie is
+      `Secure`, and a spot-check of the audit log. It also says what attribution with
+      login off is and is not, because a half-configured sign-in looks like protection
+      and is not.
 - [x] `.env.example`, `docker-compose.yml`, `design.md`, `architecture.md`, and the
       CLAUDE.md hard rule about no login all updated in the same commits.
 - [x] Tests run with auth **off** by default, so the existing suite is unchanged, plus

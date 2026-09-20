@@ -460,6 +460,18 @@
                submission (ADR-024). A reviewer reading a finding needs that context. #}
             <dt>Configuration notes</dt><dd>{% for note in run.config_notes_snapshot %}{{ note }}{% if not loop.last %} · {% endif %}{% endfor %}</dd>
             {% endif %}
+            {# Who asked for the run and who judged it. A report that is evidence of a
+               review should say whose review it was, and the two are often not the
+               same person (Phase 6.2d). #}
+            {% if submitted_by %}<dt>Submitted by</dt><dd>{{ submitted_by }}</dd>{% endif %}
+            <dt>Reviewed by</dt>
+            <dd>
+              {%- if reviewers -%}
+                {% for name in reviewers %}{{ name }}{% if not loop.last %}, {% endif %}{% endfor %}
+              {%- else -%}
+                no findings were decided
+              {%- endif -%}
+            </dd>
             <dt>Generated</dt><dd>{{ generated_at }}{% if generated_by %} by {{ generated_by }}{% endif %}</dd>
           </dl>
         </div>

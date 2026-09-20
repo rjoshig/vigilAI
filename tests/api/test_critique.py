@@ -194,3 +194,43 @@ def test_a_candidate_with_no_conflicts_needs_no_resolution(
     approved = client.post(f"{api}/admin/candidates/{candidate['id']}/approve", json={})
 
     assert approved.status_code == 200
+
+
+# --- what already covers this, said at the moment of writing (Phase 6.1e) ----------------
+
+
+def test_an_observation_carries_the_rules_that_already_cover_it(
+    client: TestClient, api: str, scripted_model: None, factory: sessionmaker[Session]
+) -> None:
+    """Saying it now beats saying it weeks later through an administrator."""
+    first = _draft(client, api, "The account status is never empty in the DIRT.")
+    client.post(f"{api}/admin/candidates/{first['id']}/approve", json={})
+
+    created = _observe(client, api, "The account status must always be filled in.").json()
+
+    assert created["covered_by"], "an active rule on the same field should be named"
+    assert created["covered_by"][0]["kind"] == "field_constraint"
+    assert created["covered_by"][0]["contradicts"] is False
+
+
+def test_a_statement_that_reverses_an_active_rule_is_flagged_as_a_contradiction(
+    client: TestClient, api: str, scripted_model: None, factory: sessionmaker[Session]
+) -> None:
+    """And it is still saved: the old rule may be the one that is wrong (ADR-021)."""
+    first = _draft(client, api, "The account status is never empty in the DIRT.")
+    client.post(f"{api}/admin/candidates/{first['id']}/approve", json={})
+
+    created = _observe(client, api, "The account status can be blank for closed accounts.")
+
+    assert created.status_code == 201, "a contradiction is information, not a refusal"
+    body = created.json()
+    assert any(rule["contradicts"] for rule in body["covered_by"])
+
+
+def test_an_observation_nothing_covers_says_nothing(
+    client: TestClient, api: str, scripted_model: None
+) -> None:
+    """The ordinary case stays quiet."""
+    created = _observe(client, api, "The account status is never empty in the DIRT.").json()
+
+    assert created["covered_by"] == []

@@ -431,6 +431,25 @@ export interface Observation extends ObservationInput {
   is_active: boolean;
   /** Earlier wordings of a note, oldest first. Empty until it has been edited. */
   revisions: NoteRevision[];
+  /**
+   * Active rules that already cover what this points at (Phase 6.1e).
+   *
+   * Returned when the observation is saved, so the author sees it while they can
+   * still reconsider rather than hearing weeks later through an administrator.
+   */
+  covered_by?: CoveringRule[];
+}
+
+/** An active rule that already covers what an observation points at (Phase 6.1e). */
+export interface CoveringRule {
+  kind: string;
+  id: number;
+  name: string;
+  summary: string;
+  scope: string;
+  state: string;
+  /** Whether the statement reads as the opposite of this rule. A hint, not a verdict. */
+  contradicts: boolean;
 }
 
 /** A finding as the drift panel refers to it (ADR-030). */

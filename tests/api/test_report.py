@@ -419,3 +419,48 @@ def test_a_successful_download_is_a_pdf_with_a_filename(
     assert response.headers["content-type"] == "application/pdf"
     assert f"greenlight-ai-run-{reviewed}.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
+
+
+# --- who asked for it and who judged it (Phase 6.2d) -------------------------------------
+
+
+def test_the_report_names_the_submitter_and_the_reviewers(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    """A report that is evidence of a review should say whose review it was."""
+    client.post(f"{api}/runs/{reviewed}/finalize")
+
+    html = client.get(f"{api}/runs/{reviewed}/report").text
+
+    assert "Submitted by" in html
+    assert "Reviewed by" in html
+    # With login off every action is the seeded placeholder's, which is still a name.
+    assert "John Doe" in html
+
+
+def test_a_run_nobody_decided_says_so_rather_than_implying_a_review(
+    submit: Submit, worker: Worker, client: TestClient, api: str, factory
+) -> None:
+    """Naming nobody is the honest answer; inventing a reviewer is not."""
+    from greenlight_ai.report.render import render_report
+
+    run_id = submit("baseline_match").json()["run_id"]
+    worker.run_once()
+
+    with factory() as session:
+        from greenlight_ai.db import models
+
+        run = session.get(models.Run, run_id)
+        rendered = render_report(
+            run=run,
+            findings=[],
+            rules=[],
+            traces=[],
+            stages=[],
+            calls=[],
+            generated_by="Someone",
+            submitted_by="",
+            reviewers=[],
+        )
+
+    assert "no findings were decided" in rendered.html

@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 is complete, and browser tests are in CI.** Next: the small items left open in 6.1, 6.2, 6.4 and 6.5 |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, and the open items in 6.1, 6.2 and 6.4 closed.** Next: four-eyes, then Phase 6.12 |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,43 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (closing the open items in 6.1, 6.2 and 6.4)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1071 Python
+tests, 91 user-ui, 81 admin-ui, 26 browser.
+
+Four items that had sat unticked in closed phases.
+
+**The frozen report names its submitter and its reviewers (6.2d).** Reviewers come from
+the decisions themselves, so a run nobody decided names nobody rather than implying a
+review that did not happen. With login off both are the seeded placeholder, which is
+attribution and not authentication — a distinction the deployment checklist now makes
+explicitly.
+
+**A contradiction is flagged when the observation is written, not weeks later
+(6.1e).** `training/conflicts.py` finds the active rules covering the same field or
+anchor and marks one the statement reverses. It comes back with the saved observation
+and the dialog shows it. Nothing is blocked: an observation contradicting an active
+rule is often the signal that the old rule is wrong (ADR-021). Detection at the
+candidate stage is unchanged; this is the second moment, where the author still
+remembers writing the sentence.
+
+**The deployment checklist gained a "Login and attribution" section (6.2f):** both
+switches, the bootstrap password the API refuses to serve past, two administrators
+rather than one, TLS so the cookie is `Secure`, and a spot-check of the audit log. A
+half-configured sign-in looks like protection and is not.
+
+**The Train AI indicator is covered rendered, in both states (6.4).** The suites
+covered the client that reads the switch and never the thing a person looks at.
+
+### Next concrete action
+
+Four-eyes: a programme-level switch requiring a second approver before finalize when a
+`must` programme breach or a compliance finding was marked OK. Off by default, and
+meaningful only with login on. Then Phase 6.12.
 
 ---
 

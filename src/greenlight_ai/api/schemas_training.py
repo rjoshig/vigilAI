@@ -89,6 +89,10 @@ class ObservationOut(ObservationIn):
     configuration_id: str = ""
     is_active: bool = True
     revisions: list[dict[str, Any]] = Field(default_factory=list)
+    #: Active rules that already cover what this points at, each marked when the
+    #: statement reads as the opposite of it (Phase 6.1e). Shown to the author while
+    #: they can still reconsider; nothing is blocked.
+    covered_by: list[dict[str, Any]] = Field(default_factory=list)
     created_at: dt.datetime
     synthesized_at: dt.datetime | None = None
 

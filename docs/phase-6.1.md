@@ -230,10 +230,14 @@ on.
 - [x] **An observation is editable by its author until an administrator queues it**,
       after which it freezes. Every edit is versioned, so the audit trail survives the
       convenience.
-- [~] **An observation that contradicts an active rule is flagged as a conflict**, not
-      filtered out. Conflict detection runs at the candidate stage and the
-      administrator sees the overlap before approving. **Outstanding:** flagging it at
-      the moment the observation is written, which is when the author could reconsider.
+- [x] **An observation that contradicts an active rule is flagged as a conflict**, not
+      filtered out. It now runs at both moments: at the candidate stage, where the
+      administrator sees the overlap before approving, and **at the moment the
+      observation is written**, where the author still remembers writing it
+      (`training/conflicts.py`). The active rules covering the same field or anchor
+      come back with the saved observation, and one the statement reverses is marked.
+      Nothing is blocked: an observation contradicting an active rule is often the
+      signal that the old rule is wrong.
 - [x] A reviewer can raise an observation straight from a finding — "this fired but it
       is fine, because…" — which turns the dismissals the tool already collects into
       training input instead of leaving them as a review note nobody reads again.

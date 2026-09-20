@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Final
+from typing import Final, Sequence
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -61,6 +61,49 @@ def _stored(session: Session, run_id: int) -> models.FinalReport | None:
     return session.execute(
         sa.select(models.FinalReport).where(models.FinalReport.run_id == run_id)
     ).scalar_one_or_none()
+
+
+def _name_of(session: Session, user_id: int | None) -> str:
+    """The display name for an account id.
+
+    Args:
+        session: The request's session.
+        user_id: The account, or ``None``.
+
+    Returns:
+        The name, or ``""`` when there is no account. With login off every action is
+        attributed to the seeded placeholder, so this is never empty in practice
+        (ADR-022).
+    """
+    if user_id is None:
+        return ""
+    row = session.get(models.User, user_id)
+    return row.name if row is not None else ""
+
+
+def _reviewers(session: Session, findings: Sequence[models.Finding]) -> list[str]:
+    """Who decided the findings on this run.
+
+    A report that is evidence of a review should name the people who reviewed it, and
+    a run is often decided by more than one (Phase 6.2d). The names come from the
+    decisions themselves, so a run nobody reviewed names nobody rather than implying
+    a review that did not happen.
+
+    Args:
+        session: The request's session.
+        findings: The run's findings.
+
+    Returns:
+        Each reviewer once, in the order they first decided something.
+    """
+    names: list[str] = []
+    for finding in findings:
+        if finding.review_status == "undecided" or finding.reviewed_by_user_id is None:
+            continue
+        name = _name_of(session, finding.reviewed_by_user_id)
+        if name and name not in names:
+            names.append(name)
+    return names
 
 
 @router.post("/{run_id}/finalize", status_code=status.HTTP_201_CREATED)
@@ -147,6 +190,8 @@ def finalize(
         generated_by=user.name,
         drift=drift.compute_drift(session, run),
         attestation=confirmed,
+        submitted_by=_name_of(session, run.user_id),
+        reviewers=_reviewers(session, findings),
     )
 
     storage_key = write_report(rendered.html, data_dir, run_id)
