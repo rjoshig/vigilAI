@@ -125,6 +125,13 @@ export default function RunsPage() {
       .includes(needle);
   });
 
+  // A lifetime total only ever grows, so it stops being a number anybody reads.
+  // Thirty days is the window a team actually works in.
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recentCount = runs
+    ? runs.filter((r) => new Date(r.created_at).getTime() >= thirtyDaysAgo).length
+    : null;
+
   const counts = {
     queued: (runs ?? []).filter((r) => r.status === "queued").length,
     running: (runs ?? []).filter((r) => r.status === "running").length,
@@ -152,7 +159,7 @@ export default function RunsPage() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Total runs" value={runs?.length ?? "—"} />
+        <Stat label="Runs, last 30 days" value={recentCount ?? "—"} />
         <Stat label="Queued / running" value={`${counts.queued} / ${counts.running}`} tone="info" />
         <Stat label="Needs review" value={counts.review} tone="warn" />
         <Stat label="Failed" value={counts.failed} tone={counts.failed ? "destructive" : "muted"} />
@@ -200,6 +207,7 @@ export default function RunsPage() {
                 <TR className="hover:bg-transparent">
                   <TH>Run</TH>
                   <TH>Customer</TH>
+                  <TH>Delivery programme</TH>
                   <TH>Order</TH>
                   <TH>Configuration</TH>
                   <TH>Submitted</TH>
@@ -215,6 +223,13 @@ export default function RunsPage() {
                   <TR key={run.id}>
                     <TD className="mono">VR-{String(run.id).padStart(4, "0")}</TD>
                     <TD>{run.customer_name}</TD>
+                    <TD className="text-xs">
+                      {run.scope_label || run.scope ? (
+                        <Badge tone="muted">{run.scope_label || run.scope}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TD>
                     <TD className="mono">{run.order_number}</TD>
                     <TD className="text-xs">
                       <div className="mono">{run.configuration_id}</div>

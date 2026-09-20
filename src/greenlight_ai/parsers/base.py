@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping, Protocol, Sequence
+import re
+from typing import Final, Mapping, Protocol, Sequence
 
 __all__ = [
     "BUILTIN_REPORT_KINDS",
@@ -281,6 +282,23 @@ class ReportCell:
     value: object
 
 
+#: Noise inside a report label: case aside, a customer writing "Delivered_count" or
+#: "Delivered  count" means the same cell as one writing "Delivered count".
+_LABEL_NOISE: Final = re.compile(r"[\s_\-]+")
+
+
+def _normalise_label(value: str) -> str:
+    """Reduce a report label to a comparable form.
+
+    Args:
+        value: The label as configured or as written in the workbook.
+
+    Returns:
+        Lowercased with runs of space, underscore and hyphen removed.
+    """
+    return _LABEL_NOISE.sub("", value.strip().lower())
+
+
 @dataclass(frozen=True, slots=True)
 class ReportSheet:
     """One worksheet of a report.
@@ -313,26 +331,44 @@ class ReportSheet:
             return ()
         return tuple(row[index] for row in self.rows if index < len(row))
 
-    def lookup(self, label: str, value_column: int = 1, label_column: int = 0) -> ReportCell | None:
+    def lookup(
+        self,
+        label: str,
+        value_column: int = 1,
+        label_column: int = 0,
+        alternates: Sequence[str] = (),
+    ) -> ReportCell | None:
         """Find a value by the label in another column (a "label lookup" locator).
 
         Preferred over a fixed cell address because it survives inserted rows
         (``docs/design.md`` "Configurable checks").
 
+        Matching normalises case, whitespace, underscores and hyphens, so a report
+        writing ``Delivered_count`` or ``Delivered  count`` answers a pointer configured
+        as ``Delivered count``. Measured in Phase 6.15: those two spellings did not
+        resolve before, and a pointer that does not resolve becomes a "could not check
+        this" finding — honest, but a check nobody gets the benefit of.
+
         Args:
-            label: The label text to find, matched case-insensitively and stripped.
+            label: The label text to find.
             value_column: Zero-based index of the column holding the value.
             label_column: Zero-based index of the column holding the label.
+            alternates: Other labels that also count, for a report that words it
+                differently rather than spelling it differently. Normalising reaches
+                ``Delivered_count``; only a person reaches ``Records delivered``.
 
         Returns:
-            The value cell, or ``None`` when the label is not found.
+            The value cell, or ``None`` when no label matches.
         """
-        wanted = label.strip().lower()
+        wanted = {_normalise_label(label)} | {_normalise_label(a) for a in alternates}
+        wanted.discard("")
+        if not wanted:
+            return None
         for row in self.rows:
             if label_column >= len(row) or value_column >= len(row):
                 continue
             cell = row[label_column]
-            if isinstance(cell.value, str) and cell.value.strip().lower() == wanted:
+            if isinstance(cell.value, str) and _normalise_label(cell.value) in wanted:
                 return row[value_column]
         return None
 

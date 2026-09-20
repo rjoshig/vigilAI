@@ -37,7 +37,11 @@ class NamedValue:
             ``"config"`` for a value read from the ETL configuration rather than a
             report (a validation guide compiles these, Phase 6.8b).
         cell: The A1-style address, for ``"cell"``; the JSON path, for ``"config"``.
-        label: The label text to find, for ``"label"``.
+        label: The label text to find, for ``"label"``. Matching normalises case,
+            whitespace, underscores and hyphens.
+        label_alternates: Other labels that also count, for a report that words it
+            differently rather than spelling it differently (Phase 6.15). The same
+            shape as a compliance rule's alternates, deliberately: one vocabulary.
         label_column: Zero-based column holding the label.
         value_column: Zero-based column holding the value.
         description: A plain sentence, shown in the admin-ui and on findings.
@@ -49,6 +53,7 @@ class NamedValue:
     kind: LocatorKind = "label"
     cell: str = ""
     label: str = ""
+    label_alternates: tuple[str, ...] = ()
     label_column: int = 0
     value_column: int = 1
     description: str = ""
@@ -104,7 +109,10 @@ def resolve(
         return None
 
     found = sheet.lookup(
-        named.label, value_column=named.value_column, label_column=named.label_column
+        named.label,
+        value_column=named.value_column,
+        label_column=named.label_column,
+        alternates=named.label_alternates,
     )
     return None if found is None else found.value
 

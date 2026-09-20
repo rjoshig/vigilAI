@@ -347,6 +347,10 @@ class RunStats(BaseModel):
     total_duration_ms: int = 0
     llm_calls: int = 0
     cache_hits: int = 0
+    #: How many findings each path produced (Phase 6.16). Code is the overwhelming
+    #: majority and should stay that way: a run where the model produced most of
+    #: the findings is a run worth looking at.
+    findings_by_engine: dict[str, int] = Field(default_factory=dict)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     stages: list[StageInfo] = Field(default_factory=list)

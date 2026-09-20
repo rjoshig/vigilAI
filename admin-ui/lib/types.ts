@@ -283,6 +283,26 @@ export interface Announcement {
   showing_now: boolean;
 }
 
+/**
+ * What the tool displaced over a period (Phase 6.16).
+ *
+ * `orders` rather than `runs` is what the hours are based on: an order checked three
+ * times displaced one manual check. `hours_per_order` is carried so the report can say
+ * which assumption it used.
+ */
+export interface ValueReport {
+  start: string;
+  end: string;
+  days: number;
+  runs: number;
+  orders: number;
+  customers: number;
+  repeat_runs: number;
+  hours_per_order: number;
+  hours_saved: number;
+  working_weeks: number;
+}
+
 export interface MaskedColumn {
   id: number;
   pattern: string;
