@@ -89,6 +89,8 @@ uses them yet.
 | **Observation** | One thing a person knows, in their own words, anchored to what they mean. The raw material of a learned rule; it never runs. |
 | **Anchor** | The typed selection an observation points at: a report cell or label, an OSL section, or a config JSON path. What makes synthesis reliable rather than a guess. |
 | **Candidate rule** | A rule the model drafted from one or more observations, validated by code and waiting for an administrator. It never runs. |
+| **Origin** (of a finding) | Where it came from: `built_in` when code produced it from the OSL and the configuration alone, else the origin of the rule behind it — `admin`, `guide`, `meaning` or `learned`. Shown on the review screen and in the evidence drawer (Phase 6.13b). |
+| **Outcome** (of an observation) | What became of it, read from the rule tables each time: waiting · drafted · approved (the rule is in shadow) · live · disabled · rejected. Never stored, so never stale. |
 | **Front door** | One box in the admin console where an administrator writes what they want checked. The model places the sentence on an existing surface; the drafting, the validation and the approval are the training loop's, unchanged. It adds no surface and no evaluator (ADR-037). |
 | **Surface** | One of the places an administrator can tell the tool something: an artifact type's AI context, a validation guide, a meaning entry, a named value, a check, a compliance rule, a programme rule, a standing instruction, a configuration note, a field constraint, an alias, a masked column, a reverse-pass category. |
 | **Shadow** | A rule state: it runs on every run and its findings are counted but shown to nobody, so its precision can be measured before it interrupts a reviewer. |

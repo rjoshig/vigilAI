@@ -336,6 +336,13 @@ the older rule** disables the rule it replaces, naming this one as its successor
 are found again at the moment you approve, so a rule created since the draft was made
 is not missed. Overlapping rules accumulate quietly and are very hard to untangle later.
 
+**A shadow rule's findings are yours to see.** Reviewers never see them, which kept the
+review queue clean and left nobody able to say a shadow finding was wrong, so every shadow
+rule showed a dismissal rate of zero. The Rules screen now carries **Shadow findings** on
+any rule in shadow or that has fired: what it found, on which run, and a **Not a real
+problem** button that records a dismissal. That dismissal rate is what decides whether to
+activate the rule (ADR-040).
+
 **Every rule kind now runs in shadow and carries statistics.** A learned compliance rule
 names the configuration path it looks for, runs in shadow like a check, and its findings
 count on the Rules screen; a programme rule put in shadow stays hidden from reviewers.

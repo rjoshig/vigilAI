@@ -100,6 +100,15 @@ class ObservationOut(ObservationIn):
     #: statement reads as the opposite of it (Phase 6.1e). Shown to the author while
     #: they can still reconsider; nothing is blocked.
     covered_by: list[dict[str, Any]] = Field(default_factory=list)
+    #: What became of it, read from the rule tables (Phase 6.13b): ``waiting`` ·
+    #: ``drafted`` · ``approved`` (the rule is in shadow) · ``live`` · ``disabled`` ·
+    #: ``rejected``. The author stopped hearing anything after "drafted" before this.
+    outcome: str = "waiting"
+    outcome_note: str = ""
+    rule_ref: str = ""
+    rule_name: str = ""
+    rule_summary: str = ""
+    rule_state: str = ""
     created_at: dt.datetime
     synthesized_at: dt.datetime | None = None
 

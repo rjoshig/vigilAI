@@ -47,6 +47,7 @@ import type {
   MeaningEntryPatch,
   MeaningSamples,
   ProposeResult,
+  ShadowFinding,
 } from "@/lib/types";
 
 const BASE = "/api/v1/admin";
@@ -497,6 +498,22 @@ export const api = {
   /** Every state this rule has moved between, with who moved it. */
   ruleHistory: (ruleKind: string, id: number): Promise<RuleStateChange[]> =>
     request<RuleStateChange[]>(`/rules/${ruleKind}/${id}/history`),
+
+  /** What a shadow rule found, which no reviewer sees (ADR-040). */
+  shadowFindings: (ruleKind: string, id: number): Promise<ShadowFinding[]> =>
+    request<ShadowFinding[]>(`/rules/${ruleKind}/${id}/shadow-findings`),
+
+  /**
+   * Say a shadow finding is not a real problem. The ordinary finding review, reached from
+   * the admin console because reviewers never see the finding; this is what makes a shadow
+   * rule's precision knowable before it is activated.
+   */
+  dismissShadowFinding: (findingId: number, note: string): Promise<ShadowFinding> =>
+    request<ShadowFinding>(
+      `/findings/${findingId}`,
+      json("PATCH", { review_status: "false_positive", review_note: note }),
+      ROOT
+    ),
 
   /** The last ten versions of an artifact type or a programme's rules, newest first. */
   listVersions: (kind: VersionKind, key: string): Promise<DefinitionVersion[]> =>

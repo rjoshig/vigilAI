@@ -682,3 +682,17 @@ export interface ProposeResult {
   calls: number;
   cached: number;
 }
+
+/** A finding a shadow rule produced, as the administrator sees it (ADR-040). */
+export interface ShadowFinding {
+  id: number;
+  run_id: number;
+  finding_id: string;
+  type: string;
+  severity: string;
+  title: string;
+  detail: string;
+  review_status: string;
+  review_note: string;
+  rule_ref: string;
+}

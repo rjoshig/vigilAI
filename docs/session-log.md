@@ -103,6 +103,34 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-20 (Phase 6.13b: the reviewer's loop closes)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13b complete, gates green.
+
+The author of an observation stopped hearing anything after "the model has drafted a
+rule". Now *My observations* shows a chain — Waiting → Drafted → In shadow → Live, or
+Switched off, or Not taken forward with the reason — and names the rule. The outcome is
+**derived from the rule tables at read time** (`api/provenance.py`) rather than written at
+approval, because a status written then would say "approved" forever while the rule went
+live or was disabled.
+
+A finding now says where it came from: `origin` is `built_in` when code produced it from
+the OSL and the configuration alone, else the origin of the rule behind it, and a card
+from a learned rule is marked *Learned from an observation*. *Rules applied to this run*
+lists every rule that produced a visible finding and names the ones running silently.
+Shadow findings are visible **to administrators only**, per rule on the Rules screen, with
+a *Not a real problem* control that records a dismissal — which is what makes a shadow
+rule's precision knowable before anyone activates it (ADR-040, written in 6.13f).
+
+The button went where the opinion forms: the evidence drawer, every matrix row, every
+coverage gap. The form asks for the sentence first and focuses it, the expectation second,
+and the three settings sit under *Details*; anchors are chips that can be removed; Escape
+and a click outside close it. Bulk OK says how many it marked and surfaces errors; the
+run-page banner states the gate's own reason. `e2e/tests/train-ai.spec.ts` records from a
+card, the drawer and a gap, and proves a second Save is an update.
+
+---
+
 ## Session: 2026-09-20 (Phase 6.13a: the repairs)
 
 **Branch:** `feature/loop-closes` · **Status:** 6.13a complete, gates green.

@@ -162,6 +162,33 @@ export interface Finding {
   verify_agreed: boolean | null;
   /** What each of stage 8's readers said, when several read it (Phase 6.11e). */
   lens_opinions?: LensOpinion[];
+  /**
+   * Where the finding came from (Phase 6.13b): `built_in` when code produced it from
+   * the OSL and the configuration alone, else the origin of the rule behind it.
+   */
+  origin?: FindingOrigin;
+  rule_name?: string;
+  rule_summary?: string;
+}
+
+export type FindingOrigin = "built_in" | "admin" | "guide" | "meaning" | "learned";
+
+/** One rule that touched a run (Phase 6.13b). */
+export interface RunRule {
+  rule_ref: string;
+  kind: string;
+  name: string;
+  summary: string;
+  origin: FindingOrigin;
+  state: string;
+  findings: number;
+  shadow: boolean;
+}
+
+export interface RunRules {
+  applied: RunRule[];
+  /** Rules that ran in shadow on this run: named, and nothing more. */
+  running_silently: RunRule[];
 }
 
 export interface Rule {
@@ -439,7 +466,20 @@ export interface Observation extends ObservationInput {
    * still reconsider rather than hearing weeks later through an administrator.
    */
   covered_by?: CoveringRule[];
+  /**
+   * What became of it, read from the rule tables (Phase 6.13b): waiting · drafted ·
+   * approved (in shadow) · live · disabled · rejected.
+   */
+  outcome: ObservationOutcome;
+  outcome_note: string;
+  rule_ref: string;
+  rule_name: string;
+  rule_summary: string;
+  rule_state: string;
 }
+
+export type ObservationOutcome =
+  "waiting" | "drafted" | "approved" | "live" | "disabled" | "rejected";
 
 /** One populated cell of a sample, addressable the way a named value addresses it. */
 export interface CellPreview {

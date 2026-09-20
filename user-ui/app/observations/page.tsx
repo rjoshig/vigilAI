@@ -10,7 +10,12 @@
 import { Lightbulb, Pencil } from "lucide-react";
 import * as React from "react";
 
-import { ObservationDialog, useTrainingEnabled } from "@/components/observation-dialog";
+import {
+  KINDS,
+  ObservationDialog,
+  SCOPES,
+  useTrainingEnabled,
+} from "@/components/observation-dialog";
 import { TrainAiTag } from "@/components/train-ai-tag";
 import {
   Badge,
@@ -23,21 +28,35 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import type { Observation, ObservationStatus } from "@/lib/types";
+import { OUTCOME_LABEL, SEVERITY_LABEL } from "@/lib/display";
+import type { Observation, ObservationOutcome } from "@/lib/types";
 import { fmtTime } from "@/lib/utils";
 
-/** What each status means to the person who wrote the observation. */
-const STATUS_TEXT: Record<ObservationStatus, string> = {
-  new: "Waiting for an administrator to look at it",
-  synthesized: "The model has drafted a rule from it, for an administrator to approve",
+/** How each outcome reads as a badge. */
+const OUTCOME_BADGE: Record<ObservationOutcome, string> = {
+  waiting: "Waiting",
+  drafted: "Drafted",
+  approved: "In shadow",
+  live: "Live",
+  disabled: "Switched off",
   rejected: "Not taken forward",
 };
 
-const STATUS_TONE: Record<ObservationStatus, "muted" | "info" | "success" | "destructive"> = {
-  new: "muted",
-  synthesized: "success",
+const OUTCOME_TONE: Record<ObservationOutcome, "muted" | "info" | "success" | "destructive"> = {
+  waiting: "muted",
+  drafted: "info",
+  approved: "info",
+  live: "success",
+  disabled: "muted",
   rejected: "destructive",
 };
+
+/** The chain an observation travels, so the author sees where theirs is. */
+const CHAIN: ObservationOutcome[] = ["waiting", "drafted", "approved", "live"];
+
+function label<T extends string>(options: { value: T; label: string }[], value: T): string {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
 
 export default function ObservationsPage() {
   const enabled = useTrainingEnabled();
@@ -101,7 +120,9 @@ export default function ObservationsPage() {
                 <span className="min-w-[12rem] flex-1 text-sm font-semibold">
                   {observation.statement}
                 </span>
-                <Badge tone={STATUS_TONE[observation.status]}>{observation.status}</Badge>
+                <Badge tone={OUTCOME_TONE[observation.outcome]} data-testid="outcome">
+                  {OUTCOME_BADGE[observation.outcome]}
+                </Badge>
                 {observation.editable ? (
                   <Button variant="ghost" size="xs" onClick={() => setEditing(observation)}>
                     <Pencil className="h-3.5 w-3.5" /> Edit
@@ -115,19 +136,50 @@ export default function ObservationsPage() {
                 </p>
               ) : null}
 
+              <p className="mt-1.5 text-xs">{OUTCOME_LABEL[observation.outcome]}</p>
+
+              {observation.outcome !== "rejected" ? (
+                <ol
+                  className="mt-1.5 flex flex-wrap items-center gap-1 text-[0.68rem]"
+                  aria-label="Progress"
+                >
+                  {CHAIN.map((step, index) => {
+                    const reached = CHAIN.indexOf(observation.outcome) >= index;
+                    return (
+                      <li key={step} className="flex items-center gap-1">
+                        {index > 0 ? <span className="text-muted-foreground">→</span> : null}
+                        <span
+                          className={
+                            reached ? "font-semibold text-foreground" : "text-muted-foreground"
+                          }
+                        >
+                          {OUTCOME_BADGE[step]}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : null}
+
+              {observation.rule_ref ? (
+                <p className="mt-1.5 text-xs" data-testid="became-rule">
+                  <span className="font-semibold">Became rule:</span> {observation.rule_name}{" "}
+                  <span className="mono text-muted-foreground">{observation.rule_summary}</span>
+                </p>
+              ) : null}
+
               <p className="mt-1.5 text-[0.7rem] text-muted-foreground">
-                {STATUS_TEXT[observation.status]} · {observation.kind} · severity{" "}
-                {observation.severity_hint} · scope {observation.scope_hint} ·{" "}
-                {fmtTime(observation.created_at)}
+                {label(KINDS, observation.kind)} · {SEVERITY_LABEL[observation.severity_hint]} ·{" "}
+                {label(SCOPES, observation.scope_hint)} · {fmtTime(observation.created_at)}
                 {observation.run_id
                   ? ` · run VR-${String(observation.run_id).padStart(4, "0")}`
                   : ""}
               </p>
 
-              {observation.status === "rejected" && observation.status_note ? (
+              {observation.outcome === "rejected" && observation.outcome_note ? (
                 <div className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
                   <span className="font-semibold">Why it was not taken forward: </span>
-                  {observation.status_note}
+                  {observation.outcome_note}
                 </div>
               ) : null}
             </Card>
@@ -137,8 +189,9 @@ export default function ObservationsPage() {
 
       <Card className="mt-4">
         <CardContent className="p-4 text-xs text-muted-foreground">
-          Nothing here changes a run on its own. A rule only starts producing findings once an
-          administrator has approved it and it has been through shadow mode.
+          Nothing here changes a run on its own. A rule an administrator approves runs in shadow
+          first — counted, shown to nobody — and produces findings only once it is made live. Each
+          card above says where yours has got to.
         </CardContent>
       </Card>
 

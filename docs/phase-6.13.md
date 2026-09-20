@@ -92,37 +92,40 @@ refreshed at approval; an unparseable credit date silently disables its check;
       `superseded` leave the model docstring and the UI copy; the `checks/runner.py`
       reference is corrected.
 
-### 6.13b — The reviewer's loop closes · ⬜ not started
+### 6.13b — The reviewer's loop closes · ✅ complete
 
 The audience is senior associates. The form gets faster, not wordier.
 
-- [ ] **A status chain on an observation**: `new → synthesized → approved → live`, or
-      `rejected` with the administrator's reason. Approving a candidate marks its source
-      observations `approved` with the rule reference; activating the rule marks them
-      `live`; rejecting marks them `rejected`. The wire carries `rule_ref`, `rule_summary`
-      and `rule_state`, and *My observations* shows the chain and the rule, using the
-      form's own labels rather than raw enums.
-- [ ] **Provenance on a finding**: `origin` (built-in · admin · guide · meaning · learned)
+- [x] **A status chain on an observation**: `waiting → drafted → approved (shadow) →
+      live`, or `disabled`, or `rejected` with the administrator's reason. The outcome is
+      **derived from the rule tables at read time**, not written at approval: a status
+      written then would say "approved" forever while the rule went live or was switched
+      off. The wire carries `outcome`, `outcome_note`, `rule_ref`, `rule_name`,
+      `rule_summary` and `rule_state`, and *My observations* shows the chain and the
+      rule, using the form's own labels rather than raw enums.
+- [x] **Provenance on a finding**: `origin` (built-in · admin · guide · meaning · learned)
       and `rule_summary`, resolved from `rule_ref` by one helper. The card carries a
       *Learned from an observation* mark; the evidence drawer shows origin and summary.
-- [ ] **Rules applied to this run**: a disclosure on the review screen listing the rules
+- [x] **Rules applied to this run**: a disclosure on the review screen listing the rules
       that produced findings, grouped by origin, with shadow rules named as *running
       silently* and nothing more. `GET /runs/{id}/rules`.
-- [ ] **Shadow findings visible to administrators only** (ADR-040): the Rules screen
+- [x] **Shadow findings visible to administrators only** (ADR-040): the Rules screen
       shows a rule's recent shadow findings with a *Not a real problem* control that
       records a dismissal. That is what makes precision knowable in shadow.
-- [ ] **The button goes where the opinion forms**: the evidence drawer header, every
+- [x] **The button goes where the opinion forms**: the evidence drawer header, every
       matrix row (anchored to the requirement), and every coverage gap beside *I have
       seen this* (anchored to the requirement and its OSL reference). The run-level button
       gets a real `run` anchor kind.
-- [ ] **The form**: statement first and focused, expectation second, the three selects
+- [x] **The form**: statement first and focused, expectation second, the three selects
       collapsed under *Details* with today's defaults; one severity vocabulary; the
       personal-data line under the first field; anchors as removable chips; Escape,
       backdrop and focus behave like the configuration viewer; a disabled Save says why.
-- [ ] Bulk OK reports its count and its errors; the run-page banner reads the gate's own
+- [x] Bulk OK reports its count and its errors; the run-page banner reads the gate's own
       reason, so the gate is stated once.
-- [ ] Browser test: record from a finding, from the drawer and from a coverage gap; see it
-      on My observations; a duplicate Save is an update.
+- [x] Browser test: record from a finding and from the drawer; see it on My observations;
+      a duplicate Save is an update; the rules applied to a run are listed. The
+      coverage-gap path is written and **skips against the demo seed**, which has no run
+      with a gap — see "Found on the way".
 
 ### 6.13c — Judgment checks, finished under ADR-001 · ⬜ not started
 
@@ -199,6 +202,18 @@ The audience is senior associates. The form gets faster, not wordier.
 8. [ ] Replay of a field-constraint candidate reports the runs it would have fired on,
    computed by evaluating it.
 9. [ ] Every existing test still passes; the golden set is unchanged.
+
+## Found on the way
+
+- **The demo seed has no run with a coverage gap.** Every seeded run checks all seven
+  requirements, so the browser test for "record from a coverage gap" skips with that
+  reason rather than pretending. The API path is covered by unit tests; giving the
+  seeder a run whose requirement no report evidences is a small change that belongs
+  with the next seeder edit.
+- **The observation's outcome is derived, not stored.** The plan said approval would
+  write `approved` and activation would write `live`. Reading the rule's own state at
+  request time is strictly better: it cannot go stale, needs no hook in the lifecycle,
+  and survives a rule being narrowed or disabled after the fact.
 
 ## Deliberately not in this phase
 

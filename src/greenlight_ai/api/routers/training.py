@@ -18,6 +18,8 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from greenlight_ai.api import provenance
+from greenlight_ai.api.schemas import FindingOut
 from greenlight_ai.api.deps import CurrentUser, current_user, get_session, require_admin
 from greenlight_ai.api.schemas_training import (
     CandidateDecision,
@@ -82,17 +84,31 @@ def _require_enabled(session: Session) -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Train AI mode is not enabled")
 
 
-def _observation_out(row: models.TrainingObservation) -> ObservationOut:
+def _observation_out(
+    row: models.TrainingObservation, session: Session | None = None
+) -> ObservationOut:
     """Render a stored observation.
 
     Args:
         row: The observation.
+        session: When given, the outcome is read from the rule tables: what the
+            sentence became, and whether that rule is in shadow, live, or gone
+            (Phase 6.13b). Without it the outcome fields stay at their defaults.
 
     Returns:
         The wire model. ``editable`` is what the form uses to decide whether the
         author may still change it; once an administrator queues it, it freezes.
     """
+    outcome, note, facts = (
+        provenance.outcome_of(session, row) if session is not None else ("waiting", "", None)
+    )
     return ObservationOut(
+        outcome=outcome,
+        outcome_note=note,
+        rule_ref=facts.ref if facts else "",
+        rule_name=facts.name if facts else "",
+        rule_summary=facts.summary if facts else "",
+        rule_state=facts.state if facts else "",
         id=row.id,
         kind=row.kind,  # type: ignore[arg-type]
         anchors=list(row.anchors or []),
@@ -235,7 +251,7 @@ def create_observation(
         user_id=user.id,
         actor=user.name,
     )
-    out = _observation_out(row)
+    out = _observation_out(row, session)
     out.covered_by = covered
     return out
 
@@ -276,7 +292,7 @@ def list_observations(
         statement = statement.where(models.TrainingObservation.status == obs_status)
     if kind:
         statement = statement.where(models.TrainingObservation.kind == kind)
-    return [_observation_out(row) for row in session.execute(statement).scalars()]
+    return [_observation_out(row, session) for row in session.execute(statement).scalars()]
 
 
 @router.patch("/observations/{observation_id}", response_model=ObservationOut)
@@ -327,7 +343,7 @@ def edit_observation(
     row.kind = payload.kind
     row.version += 1
     session.flush()
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 @router.post("/admin/observations/{observation_id}/reject", response_model=ObservationOut)
@@ -367,7 +383,7 @@ def reject_observation(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 # ------------------------------------------------------------ configuration notes
@@ -404,7 +420,7 @@ def list_config_notes(
     )
     if not include_inactive:
         statement = statement.where(models.TrainingObservation.is_active)
-    return [_observation_out(row) for row in session.execute(statement).scalars()]
+    return [_observation_out(row, session) for row in session.execute(statement).scalars()]
 
 
 @router.post("/configs/{configuration_id}/notes", response_model=ObservationOut, status_code=201)
@@ -462,7 +478,7 @@ def create_config_note(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 @router.patch("/config-notes/{note_id}", response_model=ObservationOut)
@@ -520,7 +536,7 @@ def edit_config_note(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 @router.post("/config-notes/{note_id}/active", response_model=ObservationOut)
@@ -558,7 +574,7 @@ def set_config_note_active(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    return _observation_out(row, session)
 
 
 def _what_exists(session: Session) -> tuple[list[str], list[str]]:
@@ -996,13 +1012,7 @@ def _summary(rule_kind: str, row: Any) -> str:
     Returns:
         The summary the rules screen searches and shows.
     """
-    if rule_kind == "field_constraint":
-        return f"{row.field} {row.constraint} {row.value}"
-    if rule_kind == "programme_rule":
-        return f"{row.scope_code} {row.strictness}: {row.text}"
-    if rule_kind == "check":
-        return str(row.expression or row.instruction)
-    return str((row.requirement or {}).get("json_path_contains", ""))
+    return provenance.summary_of(rule_kind, row)
 
 
 @router.get("/admin/rules", response_model=list[RuleOut])
@@ -1216,6 +1226,47 @@ def act_on_rule(
         for rule in collect_rules(session, state="all")
         if rule.rule_kind == rule_kind and rule.id == rule_id
     )
+
+
+@router.get("/admin/rules/{rule_kind}/{rule_id}/shadow-findings", response_model=list[FindingOut])
+def shadow_findings(
+    rule_kind: str,
+    rule_id: int,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_admin),
+    limit: int = Query(default=25, ge=1, le=200),
+) -> list[FindingOut]:
+    """What a rule found while running in shadow (ADR-040).
+
+    A shadow rule's findings are stored and counted and shown to no reviewer. That kept
+    reviewers unburdened and left nobody able to say a shadow finding was wrong, so its
+    dismissal rate was pinned at zero and "precision becomes knowable in shadow" was a
+    promise with no mechanism. The administrator who decides whether to activate the
+    rule is the person who should see them, and may dismiss one through the ordinary
+    finding review.
+
+    Args:
+        rule_kind: Which rule surface.
+        rule_id: The rule.
+        session: The request's session.
+        _user: The calling administrator.
+        limit: How many, newest run first.
+
+    Returns:
+        The shadow findings, with the run each came from.
+
+    Raises:
+        HTTPException: 404 when the rule kind is not one.
+    """
+    if rule_kind not in provenance.RULE_TABLES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"{rule_kind!r} is not a rule kind")
+    rows = session.execute(
+        sa.select(models.Finding)
+        .where(models.Finding.rule_ref == f"{rule_kind}:{rule_id}", models.Finding.shadow.is_(True))
+        .order_by(models.Finding.run_id.desc(), models.Finding.id)
+        .limit(limit)
+    ).scalars()
+    return provenance.decorate_findings(session, [FindingOut.model_validate(row) for row in rows])
 
 
 @router.get("/admin/rules/{rule_kind}/{rule_id}/history", response_model=list[RuleStateChangeOut])
