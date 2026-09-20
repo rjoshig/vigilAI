@@ -61,6 +61,7 @@ _ARTIFACT_FIELDS: Final[tuple[str, ...]] = (
 
 #: Sample fields the snapshot keeps; enough to re-create the row on a revert.
 _SAMPLE_FIELDS: Final[tuple[str, ...]] = (
+    "scope_code",
     "label",
     "notes",
     "filename",

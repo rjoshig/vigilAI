@@ -270,6 +270,7 @@ def _artifact_out(
         wire.SampleOut(
             id=sample.id,
             label=sample.label,
+            scope_code=sample.scope_code or "",
             filename=sample.filename,
             sheets=list(sample.sheets or []),
             size_bytes=sample.size_bytes,
@@ -424,11 +425,12 @@ def upload_sample(
     file: Annotated[UploadFile, File()],
     label: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
+    scope_code: Annotated[str, Form()] = "",
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(require_admin),
 ) -> wire.ArtifactTypeOut:
-    """Add a sample to an artifact type, up to three.
+    """Add a sample to an artifact type, up to three per delivery programme.
 
     Args:
         key: The artifact key.
@@ -455,10 +457,15 @@ def upload_sample(
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
-    if len(row.samples) >= MAX_SAMPLES:
+    scope = scope_code.strip().upper()
+    if scope and catalog.scope_for(session, scope) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no programme {scope!r}")
+    in_scope = [sample for sample in row.samples if (sample.scope_code or "") == scope]
+    if len(in_scope) >= MAX_SAMPLES:
+        where = f"for programme {scope}" if scope else "as global samples"
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"{key!r} already has {MAX_SAMPLES} samples; remove one before adding another",
+            f"{key!r} already has {MAX_SAMPLES} samples {where}; remove one before adding another",
         )
 
     try:
@@ -479,6 +486,7 @@ def upload_sample(
         artifact_type_id=row.id,
         label=label.strip(),
         notes=notes.strip(),
+        scope_code=scope,
         filename=stored.filename,
         storage_path=stored.storage_key,
         sha256=stored.sha256,
