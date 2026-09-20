@@ -56,7 +56,7 @@ from greenlight_ai.config import store as config_store
 from greenlight_ai.checks import field_labels
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.db import catalog, models, repository, versions
-from greenlight_ai.training import lifecycle
+from greenlight_ai.training import demotion, lifecycle
 from greenlight_ai.llm.cache import LLMCache
 from greenlight_ai.llm.client import LLMError
 from greenlight_ai.llm.factory import build_client
@@ -3289,3 +3289,54 @@ def list_corrections(
             )
         )
     return out
+
+
+@router.get("/demotion-report", response_model=wire.DemotionReportOut)
+def demotion_report(
+    customer_name: str = Query(default=""),
+    scope: str = Query(default=""),
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.DemotionReportOut:
+    """What demotion would do, while it still does nothing (Phase 6.18a, ADR-043).
+
+    The tool has counted every verdict a reviewer gave since Phase 6.13 and acted on
+    none of them. This reports what those verdicts add up to: which recurring findings
+    have been waved through often enough to have earned their way out of the review
+    queue, and which a person has upheld and so never can.
+
+    **Nothing here changes what a reviewer sees.** It is the evidence for the decision
+    to let it, which is 6.18b's, and the baseline 6.18c measures against.
+
+    Args:
+        customer_name: Limit to one customer, or every customer when empty.
+        scope: Limit to one delivery programme, or every programme when empty.
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The report: how many signatures sit in each state, those that would be
+        demoted, and those a reviewer has blocked by upholding them.
+    """
+    query = sa.select(models.FindingSignatureState)
+    if customer_name:
+        query = query.where(models.FindingSignatureState.customer_name == customer_name)
+    if scope:
+        query = query.where(models.FindingSignatureState.scope == scope)
+    rows = list(
+        session.execute(query.order_by(models.FindingSignatureState.last_seen.desc())).scalars()
+    )
+    return wire.DemotionReportOut(
+        counts=demotion.summarize([row.state for row in rows]),
+        would_demote=[
+            wire.SignatureStateOut.model_validate(row)
+            for row in rows
+            if row.state == demotion.WOULD_DEMOTE
+        ],
+        blocked=[
+            wire.SignatureStateOut.model_validate(row)
+            for row in rows
+            if row.state == demotion.BLOCKED
+        ],
+        shadow=True,
+    )

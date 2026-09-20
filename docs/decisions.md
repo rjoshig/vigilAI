@@ -1466,3 +1466,103 @@ The structural guard matters more than the keyword fix it replaced: removing `sn
 and `historical` corrected one instance, and "a programme is named only on words it
 alone claims" is what stops an administrator recreating it with the next overlapping
 word they add.
+
+## ADR-043 — A finding earns its way out of the review queue on human verdicts alone, and earns it in shadow first
+
+**Status:** accepted 2026-09-20 (Phase 6.18a, user decision).
+
+**Context:** The product's value at volume is a reviewer who reads the findings that
+matter instead of all of them. The tool has recorded every verdict a reviewer gave since
+Phase 6.11 and displayed a per-rule fired/dismissed tally since 6.13, and **nothing has
+ever read either**. Meanwhile a misreading had taken hold, in conversation and in review:
+that ADR-021 requires a person to see every finding. It does not. It requires a person
+at the gate of a **rule**, and approving a rule is precisely the act of saying *apply
+this without asking me again*. A tool that keeps asking has wasted the approval.
+
+**Decision:** Group findings into **signatures** and let a signature stop reaching the
+review queue when the people who saw it have consistently said it did not matter.
+
+- **A signature is one customer, one delivery programme, one rule, and one thing it
+  fired on.** Trust is shared across a customer's deliveries within a programme and
+  never across programmes, because a control genuinely is implemented differently under
+  Account Solicitation than under Archives. The thing it fired on is part of the
+  identity: a blank score column and a blank state column share a rule and are not the
+  same finding, and pooling them would let evidence about a harmless case silence one
+  that matters.
+- **Ten occurrences, every one waved through.** A count with no exceptions in it, not a
+  rate. *"It was shown to a person ten times and never once mattered"* can be said to an
+  auditor; *"nine times out of ten"* cannot, because the tenth is the one that would
+  have been hidden. The count is settable upward; what a verdict means is not.
+- **One upheld finding blocks the signature permanently**, until a person clears it.
+  `accepted_risk` counts as upheld, not as a dismissal: the reviewer agreed the finding
+  was true and chose to carry it, which is the opposite of saying it should never have
+  been raised.
+- **`high` and above are never demoted**, at any level of evidence. The goal is a
+  reviewer who reads only the serious findings, not one who reads none.
+- **Nothing returns on its own.** A demotion is undone by a person or by a new verdict
+  upholding the finding, never by elapsed time — ADR-021's rule that nothing in the
+  training record expires by itself.
+- **Findings from a rule in shadow are not evidence.** A rule nobody has been shown
+  cannot have earned anybody's trust, and counting them would let a shadow rule demote
+  itself.
+- **The decision is arithmetic over human verdicts** (ADR-001). The model is not asked
+  whether a finding is important, and a model's stated confidence is not evidence here.
+  Confidence is used elsewhere in this product to *discard* a weak answer and never to
+  *trust* a strong one; that asymmetry stays.
+
+**And it ships in shadow.** 6.18a computes every signature's state, records it with the
+runs whose verdicts justify it, and **changes nothing about what any reviewer sees**.
+That is deliberate: the first evidence about whether demotion is safe must not be a
+reviewer failing to see something. After some weeks there is a real list to put the
+question to — *it would have hidden these forty; was any of them real?* — and that
+evidence is what 6.18b acts on and 6.18c measures.
+
+**Consequences:** One table, `finding_signatures`, which is a cache of an answer
+derivable from `findings` and `runs`; it exists because a demotion must be explainable
+months later, so it stores the sentence and the run ids rather than only the verdict.
+Recomputation reads every finding sharing a signature rather than adjusting a counter,
+so a corrected verdict or a deleted run lands correctly with nobody remembering to undo
+anything. `GET /admin/demotion-report` is the shadow report.
+
+What this does **not** do is remove a human from signing off a delivery. The finalize
+attestation of Phase 6.11 is untouched. What shrinks is how many findings a reviewer
+must read before they can honestly sign — not whether they sign.
+
+## ADR-044 — The compliance locator is told the run's programme and its standing instructions
+
+**Status:** accepted 2026-09-20 (Phase 6.17c, user decision).
+
+**Context:** When the deterministic compliance matcher finds nothing, stage 6 asks the
+model where the control is, if anywhere. `phase-6.15.md` left open whether that prompt
+should be told which programme the run belongs to. The question was written as though
+it were not, and **the shipped code already was**: `_locate()` prepends
+`preamble(context.guidance)`, which emits the programme's label and that programme's
+standing instructions. Nobody decided this; it arrived with the preamble.
+
+Nothing asserted it either, so a refactor could have dropped it, or doubled it, with
+every test still passing.
+
+**Decision:** Keep both, pin them with tests, and record the decision that was never
+made.
+
+The argument for is the one 6.15 anticipated: OFAC screening may be implemented
+differently under Account Solicitation than under Archives, and the model cannot know
+that from a configuration alone. The argument against is real and specific to this
+prompt — it is the only call in the product whose answer can soften a high-severity
+compliance finding — but it is bounded by guards code already applies: the model may
+only quote a path from the list it was given, must clear a confidence floor, must
+answer `found` rather than hedge, and **a located control is never a pass**. It becomes
+a review-severity question for a person. A standing instruction cannot clear a
+requirement; at worst it costs a reviewer one more question.
+
+**Consequences:** Four tests in `tests/pipeline/test_compliance_locate.py` now assert
+what reaches this prompt: that the programme and its standing instructions arrive, that
+they are labelled as background rather than as a requirement, that the preamble is sent
+once rather than twice, and that a run with nothing configured sends no preamble at all,
+so the prompt is byte-for-byte what it was before any of this existed.
+
+The narrower option — sending the programme label but not the administrator's free text
+— stays available and is a one-line change if a measurement ever shows the prose
+steering an answer. Running that measurement needs a real model, since the mock always
+answers `absent`; it is worth doing if the locator is ever seen to be too generous, and
+is not worth blocking on now.

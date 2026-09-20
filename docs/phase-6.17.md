@@ -172,25 +172,36 @@ writing it finds out afterwards, if at all.
 model what was left out, so nothing is silently wrong — it is only less helpful than it
 could be. Worth doing when somebody hits it, not before.
 
-### 6.17c — How scope interacts with the compliance locator · ⬜ not started
+### 6.17c — How scope reaches the compliance locator · ✅ complete
 
-The last unanswered question from `docs/phase-6.15.md`.
+The last unanswered question from `docs/phase-6.15.md`, and the answer is that **it was
+already answered by the code**. ADR-044 records it.
 
-A compliance rule carries a scope. The locator is asked about a configuration without
-being told which programme the run belongs to, or what the programme's standing
-instructions say about it.
+The question was written as though the locator is asked about a configuration without
+being told which programme the run belongs to. It is not: `_locate()` prepends
+`preamble(context.guidance)`, and that preamble emits the programme's label and that
+programme's standing instructions, labelled as background. Nobody decided this — it
+arrived with the preamble when 6.15 option A was built — and **nothing asserted it**, so
+a refactor could have dropped it or doubled it with every test still green.
 
-- [ ] Decide whether the locator should see the run's programme and its standing
-      instructions. The argument for: "OFAC screening" may be implemented differently
-      under Account Solicitation than under Archives, and the model cannot know that.
-      The argument against: every field added to that prompt is one more thing that can
-      steer it toward finding something, and the locator's honest prior is that the
-      control is absent.
-- [ ] If it should, it belongs in the existing preamble rather than a new prompt field,
-      because that is where scope context already reaches every other stage.
+- [x] Decide whether the locator should see the run's programme and its standing
+      instructions. **It already does, and it keeps doing so.** The argument against is
+      real and specific — this is the only call whose answer can soften a high-severity
+      compliance finding — but it is bounded by guards code already applies: the model
+      may only quote a path it was offered, must clear a confidence floor, must answer
+      `found` rather than hedge, and a located control is never a pass. At worst a
+      standing instruction costs a reviewer one more question.
+- [x] It belongs in the existing preamble rather than a new prompt field, which is where
+      it already was.
+- [x] Four tests now pin what reaches this prompt: that both arrive, that they are
+      labelled as background rather than as a requirement, that the preamble is sent
+      once rather than twice, and that a run with nothing configured sends no preamble
+      at all.
 
-**Not urgent:** the locator is already conservative, and code rejects any path it did
-not offer.
+**Left available, not done:** sending the programme label without the administrator's
+free text. A one-line change if a measurement ever shows the prose steering an answer,
+and measuring it needs a real model because the mock always answers `absent`. Worth
+doing if the locator is ever seen to be too generous; not worth blocking on.
 
 ## Standing touchpoints, which are nobody's phase and everybody's problem
 

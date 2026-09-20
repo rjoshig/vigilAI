@@ -18,6 +18,7 @@ import type {
   ComplianceRule,
   ConfigChange,
   CurrentUser,
+  DemotionReport,
   DraftResponse,
   FrontDoorResult,
   MaskedColumn,
@@ -415,6 +416,15 @@ export const api = {
 
   /** Read the dashboard numbers. */
   getUsage: (): Promise<Usage> => request<Usage>("/usage"),
+
+  /** What demotion would do, while it still does nothing (Phase 6.18a). */
+  getDemotionReport: (customer = "", scope = ""): Promise<DemotionReport> => {
+    const query = new URLSearchParams();
+    if (customer) query.set("customer_name", customer);
+    if (scope) query.set("scope", scope);
+    const suffix = query.toString();
+    return request<DemotionReport>(`/demotion-report${suffix ? `?${suffix}` : ""}`);
+  },
 
   /** What the tool displaced between two dates, counted from the run records. */
   getValueReport: (start: string, end: string): Promise<ValueReport> =>

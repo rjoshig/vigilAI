@@ -330,6 +330,39 @@ export interface Usage {
   decisions: Record<string, number>;
 }
 
+/* ----------------------------------------------------- What a reviewer stops seeing */
+
+/** One recurring finding and what people have decided about it (Phase 6.18a). */
+export interface SignatureState {
+  signature: string;
+  customer_name: string;
+  /** The delivery programme. Trust is learned per customer per programme. */
+  scope: string;
+  rule_ref: string;
+  finding_type: string;
+  /** What it fired on. Two columns are two signatures, however much they share a rule. */
+  element_ref: string;
+  /** watching | would_demote | blocked */
+  state: string;
+  /** One sentence saying why it is in that state. */
+  reason: string;
+  occurrences: number;
+  dismissed: number;
+  upheld: number;
+  severities: string[];
+  /** The runs whose verdicts this rests on. */
+  justified_by_run_ids: number[];
+}
+
+/** What demotion would do, while it still does nothing (Phase 6.18a, ADR-043). */
+export interface DemotionReport {
+  counts: Record<string, number>;
+  would_demote: SignatureState[];
+  blocked: SignatureState[];
+  /** True while nothing acts on any of it. */
+  shadow: boolean;
+}
+
 /* ------------------------------------------------------------ Accounts and login */
 
 export type UserRole = "admin" | "user";

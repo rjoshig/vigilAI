@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **Phases 6.14, 6.15 and 6.16 are complete and merged. 6.17a is measured and repaired** — false high-severity findings from the programme keyword check went from five to one, and the one left is a meaning problem, deferred to 6.18f rather than dropped. **[`phase-6.18.md`](phase-6.18.md) is written and not started:** trust that is earned, measured and revocable — the phase that lets a reviewer stop reading every finding. **Next concrete action: the user reads 6.18 and answers its five open questions** (where a signature lives, how many maturity levels, whether demotion follows scope or configuration, what the minimum evidence for a promotion is, and whether a demoted signature ever returns on its own). Nothing else in 6.17 is blocking |
+| Branch | `claude/pending-items-review-f35uek`, cut from `main` at the merge of PR #54. **6.17 is closed except its two standing touchpoints** — 6.17a measured and repaired, 6.17c answered (ADR-044). **6.18 is specified and 6.18a is built, running in shadow** (ADR-043): the tool now works out which recurring findings reviewers have stopped needing to see, records it with the evidence, and **acts on none of it**. **Next concrete action: leave 6.18a running, then open the Review load screen and ask what the banner asks** — *it would have hidden these; was any of them real?* That answer decides whether 6.18b is built as specified. 6.17b (the cap countdown) and the two touchpoints remain open and unblocking |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -103,6 +103,54 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (6.18a built in shadow, 6.17c closed)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.18a complete, 6.17c
+complete, all gates green at 1485 tests and all five admin-ui gates.
+
+**6.18a — findings that learn their own severity.** The tool has recorded every verdict
+since Phase 6.11 and displayed a per-rule tally since 6.13, and nothing read either.
+Now something does. ADR-043 holds the decisions, all of which the user answered before
+a line was written.
+
+A **signature** is one customer, one delivery programme, one rule, and one thing it
+fired on. Ten occurrences with every one waved through earns `would_demote`; one upheld
+finding blocks it permanently, `accepted_risk` counting as upheld because the reviewer
+agreed it was true; `high` and above are never demoted at any evidence; findings from a
+shadow rule are not evidence, or a rule nobody was shown could demote itself; nothing
+returns on its own.
+
+**And it acts on nothing.** A test asserts that a signature at `would_demote` still puts
+its finding in front of a reviewer, undecided, exactly as before — the property the whole
+of 6.18a rests on and the one a later change is most likely to break quietly. The
+`Review load` screen carries the question it exists for in words.
+
+**6.17c.** The phase doc's premise was wrong about the code: the locator already receives
+the run's programme and its standing instructions through the preamble, and nothing
+asserted it. Kept, pinned with four tests, recorded as ADR-044. The narrower option —
+the programme label without the administrator's free text — stays a one-line change if a
+measurement ever shows the prose steering an answer.
+
+**A real defect found and fixed mid-build.** The new migration shipped with a revision id
+another migration already claimed, and **every test stayed green**, because the suite
+builds its schema from the models with `create_all` and nothing exercised alembic at all.
+An operator would have found it. `tests/db/test_migration_chain.py` now covers the three
+ways the chain breaks in practice and runs a real upgrade against an empty database,
+comparing the result to the models.
+
+**Pending:** 6.18's remaining scope (b–f) and its three still-open questions — the
+evidence bar for a maturity *promotion*, the sample rate, and whether promotion belongs
+in 6.18b; 6.17b, the cap countdown; and the two standing touchpoints,
+`gd-rollout-plan.md` unread since 6.13 and both training documents still dated *after
+Phase 6.14*. `admin-training.md` now documents the keyword rules and the Review load
+screen, but its date is deliberately unchanged rather than claiming a full realignment
+with 6.15 and 6.16 that has not been done.
+
+**Next concrete action:** let 6.18a gather evidence, then read the Review load screen and
+answer its question before building 6.18b.
 
 ---
 

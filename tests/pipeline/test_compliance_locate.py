@@ -46,6 +46,8 @@ class _Client:
 
     def complete(self, system: str, user: str, schema: Any, **kwargs: Any) -> Any:
         self.calls += 1
+        self.system = system
+        self.user = user
         if self.raises:
             raise LLMError("no answer")
 
@@ -59,7 +61,7 @@ class _Client:
         return _Result(self.answer)
 
 
-def _context(client: Any) -> RunContext:
+def _context(client: Any, guidance: Any = None) -> RunContext:
     """A context carrying only what stage 6's compliance check reads."""
     context = RunContext(
         run_id="TEST-LOCATE",
@@ -68,6 +70,7 @@ def _context(client: Any) -> RunContext:
         report_paths={},
         client=client,
         admin=AdminConfig(compliance_rules=(RULE,)),
+        **({"guidance": guidance} if guidance is not None else {}),
     )
     context.config = JsonConfigParser().parse_mapping(CONFIG, Path("config.json"))
     return context
@@ -168,3 +171,73 @@ class TestWhenItAsksAtAll:
         context = _context(client)
         s6_reverse._check_compliance(context, context.admin, "Acme")
         assert client.calls == 1
+
+
+class TestWhatTheLocatorIsTold:
+    """What reaches this prompt, pinned (Phase 6.17c, ADR-044).
+
+    The locator receives the run's delivery programme and that programme's standing
+    instructions, through the same preamble every other stage gets. Nothing asserted
+    it, so a refactor could have dropped it — or doubled it — with every test still
+    green. These are that assertion.
+
+    It is worth pinning here rather than anywhere else because this is the one call
+    whose answer can soften a high-severity compliance finding into a question.
+    """
+
+    def test_the_programme_and_its_standing_instructions_reach_the_prompt(self) -> None:
+        from greenlight_ai.pipeline.guidance import RunGuidance
+
+        client = _Client(_answer(verdict="absent", json_path=""))
+        context = _context(
+            client,
+            RunGuidance(
+                scope_code="AS",
+                scope_label="Account Solicitation",
+                scope_instructions="Screening is performed by the service bureau upstream.",
+            ),
+        )
+        s6_reverse._check_compliance(context, context.admin, "Acme")
+
+        assert client.calls == 1
+        assert "Account Solicitation" in client.user
+        assert "service bureau upstream" in client.user
+
+    def test_they_arrive_labelled_as_background_not_as_a_requirement(self) -> None:
+        """An administrator's prose must never read to the model as an instruction.
+
+        The preamble says so in words, and this is the one prompt where it matters
+        most: a standing instruction about the very control being located is exactly
+        the sentence that could steer an answer.
+        """
+        from greenlight_ai.pipeline.guidance import RunGuidance
+
+        client = _Client(_answer(verdict="absent", json_path=""))
+        context = _context(
+            client,
+            RunGuidance(scope_code="AS", scope_label="Account Solicitation"),
+        )
+        s6_reverse._check_compliance(context, context.admin, "Acme")
+
+        assert "background rather than a requirement" in client.user
+
+    def test_it_is_sent_once_not_twice(self) -> None:
+        """A doubled preamble would spend the cap and read as emphasis."""
+        from greenlight_ai.pipeline.guidance import RunGuidance
+
+        client = _Client(_answer(verdict="absent", json_path=""))
+        context = _context(
+            client,
+            RunGuidance(scope_code="AS", scope_label="Account Solicitation"),
+        )
+        s6_reverse._check_compliance(context, context.admin, "Acme")
+
+        assert client.user.count("This delivery is Account Solicitation.") == 1
+
+    def test_a_run_with_no_programme_sends_no_preamble_at_all(self) -> None:
+        """Nothing configured means the prompt is what it was before any of this."""
+        client = _Client(_answer(verdict="absent", json_path=""))
+        context = _context(client)
+        s6_reverse._check_compliance(context, context.admin, "Acme")
+
+        assert "background rather than a requirement" not in client.user

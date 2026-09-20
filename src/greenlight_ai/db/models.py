@@ -1223,3 +1223,51 @@ class Job(Base):
     locked_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)
     finished_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+
+
+class FindingSignatureState(Base):
+    """What people have decided about one recurring finding (Phase 6.18a).
+
+    A **signature** is the identity of "this same finding again": one customer, one
+    delivery programme, one rule, and one thing it fired on. The row holds the verdicts
+    people gave it and what code concluded from them — see `training/demotion.py` for
+    the rules and the reasoning behind each.
+
+    The row is a cache of an answer derivable from `findings` and `runs`, kept because
+    a demotion has to be explainable months later: ``justified_by_run_ids`` names the
+    runs whose verdicts it rests on, and ``reason`` is the sentence a reviewer is owed.
+
+    **In 6.18a the state is recorded and acted on by nobody.** Every reviewer still sees
+    every finding; this measures what demotion *would* do so that the question can be
+    asked from evidence before it changes anybody's screen (ADR-043).
+    """
+
+    __tablename__ = "finding_signatures"
+
+    id: Mapped[int] = _pk()
+    #: The digest from :func:`greenlight_ai.training.demotion.signature`.
+    signature: Mapped[str] = mapped_column(sa.String(40), unique=True, index=True)
+
+    #: The parts, stored so a person can read what the digest stands for.
+    customer_name: Mapped[str] = mapped_column(sa.String(200), index=True, default="")
+    scope: Mapped[str] = mapped_column(sa.String(20), index=True, default="")
+    rule_ref: Mapped[str] = mapped_column(sa.String(40), default="")
+    finding_type: Mapped[str] = mapped_column(sa.String(50), default="")
+    element_ref: Mapped[str] = mapped_column(sa.String(40), default="")
+
+    #: watching · would_demote · blocked
+    state: Mapped[str] = mapped_column(sa.String(20), default="watching", index=True)
+    #: One sentence saying why it is in that state. A demotion nobody can explain is
+    #: one nobody should trust.
+    reason: Mapped[str] = mapped_column(sa.Text, default="")
+
+    occurrences: Mapped[int] = mapped_column(sa.Integer, default=0)
+    dismissed: Mapped[int] = mapped_column(sa.Integer, default=0)
+    upheld: Mapped[int] = mapped_column(sa.Integer, default=0)
+    #: The severities it has fired at, so the never-demoted floor is auditable.
+    severities: Mapped[Any] = mapped_column(Json, default=list)
+    #: The runs whose verdicts this rests on — the evidence, by id.
+    justified_by_run_ids: Mapped[Any] = mapped_column(Json, default=list)
+
+    first_seen: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    last_seen: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, index=True)

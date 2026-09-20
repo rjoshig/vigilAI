@@ -429,6 +429,46 @@ is the number to watch: identical content is never sent to the model twice, and 
 that drops means something is changing prompts or inputs on every run.
 
 
+## Review load — what reviewers stop needing to see (Phase 6.18a)
+
+**Read this screen before you believe anything on it.** Nothing on it is being acted
+on: every reviewer still sees every finding, exactly as before. It shows what the tool
+*would* hide, so you can judge whether it should.
+
+The tool has recorded every verdict a reviewer gave since the review screen existed,
+and until now nothing read them. This screen adds them up.
+
+A **signature** is the identity of *this same finding again*: one customer, one
+delivery programme, one rule, and one thing it fired on. A blank score column and a
+blank state column are two signatures however much they share a rule — learning that
+one is harmless must never silence the other. Trust is learned per customer per
+programme, so what your teams learn about a customer's solicitation work never applies
+to that customer's archive work.
+
+A signature is listed as **would be hidden** once it has been shown to a reviewer **ten
+times and waved through every single time**. A count rather than a rate, and no
+exceptions in it: *"shown to a person ten times and never once mattered"* is a sentence
+that survives an audit, and *"nine times out of ten"* is not, because the tenth is the
+one that would have been hidden.
+
+Two things put a signature on the **blocked** list, where it stays:
+
+- **A reviewer judged the finding real** — marked it Not OK, or accepted it as a known
+  risk, which means they agreed it was true and chose to carry it. One of those
+  outranks any number of dismissals, forever, until somebody clears it deliberately.
+- **It fires at high severity.** These are never hidden at any level of evidence. The
+  goal is a reviewer who reads only the serious findings, not one who reads none.
+
+Every row carries the sentence explaining its state and the runs its evidence came
+from, so a decision can be checked against the deliveries it was learned from rather
+than taken on trust.
+
+**What to do with it.** Leave it for some weeks, then open it and ask the question the
+banner asks: *it would have hidden these — was any of them real?* If the answer is no,
+that is the evidence for letting reviewers stop seeing them. If any of them was real,
+the bar was wrong and the tool has told you so before anybody was hurt by it.
+
+
 ## What the model reads, and how much of it (Phase 6.11)
 
 **Three lenses, or one.** Stage 8 reads each high-severity finding a second time.

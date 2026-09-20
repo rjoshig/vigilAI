@@ -1,8 +1,9 @@
 # Phase 6.18 — Trust that is earned, measured, and revocable
 
-**Status:** ⬜ **not started** — specified 2026-09-20 from the product goal the user
+**Status:** 🟡 **in progress** — specified 2026-09-20 from the product goal the user
 stated directly: *a reviewer should not have to look at every validation point; as the
-tool learns, they should see only the real ones.*
+tool learns, they should see only the real ones.* **6.18a is built and running in
+shadow**; everything it decides is recorded and acted on by nobody, which is the point.
 
 **This is the phase that decides what the product is worth.** Everything up to here
 makes the tool correct. This makes it *usable at volume* — the difference between a
@@ -56,28 +57,55 @@ The parts have been built one phase at a time and have never been wired into a l
 **Nothing acts on any of it.** The counters are displayed and then ignored. That is the
 gap this phase closes.
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.18a — Findings that learn their own severity · ⬜ not started
+### 6.18a — Findings that learn their own severity · ✅ complete
 
-The single highest-value item, and it needs no new data — only for something to read the
-counters that already exist.
+Built 2026-09-20. **It computes, records, and changes nothing anybody sees** — the
+decisions are in ADR-043 and the reasoning lives in `training/demotion.py`.
 
-- [ ] A **finding signature**: the stable identity of "this same finding again" —
-      rule or check reference, finding type, and the scope it fired in. Not the run, not
-      the wording. Two findings share a signature when a reviewer would call them the
-      same thing.
-- [ ] A **verdict history per signature**: how many times it fired, how many times a
-      person marked it OK, how many Not OK, and the decision reasons they gave.
-- [ ] A signature whose history is overwhelmingly *OK* is **demoted**, not deleted: it
-      drops out of the review queue and onto an "also checked" list on the same screen.
-      A reviewer can open that list at any time; it is one click away, never gone.
-- [ ] A signature whose history is overwhelmingly *Not OK* is **promoted**, and this
-      matters as much: the tool should get louder about what people keep escalating.
-- [ ] Demotion and promotion are **computed by code from the counts** (ADR-001). The
-      model is not asked whether a finding is important.
-- [ ] Every demotion records **which runs' verdicts justified it**, so the decision can
-      be shown to an auditor as evidence rather than asserted as a policy.
+- [x] A **finding signature**: one customer, one delivery programme, one rule, and one
+      thing it fired on. Not the run, not the wording. Trust is shared across a
+      customer's deliveries within a programme and never across programmes, because a
+      control genuinely is implemented differently under Account Solicitation than
+      under Archives. The thing it fired on is part of the identity: a blank score
+      column and a blank state column share a rule and are not the same finding.
+- [x] A **verdict history per signature** — occurrences, dismissals, upholdings, the
+      severities it has fired at, and the runs the evidence came from. Undecided
+      findings are not counted: a finding nobody judged says nothing about whether it
+      mattered. Findings from a rule in **shadow** are not counted either, or a rule
+      nobody was shown could demote itself.
+- [x] A signature waved through **ten times with no exceptions** is marked
+      `would_demote`. A count, not a rate: *"shown to a person ten times and never once
+      mattered"* is a sentence that survives an auditor; *"nine times out of ten"* is
+      not, because the tenth is the one that would have been hidden. Settable upward.
+- [x] **One upheld finding blocks the signature permanently**, until a person clears it.
+      `accepted_risk` counts as upheld — the reviewer agreed it was true and chose to
+      carry it, which is the opposite of saying it should never have been raised.
+- [x] Computed by **code from the counts** (ADR-001). The model is not asked whether a
+      finding is important, and its confidence is not evidence here.
+- [x] Every state records **which runs' verdicts justified it**, and one sentence saying
+      why, so a decision can be shown rather than asserted.
+- [x] **`high` and above are never demoted**, at any level of evidence — the floor from
+      6.18d, brought forward because it is cheap and it is a safety property.
+- [x] **Nothing returns on its own.** A new verdict upholding the finding un-demotes it
+      immediately; otherwise a person restores it. ADR-021's rule that nothing in the
+      training record expires by itself.
+- [x] `GET /admin/demotion-report` — what demotion *would* do, narrowable to a customer
+      or a programme, with `shadow: true` on every response while that is the truth.
+- [x] **A test asserts that a signature at `would_demote` still puts its finding in
+      front of a reviewer**, undecided, exactly as before. That property is the whole of
+      6.18a, and it is the one a future change is most likely to break quietly.
+
+**Promotion — a signature people keep escalating getting louder — is specified above
+and is not built.** It changes what a reviewer sees, so it belongs with 6.18b's maturity
+levels rather than ahead of them, and unlike demotion there is no safe shadow version of
+making something noisier.
+
+**What to do with this before building 6.18b.** Let it run for some weeks and then open
+the report and ask the question it exists for: *it would have hidden these — was any of
+them real?* That answer, not this code, is what says whether the rest of the phase
+should be built as specified.
 
 ### 6.18b — A maturity level per customer or configuration · ⬜ not started
 
@@ -197,16 +225,29 @@ read before they can honestly sign — not whether they sign.
 **It is not irreversible.** Every level can be dropped, instantly, by anyone with the
 console. The tool can revoke its own trust and can never grant it.
 
-## Open questions
+## Decisions taken
 
-- [ ] **Where does a signature live** — beside the rule, or in its own table? A check
-      and a learned rule both produce findings, and both need the same history.
-- [ ] **How many maturity levels?** Three is the instinct. Two may be enough, and fewer
-      is easier to explain to a customer.
-- [ ] **Does demotion follow a scope or a configuration?** A customer running the same
-      programme twice probably wants one answer; two customers should not share trust.
-- [ ] **What is the minimum evidence** for a promotion — deliveries, findings, or both?
-      This wants a number the delivery team recognizes, not one invented here.
-- [ ] **Does a demoted signature ever come back on its own** after enough time or a
-      changed configuration? ADR-021's "no rule expires on its own" suggests not, but a
-      configuration that changed materially is a different question.
+Answered by the user on 2026-09-20, before 6.18a was built. Recorded here so they are
+not relitigated; the ones 6.18a acted on are in ADR-043.
+
+| Question | Answer |
+| --- | --- |
+| How many maturity levels | **Three** — training, supervised, trusted. The middle one is where the evidence for the final step is collected, so a customer never jumps from *see everything* straight to *see almost nothing*. |
+| What trust attaches to | **Customer plus programme.** Faster to mature than per-configuration, and it respects the boundary where a control genuinely is implemented differently. |
+| What 6.18a does on day one | **Shadow.** Compute, record, show nobody. The first evidence about whether demotion is safe must not be a reviewer failing to see something. |
+| Minimum evidence to demote | **Ten occurrences, every one waved through.** A count with no exceptions, not a rate. Settable upward. |
+| Signature granularity | **Include what it fired on.** Two columns, two signatures, however much they share a rule. |
+| Does a demotion ever lapse | **Never on its own.** A person restores it, or a new verdict upholding the finding un-demotes it immediately. |
+| Where a signature lives | Its own table, `finding_signatures` — a check and a learned rule both produce findings and both need the same history. |
+
+## Still open
+
+- [ ] **What is the minimum evidence for a maturity *promotion*** — deliveries,
+      findings, or both? Distinct from the ten-dismissal bar above, which governs one
+      signature; this governs a whole configuration moving up a level. It wants a
+      number the delivery team recognizes rather than one invented here, and 6.18a's
+      shadow report is what will suggest it.
+- [ ] **What the sample rate should be** (6.18e). Two per cent is the instinct and
+      nothing has tested it.
+- [ ] **Whether promotion — findings people keep escalating getting louder — belongs in
+      6.18b or later.** It changes what a reviewer sees and has no safe shadow form.

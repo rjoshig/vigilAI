@@ -626,3 +626,49 @@ class PromoteIn(BaseModel):
     rule_id: str = ""
     scope: ScopeToken = scopes.EVERYWHERE
     note: str = ""
+
+
+class SignatureStateOut(BaseModel):
+    """One recurring finding and what people have decided about it (Phase 6.18a)."""
+
+    signature: str
+    customer_name: str = ""
+    #: The delivery programme's code. Trust is learned per customer per programme, so
+    #: what Account Solicitation taught never applies to that customer's Archives work.
+    scope: str = ""
+    rule_ref: str = ""
+    finding_type: str = ""
+    #: What it fired on. A blank score column and a blank state column are two
+    #: signatures however much they share a rule.
+    element_ref: str = ""
+    #: watching · would_demote · blocked
+    state: str = "watching"
+    #: One sentence saying why it is in that state.
+    reason: str = ""
+    occurrences: int = 0
+    dismissed: int = 0
+    upheld: int = 0
+    severities: list[str] = Field(default_factory=list)
+    #: The runs whose verdicts this rests on. A demotion has to be checkable against
+    #: the deliveries it was learned from, not merely asserted.
+    justified_by_run_ids: list[int] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class DemotionReportOut(BaseModel):
+    """What demotion would do, before anything acts on it (Phase 6.18a, ADR-043).
+
+    Every reviewer still sees every finding. This is the evidence for the question
+    that decides whether they should: *it would have hidden these — was any of them
+    real?*
+    """
+
+    #: How many signatures are in each state.
+    counts: dict[str, int] = Field(default_factory=dict)
+    #: The signatures that have earned their way out of the queue, most recent first.
+    would_demote: list[SignatureStateOut] = Field(default_factory=list)
+    #: Signatures a person has upheld, which are never demotable until cleared.
+    blocked: list[SignatureStateOut] = Field(default_factory=list)
+    #: True while nothing acts on any of this, which is the whole of 6.18a.
+    shadow: bool = True
