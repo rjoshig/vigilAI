@@ -87,6 +87,8 @@ uses them yet.
 | **Validation guide** | Per report type: what a cell means and where it answers to in the OSL and the configuration, with examples from the samples. The model reads it as background; a concrete entry compiles into a shadow check (ADR-029). |
 | **Delivery drift** | What changed since the previous finalized run of the same configuration: new, resolved and carried-over Not OK findings, requirements whose value changed, and the configuration diff by path. Computed in code (ADR-030). |
 | **Theme** | One of four named palettes, each with a light and a dark variant. The deployment's default and lock come from the console over `.env`; a person's own choice, where allowed, wins for their browser (ADR-031). |
+| **Meaning entry** | One OSL requirement's links: the configuration path that implements it and the report cells that evidence it, global or per programme. Proposed by the mapping interview, confirmed by an administrator, compiled by code into a shadow check (ADR-033). |
+| **Mapping interview** | One cached model call per OSL section over the samples in scope, proposing meaning entries and asking a question when a requirement cannot be placed. |
 | **Definition version** | A snapshot of an artifact type (fields, samples, guide) or a programme's rule set, taken after every save. Ten are listed; a revert restores one as a new version (ADR-029). |
 | **Programme rule** | A sentence true of every delivery in a programme, with a strictness (must, should, advisory). The model reads for breaches; code sets the severity from the strictness (ADR-026). |
 | **Programme check** | A grep of the OSL, configuration, and report headers for the declared programme's keywords. A mismatch is a finding, never a block. |

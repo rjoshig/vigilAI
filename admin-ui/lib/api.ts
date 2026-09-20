@@ -42,6 +42,10 @@ import type {
   VersionKind,
   BulkResult,
   RulesBulkResult,
+  MeaningEntry,
+  MeaningEntryPatch,
+  MeaningSamples,
+  ProposeResult,
 } from "@/lib/types";
 
 const BASE = "/api/v1/admin";
@@ -156,11 +160,18 @@ export const api = {
    * Add one sample to an artifact type. 409 once three are stored, because the
    * fourth is refused rather than silently replacing one.
    */
-  addSample(key: string, file: File, label = "", notes = ""): Promise<ArtifactType> {
+  addSample(
+    key: string,
+    file: File,
+    label = "",
+    notes = "",
+    scopeCode = ""
+  ): Promise<ArtifactType> {
     const form = new FormData();
     form.set("file", file);
     form.set("label", label);
     form.set("notes", notes);
+    form.set("scope_code", scopeCode);
     return request<ArtifactType>(`/artifact-types/${key}/samples`, { method: "POST", body: form });
   },
 
@@ -434,6 +445,37 @@ export const api = {
     note = ""
   ): Promise<RulesBulkResult> =>
     request<RulesBulkResult>("/rules/bulk", json("POST", { items, action, confirm, note })),
+
+  /** Meaning entries of one scope (Phase 6.10). */
+  listMeaning: (scopeCode = ""): Promise<MeaningEntry[]> =>
+    request<MeaningEntry[]>(`/meaning?scope_code=${encodeURIComponent(scopeCode)}`),
+
+  /** The samples an interview on this scope reads, and what is missing. */
+  meaningSamples: (scopeCode = ""): Promise<MeaningSamples> =>
+    request<MeaningSamples>(`/meaning/samples?scope_code=${encodeURIComponent(scopeCode)}`),
+
+  /** Run the mapping interview: one cached model call per OSL section. */
+  proposeMeaning: (scopeCode = ""): Promise<ProposeResult> =>
+    request<ProposeResult>("/meaning/propose", json("POST", { scope_code: scopeCode })),
+
+  /** Write a requirement mapping by hand; it starts confirmed. */
+  createMeaning: (payload: Record<string, unknown>): Promise<MeaningEntry> =>
+    request<MeaningEntry>("/meaning", json("POST", payload)),
+
+  /** Correct an entry, decide it, or both. */
+  updateMeaning: (id: number, patch: MeaningEntryPatch): Promise<MeaningEntry> =>
+    request<MeaningEntry>(`/meaning/${id}`, json("PATCH", patch)),
+
+  /** Confirm, reject or delete several entries; delete needs the typed word. */
+  bulkMeaning: (
+    ids: number[],
+    action: "confirm" | "reject" | "delete",
+    confirm = ""
+  ): Promise<{ changed: number; missing: number[] }> =>
+    request<{ changed: number; missing: number[] }>(
+      "/meaning/bulk",
+      json("POST", { ids, action, confirm })
+    ),
 
   /** Every state this rule has moved between, with who moved it. */
   ruleHistory: (ruleKind: string, id: number): Promise<RuleStateChange[]> =>

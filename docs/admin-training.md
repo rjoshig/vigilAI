@@ -83,6 +83,23 @@ version as `v1.0`, `v1.1`, … (the first save is `v1.0`). For each type:
   ever lost. A removed sample's workbook stays on disk while a listed version still
   names it, so a revert brings the file back too.
 
+## Meaning
+
+Where each OSL requirement answers to, globally and per delivery programme. Pick a
+scope, check the **samples in scope** (a programme's own where it has any, else the
+global ones; upload them on Artifact types, choosing *Belongs to*), and press
+**Map**. The model reads every OSL section against the configuration blocks and the
+report cells and proposes, per requirement, the configuration path and the report
+cells, with a question when it cannot place one. Rows come back **proposed** or
+**open** (with the model's question). Correct a row's path, report cell or wording,
+add your note, and **Confirm**: a row with a configuration path, a report cell that
+resolves on a sample and a comparison becomes a **shadow check** on the Rules screen;
+a suggested compliance rule becomes a shadow compliance rule. **Reject** retires
+both. The bar above the rows confirms, rejects or deletes a selection under one
+typed word. A programme entry with the same key as a global one replaces it on that
+programme's runs. **By report cell** is the same guide editor as on Artifact types.
+Everything here reaches the model as background; code does the comparing.
+
 ## Delivery programmes
 
 Account Monitoring, Account Solicitation, Archives, and Other. Each carries **standing

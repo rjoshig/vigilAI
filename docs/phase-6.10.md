@@ -1,6 +1,6 @@
 # Phase 6.10 — Meaning: scoped samples, the mapping interview, and edit/delete everywhere
 
-**Status:** 🟡 **in progress** — decided 2026-09-19; Part A landed 2026-09-19.
+**Status:** ✅ **complete** (2026-09-20).
 
 **Goal:** the platform holds **global and per-programme meaning**: OSL variants as
 scoped samples, each requirement tied to the config block that implements it and the
@@ -29,7 +29,7 @@ editable everywhere and every delete is deliberate (ADR-032).
 | A confirmed mapping | **Compiles to a shadow check automatically**, like a guide entry; may also propose a compliance rule, also shadow. |
 | Bulk deletes | **One typed word per batch.** |
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### Part A — edit, delete, bulk, small UI asks · ✅ complete
 
@@ -42,30 +42,31 @@ editable everywhere and every delete is deliberate (ADR-032).
 - [x] User console tab title is "Greenlight AI"; `confirm-dialog` ready for the first
       user-side delete. ADR-032; `standards/frontend.md`; training documents.
 
-### Part B — Meaning · ⬜ not started
+### Part B — Meaning · ✅ complete
 
-- [ ] `artifact_samples.scope_code`; three samples per type **per programme**.
-- [ ] `meaning_entries`: requirement and cell entries, global or per programme, with
-      status (proposed · open · confirmed · rejected), the model's question and the
-      administrator's note; today's guide entries migrated as cell entries.
-- [ ] The mapping interview: one cached call per OSL section (`admin_map_requirement`)
+- [x] `artifact_samples.scope_code`; three samples per type **per programme**.
+- [x] `meaning_entries`: requirement entries, global or per programme, with status
+      (proposed · open · confirmed · rejected), the model's question and the
+      administrator's note. Cell entries (the validation guide) stay on the artifact
+      type, versioned with it; the Meaning screen shows them as its second tab.
+- [x] The mapping interview: one cached call per OSL section (`admin_map_requirement`)
       proposing requirement → config block → report cells → what to validate, with a
       question when unsure; the model proposes and never compares.
-- [ ] Confirm compiles a placed entry into named values and a shadow check scoped to
+- [x] Confirm compiles a placed entry into named values and a shadow check scoped to
       the programme; a confirmed compliance suggestion into a shadow compliance rule.
-- [ ] Run time: global entries plus the run's programme's, same key overrides, rendered
+- [x] Run time: global entries plus the run's programme's, same key overrides, rendered
       to stages 4 and 8 as today's guides are.
-- [ ] The Meaning screen: scope picker, samples in scope, Map, rows with pickers from
+- [x] The Meaning screen: scope picker, samples in scope, Map, rows with pickers from
       the parsed samples, the question in an amber note, confirm / reject / bulk.
-- [ ] ADR-033, glossary, training documents, this phase closed out.
+- [x] ADR-033, glossary, training documents, this phase closed out.
 
-## Acceptance criteria · 🟡 in progress
+## Acceptance criteria · ✅ complete
 
 1. [x] A delete without the typed word is refused by the API; a batch of rows goes
    under one word; a compliance rule can be edited and its version increments.
-2. [ ] An OSL sample scoped to Account Solicitation and a global one coexist; Map on
+2. [x] An OSL sample scoped to Account Solicitation and a global one coexist; Map on
    the programme proposes rows from the scoped sample.
-3. [ ] Confirming a placed row yields a shadow check with scope `programme:CODE`; an
+3. [x] Confirming a placed row yields a shadow check with scope `programme:CODE`; an
    unplaced row stays open with the model's question and compiles nothing.
-4. [ ] A run of that programme shows the model global plus programme entries, with a
+4. [x] A run of that programme shows the model global plus programme entries, with a
    same-key programme entry replacing the global one.
