@@ -22,6 +22,7 @@ from greenlight_ai.llm.prompts.registry import PROMPTS, Prompt, get_prompt, prom
 from greenlight_ai.llm.prompts.s2_extract import EXTRACT_PROMPT
 from greenlight_ai.llm.prompts.s3_describe import DESCRIBE_PROMPT
 from greenlight_ai.llm.prompts.s4_trace import TRACE_PROMPT
+from greenlight_ai.llm.prompts.s8_lenses import LENSES, LENS_LABEL, LENS_PROMPTS, lens_prompt
 from greenlight_ai.llm.prompts.s8_programme import PROGRAMME_PROMPT
 from greenlight_ai.llm.prompts.s8_verify import VERIFY_PROMPT
 from greenlight_ai.llm.prompts.s9_summarize import SUMMARIZE_PROMPT
@@ -40,6 +41,10 @@ __all__ = [
     "SYNTHESIZE_PROMPT",
     "TRACE_PROMPT",
     "VERIFY_PROMPT",
+    "LENSES",
+    "LENS_LABEL",
+    "LENS_PROMPTS",
+    "lens_prompt",
     "get_prompt",
     "prompt_versions",
 ]

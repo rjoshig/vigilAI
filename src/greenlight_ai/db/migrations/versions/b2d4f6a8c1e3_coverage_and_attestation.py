@@ -1,8 +1,9 @@
-"""coverage per run, acknowledgements, and the finalize attestation
+"""coverage per run, acknowledgements, the attestation, and lens opinions
 
 A run records what it checked and what it did not (Phase 6.11c), a person
-acknowledges each requirement no report evidenced (6.11d), and the frozen
-report carries the attestation they confirmed.
+acknowledges each requirement no report evidenced (6.11d), the frozen report
+carries the attestation they confirmed, and a finding carries what each of
+stage 8's lenses said about it (6.11e).
 
 Revision ID: b2d4f6a8c1e3
 Revises: a4b6c8d0e2f4
@@ -56,9 +57,14 @@ def upgrade() -> None:
     with op.batch_alter_table("final_reports", schema=None) as batch_op:
         batch_op.add_column(sa.Column("attestation", sa.JSON(), nullable=True))
 
+    with op.batch_alter_table("findings", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("lens_opinions", sa.JSON(), nullable=True))
+
 
 def downgrade() -> None:
     """Undo the change."""
+    with op.batch_alter_table("findings", schema=None) as batch_op:
+        batch_op.drop_column("lens_opinions")
     with op.batch_alter_table("final_reports", schema=None) as batch_op:
         batch_op.drop_column("attestation")
     op.drop_table("coverage_acknowledgements")

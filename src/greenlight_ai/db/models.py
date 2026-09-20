@@ -349,6 +349,9 @@ class Finding(Base):
     reviewed_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     verified: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     verify_agreed: Mapped[Optional[bool]] = mapped_column(sa.Boolean, nullable=True)
+    #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
+    #: the single second opinion.
+    lens_opinions: Mapped[Any] = mapped_column(Json, default=list)
 
     run: Mapped[Run] = relationship(back_populates="findings")
 

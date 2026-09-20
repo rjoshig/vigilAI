@@ -182,6 +182,9 @@ class FindingOut(BaseModel):
     review_note: str = ""
     verified: bool = False
     verify_agreed: Optional[bool] = None
+    #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
+    #: the single second opinion.
+    lens_opinions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class FindingPatch(BaseModel):

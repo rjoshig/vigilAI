@@ -242,6 +242,14 @@ class RunContext:
     #: What the run checked and what it did not, computed by stage 7 from the record
     #: above (Phase 6.11c). ``None`` before stage 7 has run.
     coverage: "Coverage | None" = None
+    #: Which lenses read a high-severity finding in stage 8 (Phase 6.11e).
+    #: ``("single",)`` is the one second opinion the tool has always made; naming
+    #: lenses has each read the same evidence independently, never each other's
+    #: answers, with code merging them. Empty turns verification off.
+    verify_lenses: tuple[str, ...] = ("single",)
+    #: A ceiling on lens calls for the whole run, beside the token budget. Past it the
+    #: remaining findings are left unverified and the run says so.
+    max_lens_calls: int = 150
     #: Run-level things a reviewer must be told that are not findings: a verification
     #: that could not run, a stage that stopped early. Appended by the stages,
     #: surfaced beside the coverage panel and recorded in the attestation (6.11c).

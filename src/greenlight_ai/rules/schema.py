@@ -11,7 +11,7 @@ downstream (standards/python.md, ADR-001).
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Sequence
+from typing import Annotated, Any, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -94,6 +94,12 @@ FindingType = Literal[
     #: The credit date on the run does not appear in the reports (ADR-027).
     "credit_date_missing",
     "could_not_evaluate",
+    #: One of stage 8's lenses saw something in the same evidence the finding does
+    #: not mention (Phase 6.11e). Always ``review`` severity: a lens proposes, it
+    #: never grades (ADR-034).
+    "lens_proposed",
+    #: A requirement no report evidenced that reads like an obligation (Phase 6.11f).
+    "coverage_gap",
 ]
 
 #: A reviewer's decision on a finding.
@@ -384,6 +390,8 @@ class Finding(BaseModel):
         verified: Whether stage 8 re-checked this finding.
         verify_agreed: Whether the second opinion agreed. Disagreement downgrades the
             severity to ``"review"`` rather than dropping the finding.
+        lens_opinions: What each lens said, when several read the finding
+            (Phase 6.11e). Empty for a run made with one second opinion.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -404,6 +412,11 @@ class Finding(BaseModel):
     review_note: str = ""
     verified: bool = False
     verify_agreed: bool | None = None
+    #: What each of stage 8's lenses said, in order (Phase 6.11e): its name, whether
+    #: it answered, whether it agreed, its reason and its confidence. Shown in the
+    #: evidence panel so a reviewer reading a disputed finding sees the argument
+    #: rather than only the verdict.
+    lens_opinions: tuple[dict[str, Any], ...] = ()
 
     @property
     def needs_decision(self) -> bool:

@@ -25,6 +25,8 @@ __all__ = [
     "DescribeResponse",
     "TraceResponse",
     "VerifyResponse",
+    "LensResponse",
+    "MissedItem",
     "SummarizeResponse",
 ]
 
@@ -107,6 +109,29 @@ class VerifyResponse(BaseModel):
     agreed: bool
     reason: str = ""
     confidence: Confidence = 0.5
+
+
+class MissedItem(BaseModel):
+    """Something a lens saw in the evidence that the finding does not mention."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = ""
+    reason: str = ""
+    confidence: Confidence = 0.5
+
+
+class LensResponse(VerifyResponse):
+    """One lens's reading of a finding (Phase 6.11e).
+
+    The same answer stage 8 has always wanted, plus at most one thing this lens noticed
+    and the finding did not. A proposal is never a graded finding: it becomes a review
+    item for a person (ADR-034).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    missed: tuple[MissedItem, ...] = ()
 
 
 class SummarizeResponse(BaseModel):

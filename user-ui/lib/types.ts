@@ -135,6 +135,15 @@ export interface Evidence {
   sample_rows?: number[];
 }
 
+/** One reader's view of a finding. They never see each other; code merges them. */
+export interface LensOpinion {
+  lens: string;
+  answered: boolean;
+  agreed?: boolean;
+  reason?: string;
+  confidence?: number;
+}
+
 export interface Finding {
   id: number;
   finding_id: string;
@@ -151,6 +160,8 @@ export interface Finding {
   review_note: string;
   verified: boolean;
   verify_agreed: boolean | null;
+  /** What each of stage 8's readers said, when several read it (Phase 6.11e). */
+  lens_opinions?: LensOpinion[];
 }
 
 export interface Rule {

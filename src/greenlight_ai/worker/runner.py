@@ -183,6 +183,8 @@ def build_context(
         aliases=repository.load_aliases(session, run.customer_name),
         masked_columns=repository.load_masked_columns(session),
         rules_version=run.rules_version,
+        verify_lenses=llm_settings.verify_lenses,
+        max_lens_calls=llm_settings.max_lens_calls_per_run,
     )
 
     for row in session.execute(

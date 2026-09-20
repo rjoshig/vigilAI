@@ -9,12 +9,17 @@ real problem.
 from __future__ import annotations
 
 import logging
-from typing import Final
+from typing import Final, Sequence
 
 from greenlight_ai.llm.client import LLMError
+from greenlight_ai.llm.prompts.s8_lenses import LENS_LABEL, lens_prompt
 from greenlight_ai.llm.prompts.s8_programme import PROGRAMME_PROMPT
 from greenlight_ai.llm.prompts import VERIFY_PROMPT
-from greenlight_ai.llm.prompts.schemas import ProgrammeRulesResponse, VerifyResponse
+from greenlight_ai.llm.prompts.schemas import (
+    LensResponse,
+    MissedItem,
+    ProgrammeRulesResponse,
+)
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.pipeline.guidance import guide_block, preamble
 from greenlight_ai.rules.schema import Evidence, Finding, Severity
@@ -23,71 +28,122 @@ __all__ = ["run", "format_evidence"]
 
 _LOG: Final = logging.getLogger(__name__)
 
+#: Below this a lens was guessing, and a guess is not worth a reviewer's time.
+_PROPOSAL_CONFIDENCE_FLOOR: Final[float] = 0.5
+
 
 def run(context: RunContext) -> None:
-    """Ask for a second opinion on every high-severity finding.
+    """Read every high-severity finding through the configured lenses.
+
+    One lens (``single``) is the second opinion the tool has always asked for. Several
+    lenses read the same evidence independently, never each other's answers, and code
+    merges what they say (Phase 6.11e, ADR-034).
 
     Args:
-        context: The run context, whose high-severity findings this may downgrade.
+        context: The run context, whose high-severity findings this may downgrade and
+            whose findings this may add review items to.
     """
     _read_programme_rules(context)
+
+    lenses = tuple(context.verify_lenses)
+    if not lenses:
+        high = sum(1 for f in context.findings if f.severity == "high" and not f.verified)
+        if high:
+            context.notices.append(
+                f"Verification is switched off, so {high} high-severity finding(s) were not "
+                "read a second time. They are shown exactly as the checks produced them."
+            )
+        return
 
     verified: list[Finding] = []
     disputed = 0
     unverified: list[str] = []
+    proposals: list[tuple[Finding, str, MissedItem]] = []
+    calls = 0
+    capped = False
 
     for finding in context.findings:
         if finding.severity != "high" or finding.verified:
             verified.append(finding)
             continue
-
-        try:
-            result = context.client.complete(
-                VERIFY_PROMPT.system,
-                preamble(context.guidance)
-                + VERIFY_PROMPT.render(
-                    finding=f"{finding.type} — {finding.title}. {finding.detail}",
-                    evidence=format_evidence(finding.evidence),
-                ),
-                VERIFY_PROMPT.schema,
-                stage="s8_verify",
-                prompt_version=VERIFY_PROMPT.version,
-            )
-            answer = result.parsed(VerifyResponse)
-        except LLMError as exc:
-            # A verification that cannot run leaves the finding exactly as it was: the
-            # second opinion is an improvement, not a gate. It is not silent either:
-            # the reviewer is told which findings went unverified (Phase 6.11c).
-            _LOG.warning(
-                "run %s: verification of %s failed (%s); keeping the finding unchanged",
-                context.run_id,
-                finding.finding_id,
-                type(exc).__name__,
-            )
+        if calls + len(lenses) > context.max_lens_calls:
+            capped = True
             unverified.append(finding.finding_id)
             verified.append(finding.model_copy(update={"verified": False}))
             continue
 
-        if answer.agreed:
-            verified.append(finding.model_copy(update={"verified": True, "verify_agreed": True}))
+        opinions: list[dict[str, object]] = []
+        for lens in lenses:
+            calls += 1
+            answer = _ask(context, lens, finding)
+            if answer is None:
+                # A lens that did not answer counts as neither agreement nor
+                # disagreement: two lenses that agree still verify the finding.
+                opinions.append({"lens": lens, "answered": False})
+                continue
+            opinions.append(
+                {
+                    "lens": lens,
+                    "answered": True,
+                    "agreed": answer.agreed,
+                    "reason": answer.reason,
+                    "confidence": answer.confidence,
+                }
+            )
+            for item in getattr(answer, "missed", ()):
+                proposals.append((finding, lens, item))
+
+        answered = [o for o in opinions if o.get("answered")]
+        if not answered:
+            _LOG.warning(
+                "run %s: no lens answered for %s; keeping the finding unchanged",
+                context.run_id,
+                finding.finding_id,
+            )
+            unverified.append(finding.finding_id)
+            verified.append(
+                finding.model_copy(update={"verified": False, "lens_opinions": tuple(opinions)})
+            )
             continue
 
+        dissenting = [o for o in answered if not o.get("agreed")]
+        if not dissenting:
+            verified.append(
+                finding.model_copy(
+                    update={
+                        "verified": True,
+                        "verify_agreed": True,
+                        "lens_opinions": tuple(opinions),
+                    }
+                )
+            )
+            continue
+
+        # Any disagreement sends the finding to a person, with every reason attached.
+        # A lens can lower confidence in a finding; it can never raise a severity.
         disputed += 1
+        summary = _disagreement(answered, dissenting)
         verified.append(
             finding.model_copy(
                 update={
                     "verified": True,
                     "verify_agreed": False,
                     "severity": "review",
+                    "lens_opinions": tuple(opinions),
                     "detail": (
-                        f"{finding.detail} Second opinion disagreed: {answer.reason} "
-                        "The finding is kept for a person to judge."
+                        f"{finding.detail} {summary} " "The finding is kept for a person to judge."
                     ),
                 }
             )
         )
 
     context.findings = verified
+    _add_proposals(context, proposals)
+    if capped:
+        context.notices.append(
+            f"The per-run limit of {context.max_lens_calls} verification call(s) was reached, "
+            "so some high-severity findings were not read a second time."
+        )
     if unverified:
         context.notices.append(
             f"The second opinion could not be obtained for {len(unverified)} high-severity "
@@ -101,6 +157,143 @@ def run(context: RunContext) -> None:
         sum(1 for f in verified if f.verified),
         disputed,
     )
+
+
+def _reason_of(opinion: dict[str, object]) -> str:
+    """One lens's reason, without its trailing stop.
+
+    Args:
+        opinion: The stored opinion.
+
+    Returns:
+        The reason, or a stand-in when the lens gave none.
+    """
+    return str(opinion.get("reason") or "no reason given").rstrip(". ")
+
+
+def _disagreement(
+    answered: Sequence[dict[str, object]], dissenting: Sequence[dict[str, object]]
+) -> str:
+    """Say who disagreed and why, for the finding's detail.
+
+    One reader is the second opinion the tool has always asked for, and reads as such.
+    Several readers are a split, and the reviewer is told how it fell and what each
+    dissenting lens said, because a reviewer judging a disputed finding needs the
+    argument and not only the verdict.
+
+    Args:
+        answered: Every lens that answered.
+        dissenting: The ones that disagreed.
+
+    Returns:
+        A sentence.
+    """
+    if len(answered) == 1:
+        return f"Second opinion disagreed: {_reason_of(dissenting[0])}."
+    reasons = "; ".join(
+        f"{LENS_LABEL.get(str(o.get('lens', '')), str(o.get('lens', '')))}: {_reason_of(o)}"
+        for o in dissenting
+    )
+    return f"{len(dissenting)} of {len(answered)} readers disagreed — {reasons}."
+
+
+def _ask(context: RunContext, lens: str, finding: Finding) -> LensResponse | None:
+    """Put one finding to one lens.
+
+    Each lens is its own prompt with its own stage name, so each answer is cached
+    separately and a re-run costs nothing (ADR-005).
+
+    Args:
+        context: The run context.
+        lens: The lens name, or ``"single"`` for the one second opinion the tool has
+            always asked for.
+        finding: The finding to read.
+
+    Returns:
+        The answer, or ``None`` when the model could not be reached. A lens that did
+        not answer counts as neither agreement nor disagreement.
+    """
+    prompt = VERIFY_PROMPT if lens == "single" else lens_prompt(lens)
+    try:
+        result = context.client.complete(
+            prompt.system,
+            preamble(context.guidance)
+            + prompt.render(
+                finding=f"{finding.type} — {finding.title}. {finding.detail}",
+                evidence=format_evidence(finding.evidence),
+            ),
+            prompt.schema,
+            stage=prompt.stage,
+            prompt_version=prompt.version,
+        )
+        return result.parsed(LensResponse)
+    except LLMError as exc:
+        # A verification that cannot run leaves the finding exactly as it was: the
+        # second opinion is an improvement, not a gate. It is not silent either: the
+        # reviewer is told which findings went unverified (Phase 6.11c).
+        _LOG.warning(
+            "run %s: lens %s could not read %s (%s)",
+            context.run_id,
+            lens,
+            finding.finding_id,
+            type(exc).__name__,
+        )
+        return None
+
+
+def _add_proposals(
+    context: RunContext, proposals: Sequence[tuple[Finding, str, MissedItem]]
+) -> None:
+    """Turn what the lenses noticed into review items, one per distinct question.
+
+    Never graded findings: the severities code set stand, and a lens may raise a
+    possibility but not decide one (ADR-034). They are added after the merge so a
+    proposal is not itself put back through the lenses.
+
+    The same observation usually arrives several times, because one lens reads every
+    high-severity finding and the same gap is visible from more than one of them. A
+    reviewer needs the question once, with the readings that raised it named, not once
+    per finding: a proposal repeated five times is five times the noise and none of the
+    extra information.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to.
+        proposals: What each lens said, in the order it was said.
+    """
+    grouped: dict[str, tuple[Finding, MissedItem, list[str], list[str]]] = {}
+    for source, lens, item in proposals:
+        title = item.title.strip()
+        if not title or item.confidence < _PROPOSAL_CONFIDENCE_FLOOR:
+            continue
+        key = " ".join(title.lower().split())
+        if key not in grouped:
+            grouped[key] = (source, item, [], [])
+        _, _, lenses, sources = grouped[key]
+        if lens not in lenses:
+            lenses.append(lens)
+        if source.finding_id not in sources:
+            sources.append(source.finding_id)
+
+    for source, item, lenses, sources in grouped.values():
+        labels = ", ".join(LENS_LABEL.get(lens, lens) for lens in lenses)
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="lens_proposed",
+                severity="review",
+                title=item.title.strip()[:200],
+                detail=(
+                    f"Raised by the {labels} reading of "
+                    f"{', '.join(sources[:3])}"
+                    f"{' and others' if len(sources) > 3 else ''}, from the same "
+                    f"evidence: {item.reason} Nothing was compared to produce this; it "
+                    "is a question for a person."
+                ),
+                leg=source.leg,
+                rule_id=source.rule_id,
+                evidence=source.evidence,
+            )
+        )
 
 
 def format_evidence(evidence: Evidence) -> str:

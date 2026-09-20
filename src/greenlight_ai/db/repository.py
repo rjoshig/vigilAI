@@ -430,6 +430,7 @@ def _replace_findings(session: Session, run: models.Run, findings: Sequence[Find
                 shadow=finding.shadow,
                 verified=finding.verified,
                 verify_agreed=finding.verify_agreed,
+                lens_opinions=list(finding.lens_opinions),
             )
         )
 
@@ -498,6 +499,7 @@ def load_findings(session: Session, run_id: int) -> list[Finding]:
             review_note=row.review_note,
             verified=row.verified,
             verify_agreed=row.verify_agreed,
+            lens_opinions=tuple(row.lens_opinions or []),
         )
         for row in rows
     ]
