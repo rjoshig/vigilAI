@@ -125,6 +125,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.10.md`](docs/phase-6.10.md) — **meaning**: scoped samples, the mapping
   interview (model proposes, person confirms, code compiles), and edit / typed delete
   everywhere (ADR-032, ADR-033)
+- [`docs/phase-6.11.md`](docs/phase-6.11.md) — **nothing slips**: coverage of every
+  requirement, a fail-closed finalize gate with an attestation, decision reasons, three
+  independent lenses at stage 8 merged by code, a benchmark harness (specified, not started)
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)

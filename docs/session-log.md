@@ -12,8 +12,8 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev` == `main` (2026-09-20). **Next task: browser tests in CI** on `feature/browser-tests`, cut from `main` — see "Next concrete action" below |
-| Last updated | 2026-09-19 |
+| Branch | `dev` == `main` (2026-09-20). **Next task: Phase 6.11a** (review defects and decision quality) on `feature/nothing-slips`, cut from `dev`; `docs/phase-6.11.md` is the spec. Browser tests in CI follow 6.11 |
+| Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
 reports; the worker runs the nine stages; a reviewer decides each finding; the frozen
@@ -102,6 +102,44 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (product review → Phase 6.11 specified)
+
+**Branch:** session branch, docs only · **Status:** `docs/phase-6.11.md` written and
+indexed; no code changed.
+
+A review of the product as built, asked for before the next work: ease of use, human
+error, whether a compliance error can slip, and whether a multi-agent "personas
+debate" loop would help. Verified in code:
+
+- **Defect:** `POST /runs/{id}/findings/bulk-ok` writes `confirmed`, the Not OK value
+  in `display.ts` and `render.py`. "Mark all low OK" flips a clean run's verdict to
+  `not_ok`. The test asserts only "not undecided". Fix is 6.11a's first item.
+- Every OK from the screen is stored as `false_positive`; `accepted_risk` is
+  unreachable. No comment is ever required. Finalize has no confirm.
+- The gate covers high findings only; `review`-severity findings can be left
+  undecided through finalize. No coverage concept: a requirement traced but never
+  checked in any report, and a custom report with zero checks, are silent.
+- Stage 4 gets the guide block but not the preamble; the preamble clip is per field.
+- Synthesis detects conflicts but approval of a conflicting candidate is not blocked.
+- Sixteen admin surfaces, three scope vocabularies; overlap among guides, meaning
+  entries and named values, and among programme rules, compliance rules and judgment
+  checks. Named as Phase 6.12, not yet specified.
+- No benchmark harness with precision and recall, which the rollout plan's gates need.
+
+**Decisions** (user): no debate loop; three independent lenses (Delivery, Compliance,
+Requirements owner) at stage 8 merged by code, confidence only, never a severity up;
+a fail-closed finalize gate with an attestation; four-eyes deferred; the admin front
+door is Phase 6.12; 6.11 runs before browser tests, with the benchmark harness inside
+it. Full reasoning in `docs/phase-6.11.md` "The idea".
+
+### Next concrete action
+
+Cut `feature/nothing-slips` from `dev`. 6.11a first: the bulk-OK fix with the
+finalize-after-bulk-OK test, then reason codes and required comments, then the confirm
+on finalize. Then 6.11b, the harness, before any coverage or lens work.
 
 ---
 
