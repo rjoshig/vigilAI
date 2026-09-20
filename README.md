@@ -135,6 +135,10 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   repaired, the author of an observation sees what became of it, findings carry their
   origin, judgment checks finished, a controlled example library for the model, and a
   replay that replays
+- [`docs/phase-6.14.md`](docs/phase-6.14.md) — **the artifacts belong together**: an
+  artifact match check before any model call that a person accepts with a reason, the credit
+  date resolved by label, every field saying what it does to a run, tooltips on by
+  default, and the theme locked
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic

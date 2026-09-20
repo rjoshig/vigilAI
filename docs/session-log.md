@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 is complete and pushed** — all six milestones, every acceptance criterion met, the golden set unchanged at 15/15. **Next: nothing is started.** The phase gate says report before beginning anything, so the next session picks the next piece of work with the user. Two follow-ups carried forward: give the demo seed a run with a coverage gap so the browser test for that path runs instead of skipping; the user deletes the old remote branches themselves. A pull request into `dev` has not been opened — the user asks for one when they want it |
+| Branch | `dev` (2026-09-20), synced to `900f301`. **Phase 6.13 is complete and merged.** **Phase 6.14 is specified and not started** — [`phase-6.14.md`](phase-6.14.md), five milestones, 2–3 weeks. **Next concrete action: begin 6.14a, the artifact match check**, on `feature/identity-gate` cut from `dev`. Nothing blocks it — the three design questions were answered by the user on 2026-09-20 and are recorded as **ADR-041**: anyone who can submit may accept a mismatch, the check does not cross-check run history, and an accepted mismatch does not block finalize (a deliberate departure from ADR-035). Follow-ups carried forward: give the demo seed a run with a coverage gap so the browser test for that path runs instead of skipping; the user deletes the old remote branches themselves |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -23,6 +23,9 @@ one-page report is generated once and never regenerated.
 
 ```bash
 source .venv/bin/activate
+set -a && . ./.env && set +a   # nothing in src/ loads .env; without this the
+                               # worker starts on the built-in defaults and logs
+                               # "building mock client (model=gemma3:27b)"
 export DATABASE_URL="sqlite+pysqlite:///$PWD/data/demo.db" GREENLIGHT_AI_DATA_DIR="$PWD/data"
 python scripts/seed_demo.py          # 8 runs in every lifecycle state + admin data
 uvicorn greenlight_ai.api.app:get_app --factory --reload   # :8000
@@ -1864,3 +1867,57 @@ Four regression tests on the API side and four in the UI client, covering the ex
 shape of the bug: a 503 must be an unmistakable status with a non-PDF body, a 200 must
 be a real PDF with a filename, and the client must raise rather than hand back bytes in
 either failure case. 732 Python tests, 39 user-ui, 10 admin-ui.
+
+---
+
+## Session: 2026-09-20 (the real model, and Phase 6.14 specified)
+
+**Branch:** `dev`, synced to `900f301`. **Phase:** 6.13 complete; 6.14 specified, not
+started. **Status:** documentation only — no source file changed.
+
+**Completed.**
+
+- **The adapter ran against a real model for the first time.** `LLM_PROVIDER=anthropic`
+  with Claude Haiku 4.5. The model id in `.env` was corrected from a dated spelling to
+  the canonical `claude-haiku-4-5`; both were tested against the live endpoint and both
+  answer, but the model name is part of every cache key (ADR-005) and the undated form
+  is the one to keep. No code changed: the Anthropic client already sent the right
+  shape. A full run took 33s, 30 calls, 30,233 in / 2,792 out, about $0.045, and
+  reproduced on the real model exactly what the fixture plants. Stages 5, 6 and 7 made
+  **no calls at all**, which is ADR-001 visible in a log.
+- **A gap in the documented startup.** Nothing in `src/` loads `.env`; the commands in
+  "See it running" start the worker on the built-in defaults, so it logs
+  `building mock client (model=gemma3:27b)` and produces findings that read as real.
+  The block below now exports `.env` first.
+- **An identity mismatch was submitted deliberately, and passed.** Wrong customer, wrong
+  configuration id, a credit date in none of the artifacts. Only the credit date was
+  caught, at stage 7 of 9. `config.json` declares both `configuration_id` and
+  `customer`; the parser reads the first and ignores the second, and neither is ever
+  compared with what the submitter typed. Delivery drift then reported "no earlier
+  finalized run of configuration CFG-DOES-NOT-EXIST-999", which is indistinguishable
+  from a legitimate first run.
+- **[`phase-6.14.md`](phase-6.14.md) written** from that result: the artifact match check, the
+  credit date resolved by scoped label, one register and one marker for every field that
+  reaches the model, tooltips on by default, and the theme locked by default.
+- **A standing touchpoint added to `CLAUDE.md`:** a commit that changes what reaches the
+  model, what a stage reads, or a cap, updates `docs/model-context.md`, the field's
+  label or tooltip in both apps, and the training documents — in that commit.
+
+- **ADR-041 written**, recording the three decisions the user took on the phase before it
+  was built: an administrator accepts an identity mismatch, the gate does not cross-check
+  run history, and an accepted mismatch does not block the finalize gate. The third is a
+  deliberate departure from ADR-035 and the ADR says why — a coverage gap is a question
+  the tool cannot answer and must put to a person at the last moment; an identity
+  mismatch was already asked and answered by a named administrator before the run
+  started, and asking twice trains people to click through both.
+
+**Pending.** Every 6.14 box.
+
+**Blockers.** None.
+
+**Next concrete action.** Cut `feature/identity-gate` from `dev` and start 6.14a.
+
+**Housekeeping.** `data/demo.db` was re-seeded on the 6.13 schema; the previous file is
+`data/demo.db.pre-6.13.bak`. The demo database is built by `create_all` and carries no
+alembic stamp, so `alembic upgrade head` fails against it — re-seed rather than migrate.
+`pytest` is 1222 passing on `900f301`.

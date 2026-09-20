@@ -1329,3 +1329,76 @@ prompt that grows by up to four examples per stage, which the cap bounds, and on
 thing to keep true: a library example that stops matching the deliveries is as
 misleading as a stale document, which is why each one records why it is there.
 
+
+---
+
+## ADR-041 — The artifacts are checked against each other before the model runs, anyone may accept a mismatch, and acceptance does not block finalize
+
+**Status:** accepted 2026-09-20 (user decision, before Phase 6.14 was built)
+
+**Context:** The tool validates a delivery thoroughly and says nothing about whether the
+delivery is the one the submitter claims. A run submitted on 2026-09-20 with the wrong
+customer, the wrong configuration id and a credit date present in none of the artifacts
+finished `needs_review` with four ordinary findings and a confident summary. The evidence
+was there and parsed — `config.json` declares both `configuration_id` and `customer` —
+and neither was ever compared with what the submitter typed. Delivery drift (ADR-026)
+then reported "no earlier finalized run of configuration CFG-DOES-NOT-EXIST-999", which
+a reviewer cannot tell apart from a legitimate first run: a mistyped configuration id silently
+disables the drift comparison and looks correct doing it.
+
+The one such check that existed, the credit date, ran at stage 7 of 9 and searched
+for the date's *value* in every cell, so it could report absence but never a mismatch,
+and any coincidental occurrence passed it.
+
+**Decision:**
+
+1. **A mismatch is a gate, not a finding.** Code compares the submitted configuration id,
+   customer and credit date against what the artifacts declare, synchronously at submit,
+   after the files are stored and **before any model call**. A finding is something a
+   reviewer weighs against other findings; an artifact mismatch says the other findings
+   may have been computed against the wrong premise, so it belongs in front of them. The
+   comparison is code on parsed input — no model reads it (ADR-001) — and stage 1 parses
+   a whole run in tens of milliseconds, so the gate costs nothing.
+2. **A mismatch holds the run; nothing is re-uploaded.** The run and its files exist
+   before the gate runs, which is what makes acceptance possible without resubmitting.
+   A run with no mismatch is queued exactly as it is today.
+3. **Anyone who can submit a run may accept a mismatch, with a reason per mismatch.**
+   No role, no routing, no second person. The check earns its place by putting the
+   disagreement in front of whoever is standing there; the record of who accepted and
+   why is what makes it reviewable afterwards. Who *ought* to be consulted before
+   accepting is a delivery-process question and belongs in `docs/gd-rollout-plan.md`,
+   not in an authorization check in the tool. Building it as a role would also make the
+   tool behave differently depending on whether login is switched on, which ADR-022
+   exists to prevent.
+4. **The gate does not cross-check run history.** A configuration id that is valid but
+   has only ever belonged to a different customer is a real mis-submission shape, and it
+   is deliberately out of scope: it needs a second source of truth, it is wrong for
+   legitimate reasons (a customer renamed, a configuration transferred), and comparing
+   against the artifacts catches the common case. Revisit only with evidence that the
+   common case was not enough.
+5. **Acceptance does not block the finalize gate.** It is recorded, it appears on the
+   review screen and on the frozen report with who accepted and why, and the reviewer
+   weighs it like anything else they are shown. **This departs from ADR-035**, which made
+   a coverage gap block finalize until acknowledged, and the difference is deliberate: a
+   coverage gap is a question the tool cannot answer and must put to a person at the last
+   possible moment, whereas an artifact mismatch is a question that was already asked and
+   answered by a named administrator before the run was allowed to start. Asking twice
+   would train people to click through both. One acceptance, at the point the question
+   arises; the report carries it forward.
+6. **The credit date is resolved by label, then compared by value.** What a delivery
+   calls it varies — *as-of date*, *data date*, *cycle date*, *extract date* — so the
+   labels are scoped data using the one scope vocabulary (ADR-029), in their own table.
+   They are not `attribute_aliases`: those resolve *data attribute* names and load as
+   global-plus-customer only, the one table in the product that never adopted the scope
+   vocabulary, and overloading it would repeat the near-miss ADR-029 exists to prevent.
+   The check finds the labelled cell and compares its value, so it can report a mismatch
+   rather than only an absence; where no labelled cell is found it falls back to the old
+   search and says that it did.
+
+**Consequences:** A wrong-artifact submission is stopped before it costs a model call,
+and the reviewer of an accepted one can see that somebody waived the question. The cost
+is a new run state (`held`) that every queue consumer and every screen listing runs has
+to know about, and one more question a submitter can be asked at submit time. The
+gate is code-only and adds no prompt, so the golden set is unaffected. What this does not
+do is verify that a configuration *belongs* to a customer — only that the artifacts agree
+with each other and with what was typed; point 4 is the reason, and it is revisitable.

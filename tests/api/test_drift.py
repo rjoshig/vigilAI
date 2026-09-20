@@ -32,6 +32,35 @@ def _finalize(client: TestClient, api: str, run_id: int, high_as: str = "confirm
     assert response.status_code == 201, response.text
 
 
+def _submit_under(submit: Submit, client: TestClient, api: str, case: str, **identity: str) -> int:
+    """Submit a case under a configuration id it does not declare, and accept the hold.
+
+    Drift compares two runs of *one* configuration, and the fixtures each declare their
+    own. Forcing a shared id is a test artifice, and since 6.14a the artifacts rightly
+    disagree with it — so the test walks the same path a person would: it is held, and
+    a reason clears it (ADR-041).
+
+    Args:
+        submit: The submitting fixture.
+        client: The test client.
+        api: The API prefix.
+        case: Which fixture case.
+        **identity: Overrides for the form, typically ``configuration_id``.
+
+    Returns:
+        The run id, queued and ready for the worker.
+    """
+    body = submit(case, **identity).json()
+    run_id = int(body["run_id"])
+    if body["status"] == "held":
+        response = client.post(
+            f"{api}/runs/{run_id}/match/accept",
+            json={"reason": "Drift fixture: two cases deliberately share one configuration id."},
+        )
+        assert response.status_code == 200, response.text
+    return run_id
+
+
 def test_a_first_run_has_nothing_to_compare_with(
     submit: Submit, worker: Worker, client: TestClient, api: str
 ) -> None:
@@ -46,15 +75,25 @@ def test_drift_names_new_resolved_and_carried_findings_and_the_config_paths(
     submit: Submit, worker: Worker, client: TestClient, api: str
 ) -> None:
     """Two runs of one configuration: the second has one new finding and one resolved."""
-    first = submit(
-        "score_value_mismatch", configuration_id="CFG-DRIFT", customer_name="Acme Card Services"
-    ).json()["run_id"]
+    first = _submit_under(
+        submit,
+        client,
+        api,
+        "score_value_mismatch",
+        configuration_id="CFG-DRIFT",
+        customer_name="Acme Card Services",
+    )
     worker.run_once()
     _finalize(client, api, first)  # the mismatch is marked Not OK
 
-    second = submit(
-        "geography_extra_state", configuration_id="CFG-DRIFT", customer_name="Acme Card Services"
-    ).json()["run_id"]
+    second = _submit_under(
+        submit,
+        client,
+        api,
+        "geography_extra_state",
+        configuration_id="CFG-DRIFT",
+        customer_name="Acme Card Services",
+    )
     worker.run_once()
     drift = client.get(f"{api}/runs/{second}/drift").json()
 
@@ -69,12 +108,15 @@ def test_drift_names_new_resolved_and_carried_findings_and_the_config_paths(
     assert all(c["path"] != "last_modified" for c in drift["config"])
 
     # A third run identical to the first carries its Not OK item back.
-    third = submit(
+    third = _submit_under(
+        submit,
+        client,
+        api,
         "score_value_mismatch",
         configuration_id="CFG-DRIFT",
         customer_name="Acme Card Services",
         rerun_reason="drift test",
-    ).json()["run_id"]
+    )
     worker.run_once()
     _finalize(client, api, second, high_as="accepted_risk")
     drift = client.get(f"{api}/runs/{third}/drift").json()
@@ -86,17 +128,25 @@ def test_drift_names_new_resolved_and_carried_findings_and_the_config_paths(
 def test_the_frozen_report_carries_the_comparison(
     submit: Submit, worker: Worker, client: TestClient, api: str
 ) -> None:
-    first = submit(
-        "score_value_mismatch", configuration_id="CFG-R", customer_name="Acme Card Services"
-    ).json()["run_id"]
+    first = _submit_under(
+        submit,
+        client,
+        api,
+        "score_value_mismatch",
+        configuration_id="CFG-R",
+        customer_name="Acme Card Services",
+    )
     worker.run_once()
     _finalize(client, api, first)
-    second = submit(
+    second = _submit_under(
+        submit,
+        client,
+        api,
         "score_value_mismatch",
         configuration_id="CFG-R",
         customer_name="Acme Card Services",
         rerun_reason="drift test",
-    ).json()["run_id"]
+    )
     worker.run_once()
     _finalize(client, api, second)
     html = client.get(f"{api}/runs/{second}/report").text

@@ -143,7 +143,10 @@ class Run(Base):
     credit_date: Mapped[Optional[dt.date]] = mapped_column(sa.Date, nullable=True)
     notes: Mapped[str] = mapped_column(sa.Text, default="")
 
-    #: queued · running · needs_review · finalized · failed
+    #: held · queued · running · needs_review · finalized · failed. A run is ``held``
+    #: when the artifacts disagree with what the submitter typed (ADR-041): the files
+    #: are stored and the run exists, and it waits for somebody to accept the
+    #: disagreement rather than being thrown away and re-uploaded.
     status: Mapped[str] = mapped_column(sa.String(30), default="queued", index=True)
     current_stage: Mapped[str] = mapped_column(sa.String(30), default="")
     error: Mapped[str] = mapped_column(sa.Text, default="")
@@ -719,6 +722,43 @@ class CoverageAcknowledgement(Base):
     note: Mapped[str] = mapped_column(sa.Text, default="")
     actor: Mapped[str] = mapped_column(sa.String(200), default="")
     actor_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
+class ArtifactMismatch(Base):
+    """The artifacts disagreed with what the submitter typed (ADR-041).
+
+    One row per field that did not agree, written before the run is allowed to start.
+    A row with no ``accepted_at`` is why the run is ``held``; accepting fills the
+    reason and lets it queue. Rows are never deleted, so the review screen and the
+    frozen report can both show that somebody waived the question and why.
+    """
+
+    __tablename__ = "artifact_mismatches"
+    __table_args__ = (
+        sa.UniqueConstraint("run_id", "field", name="uq_artifact_mismatch_run_field"),
+    )
+
+    id: Mapped[int] = _pk()
+    run_id: Mapped[int] = mapped_column(sa.ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    #: One of ``checks.artifact_match.MATCH_FIELDS``.
+    field: Mapped[str] = mapped_column(sa.String(40))
+    #: What the person typed, verbatim.
+    submitted: Mapped[str] = mapped_column(sa.String(400), default="")
+    #: What the artifact declares, verbatim.
+    declared: Mapped[str] = mapped_column(sa.String(400), default="")
+    #: ``near`` or ``different``. A ``match`` never becomes a row.
+    kind: Mapped[str] = mapped_column(sa.String(20), default="different")
+    #: Where the declared value was read from, in words a person can act on.
+    source: Mapped[str] = mapped_column(sa.String(200), default="")
+
+    #: Why it was accepted. Empty until somebody accepts it.
+    reason: Mapped[str] = mapped_column(sa.Text, default="")
+    accepted_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    accepted_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    accepted_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 

@@ -236,6 +236,15 @@ def execute_run(
         run = session.get(models.Run, run_id)
         if run is None:
             raise ValueError(f"run {run_id} does not exist")
+        # A held run's artifacts disagree with what was submitted and nobody has
+        # accepted that yet (ADR-041). The gate lives at submit, but a queue consumer
+        # must not be able to race past it: a job enqueued before the hold, or replayed
+        # from a dead letter, arrives here and stops.
+        if run.status == "held":
+            raise ValueError(
+                f"run {run_id} is held: its artifacts disagree with what was submitted "
+                "and the disagreement has not been accepted"
+            )
         run.status = "running"
         run.started_at = run.started_at or utcnow()
         run.error = ""

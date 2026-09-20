@@ -35,6 +35,7 @@ from greenlight_ai.api.deps import (
     get_session,
 )
 from greenlight_ai.auth.settings import AuthSettings
+from greenlight_ai.checks import artifact_match
 from greenlight_ai.api.uploads import UploadError, store_upload
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import catalog, models, repository, drift
@@ -237,6 +238,7 @@ def _detail(
         finalized=finalized,
         stages=stages,
         files={f.kind: f.filename for f in run.files},
+        mismatches=[_mismatch_out(row) for row in _mismatches_for(session, run.id)],
     )
 
 
@@ -494,6 +496,32 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         )
 
     _capture_config_from_upload(session, run, data_dir, stored, user)
+
+    # Do these artifacts belong to the delivery that was just described? Code compares,
+    # before anything is asked of the model (ADR-041). A run whose artifacts agree
+    # queues exactly as it always did; one whose artifacts disagree is held with its
+    # files intact, so accepting costs a click rather than a re-upload.
+    mismatches = _record_mismatches(session, run, data_dir, stored)
+    if mismatches:
+        run.status = "held"
+        session.flush()
+        repository.audit(
+            session,
+            "run.held",
+            run.id,
+            ",".join(row.field for row in mismatches),
+        )
+        _LOG.info(
+            "run %d held: %s disagree with the artifacts",
+            run.id,
+            ", ".join(row.field for row in mismatches),
+        )
+        return schemas.CreateRunResult(
+            run_id=run.id,
+            status=run.status,
+            mismatches=[_mismatch_out(row) for row in mismatches],
+        )
+
     queue.enqueue(TASK_RUN_PIPELINE, run_id=run.id)
     repository.audit(
         session,
@@ -505,6 +533,190 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
 
     return schemas.CreateRunResult(
         run_id=run.id, status=run.status, queue_position=queue.queue_position(run.id)
+    )
+
+
+def _mismatches_for(session: Session, run_id: int) -> list[models.ArtifactMismatch]:
+    """Read a run's artifact mismatches, oldest first.
+
+    Args:
+        session: An open session.
+        run_id: The run.
+
+    Returns:
+        Every mismatch recorded for the run, accepted or not. Accepted ones are kept
+        and shown, because a reviewer signing the delivery should see what was waived.
+    """
+    return list(
+        session.execute(
+            sa.select(models.ArtifactMismatch)
+            .where(models.ArtifactMismatch.run_id == run_id)
+            .order_by(models.ArtifactMismatch.id)
+        ).scalars()
+    )
+
+
+#: How each compared field is named on screen, so the vocabulary lives in one place.
+MATCH_FIELD_LABELS: Final[dict[str, str]] = {
+    "configuration_id": "Configuration id",
+    "customer": "Customer",
+    "credit_date": "Credit date",
+}
+
+
+def _mismatch_out(row: models.ArtifactMismatch) -> schemas.ArtifactMismatchOut:
+    """Render one stored mismatch for the wire.
+
+    Args:
+        row: The stored row.
+
+    Returns:
+        The wire model, with the field's display label filled in.
+    """
+    return schemas.ArtifactMismatchOut(
+        id=row.id,
+        field=row.field,
+        label=MATCH_FIELD_LABELS.get(row.field, row.field),
+        submitted=row.submitted,
+        declared=row.declared,
+        kind=row.kind,
+        source=row.source,
+        reason=row.reason,
+        accepted_at=row.accepted_at,
+        accepted_by=row.accepted_by,
+    )
+
+
+def _record_mismatches(
+    session: Session, run: models.Run, data_dir: Path, stored: list[Any]
+) -> list[models.ArtifactMismatch]:
+    """Compare the submission with its artifacts and store what disagrees.
+
+    The configuration is the only artifact read here. It is small, it is already being
+    decoded a few lines earlier for the config history, and it is the one artifact that
+    declares its own identity. The credit date needs a labelled cell from a report and
+    is compared by stage 7 until 6.14b moves it forward.
+
+    Args:
+        session: An open session.
+        run: The run row, already flushed so it has an id.
+        data_dir: The shared volume.
+        stored: The stored files.
+
+    Returns:
+        The rows written, empty when everything agreed. An unreadable configuration
+        produces no rows: that is the pipeline's failure to report, not a disagreement.
+    """
+    config_file = next((f for f, _, _ in stored if f.kind == "config"), None)
+    if config_file is None:
+        return []
+    try:
+        decoded = json.loads((data_dir / config_file.storage_key).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(decoded, dict):
+        return []
+
+    declared_id = decoded.get("configuration_id")
+    declared_customer = decoded.get("customer")
+    results = (
+        artifact_match.compare_configuration_id(
+            run.configuration_id, declared_id if isinstance(declared_id, str) else ""
+        ),
+        artifact_match.compare_customer(
+            run.customer_name, declared_customer if isinstance(declared_customer, str) else ""
+        ),
+    )
+
+    rows: list[models.ArtifactMismatch] = []
+    for result in artifact_match.disagreements(results):
+        row = models.ArtifactMismatch(
+            run_id=run.id,
+            field=result.field,
+            submitted=result.submitted[:400],
+            declared=result.declared[:400],
+            kind=result.kind,
+            source=result.source[:200],
+        )
+        session.add(row)
+        rows.append(row)
+    if rows:
+        session.flush()
+    return rows
+
+
+@router.post("/{run_id}/match/accept", response_model=schemas.AcceptMismatchesResult)
+def accept_mismatches(
+    run_id: int,
+    body: schemas.AcceptMismatches,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> schemas.AcceptMismatchesResult:
+    """Accept the artifact disagreements on a held run and let it start (ADR-041).
+
+    Anyone who can submit a run can accept one. The check exists to put the
+    disagreement in front of the person, not to route it to somebody else; who ought
+    to be consulted first is a delivery-process question, not a role in the tool.
+
+    Args:
+        run_id: The held run.
+        body: The reason, and optionally which fields it covers.
+        request: The incoming request, carrying the backend flag for the queue.
+        session: The request's session.
+        user: Who accepted, recorded against every row.
+
+    Returns:
+        The run's new status and its queue position.
+
+    Raises:
+        HTTPException: 404 when the run does not exist, 409 when it is not held.
+    """
+    run = session.get(models.Run, run_id)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"run {run_id} not found")
+    if run.status != "held":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run_id} is {run.status}, not held; there is nothing to accept",
+        )
+
+    wanted = {field.strip() for field in body.fields if field.strip()}
+    outstanding = list(
+        session.execute(
+            sa.select(models.ArtifactMismatch).where(
+                models.ArtifactMismatch.run_id == run_id,
+                models.ArtifactMismatch.accepted_at.is_(None),
+            )
+        ).scalars()
+    )
+    accepting = [row for row in outstanding if not wanted or row.field in wanted]
+    for row in accepting:
+        row.reason = body.reason.strip()
+        row.accepted_at = utcnow()
+        row.accepted_by = user.name
+        row.accepted_by_user_id = user.id
+
+    still_open = [row for row in outstanding if row not in accepting]
+    queue = _queue(request, session)
+    if not still_open:
+        run.status = "queued"
+        session.flush()
+        queue.enqueue(TASK_RUN_PIPELINE, run_id=run.id)
+        _LOG.info("run %d accepted by %s and queued", run.id, user.name)
+    repository.audit(
+        session,
+        "run.match_accepted",
+        run.id,
+        f"{len(accepting)} accepted, {len(still_open)} outstanding",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return schemas.AcceptMismatchesResult(
+        run_id=run.id,
+        status=run.status,
+        accepted=len(accepting),
+        queue_position=queue.queue_position(run.id) if not still_open else None,
     )
 
 
