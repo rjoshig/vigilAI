@@ -109,7 +109,8 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/admin-training.md`](docs/admin-training.md) — **administrator training**: the
   admin console, the training queue, the rules, and a weekly routine
 - [`docs/presentation-brief.md`](docs/presentation-brief.md) — **design brief** for slide
-  decks and management documents: the design, its reasons, the advantages, what a run
+  decks and management documents: the design, its reasons, the advantages, the same
+  product answered for three audiences (the associate, the accuracy, the AI), what a run
   costs and the controls on it, why the model is a setting rather than a dependency,
   and what it changes for an associate — at a general-audience level
 - [`docs/gd-rollout-plan.md`](docs/gd-rollout-plan.md) — **Global Delivery rollout**:

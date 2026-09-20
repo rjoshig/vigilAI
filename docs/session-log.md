@@ -106,6 +106,55 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-20 (the presentation brief, and four stale documents)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** documentation only, gates
+green at 1514 tests.
+
+**`presentation-brief.md` brought current and widened.** It was dated at phase 6.13 with
+6.14 part built. It now covers 6.14 to 6.18f, with four advantages added: that the tool
+survives customers writing things their own way *and was measured for it before anybody
+shipped a promise*; that it is honest about not knowing; that the review list shrinks
+only once the tool has earned it; and that trust is revocable and never self-granted.
+
+**A new section 8, "Three ways to judge it",** because the same product answers to three
+audiences and a brief giving only one will be challenged by whichever room it did not
+address. The associate's view is what changes on Monday. The accuracy view is how a QC
+function answers that question about its own QC tool — coverage tracked rather than
+assumed, claims measured and the measurements kept, sign-off fail-closed. The AI view is
+what the model actually does and, at greater length, what it never does: no comparison,
+no count, no compliance verdict, no activation, and **its confidence discards a weak
+answer and never authorises a strong one**.
+
+**A stale claim caught by checking rather than by reading.** The brief said three of the
+nine stages make no model call. Stage 6 gained one in 6.15 and stage 7 in 6.18f, so it is
+two — and the more useful statement, which it now makes, is that both of those call the
+model only where the deterministic check has already failed.
+
+**Three more documents were behind, none of them noticed by `check_docs.sh`** because it
+checks links and status markers, not claims:
+
+- `architecture.md` still described stages 6 and 7 as pure code, and its `checks/` and
+  `training/` rows predated `programme_match.py`, `demotion.py` and `signatures.py`.
+- `llm-privacy.md` had no row for either exception prompt. The programme reading is the
+  one prompt whose input is largely free prose the tool did not compose, so it now says
+  what bounds it: the same haystack the keyword check greps and never a data row, an
+  instruction not to quote a phrase carrying a person's details, and the tripwire.
+- `glossary.md` said Phase 6.2 was "specified but not built" — it has been complete since
+  2026-09-18 — and had none of the 6.15 to 6.18 vocabulary.
+
+**Worth noting for the next session:** `check_docs.sh` passed on every one of these. It
+verifies that links resolve and that status markers match their checkboxes, and it cannot
+tell that a sentence became false. The phase docs are kept honest by the boxes; the
+descriptive documents are kept honest only by somebody re-reading them, which is what the
+two standing touchpoints in `CLAUDE.md` exist to force and why this one was worth doing
+by hand.
+
+**Next concrete action:** unchanged — nothing in this repository. 6.18b waits on
+[`phase-7.1.md`](phase-7.1.md).
+
+---
+
 ## Session: 2026-09-20 (6.18f, 6.17b, the touchpoints, and phase 7.1)
 
 **Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.17 complete, 6.18a and
