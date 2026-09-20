@@ -4,6 +4,7 @@
 
 import {
   ExternalLink,
+  FileSearch,
   FileText,
   FolderGit2,
   LayoutList,
@@ -52,6 +53,17 @@ const TRAINING_NAV: NavItem = {
   href: "/observations",
   label: "My observations",
   icon: Lightbulb,
+};
+
+/**
+ * Explore a sample (Phase 6.1e). Always available: looking at an example of what the
+ * tool accepts is useful whatever the mode says, and it is where a reviewer goes to
+ * point at something the tool has not raised.
+ */
+const EXPLORE_NAV: NavItem = {
+  href: "/explore",
+  label: "Explore a sample",
+  icon: FileSearch,
 };
 
 /**
@@ -110,7 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Null while login is off, which is the shipped default, so the footer stays as it was.
   const { user, signOut } = useAuth();
   const trainingEnabled = useTrainingEnabled();
-  const nav = trainingEnabled ? [...NAV, TRAINING_NAV] : NAV;
+  const nav = trainingEnabled ? [...NAV, EXPLORE_NAV, TRAINING_NAV] : [...NAV, EXPLORE_NAV];
 
   return (
     <div className="flex min-h-screen">

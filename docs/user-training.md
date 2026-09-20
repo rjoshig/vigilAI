@@ -102,6 +102,19 @@ you hit one, the message says so and asks you to try again shortly.
 while it waits. A run moves through nine stages; the run page shows which stage it is
 on and refreshes itself. **Needs review** means it is ready for you.
 
+## Explore a sample
+
+**Explore a sample** shows an example of every artifact the tool accepts: a report
+workbook cell by cell with the label beside each one, an OSL by section, a
+configuration by JSON path. Values are masked exactly as they are on a real run.
+
+It is there for two reasons. One is to see what the tool is reading. The other matters
+more: with Train AI mode on, every cell, section and path has a **What should this
+check?** button, so you can tell the tool about something it has never raised. Until
+now you could only do that from a finding, which meant you could only talk about what
+the tool had already noticed — and what you know is usually about what it said nothing
+about.
+
 ## Reviewing findings
 
 The run page shows the **traceability matrix** and the **findings**, worst first.

@@ -162,6 +162,33 @@ class AcknowledgePayload(BaseModel):
     note: str = ""
 
 
+class ExploreSampleOut(BaseModel):
+    """One sample a reviewer can look at (Phase 6.1e).
+
+    Deliberately smaller than the admin console's view: a reviewer is choosing
+    something to point at, not maintaining the catalog.
+    """
+
+    id: int
+    label: str = ""
+    filename: str = ""
+    sheets: list[str] = Field(default_factory=list)
+    notes: str = ""
+    #: The programme it belongs to; empty for a global sample.
+    scope_code: str = ""
+
+
+class ExploreArtifactOut(BaseModel):
+    """An artifact type and the samples stored for it."""
+
+    key: str
+    label: str = ""
+    #: ``osl``, ``config`` or a report kind. It decides what a preview looks like:
+    #: sections, JSON paths, or cells.
+    kind: str = ""
+    samples: list[ExploreSampleOut] = Field(default_factory=list)
+
+
 class FindingOut(BaseModel):
     """One finding, with its evidence."""
 

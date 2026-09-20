@@ -70,12 +70,15 @@ export default defineConfig({
   globalTeardown: "./global-teardown.ts",
 
   webServer: [
+    // `reuseExistingServer` is deliberately false everywhere: global setup wipes the
+    // database on every run, so a server left over from an earlier one is attached to
+    // the database that was just deleted and carries its state into this run.
     {
       command: `${PYTHON} -m uvicorn greenlight_ai.api.app:get_app --factory --host 127.0.0.1 --port 8000`,
       url: "http://127.0.0.1:8000/health",
       cwd: ROOT,
       env: SERVICE_ENV,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       stdout: "pipe",
       stderr: "pipe",
@@ -85,7 +88,7 @@ export default defineConfig({
       url: "http://127.0.0.1:3000",
       cwd: path.join(ROOT, "user-ui"),
       env: { ...process.env, GREENLIGHT_AI_API_URL: "http://127.0.0.1:8000" },
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 300_000,
       stdout: "pipe",
       stderr: "pipe",
@@ -95,7 +98,7 @@ export default defineConfig({
       url: "http://127.0.0.1:3001",
       cwd: path.join(ROOT, "admin-ui"),
       env: { ...process.env, GREENLIGHT_AI_API_URL: "http://127.0.0.1:8000" },
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 300_000,
       stdout: "pipe",
       stderr: "pipe",

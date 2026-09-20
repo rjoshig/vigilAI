@@ -440,6 +440,49 @@ export interface Observation extends ObservationInput {
   covered_by?: CoveringRule[];
 }
 
+/** One populated cell of a sample, addressable the way a named value addresses it. */
+export interface CellPreview {
+  cell: string;
+  value: string;
+  label: string;
+  row: number;
+  column: number;
+}
+
+/** One sheet of a sample, or one OSL section, or one configuration block. */
+export interface SheetPreview {
+  name: string;
+  rows: number;
+  columns: number;
+  cells: CellPreview[];
+}
+
+/** What a sample contains, for someone deciding what to point at (Phase 6.1e). */
+export interface SamplePreview {
+  sample_id: number;
+  filename: string;
+  sheets: SheetPreview[];
+}
+
+/** One sample a reviewer can explore. */
+export interface ExploreSample {
+  id: number;
+  label: string;
+  filename: string;
+  sheets: string[];
+  notes: string;
+  scope_code: string;
+}
+
+/** An artifact type and the samples stored for it. */
+export interface ExploreArtifact {
+  key: string;
+  label: string;
+  /** "osl", "config", or a report kind. It decides what a preview looks like. */
+  kind: string;
+  samples: ExploreSample[];
+}
+
 /** An active rule that already covers what an observation points at (Phase 6.1e). */
 export interface CoveringRule {
   kind: string;

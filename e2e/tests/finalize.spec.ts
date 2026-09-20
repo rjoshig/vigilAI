@@ -23,9 +23,16 @@ const RUN = 5;
  * misses findings, and each decision re-renders the list.
  */
 async function decideEveryFinding(page: Page): Promise<void> {
+  // Ask the API how many findings there are before reading the screen. The list
+  // renders progressively, so a count taken from the DOM at the wrong moment misses
+  // one, and a missed finding leaves the gate shut for a reason the test cannot see.
+  const findings = await (await page.request.get(`/api/v1/runs/${RUN}/findings`)).json();
+  const expected = findings.filter((f: { shadow?: boolean }) => !f.shadow).length;
+  expect(expected, "the run should have findings to decide").toBeGreaterThan(0);
+
   await page.goto(`/runs/${RUN}`);
   await page.getByRole("button", { name: /^Findings/ }).click();
-  await expect(page.getByTestId("finding-card").first()).toBeVisible();
+  await expect(page.getByTestId("finding-card")).toHaveCount(expected);
 
   // Read the ids once. Deciding a finding re-renders the list, and both "the first
   // undecided card" and a count taken at the wrong moment are moving targets: during a
@@ -33,7 +40,7 @@ async function decideEveryFinding(page: Page): Promise<void> {
   const ids = await page.$$eval('[data-testid="finding-card"]', (cards) =>
     cards.map((card) => card.getAttribute("data-finding") ?? "")
   );
-  expect(ids.length, "the run should have findings to decide").toBeGreaterThan(0);
+  expect(ids).toHaveLength(expected);
 
   for (const id of ids) {
     const card = page.locator(`[data-testid="finding-card"][data-finding="${id}"]`);
@@ -98,17 +105,37 @@ test("a run is frozen only once every finding is decided and every gap acknowled
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("never regenerated");
   await expect(dialog).toContainText("requirements");
-  await dialog.getByRole("button", { name: /Yes, generate it/ }).click();
+
+  // Wait for the request itself rather than for the screen to catch up: a freeze that
+  // never reached the server is the failure worth reporting precisely. The outcome
+  // asserted is that the run ends up frozen, not the status of one reply — a second
+  // identical request is refused by design, and that refusal is not a failure here
+  // (ADR-005).
+  await Promise.all([
+    page.waitForResponse(
+      (reply) =>
+        reply.url().includes(`/runs/${RUN}/finalize`) && reply.request().method() === "POST"
+    ),
+    dialog.getByRole("button", { name: /Yes, generate it/ }).click(),
+  ]);
+
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/v1/runs/${RUN}`)).json()).finalized, {
+      timeout: 30_000,
+      message: "the run never became frozen after the confirmation",
+    })
+    .toBe(true);
 
   // Reload rather than assert the screen live-updates: it reads the run when it
   // mounts, and what matters is that the run is frozen and stays frozen.
-  await expect(dialog).toHaveCount(0, { timeout: 30_000 });
   await page.reload();
-
   await expect(page.getByText("frozen")).toBeVisible({ timeout: 30_000 });
   await expect(generate).toHaveCount(0);
 
-  // And the frozen report states the limits of what was verified.
-  const frame = page.frameLocator("iframe");
-  await expect(frame.locator("body")).toContainText("What was checked");
+  // And the frozen report states the limits of what was verified. Read it from the
+  // server rather than through the iframe, which the browser may still be showing
+  // from before the freeze.
+  const report = await page.request.get(`/api/v1/runs/${RUN}/report`);
+  expect(report.status()).toBe(200);
+  expect(await report.text()).toContain("What was checked");
 });

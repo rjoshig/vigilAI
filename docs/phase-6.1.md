@@ -103,7 +103,7 @@ the EU AI Act's human-oversight provisions and the NIST AI Risk Management Frame
 the record of the human decision is itself the required artifact, and it is cheap to
 keep only if it is kept from the start.
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.1a — Several samples per artifact type · ✅ complete
 
@@ -189,7 +189,7 @@ field distribution may arrive as several tabs in one file.
 - [x] Every correction a user makes is recorded. Corrections are the cheapest training
       signal in the system and they feed 6.1e's queue automatically.
 
-### 6.1e — Train AI mode: observations · 🟡 in progress
+### 6.1e — Train AI mode: observations · ✅ complete
 
 The user-facing half of the learning loop. Off by default; an administrator switches it
 on.
@@ -197,11 +197,17 @@ on.
 - [x] `app_settings`: a small key/value table for operator switches, with
       `train_ai_mode` the first one. `GET /runs/options` reports it, so the user-ui
       shows the training affordances only when it is on.
-- [~] **A data-point viewer.** The admin console previews a sample workbook cell by
+- [x] **A data-point viewer.** The admin console previews a sample workbook cell by
       cell, with the label to each cell's left, and an observation raised from a
-      finding carries that finding's evidence as its anchor. **Outstanding:** the
-      standalone "explore a sample" screen in the user app, and browsing an OSL's
-      sections or a config's JSON paths to anchor against.
+      finding carries that finding's evidence as its anchor. The user app now has the
+      standalone **Explore a sample** screen too (`app/explore`), serving the stored
+      samples read-only: a workbook cell by cell, an OSL by section, a configuration by
+      JSON path, each of them something a reviewer can point at. It is the same preview
+      the admin console uses, reused rather than reimplemented, with the same masking.
+      That closes the limitation behind this item: an observation could only be
+      anchored to a finding, so a reviewer could only tell the tool about what it had
+      already noticed, and what a person knows is usually about what it said nothing
+      about.
 - [x] **An observation is anchored to a selection, not only to prose.** The user clicks
       a cell, a label, an OSL section, or a config path, and writes what they mean. The
       stored observation carries both. This is the difference between a rule the model

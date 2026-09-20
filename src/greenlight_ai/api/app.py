@@ -19,6 +19,7 @@ from greenlight_ai.api.routers import (
     admin,
     appearance,
     coverage,
+    explore,
     meaning,
     auth,
     configs,
@@ -163,6 +164,7 @@ def create_app(
         appearance.router,
         meaning.router,
         coverage.router,
+        explore.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, and the open items in 6.1, 6.2 and 6.4 closed.** Next: four-eyes, then Phase 6.12 |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, and every open item in 6.1, 6.2 and 6.4 closed.** Next: four-eyes, then Phase 6.12 |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,41 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Explore a sample: the last 6.1 item)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1076 Python
+tests, 91 user-ui, 81 admin-ui, 26 browser.
+
+A reviewer could only anchor an observation to a finding, so they could only tell the
+tool about what it had already noticed. What a person knows is usually about what it
+said nothing about. **Explore a sample** (`user-ui/app/explore`) serves the stored
+samples read-only: a workbook cell by cell with its label, an OSL by section, a
+configuration by JSON path, each of them something to point at. With Train AI mode on
+every one carries a "What should this check?" button. It is the admin console's preview
+reused, with the same masking: two renderings of one workbook that could disagree would
+be worse than one.
+
+### Found on the way, in the browser suite
+
+Two flakes that were both real, and both now written down in `e2e/README.md`:
+
+- **`reuseExistingServer` was carrying state between runs.** Global setup wipes the
+  database, so a server left from an earlier run is attached to the one it wiped. It is
+  false everywhere now.
+- **The finding list renders progressively.** A count taken from the screen missed a
+  finding, which left the gate shut for a reason the test could not see. The test asks
+  the API how many findings there are, waits for that many cards, and asserts the run
+  ends frozen rather than the status of one reply — a second identical finalize is
+  refused by design (ADR-005), which is not a failure.
+
+### Next concrete action
+
+Four-eyes: a programme-level switch requiring a second approver before finalize when a
+`must` programme breach or a compliance finding was marked OK. Off by default, and
+meaningful only with login on. Then Phase 6.12.
 
 ---
 

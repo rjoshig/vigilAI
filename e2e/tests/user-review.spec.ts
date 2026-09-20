@@ -104,3 +104,19 @@ test("the drift panel appears on a run with a configuration id", async ({ page }
 
   await expect(page.getByTestId("drift-card")).toBeVisible();
 });
+
+test("a reviewer can explore a sample and point at part of it", async ({ page }) => {
+  await page.goto("/explore");
+  await expect(page.getByRole("heading", { name: /Explore a sample/ })).toBeVisible();
+
+  const picker = page.getByLabel("Choose a sample");
+  await expect(picker).toBeVisible();
+  const options = await picker.locator("option").count();
+  test.skip(options < 2, "this deployment has no samples stored");
+
+  await picker.selectOption({ index: 1 });
+
+  // Every populated cell is something a person can name: its address, its label, and
+  // what it holds.
+  await expect(page.getByTestId("sample-cell").first()).toBeVisible();
+});

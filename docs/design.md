@@ -332,6 +332,7 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | user-ui | Runs | History with filters. Queue position and live stage progress |
 | user-ui | Review | Traceability matrix, coverage, and findings. Three decisions and a comment per finding. Edit a requirement or a link, then Re-check. Generate final report |
 | user-ui | Final report | The frozen one-page HTML report. Download PDF. Clone run |
+| user-ui | Explore a sample | The stored example of any artifact the tool accepts, read-only: a workbook cell by cell with its label, an OSL by section, a configuration by JSON path. With Train AI mode on, any of them can be pointed at to start an observation |
 | user-ui | Observations | What this person has recorded in Train AI mode and what became of it. Only when the mode is on (ADR-021) |
 | user-ui | Run stats | Stage timings, LLM calls, tokens, cache hits |
 | user-ui | Config history | Captured configs by configuration ID and version, with created and last-modified dates. Copy one into a new run. Same layout as the config history in the compare-file ui2 mock |
