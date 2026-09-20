@@ -175,7 +175,7 @@ for a year is either load-bearing or dead, and only a person can tell which.
 ## Settings
 
 Every runtime setting, grouped: Model, Training, Login, Throughput, Uploads,
-Retention, Platform. Beside each value is **where it came from**: set here, from
+Retention, Appearance, Platform. Beside each value is **where it came from**: set here, from
 `.env`, or the built-in default. A value you set here wins over `.env`; **Revert** puts
 it back and says what it will revert to. The **change history** at the foot says who
 changed what and from what.
@@ -194,6 +194,10 @@ changed what and from what.
 - **Uploads and Retention.** The size limit, and how long runs are kept. Shortening
   retention asks for a second click: the next sweep deletes anything past the new
   window.
+- **Appearance.** The **default theme** every browser starts on, in both apps, and
+  **Lock the theme**, which hides the picker everywhere and applies the default. A
+  person's own choice wins for their browser until you lock; the change reaches open
+  tabs within a minute, no redeploy.
 - **Platform**, read-only: the database URL, the data directory, and the bind
   address. Each is needed to reach or protect the settings store itself, so none can
   live inside it.

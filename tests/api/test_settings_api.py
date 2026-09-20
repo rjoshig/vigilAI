@@ -36,6 +36,7 @@ def test_the_console_lists_every_setting_with_its_source(client: TestClient, api
         "Throughput",
         "Uploads",
         "Retention",
+        "Appearance",
         "Platform",
     ]
 

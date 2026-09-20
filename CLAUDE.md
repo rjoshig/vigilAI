@@ -62,7 +62,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.3 | Runtime settings in the admin console: console overrides `.env` overrides defaults (ADR-023) | `docs/phase-6.3.md` | ✅ complete |
 | 6.4 | Train AI indicator in both apps; standing notes on a configuration id, reaching the model as background and the admin queue as comments | `docs/phase-6.4.md` | ✅ complete — one test open |
 | 6.5 | Training documentation, kept current: `docs/user-training.md` and `docs/admin-training.md` | `docs/phase-6.5.md` | 🟡 recurring — re-entered after every milestone |
-| 6.6 | Themes: named themes, a step-through picker, the default and lock set from the admin console | `docs/phase-6.6.md` | ⬜ not started — specified |
+| 6.6 | Themes: named themes, a step-through picker, the default and lock set from the admin console | `docs/phase-6.6.md` | ✅ complete |
 | 6.7 | Programme rules (must/should/advisory) read by the model and graded by code; a keyword check that a run is the programme it claims | `docs/phase-6.7.md` | ✅ complete |
 | 6.8 | Scoped compliance, validation guides (report cell ↔ OSL ↔ config, with examples), ten versions of every definition with revert | `docs/phase-6.8.md` | ✅ complete |
 | 6.9 | Delivery drift: what changed since the previous finalized run of the same configuration, on the review screen and the frozen report | `docs/phase-6.9.md` | ✅ complete |
