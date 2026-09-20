@@ -43,3 +43,38 @@ def test_an_unknown_programme_is_refused(
 ) -> None:
     client.get(f"{api}/admin/artifact-types")
     assert _add(client, api, fixtures_root, cases, "ZZ", 0).status_code == 404
+
+
+def test_a_sample_can_be_relabelled_annotated_and_moved_between_scopes(
+    client: TestClient, api: str, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    client.get(f"{api}/admin/artifact-types")
+    for n in range(3):
+        assert _add(client, api, fixtures_root, cases, "AS", n).status_code == 201
+    added = _add(client, api, fixtures_root, cases, "", 0).json()
+    sample_id = next(s["id"] for s in added["samples"] if s["scope_code"] == "")
+
+    edited = client.patch(
+        f"{api}/admin/artifact-types/counts/samples/{sample_id}",
+        json={"label": "Q3", "notes": "the monitoring variant has no billing sheet"},
+    )
+    assert edited.status_code == 200, edited.text
+    sample = next(s for s in edited.json()["samples"] if s["id"] == sample_id)
+    assert (sample["label"], sample["notes"]) == (
+        "Q3",
+        "the monitoring variant has no billing sheet",
+    )
+
+    full = client.patch(
+        f"{api}/admin/artifact-types/counts/samples/{sample_id}", json={"scope_code": "as"}
+    )
+    assert full.status_code == 409
+    moved = client.patch(
+        f"{api}/admin/artifact-types/counts/samples/{sample_id}", json={"scope_code": "AM"}
+    )
+    assert moved.status_code == 200
+    assert next(s for s in moved.json()["samples"] if s["id"] == sample_id)["scope_code"] == "AM"
+    unknown = client.patch(
+        f"{api}/admin/artifact-types/counts/samples/{sample_id}", json={"scope_code": "ZZ"}
+    )
+    assert unknown.status_code == 404

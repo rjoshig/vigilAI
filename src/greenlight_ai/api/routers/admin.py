@@ -562,6 +562,68 @@ def save_guide(
     )
 
 
+@router.patch("/artifact-types/{key}/samples/{sample_id}", response_model=wire.ArtifactTypeOut)
+def edit_sample(
+    key: str,
+    sample_id: int,
+    payload: wire.SamplePatch,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_admin),
+) -> wire.ArtifactTypeOut:
+    """Relabel a sample, write notes on it, or move it to another programme.
+
+    Notes reach the mapping interview as the administrator's words about that
+    sample, so they are the place to say how this variant differs.
+
+    Args:
+        key: The artifact key.
+        sample_id: The sample.
+        payload: What changes.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Returns:
+        The type with all of its samples.
+
+    Raises:
+        HTTPException: 404 for an unknown sample or programme, 409 when the target
+            programme already has three samples of this type.
+    """
+    sample = _get_sample(session, key, sample_id)
+    row = sample.artifact_type
+    if payload.scope_code is not None:
+        scope = payload.scope_code.strip().upper()
+        if scope and catalog.scope_for(session, scope) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"no programme {scope!r}")
+        if scope != (sample.scope_code or ""):
+            there = [s for s in row.samples if (s.scope_code or "") == scope and s.id != sample.id]
+            if len(there) >= MAX_SAMPLES:
+                where = f"programme {scope}" if scope else "the global samples"
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    f"{where} already has {MAX_SAMPLES} samples of {key!r}",
+                )
+            sample.scope_code = scope
+    if payload.label is not None:
+        sample.label = payload.label.strip()
+    if payload.notes is not None:
+        sample.notes = payload.notes.strip()
+    session.flush()
+    repository.audit(
+        session,
+        "admin.sample_edited",
+        detail=f"{key}/{sample_id}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    versions.record_artifact_version(session, row, user.name, "sample edited")
+    return _artifact_out(
+        row, data_dir, version=versions.latest_version(session, "artifact_type", row.key)
+    )
+
+
 @router.get("/artifact-types/{key}/samples/{sample_id}/download")
 def download_sample(
     key: str,

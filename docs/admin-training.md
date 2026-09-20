@@ -59,8 +59,12 @@ version as `v1.0`, `v1.1`, … (the first save is `v1.0`). For each type:
 - **Define** it: a label, what it is for the person uploading it, and **what the AI
   should look at**, in plain words. Leave the guidance empty and the model reads the
   document exactly as it always did; this is additive, never a substitute for the OSL.
-- **Samples**, up to three per type, each with a label such as the customer or the
-  year. You can view a sample, download it, and remove it: a report cell by cell, an
+- **Samples**, grouped by who they belong to: **Global** (read by every programme
+  that has none of its own) and one box per **delivery programme**, so a variant of
+  the OSL or the configuration for Account Solicitation has its own place. Up to
+  three per box, each with a label such as the customer or the year and **notes**:
+  how this variant differs and what to look for. The notes on the OSL and the
+  configuration samples reach the model when it maps that scope. You can view a sample, download it, and remove it: a report cell by cell, an
   OSL section by section with each paragraph numbered `¶1, ¶2…`, and a
   configuration block by block with its JSON path. Named values
   resolve against the samples, and workbook type detection compares uploads with

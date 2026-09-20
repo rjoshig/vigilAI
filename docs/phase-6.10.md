@@ -44,7 +44,10 @@ editable everywhere and every delete is deliberate (ADR-032).
 
 ### Part B — Meaning · ✅ complete
 
-- [x] `artifact_samples.scope_code`; three samples per type **per programme**.
+- [x] `artifact_samples.scope_code`; three samples per type **per programme**; on
+      Artifact types the samples are grouped by scope with an add form per box; a
+      sample's label, notes and programme are editable, and the notes on the OSL and
+      configuration samples reach the interview.
 - [x] `meaning_entries`: requirement entries, global or per programme, with status
       (proposed · open · confirmed · rejected), the model's question and the
       administrator's note. Cell entries (the validation guide) stay on the artifact
