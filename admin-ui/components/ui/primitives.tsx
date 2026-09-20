@@ -219,14 +219,23 @@ export interface PageHeaderProps {
   description?: string;
   action?: React.ReactNode;
   breadcrumb?: React.ReactNode;
+  /**
+   * What this screen is for, how it is meant to be used, and what belongs
+   * elsewhere — an `<Explain>` from `@/components/explain`. Hidden when the
+   * deployment switches explanations off (Phase 6.14d).
+   */
+  explain?: React.ReactNode;
 }
 
-export function PageHeader({ title, description, action, breadcrumb }: PageHeaderProps) {
+export function PageHeader({ title, description, action, breadcrumb, explain }: PageHeaderProps) {
   return (
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div>
         {breadcrumb ? <div className="mb-1 text-xs text-muted-foreground">{breadcrumb}</div> : null}
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="flex items-center gap-1.5 text-xl font-semibold tracking-tight">
+          {title}
+          {explain}
+        </h1>
         {description ? (
           <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">{description}</p>
         ) : null}

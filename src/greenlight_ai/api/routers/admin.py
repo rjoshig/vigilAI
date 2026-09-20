@@ -1984,6 +1984,9 @@ def create_field_label(
         user_id=user.id,
         actor=user.name,
     )
+    versions.record_field_label_version(
+        session, payload.canonical, user.name, f"added {payload.label!r}"
+    )
     return wire.FieldLabelOut(
         id=row.id,
         canonical=row.canonical,
@@ -2031,6 +2034,12 @@ def set_field_label_active(
         user_id=user.id,
         actor=user.name,
     )
+    versions.record_field_label_version(
+        session,
+        row.canonical,
+        user.name,
+        f"{'switched on' if active else 'switched off'} {row.label!r}",
+    )
     return wire.FieldLabelOut(
         id=row.id,
         canonical=row.canonical,
@@ -2063,14 +2072,16 @@ def delete_field_label(
     row = session.get(models.FieldLabel, label_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"field label {label_id} not found")
+    canonical, label = row.canonical, row.label
     session.delete(row)
     repository.audit(
         session,
         "admin.field_label_deleted",
-        detail=f"{row.canonical}:{row.label}",
+        detail=f"{canonical}:{label}",
         user_id=user.id,
         actor=user.name,
     )
+    versions.record_field_label_version(session, canonical, user.name, f"deleted {label!r}")
 
 
 @router.get("/aliases", response_model=list[wire.AliasOut])
@@ -2510,6 +2521,7 @@ _VERSION_KINDS: Final[dict[str, versions.VersionKind]] = {
     "programme": "programme_rules",
     "meaning": "meaning",
     "example": "example",
+    "field-label": "field_label",
 }
 
 

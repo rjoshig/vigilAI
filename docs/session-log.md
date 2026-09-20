@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/artifact-match`, cut from `dev` (2026-09-20). **Phase 6.14 is partly built**: 6.14a (the artifact match check) and 6.14e (the theme locked) are complete; 6.14b, 6.14c and 6.14d are in progress with every open item labelled **outstanding** in the phase doc. 1292 tests pass; every Python and UI gate is clean. **Next concrete action: close the four outstanding items** — an admin screen for `field_labels`, the remaining field markers and tooltips, the live cap countdown, and moving the credit date into the pre-flight (measure the added parse latency first). A pull request into `dev` has not been opened |
+| Branch | `feature/queue-controls`, cut from `dev` (2026-09-21). **Phase 6.14 is complete but for one deferred item**: 6.14a, b, d, e and j are done; 6.14c is 🟡 with only the live cap countdown open, which the user parked as a nice-to-have. 1335 tests pass; every Python and UI gate is clean. **Next concrete action: open a PR into `dev`.** After that the phase gate says report before starting anything new |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -1964,3 +1964,44 @@ for `field_labels`.
 **Worth knowing.** The drift tests now walk the accept path: forcing two fixtures to
 share one configuration id is exactly the disagreement 6.14a catches, so the test does
 what a person would rather than being exempted from the gate.
+
+---
+
+## Session: 2026-09-21 (6.14 closed out, and the availability controls)
+
+**Branch:** `feature/queue-controls`. **Phase:** 6.14, complete but for one deferred
+item. **Status:** 1335 tests pass; `black`, `flake8`, `mypy`, both UI gates and
+`check_docs.sh` clean.
+
+**Completed.**
+
+- **Field labels are versioned** (closing 6.14b), per canonical field with revert, the
+  way worked examples are versioned per stage. The useful question is what we called
+  the credit date last month, not what happened to row 14.
+- **Every admin screen explains itself** (closing 6.14d), through an `explain` slot on
+  `PageHeader`. Each one names what belongs *elsewhere*, taken from the overlap table in
+  `admin-training.md` — which is the part that helps somebody choosing between sixteen
+  surfaces.
+- **6.14j, availability.** Four switches resolved by one module so a deployment can
+  never refuse submissions while the banner says everything is fine: a change-your-mind
+  window, hold the queue, stop accepting submissions, and maintenance mode. The window
+  reuses the queue's existing `run_after` rather than adding a mechanism. Cancelling is
+  free while a run is queued and keeps the files, so the next step is cloning it
+  corrected. Work already running always finishes.
+
+**Pending.** The live cap countdown in 6.14c — deferred by the user as a nice-to-have.
+
+**Blockers.** None.
+
+**Next concrete action.** Open a PR into `dev`, then report before starting anything
+new.
+
+**Worth knowing.** Adding the grace window broke 81 tests at once, because the suite
+drives the worker inline and immediately. The fix is an autouse fixture setting the
+window to zero rather than changing the default: the default is a product decision and
+a test environment is not where it gets made. The tests that are *about* the window set
+it themselves.
+
+Also: a dev server left running across a `git checkout` corrupts its `.next` cache and
+serves a blank page on HTTP 200. Clear `.next` and restart after switching branches,
+and check rendered content rather than a status code when verifying the apps are up.

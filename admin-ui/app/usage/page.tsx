@@ -9,6 +9,7 @@
 
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import { Sparkline } from "@/components/sparkline";
 import {
   Card,
@@ -54,6 +55,16 @@ export default function UsagePage() {
   return (
     <>
       <PageHeader
+        explain={
+          <Explain label="Reading these numbers">
+            What the tool has actually spent: calls, tokens and cache hits over time. Every number
+            is counted by code from the run records.
+            <br />
+            <br />A high cache-hit rate is the thing to want — it means repeated content is costing
+            nothing. The token budget that stops a runaway run is under <b>Settings &rarr; Model</b>
+            .
+          </Explain>
+        }
         title="Usage"
         description="Tool health and cost. Every number comes from the run tables; no prompts or content are stored."
       />

@@ -11,6 +11,7 @@
 import { AlertTriangle, FlaskConical, Plus, Sparkles, Zap } from "lucide-react";
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import {
   Badge,
   Button,
@@ -99,6 +100,19 @@ export default function ChecksPage() {
   return (
     <>
       <PageHeader
+        explain={
+          <Explain label="What is this for?">
+            A check is a rule <b>code evaluates</b> against a report: a named value compared with a
+            threshold, a count that must reconcile. It produces a finding and always gives the same
+            answer on the same inputs.
+            <br />
+            <br />
+            Not here: something that must hold across a whole programme is a <b>programme rule</b>;
+            something that must be <i>present in the configuration</i> is a <b>compliance rule</b>;
+            something the model should know rather than test is an artifact type&rsquo;s{" "}
+            <b>AI context</b>.
+          </Explain>
+        }
         title="Checks"
         description="Cross-report checks defined as data. The model helps write a check once; code runs it on every request at no token cost. Versioned, scoped, and switchable. Evaluated by code on every run; nothing here is sent to the model."
         action={

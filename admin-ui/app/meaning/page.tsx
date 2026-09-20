@@ -13,6 +13,7 @@
 import { Sparkles } from "lucide-react";
 import * as React from "react";
 
+import { Explain } from "@/components/explain";
 import { BulkBar } from "@/components/bulk-bar";
 import { GuideEditor } from "@/components/guide-editor";
 import {
@@ -124,6 +125,17 @@ export default function MeaningPage() {
   return (
     <>
       <PageHeader
+        explain={
+          <Explain label="What mapping is for">
+            Where each OSL requirement answers to: which configuration path implements it, and which
+            report cells evidence it. The model proposes from the samples, you confirm, and code
+            compiles a confirmed row into a shadow check.
+            <br />
+            <br />
+            Scoped globally or per programme. A programme entry with the same key as a global one
+            replaces it on that programme&rsquo;s runs.
+          </Explain>
+        }
         title="Meaning"
         description="What each OSL requirement answers to in the configuration and the reports, globally and per delivery programme. The model proposes from the samples, you confirm, and code turns a confirmed row into a check that runs in shadow until you activate it on the Rules screen. Sent to the model as background on every run; code does the comparing."
       />
