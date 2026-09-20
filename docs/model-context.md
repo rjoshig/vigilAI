@@ -1,6 +1,6 @@
 # What reaches the model, and what code decides
 
-**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i).
+**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i and 6.15).
 
 An administrator cannot see a prompt. Everything they know about where their words end
 up comes from the label next to the box they typed them in, which makes that label the
@@ -59,9 +59,16 @@ prompts are byte-for-byte what they were before any of this existed.
 | **Judgment check named values** | Admin → Checks | Stage 7, as `name = value` lines for the named values that check lists | — |
 
 **The stages that build a preamble** are 2 (extract), 3 (describe), 4 (trace),
-7 (reports), 8 (verify) and 9 (summarize). Stages 5 (compare) and 6 (reverse) build
-none and make no model call at all: they are pure comparison, which is ADR-001 visible
-in a stage log.
+6 (reverse), 7 (reports), 8 (verify) and 9 (summarize). Stage 5 (compare) builds none
+and makes no model call at all: it is pure comparison, which is ADR-001 visible in a
+stage log.
+
+Stage 6 joined that list in Phase 6.15 and is the narrowest case in the product: it
+asks the model *where a compliance control is implemented, if anywhere*, and only
+when the deterministic matcher has already failed. It never asks whether a delivery
+is compliant. Code checks the answer against the paths it offered, applies a
+confidence floor, and a located control becomes a review-severity finding for a
+person to confirm — never a pass.
 
 **The whole preamble is capped at 6,000 characters** (`MAX_BLOCK_CHARS`). Past it the
 block is trimmed as a whole and the model is told what was left out — before 6.11e each
@@ -80,7 +87,7 @@ produce a finding.
 | --- | --- | --- |
 | **Expression checks** | Admin → Checks | `checks/expressions.py` at stage 7 |
 | **Field constraints** | Admin → Rules | `checks/field_constraints.py` at stage 7 |
-| **Compliance rules** | Admin → Compliance | `pipeline/s6_reverse.py` |
+| **Compliance rules** | Admin → Compliance | `checks/compliance_match.py` in code; when that finds nothing, `pipeline/s6_reverse.py` asks the model where the control is and code decides what the answer means |
 | **Programme rule strictness** | Admin → Delivery programmes | `pipeline/s8_verify.py` — the model says whether it holds, code sets the severity |
 | **Named values** | Admin → Artifact types | `checks/named_values.py`, resolved against the report |
 | **Attribute aliases** | Admin → Reference data | `rules/normalize.py`, applied at stages 4, 5 and 7 |

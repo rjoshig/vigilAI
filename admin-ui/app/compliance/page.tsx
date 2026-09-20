@@ -47,6 +47,7 @@ export default function CompliancePage() {
   const [draft, setDraft] = React.useState({
     name: "",
     json_path_contains: "",
+    alternates: "",
     reasoning: "",
     scope: EVERYWHERE,
   });
@@ -77,12 +78,22 @@ export default function CompliancePage() {
       await api.saveComplianceRule({
         name: draft.name.trim(),
         json_path_contains: draft.json_path_contains.trim(),
+        alternates: draft.alternates
+          .split(/[\n,]/)
+          .map((p) => p.trim())
+          .filter(Boolean),
         expected_value: true,
         scope: draft.scope,
         reasoning: draft.reasoning,
         is_active: true,
       });
-      setDraft({ name: "", json_path_contains: "", reasoning: "", scope: EVERYWHERE });
+      setDraft({
+        name: "",
+        json_path_contains: "",
+        alternates: "",
+        reasoning: "",
+        scope: EVERYWHERE,
+      });
       await load();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not save the rule.");
@@ -98,6 +109,7 @@ export default function CompliancePage() {
       await api.updateComplianceRule(editing.id, {
         name: editing.name.trim(),
         json_path_contains: editing.json_path_contains.trim(),
+        alternates: editing.alternates ?? [],
         expected_value: editing.expected_value,
         scope: editing.scope,
         reasoning: editing.reasoning,
@@ -216,7 +228,14 @@ export default function CompliancePage() {
                           v{rule.version}
                         </Badge>
                       </TD>
-                      <TD className="mono text-xs">{rule.json_path_contains}</TD>
+                      <TD className="mono text-xs">
+                        {rule.json_path_contains}
+                        {rule.alternates?.length ? (
+                          <span className="block text-muted-foreground">
+                            or {rule.alternates.join(", ")}
+                          </span>
+                        ) : null}
+                      </TD>
                       <TD className="text-xs">{scopeLabel(rule.scope, programmes)}</TD>
                       <TD className="text-xs text-muted-foreground">{rule.reasoning || "—"}</TD>
                       <TD className="whitespace-nowrap text-right">
@@ -313,7 +332,7 @@ export default function CompliancePage() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="cr-path">Config path contains</Label>
+            <Label htmlFor="cr-path">Config path</Label>
             <Input
               id="cr-path"
               className="mono"
@@ -321,6 +340,25 @@ export default function CompliancePage() {
               value={draft.json_path_contains}
               onChange={(event) => setDraft({ ...draft, json_path_contains: event.target.value })}
             />
+            <span className="text-[0.7rem] text-muted-foreground">
+              A different spelling and an extra level of nesting are allowed for:
+              <span className="mono"> opt_out</span> finds <span className="mono">optout</span>, and
+              a control grouped under a <span className="mono">lists</span> key is still found.
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="cr-alts">Also implemented at (optional)</Label>
+            <Input
+              id="cr-alts"
+              className="mono"
+              placeholder="suppressions.sdn_screening, exclusions.ofac"
+              value={draft.alternates}
+              onChange={(event) => setDraft({ ...draft, alternates: event.target.value })}
+            />
+            <span className="text-[0.7rem] text-muted-foreground">
+              For the case no amount of normalising reaches — a customer whose OFAC screening is
+              called something else entirely. One per line, or comma-separated.
+            </span>
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="cr-reason">Reasoning</Label>

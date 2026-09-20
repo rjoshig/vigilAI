@@ -153,6 +153,9 @@ def load_admin_config(
             state=row.state,
             name=row.name,
             json_path_contains=str((row.requirement or {}).get("json_path_contains", "")),
+            alternates=tuple(
+                str(p) for p in (row.requirement or {}).get("alternates", []) if str(p).strip()
+            ),
             expected_value=(row.requirement or {}).get("expected_value", True),
             scope=row.scope,
             reasoning=row.reasoning,

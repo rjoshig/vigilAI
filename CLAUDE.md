@@ -81,7 +81,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.12 | One front door: an administrator says what to check in their own words and the model drafts it onto the surface that already runs it; one scope vocabulary everywhere | `docs/phase-6.12.md` | ✅ complete |
 | 6.13 | The loop closes: fifteen silent defects repaired, the observation author sees the outcome, findings carry their origin, judgment checks finished, a controlled example library, a real replay | `docs/phase-6.13.md` | ✅ complete |
 | 6.14 | The artifacts belong together: an artifact match check before any model call (configuration id, customer, credit date) any submitter accepts with a reason; the credit date resolved by label; every field says what it does to a run; tooltips on by default; the theme locked | `docs/phase-6.14.md` | ⬜ not started |
-| 6.15 | A compliance rule should survive being spelled differently: measured, specified, approach open | `docs/phase-6.15.md` | ⬜ specified, not started |
+| 6.15 | A compliance rule should survive being spelled differently: four deterministic tests widen the match, and where they still fail the model says where the control is and code decides what that means | `docs/phase-6.15.md` | ✅ complete |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same

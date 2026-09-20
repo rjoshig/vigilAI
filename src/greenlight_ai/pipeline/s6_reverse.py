@@ -1,4 +1,4 @@
-"""Stage 6: the scoped reverse pass. Pure code, no LLM call.
+"""Stage 6: the scoped reverse pass. Code decides; the model is asked one question.
 
 The reverse pass is scoped, not exhaustive, because the OSL does not describe every
 detail of the extract process (``docs/design.md`` "Processing pipeline", step 6). Only
@@ -6,6 +6,19 @@ three categories of config element are checked back against the OSL: filters and
 criteria, model data such as attributes, and fixed compliance rules. Compliance rules
 work the other way round: each one must be present in the config even if the OSL never
 mentions it.
+
+**This stage made no model call until Phase 6.15.** It now makes one, and only in one
+place: when the deterministic matcher has failed to find a compliance control, the
+model is asked *where the control is, if anywhere* — never whether the delivery is
+compliant. Code checks the answer against the paths it offered, applies a confidence
+floor, and turns a located control into a **review-severity** finding for a person to
+confirm, never into a pass. The high-severity miss is unchanged when the answer is
+"absent", which it usually is.
+
+Why the call is worth its cost: a substring match could not distinguish a control that
+is *absent* from one that is *spelled differently*, and reported both at high severity.
+Option C narrowed that deterministically; this closes what is left. The call happens on
+the exception rather than on every run, and not at all when the match succeeds.
 """
 
 from __future__ import annotations
@@ -13,7 +26,12 @@ from __future__ import annotations
 import logging
 from typing import Final
 
-from greenlight_ai.checks.definitions import AdminConfig
+from greenlight_ai.checks import compliance_match
+from greenlight_ai.checks.definitions import AdminConfig, ComplianceRule
+from greenlight_ai.llm.client import LLMError
+from greenlight_ai.llm.prompts import COMPLIANCE_LOCATE_PROMPT
+from greenlight_ai.llm.prompts.schemas import ComplianceLocation
+from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.pipeline.s4_trace import describe_rule
 from greenlight_ai.rules.schema import Evidence, Finding
@@ -81,6 +99,148 @@ def run(context: RunContext) -> None:
 _PRESENCE_REASON: Final[str] = "This rule must be present in every config in scope."
 
 
+#: Below this the model's own answer is treated as "unsure": a locator that is not
+#: confident has told us nothing the deterministic match had not already.
+_LOCATE_CONFIDENCE_FLOOR: Final[float] = 0.6
+
+#: How many configuration paths the model is shown. A configuration is not a search
+#: space, and a prompt that is mostly paths stops being a prompt.
+_LOCATE_MAX_PATHS: Final[int] = 120
+
+
+def _may_locate(context: RunContext) -> bool:
+    """Whether this run may spend a model call locating a compliance control.
+
+    Args:
+        context: The run context.
+
+    Returns:
+        True when a client is available and the run has budget. A run that has
+        exhausted its budget falls back to the deterministic answer rather than
+        failing, because the deterministic answer is what it would have had anyway.
+    """
+    return context.client is not None
+
+
+def _locate(context: RunContext, rule: ComplianceRule) -> ComplianceLocation | None:
+    """Ask where a configuration implements a control, if anywhere.
+
+    The model is shown paths and the shape of their contents — never a value, which is
+    ADR-003 — and answers one narrow question. It does not decide compliance; the
+    caller turns the answer into a severity, which is ADR-001.
+
+    Args:
+        context: The run context.
+        rule: The compliance rule whose control could not be found.
+
+    Returns:
+        The model's answer, or ``None`` when it could not be obtained or cannot be
+        believed — an unparseable reply, a path that was not in the list, or an answer
+        the model itself was not confident in.
+    """
+    if context.config is None:
+        return None
+    paths = [b.json_path for b in context.config.blocks][:_LOCATE_MAX_PATHS]
+    if not paths:
+        return None
+
+    shapes = {b.json_path: type(b.content).__name__ for b in context.config.blocks}
+    listed = "\n".join(f"- {path} ({shapes.get(path, 'value')})" for path in paths)
+    control = f"{rule.name} — {rule.reasoning or _PRESENCE_REASON}"
+
+    try:
+        result = context.client.complete(
+            COMPLIANCE_LOCATE_PROMPT.system,
+            preamble(context.guidance)
+            + COMPLIANCE_LOCATE_PROMPT.render_with_examples(
+                context.examples.get("compliance_locate", ()),
+                control=control,
+                paths=listed,
+            ),
+            ComplianceLocation,
+            stage="compliance_locate",
+            prompt_version=COMPLIANCE_LOCATE_PROMPT.version,
+        )
+        answer = result.parsed(ComplianceLocation)
+    except LLMError as exc:
+        _LOG.info("compliance %r: locator did not answer (%s)", rule.name, type(exc).__name__)
+        return None
+
+    if answer.verdict != "found":
+        return None
+    # The model was told to quote a path from the list. Code checks that it did:
+    # a path nobody offered is a hallucination, and believing one would be the
+    # comparison ADR-001 keeps out of the model's hands.
+    if answer.json_path not in set(paths):
+        _LOG.info(
+            "compliance %r: locator proposed %r, which is not a path in this "
+            "configuration; ignored",
+            rule.name,
+            answer.json_path,
+        )
+        return None
+    if answer.confidence < _LOCATE_CONFIDENCE_FLOOR:
+        _LOG.info(
+            "compliance %r: locator proposed %r at confidence %.2f; below the floor",
+            rule.name,
+            answer.json_path,
+            answer.confidence,
+        )
+        return None
+    return answer
+
+
+def _report_located(
+    context: RunContext,
+    rule: ComplianceRule,
+    located: ComplianceLocation,
+    ref: str,
+    shadow: bool,
+) -> None:
+    """Report a control found somewhere the rule does not name.
+
+    Deliberately **not** a pass and deliberately **not** a high-severity miss. The
+    model located something; a person decides whether it is the control, and
+    confirming it adds the path to the rule so the next run matches in code.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to.
+        rule: The rule whose control was located.
+        located: The model's answer, already checked against the offered paths.
+        ref: The rule reference for statistics.
+        shadow: Whether the rule is running in shadow.
+    """
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="could_not_evaluate",
+            severity="review",
+            title=(
+                f"Compliance rule {rule.name!r} may be implemented at "
+                f"{located.json_path}, which the rule does not name"
+            ),
+            detail=(
+                f"{rule.reasoning or _PRESENCE_REASON} No configuration path matched "
+                f"{rule.json_path_contains!r}, so the configuration was read for the "
+                f"control itself: {located.reason} "
+                "Confirm whether this is the control. If it is, add the path to the "
+                "rule as an alternate and the next run will match it in code, without "
+                "asking again."
+            ),
+            leg="osl_config",
+            rule_ref=ref,
+            shadow=shadow,
+            evidence=Evidence(config_path=located.json_path),
+        )
+    )
+    _LOG.info(
+        "compliance %r located at %r (confidence %.2f)",
+        rule.name,
+        located.json_path,
+        located.confidence,
+    )
+
+
 def _check_compliance(context: RunContext, admin: AdminConfig, customer: str) -> None:
     """Assert every in-scope compliance rule is present in the config.
 
@@ -97,7 +257,26 @@ def _check_compliance(context: RunContext, admin: AdminConfig, customer: str) ->
             continue
         ref = f"compliance_rule:{rule.id}" if rule.id is not None else ""
         shadow = bool(ref) and ref in admin.shadow_rule_refs
-        matching = [b for b in context.config.blocks if rule.json_path_contains in b.json_path]
+        # Widened in 6.15: a substring test on the path could not tell a control
+        # that is absent from one that is spelled differently or nested a level
+        # deeper, and reported both at high severity.
+        hits = compliance_match.matches(
+            rule.json_path_contains,
+            [(b.json_path, b.content) for b in context.config.blocks],
+            rule.alternates,
+        )
+        found = {hit.json_path for hit in hits}
+        matching = [b for b in context.config.blocks if b.json_path in found]
+        if not matching and _may_locate(context):
+            # Four code tests have already failed, so the honest prior is that the
+            # control is absent. Ask once where it is anyway, because "absent" and
+            # "implemented under a name this rule does not know" are the two things
+            # the deterministic match cannot tell apart, and one of them is a false
+            # high-severity finding (Phase 6.15, option A).
+            located = _locate(context, rule)
+            if located is not None:
+                _report_located(context, rule, located, ref, shadow)
+                continue
         if not matching:
             context.add_finding(
                 Finding(
@@ -107,7 +286,14 @@ def _check_compliance(context: RunContext, admin: AdminConfig, customer: str) ->
                     title=f"Compliance rule {rule.name!r} is not implemented in the config",
                     detail=(
                         f"{rule.reasoning or _PRESENCE_REASON} "
-                        f"No config path contains {rule.json_path_contains!r}."
+                        f"No configuration path implements {rule.json_path_contains!r}"
+                        + (
+                            f", nor any of {list(rule.alternates)}."
+                            if rule.alternates
+                            else ". Spelling and nesting were allowed for; if this "
+                            "customer calls it something else, add that path to the "
+                            "rule as an alternate."
+                        )
                     ),
                     leg="osl_config",
                     rule_ref=ref,

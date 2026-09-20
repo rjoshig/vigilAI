@@ -277,6 +277,11 @@ class ComplianceRuleIn(BaseModel):
 
     name: str = Field(min_length=1, max_length=100)
     json_path_contains: str = Field(min_length=1)
+    #: Other configuration paths that also count as implementing this rule
+    #: (Phase 6.15). Spelling and an extra level of nesting are already allowed for;
+    #: this is for the case no amount of normalising reaches — a customer whose OFAC
+    #: screening is called ``suppressions.sdn_screening``.
+    alternates: list[str] = Field(default_factory=list, max_length=10)
     expected_value: Any = True
     scope: ScopeToken = scopes.EVERYWHERE
     reasoning: str = ""

@@ -1,9 +1,8 @@
 # Phase 6.15 — A compliance rule should survive being spelled differently
 
-**Status:** ⬜ **not started** — specified 2026-09-21 from a question the user asked and
-a measurement that answered it. **The approach is deliberately left open**; this
-document states the problem, the evidence, the constraint the answer has to satisfy,
-and three candidate shapes. It is not yet a build plan.
+**Status:** ✅ **complete** — 2026-09-21. Specified from a question the user asked and a
+measurement that answered it. **Options C and A are both built**; B is not, and the
+open questions at the foot of this document are answered where the build answered them.
 
 ## The question that started it
 
@@ -147,6 +146,54 @@ which is the row a real customer most often is.
 removes two of the five failure shapes. A closes the remaining gap. They are not
 alternatives.
 
+## C, as built · ✅ complete
+
+`checks/compliance_match.py`. Four tests, and a block counts if **any** of them passes,
+so nothing that matched before stops matching:
+
+1. **Normalised substring** — what the old check did, with case, underscores and hyphens
+   treated as noise.
+2. **Segments in order** — the rule's segments as an ordered subsequence of the path's.
+3. **Keys inside the block** — the parser groups a nested object into one block, so
+   `{"suppressions": {"lists": {"ofac": true}}}` is the single path `suppressions.lists`
+   holding `{"ofac": true}`. The control is real and it is in the *content*.
+4. **Alternates** — other paths that also count, written by a person.
+
+Re-running the measurement against it:
+
+| Configuration shape | Before | After | With an alternate |
+| --- | --- | --- | --- |
+| Exactly as the rules expect | 0 | 0 | 0 |
+| `opt_out` vs `optout` | 1 | **0** | 0 |
+| Grouped under `exclusions` | 3 | 3 | **0** |
+| Vendor names | 3 | 3 | **0** |
+| Nested one deeper | 3 | **0** | 0 |
+| Genuinely absent | 2 | 2 | **2 — still correctly reported** |
+
+Two shapes fixed with no configuration at all, two more with one path an administrator
+types, and the check still reports a control that genuinely is not there. That last row
+is the one that makes the rest safe to ship.
+
+**Two things the build found that the specification had not.**
+
+- **The nesting row was not what it looked like.** `suppressions.lists.ofac` is not a
+  path the parser produces — it produces `suppressions.lists` holding an object. So
+  segment matching alone did not fix that row; reading the block's *content* did. The
+  specification had the symptom right and the mechanism wrong.
+- **Segment matching alone would have been a regression.** The old substring test found
+  `suppressions.ofac_sdn` for a rule saying `suppressions.ofac`, by luck, and that is
+  the right answer. Normalised segments reject it. Keeping the substring test as one of
+  the four is what makes the change purely additive.
+
+**The looseness that remains, stated rather than hidden.** The substring test cannot
+tell `suppressions.ofac_sdn` — a real control under a vendor name — from
+`suppressions.ofacish_thing`, which is not one. Dropping it would fix that and would
+also stop finding `ofac_sdn`. Between a rule that occasionally matches too generously
+and one that reports a real control as missing at high severity, the generous failure
+is the safer one: it is visible on the finding, which names the path it matched.
+Narrowing it properly is what option A is for. There is a test that states this
+explicitly rather than asserting behaviour the code does not have.
+
 ## What to settle before this becomes a build plan
 
 - [ ] Is a model-located match a **finding** or a **confirmation prompt**? Review
@@ -168,3 +215,49 @@ alternatives.
 
 **Rewriting the deterministic check.** It is correct where naming matches, and the
 measurement says so. Whatever is built goes *behind* it, not instead of it.
+
+## A, as built · ✅ complete
+
+`llm/prompts/compliance_locate.py` and `pipeline/s6_reverse.py`. Asked **only** where the
+deterministic matcher has already failed, so the common case still costs nothing and a
+configuration whose naming matches never reaches the model at all.
+
+The model is asked *where the control is, if anywhere* — never whether the delivery is
+compliant. It is shown configuration paths and the shape of their contents, never a
+value (ADR-003). It answers `found`, `absent` or `unsure`.
+
+**Four things code refuses to believe**, each falling back to the finding the old
+behaviour would have produced, and each with a test:
+
+| The answer | Why it is discarded |
+| --- | --- |
+| A path that was not in the list | A hallucinated path must not clear a compliance rule. The prompt says the path will be rejected; code rejects it. |
+| Confidence below 0.6 | A locator that is unsure has told us nothing the matcher had not. |
+| `unsure`, or anything but `found` | Only a positive location counts. |
+| No answer at all | An unavailable model must never turn a miss into a pass. |
+
+**A located control is never a pass.** It becomes a **review-severity** finding naming
+the path and asking a person to confirm, with the next step written into the finding:
+add the path to the rule as an alternate and the next run matches it in code, without
+asking again. That is the write-back the specification wanted, done by a person rather
+than silently — ADR-021 — and it means the model is consulted once per customer per
+rule rather than on every run.
+
+**What this changed about the stage.** `s6_reverse.py` opened with *"Pure code, no LLM
+call"* for its whole life. It now makes one, in one place, and its documentation says
+so — as does `docs/model-context.md`, which a test keeps honest: the register lists
+which stages build a preamble, and stage 6 joining that list is what made the test fail
+until both were corrected.
+
+## The open questions, answered by the build
+
+- **Is a model-located match a finding or a confirmation prompt?** A confirmation
+  prompt, at review severity. Not a pass, because deciding compliance is a comparison.
+- **Automatic write-back or the training queue?** Neither, in the end: the finding tells
+  the person what to add, and they add it. Simpler than a queue round-trip for a
+  one-line change, and it keeps ADR-021's rule that nothing activates without a person.
+- **Run statistics saying which engine answered.** Still outstanding. A run records its
+  calls and cache hits, so the locator's cost is visible in aggregate, but a finding
+  does not yet say whether code or the model produced it.
+- **Does the same problem apply to programme rules and checks?** Still unmeasured.
+  Worth the same half-hour the compliance measurement took.
