@@ -105,6 +105,14 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-20 (samples grouped by scope, with notes)
+
+Artifact types: samples in one box per scope (Global, then each programme) with
+its own add form; label, notes and programme editable on a sample; notes on the OSL
+and configuration samples reach the mapping interview.
+
+---
+
 ## Session: 2026-09-20 (documents brought current)
 
 Architecture (the `meaning/` package, the API row), CLAUDE.md's package list, the

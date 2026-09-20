@@ -190,6 +190,14 @@ export const api = {
   saveGuide: (key: string, entries: GuideEntry[]): Promise<ArtifactType> =>
     request<ArtifactType>(`/artifact-types/${key}/guide`, json("PUT", { entries })),
 
+  /** Relabel a sample, write notes on it, or move it to another programme. */
+  updateSample: (
+    key: string,
+    sampleId: number,
+    patch: { label?: string; notes?: string; scope_code?: string }
+  ): Promise<ArtifactType> =>
+    request<ArtifactType>(`/artifact-types/${key}/samples/${sampleId}`, json("PATCH", patch)),
+
   /** Remove one sample. */
   deleteSample: (key: string, sampleId: number, confirm: string): Promise<void> =>
     request<void>(

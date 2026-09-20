@@ -408,3 +408,13 @@ class BulkResult(BaseModel):
 
     deleted: int = 0
     missing: list[int] = Field(default_factory=list)
+
+
+class SamplePatch(BaseModel):
+    """An edit to a stored sample: its label, its notes, or which programme it belongs to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: Optional[str] = None
+    notes: Optional[str] = None
+    scope_code: Optional[str] = None
