@@ -183,6 +183,9 @@ def build_context(
         ),
         guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
+        examples=repository.load_prompt_examples(
+            session, run.customer_name, run.configuration_id, run.scope or ""
+        ),
         masked_columns=repository.load_masked_columns(session),
         rules_version=run.rules_version,
         verify_lenses=llm_settings.verify_lenses,

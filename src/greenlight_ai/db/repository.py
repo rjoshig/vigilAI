@@ -29,6 +29,7 @@ from greenlight_ai.checks.definitions import (
 from greenlight_ai.checks.named_values import NamedValue
 from greenlight_ai.db import models
 from greenlight_ai.db.types import utcnow
+from greenlight_ai.llm import examples as example_library
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
@@ -39,6 +40,7 @@ __all__ = [
     "load_admin_config",
     "load_aliases",
     "load_masked_columns",
+    "load_prompt_examples",
     "save_context",
     "load_findings",
     "fingerprint",
@@ -289,6 +291,51 @@ def load_aliases(session: Session, customer: str = "") -> AliasTable:
     for row in rows:
         mapping.setdefault(row.canonical_name, []).append(row.alias)
     return AliasTable.from_mapping(mapping)
+
+
+def load_prompt_examples(
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
+) -> dict[str, tuple[example_library.LibraryExample, ...]]:
+    """Load the administrator's worked examples, by stage (Phase 6.13d, ADR-038).
+
+    Args:
+        session: An open session.
+        customer: The run's customer, so a customer-scoped example applies.
+        configuration_id: The run's ETL configuration.
+        programme_code: The run's delivery programme.
+
+    Returns:
+        Active examples in scope, at most :data:`MAX_PER_STAGE` per stage, narrowest
+        scope first. A stage nobody has written an example for is absent, and the
+        prompt then renders exactly as it always did.
+    """
+    rows = session.execute(
+        sa.select(models.PromptExample)
+        .where(models.PromptExample.is_active.is_(True))
+        .order_by(models.PromptExample.sort_order, models.PromptExample.id)
+    ).scalars()
+
+    by_stage: dict[str, list[example_library.LibraryExample]] = {}
+    for row in rows:
+        if row.stage not in example_library.STAGE_FIELDS:
+            continue
+        if not scopes.covers(row.scope, customer, programme_code, configuration_id):
+            continue
+        by_stage.setdefault(row.stage, []).append(
+            example_library.LibraryExample(
+                id=row.id,
+                stage=row.stage,
+                scope=row.scope,
+                given={str(k): str(v) for k, v in dict(row.given or {}).items()},
+                answer=dict(row.answer or {}),
+                note=row.note,
+                sort_order=row.sort_order,
+            )
+        )
+    return {stage: example_library.select(found) for stage, found in by_stage.items()}
 
 
 def load_masked_columns(session: Session) -> tuple[str, ...]:

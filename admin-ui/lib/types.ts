@@ -544,7 +544,7 @@ export interface RuleStateChange {
 }
 
 /** Which definitions keep ten versions with revert (ADR-029). */
-export type VersionKind = "artifact-type" | "programme" | "meaning";
+export type VersionKind = "artifact-type" | "programme" | "meaning" | "example";
 
 /** One retained version of an artifact type or a programme's rule set. */
 export interface DefinitionVersion {
@@ -697,4 +697,79 @@ export interface ShadowFinding {
   review_status: string;
   review_note: string;
   rule_ref: string;
+}
+
+/**
+ * One worked example an administrator gives the model (Phase 6.13d, ADR-038).
+ *
+ * The built-in examples in the prompts are the floor; these are added after them, at
+ * most four per stage, narrowest scope first. The answer is validated against the
+ * stage's own schema before it is stored, because an example the schema rejects teaches
+ * a shape the pipeline cannot parse. An example shows; it is never a rule.
+ */
+export interface PromptExampleIn {
+  stage: string;
+  scope: string;
+  /** What the model would be shown, keyed by the stage's field names. */
+  given: Record<string, string>;
+  /** A good answer, in the stage's own JSON shape. */
+  answer: Record<string, unknown>;
+  note: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface PromptExample extends PromptExampleIn {
+  id: number;
+  /** `admin`, or `promoted:<kind>:<id>` when somebody promoted a decision. */
+  origin: string;
+  created_by: string;
+  created_at: string;
+  updated_by: string;
+  updated_at: string;
+}
+
+/** One part of what a stage shows the model. */
+export interface ExampleField {
+  name: string;
+  label: string;
+  shape: "line" | "block" | "tag";
+}
+
+/** An example that ships inside the prompt, shown read-only above the library. */
+export interface BuiltInExample {
+  number: number;
+  shown: string;
+  answer: string;
+}
+
+/** A stage an administrator may add examples to. */
+export interface ExampleStage {
+  stage: string;
+  label: string;
+  description: string;
+  fields: ExampleField[];
+  built_in: BuiltInExample[];
+  max_examples: number;
+}
+
+/** A requirement a reviewer rewrote, offered as an extraction example (ADR-038). */
+export interface Correction {
+  run_id: number;
+  rule_id: string;
+  customer: string;
+  source_text: string;
+  summary: string;
+  edited_by: string;
+  edited_at: string | null;
+  promoted: boolean;
+}
+
+/** Turn a decision a person already confirmed into a worked example. */
+export interface PromoteExample {
+  source: "meaning" | "requirement" | "candidate";
+  id: number;
+  rule_id?: string;
+  scope?: string;
+  note?: string;
 }

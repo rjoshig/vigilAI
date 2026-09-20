@@ -138,26 +138,31 @@ The audience is senior associates. The form gets faster, not wordier.
       the token budget; coverage records the reports the values came from.
 - [x] The console keeps *use sparingly* and states the per-run call.
 
-### 6.13d — Controlled examples for the model · ⬜ not started
+### 6.13d — Controlled examples for the model · ✅ complete
 
-- [ ] A `prompt_examples` table: stage (a closed set), scope token, `given` (the stage's
+- [x] A `prompt_examples` table: stage (a closed set), scope token, `given` (the stage's
       placeholders), `answer` (**validated against the stage's schema on save**, the same
       check the prompt suite applies to the built-ins), note, origin (`admin` or
       `promoted:<kind>:<id>`), active flag, order, author. Versioned like every other
-      definition.
-- [ ] `Prompt.render_with_examples` appends the active examples for the stage, most
+      definition, per stage, with revert.
+- [x] `Prompt.render_with_examples` appends the active examples for the stage, most
       specific scope first, at most four, in the built-in `Example N … Answer:` shape,
-      under one line saying they show the shape of a good answer and are not rules. The
-      text is part of the rendered prompt, so the cache key changes on its own. The
-      personal-data tripwire runs on save.
-- [ ] **Promotion**: one *Use as example* control on a confirmed meaning entry (tracing),
-      on a reviewer's requirement edit (extraction), and on an approved candidate
+      under one line saying they show the shape of a good answer and are not rules. They
+      are inserted into the *rendered* prompt, so nothing an administrator wrote is read
+      as a placeholder and the cache key changes on its own. The personal-data tripwire
+      runs on save. Six stages take them: extraction, description, tracing, judgment,
+      classification and synthesis.
+- [x] **Promotion**: a *Use as example* control on a confirmed meaning entry (tracing),
+      on a requirement a reviewer rewrote (extraction), and on an approved candidate
       (synthesis). Each creates a row with its origin; nothing is promoted without the
-      click.
-- [ ] Admin console **Examples** screen: per stage, the built-ins read-only above the
-      library; add, edit, deactivate; a promoted badge; the existing scope control.
-- [ ] Tests: every stored example validates; a failing one is refused with the field
-      named; rendering respects scope and the cap; a promoted example round-trips.
+      click. The two run-side sources are listed on the Examples screen itself, which is
+      where an administrator curates — see "Found on the way".
+- [x] Admin console **Examples** screen: per stage, the built-ins read-only above the
+      library; add and deactivate; where a promoted example came from; the existing scope
+      control; the stage's version list with revert.
+- [x] Tests: every stored example validates; a failing one is refused with the field
+      named; rendering respects scope and the cap; each promotion round-trips; an
+      example that looks like personal data is refused.
 
 ### 6.13e — A replay that replays · ⬜ not started
 
@@ -173,11 +178,11 @@ The audience is senior associates. The form gets faster, not wordier.
 
 ### 6.13f — Documentation · 🟡 in progress
 
-- [~] ADR-038 (examples are worked examples, never rules; promotion needs a click; a
-      per-stage cap; part of the cache key) lands with 6.13d. **Done in 6.13c:** ADR-039
-      (judgment checks under ADR-001), ADR-040 (shadow findings visible to administrators
-      only, dismissible), and ADR-021's item 6 amended to say how precision becomes
-      knowable in shadow.
+- [x] ADR-038 (examples are worked examples, never rules; promotion needs a click; a
+      per-stage cap; part of the cache key), ADR-039 (judgment checks under ADR-001),
+      ADR-040 (shadow findings visible to administrators only, dismissible), and ADR-021's
+      item 6 amended to say how precision becomes knowable in shadow. Each landed with the
+      milestone it describes.
 - [ ] `design.md`, `architecture.md`, `glossary.md`, `llm-privacy.md`, both training
       documents (the Train AI section rewritten for senior associates and the status
       chain), `gd-rollout-plan.md` stage 3.
@@ -194,7 +199,7 @@ The audience is senior associates. The form gets faster, not wordier.
    approves it, and the author's page says *approved*, names the rule, and later says
    *live*.
 5. [ ] A finding produced by a learned rule is marked as such on the review screen.
-6. [ ] An administrator adds a worked example for extraction; the next run's extraction
+6. [x] An administrator adds a worked example for extraction; the next run's extraction
    prompt contains it and its cache key differs; an example whose answer fails the schema
    is refused.
 7. [x] A judgment check with two named values produces a finding when the model says
@@ -211,6 +216,20 @@ The audience is senior associates. The form gets faster, not wordier.
   reason rather than pretending. The API path is covered by unit tests; giving the
   seeder a run whose requirement no report evidences is a small change that belongs
   with the next seeder edit.
+- **Promotion lives on the Examples screen, not on every source screen.** The plan put a
+  *Use as example* control beside each source. Two of the three have no screen an
+  administrator looks at: the training console lists candidates in draft, not approved
+  ones, and a reviewer's requirement edit happens in the user app, where an administrator
+  is not. So the confirmed mapping keeps its button on the Meaning screen, and the other
+  two are listed on the Examples screen under "Teach from a correction somebody already
+  made", which is where an administrator is already curating. A new
+  `GET /admin/corrections` lists the requirements reviewers rewrote.
+
+- **A fifth active example is refused rather than dropped.** The cap was specified as a
+  rendering limit. Applied only there, a fifth stored row would look live and reach
+  nothing, which is exactly the class of defect this phase set out to remove, so the
+  console refuses it and says which one to take out of use first.
+
 - **The observation's outcome is derived, not stored.** The plan said approval would
   write `approved` and activation would write `live`. Reading the rule's own state at
   request time is strictly better: it cannot go stale, needs no hook in the lifecycle,

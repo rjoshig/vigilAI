@@ -13,6 +13,7 @@ ADR-003, ADR-004, ADR-005.
 | Canonical rules, trace pairs, findings (field names, thresholds, aggregate stats) | Customer identifiers beyond what the OSL itself contains |
 | A lens's finding and evidence; the list of requirements no report evidenced, as text and references; a drafted rule with the statements it came from | Any report value or configuration value not already in a finding's evidence |
 | Named values and the reasoning behind an admin check | Uploaded file contents verbatim |
+| An administrator's worked examples: what a stage would be shown and a good answer, checked by the tripwire on save (ADR-038) | A report row or a configuration value pasted into an example |
 
 The model never needs sample rows to do its job. If a stage seems to need one, that is a
 `# SPEC GAP:` and a question, not a prompt change.
@@ -74,6 +75,26 @@ The model never needs sample rows to do its job. If a stage seems to need one, t
 - Encrypted Docker volumes and TLS at the reverse proxy are the deployment assumption;
   confirm the in-house standard.
 
+
+## Worked examples (ADR-038)
+
+An administrator can add worked examples to six prompt stages. They are the second place
+text an administrator writes reaches a prompt, and they are handled like the first.
+
+- **The tripwire runs on save**, not when the prompt is assembled. An example is text
+  pasted from a real delivery, and save is the last moment the person who pasted it can
+  take it out.
+- **An example is a pair, not a sentence.** What the model would be shown and a good
+  answer, with no free-text field reaching a prompt. The note saying why the example is
+  there is for the next administrator and is never rendered.
+- **The answer is schema-constrained before storage.** The stage's own Pydantic model
+  validates it, so nothing teaches a shape the pipeline cannot parse.
+- **They are shown as examples.** The block is rendered after the built-in examples under
+  a line saying they show the shape of a good answer and are not rules, and nothing in
+  the library can make anything run: rules live in the rule tables and code evaluates
+  them (ADR-001).
+- **They are part of the cache key by being part of the prompt.** Adding one refreshes
+  exactly the calls it changes.
 
 ## Training synthesis (ADR-021)
 

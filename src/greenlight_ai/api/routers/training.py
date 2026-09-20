@@ -654,6 +654,7 @@ def synthesize_candidates(
             rows,
             known_fields=known_fields,
             report_kinds=report_kinds,
+            examples=repository.load_prompt_examples(session).get("training_synthesize", ()),
             actor=user.name,
             user_id=user.id,
         )
@@ -718,6 +719,7 @@ def front_door_place(
             scope=payload.scope,
             known_fields=known_fields,
             report_kinds=report_kinds,
+            examples=repository.load_prompt_examples(session).get("admin_classify", ()),
             actor=user.name,
             user_id=user.id,
         )

@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.12a.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.13d.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -85,6 +85,7 @@ separates them.
 | Validation guides, meaning entries, named values | how they locate a cell in a report |
 | Programme rules, compliance rules, judgment checks | who evaluates "this must hold": the model reading, code comparing, or the configuration being present |
 | An artifact type's AI context, standing instructions, configuration notes | nothing, at the prompt — all three reach the model as background. Choose by how wide it is: one artifact type, one programme, one configuration |
+| An artifact type's AI context, a worked example | whether you are telling the model something about this work, or showing it a finished answer to copy the shape of. Neither is a rule |
 
 ## Artifact types
 
@@ -206,6 +207,51 @@ customer with no name — covers nothing, so the form will not save one.
 Scopes written before the vocabulary was unified still read and still work; nothing was
 rewritten in the database, and a rule becomes canonical the next time somebody saves it
 (ADR-037).
+
+## Worked examples
+
+**What this screen is for.** Every prompt in the tool ships with worked examples: a
+section of a requirements document and the requirements it states, a pair of things and
+whether one implements the other. They are what makes a mid-size model reliable on a
+narrow task. This screen is where you add yours, drawn from the deliveries you actually
+see, when the model reads something the way your documents do not.
+
+**An example is a pair, never an instruction.** You give what the model would be shown
+and a good answer, in the JSON that stage returns. There is no box here that tells the
+model what to do. The block reaches the prompt after the built-in examples, under a line
+saying the examples show the shape of a good answer and are not rules (ADR-038).
+
+**What it is not.** An example is not a rule. It changes how the model *reads*; it
+cannot make anything pass or fail. Every comparison is still made by code against a
+check, a compliance rule or a field constraint. If what you want is a rule, use Tell the
+tool.
+
+**The six stages.** Reading the OSL, describing the configuration, tracing a requirement
+to the configuration, judging named values, placing a statement, and drafting a rule from
+observations. Open a stage to see the examples that ship in the prompt, read-only, above
+your own.
+
+**What the console refuses.**
+
+- An answer that is not valid for that stage is refused with the field named. An example
+  the pipeline could not parse would teach the model a shape it then rejects.
+- A fifth active example on one stage is refused. A prompt carries four, so a fifth
+  would look live and reach nothing; take one out of use first.
+- An example that looks like it carries personal data is refused on save, not later.
+
+**Scope.** An example is scoped like every other definition: everywhere, one delivery
+programme, one customer, or one configuration. The narrowest scopes are shown to the
+model first.
+
+**Teaching from a correction.** Under the stages, the screen lists the two places
+somebody has already corrected the model: requirements reviewers rewrote, and rules you
+approved from what reviewers wrote. **Use as example** turns one into a worked example.
+A confirmed mapping on the Meaning screen has the same button. Nothing is promoted on
+its own — a correction says one reading was wrong, not that it generalises, and that
+judgement is yours.
+
+**Versions.** Each stage keeps its last ten versions with revert, like any other
+definition.
 
 ## The training queue
 

@@ -1271,3 +1271,61 @@ administrators who decide whether a rule goes live.
 cost is one more list on the Rules screen and one more flag on the finding endpoint. A
 shadow finding dismissed by an administrator is a finding row like any other, so it
 survives the rule's activation and stays in the record.
+
+## ADR-038 — An administrator's examples show the model a shape, and are never rules
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.13d
+
+**Context:** Every prompt ships with worked examples written in Python, and they are
+what makes a mid-size model reliable on a narrow task. An administrator could teach the
+model a great deal — background prose per programme and per artifact, the validation
+guides, the meaning map — and could not add a single worked example: not one *this
+wording means this requirement* pair drawn from the deliveries they actually see. The
+one thing that most improves how a model reads their documents was the one thing only a
+developer could change.
+
+The risk in letting an administrator write into a prompt is obvious: a sentence in an
+example can read as an instruction, and a model told to do something else stops doing
+the job. The decision is about what makes that safe rather than whether to allow it.
+
+**Decision:**
+
+1. **An example is a pair, not a sentence.** It names a stage, what the model would be
+   shown, and a good answer. There is no free-text field that reaches a prompt. The
+   block is rendered under one line saying the examples show the shape of a good answer
+   and are not rules.
+2. **The answer is validated against the stage's own schema before it is stored**, which
+   is the same check the prompt suite applies to the built-in examples. An example the
+   schema would reject teaches a shape the pipeline then refuses to parse, so it is
+   refused at the console with the field named rather than discovered at run time.
+3. **The built-ins stay as the floor.** The library is added after them, numbered on
+   from them, and never replaces one. A stage with no library examples renders exactly
+   as it always did.
+4. **At most four per stage, narrowest scope first**, and the console refuses to store a
+   fifth *active* one. A cap that silently dropped the fifth would leave a row that looks
+   live and reaches nothing, which is the class of defect this phase exists to remove.
+   Scope is the one vocabulary (ADR-037), so an example can belong to one programme,
+   one customer, one configuration, or everywhere.
+5. **Examples are inserted into the rendered prompt, never substituted into it.** What
+   an administrator wrote is never read as a template placeholder, and because the text
+   is part of what is hashed, adding an example refreshes exactly the calls it changes
+   and nothing else (ADR-005). No separate cache-key field was needed.
+6. **The personal-data tripwire runs on save.** An example is text somebody pasted from
+   a real delivery, and save is the last moment the person who pasted it can take it
+   out (ADR-003).
+7. **Promotion needs a person's click.** The three places somebody has already corrected
+   the model — a confirmed requirement mapping, a requirement a reviewer rewrote, an
+   approved candidate — each offer a *Use as example* control, and each stored example
+   records where it came from. Nothing is promoted automatically: a correction is
+   evidence that one reading was wrong, not evidence that it generalises.
+8. **Examples are versioned like every other definition** (ADR-029), per stage, with the
+   same ten-deep list and revert.
+
+**Consequences:** The tool can now be taught to read a customer's documents the way
+their people read them, by the people who know. What it cannot be taught this way is a
+rule: ADR-001 is untouched, an example changes only how the model reads, and every
+comparison is still made by code against a rule in the rule tables. The cost is a
+prompt that grows by up to four examples per stage, which the cap bounds, and one more
+thing to keep true: a library example that stops matching the deliveries is as
+misleading as a stale document, which is why each one records why it is there.
+

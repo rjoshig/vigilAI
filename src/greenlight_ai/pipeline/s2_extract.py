@@ -127,7 +127,10 @@ def run(context: RunContext) -> None:
 
         result = context.client.complete(
             EXTRACT_PROMPT.system,
-            preamble(context.guidance, OSL_KIND) + EXTRACT_PROMPT.render(section=section.as_text()),
+            preamble(context.guidance, OSL_KIND)
+            + EXTRACT_PROMPT.render_with_examples(
+                context.examples.get("s2_extract", ()), section=section.as_text()
+            ),
             EXTRACT_PROMPT.schema,
             stage="s2_extract",
             prompt_version=EXTRACT_PROMPT.version,

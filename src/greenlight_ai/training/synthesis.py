@@ -19,6 +19,7 @@ from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import CONSTRAINT_KINDS
 from greenlight_ai.db import models
 from greenlight_ai.llm.client import LLMClient, LLMError, LLMResponseError
+from greenlight_ai.llm.examples import LibraryExample
 from greenlight_ai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
 from greenlight_ai.llm.prompts.synthesize_critique import CRITIQUE_PROMPT
 from greenlight_ai.llm.prompts.schemas import (
@@ -392,6 +393,7 @@ def synthesize(
     *,
     known_fields: Sequence[str] = (),
     report_kinds: Sequence[str] = (),
+    examples: Sequence[LibraryExample] = (),
     actor: str = "",
     user_id: int | None = None,
 ) -> list[models.RuleCandidate]:
@@ -405,6 +407,7 @@ def synthesize(
             follow.
         known_fields: Attribute names the tool knows, so an invented one is caught.
         report_kinds: The report types that exist.
+        examples: The administrator's worked examples for this stage (ADR-038).
         actor: Who asked for the synthesis.
         user_id: Their account id.
 
@@ -427,7 +430,8 @@ def synthesize(
     )
     result = client.complete(
         SYNTHESIZE_PROMPT.system,
-        SYNTHESIZE_PROMPT.render(
+        SYNTHESIZE_PROMPT.render_with_examples(
+            examples,
             statements=statements,
             attributes=", ".join(known_fields) or "none recorded",
             report_types=", ".join(report_kinds) or "none recorded",

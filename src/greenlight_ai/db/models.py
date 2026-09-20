@@ -17,6 +17,7 @@ from typing import Any, Optional
 import sqlalchemy as sa
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from greenlight_ai import scopes
 from greenlight_ai.db.types import Json, Utc, utcnow
 
 __all__ = [
@@ -940,6 +941,42 @@ class MeaningEntry(Base):
     confirmed_by: Mapped[str] = mapped_column(sa.String(200), default="")
     confirmed_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
+
+
+class PromptExample(Base):
+    """One worked example an administrator gives the model (Phase 6.13d, ADR-038).
+
+    The built-in examples in :mod:`greenlight_ai.llm.prompts` are the floor; these are
+    added after them, at most four per stage, most specific scope first. The answer was
+    validated against the stage's own schema before this row was written, because an
+    example the schema rejects teaches the model a shape the pipeline cannot parse.
+
+    An example shows; it never instructs. Nothing here is a rule: the rules the engine
+    runs live in the rule tables and are evaluated by code (ADR-001).
+    """
+
+    __tablename__ = "prompt_examples"
+
+    id: Mapped[int] = _pk()
+    #: A stage from :data:`greenlight_ai.llm.examples.EXAMPLE_STAGES`.
+    stage: Mapped[str] = mapped_column(sa.String(40), index=True)
+    #: Where it applies, as a scope token (ADR-037).
+    scope: Mapped[str] = mapped_column(sa.String(120), default=scopes.EVERYWHERE, index=True)
+    #: What the model would be shown, keyed by the stage's field names.
+    given: Mapped[Any] = mapped_column(Json, default=dict)
+    #: The answer to teach, as the stage's schema dumps it.
+    answer: Mapped[Any] = mapped_column(Json, default=dict)
+    #: Why it is here. For the next administrator; never rendered into a prompt.
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    #: ``admin``, or ``promoted:<kind>:<id>`` when it came from a decision a person
+    #: had already confirmed. Nothing is promoted without somebody clicking.
+    origin: Mapped[str] = mapped_column(sa.String(60), default="admin", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=0)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    updated_by: Mapped[str] = mapped_column(sa.String(200), default="")
     updated_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow, onupdate=utcnow)
 
 

@@ -4,6 +4,7 @@
 
 import {
   BookMarked,
+  BookOpen,
   ClipboardCheck,
   Gauge,
   GraduationCap,
@@ -46,6 +47,7 @@ const NAV: NavItem[] = [
   { href: "/compliance", label: "Compliance rules", icon: ShieldCheck },
   { href: "/rules", label: "Rules", icon: Scale },
   { href: "/training", label: "Training", icon: GraduationCap },
+  { href: "/examples", label: "Examples", icon: BookOpen },
   { href: "/reference", label: "Reference data", icon: Settings },
   { href: "/usage", label: "Usage", icon: Gauge },
   { href: "/users", label: "Users", icon: UserCog },

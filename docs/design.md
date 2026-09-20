@@ -340,6 +340,7 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | admin-ui | Artifact types | Define which inputs the tool accepts — the OSL, the config, and each report — with a label, a meaning, an optional sample workbook, model guidance, and an on/off switch. Named values are defined here too |
 | admin-ui | Delivery programmes | AM, AS, Archives, and a catch-all, each with standing instructions that reach the model as background (ADR-020) |
 | admin-ui | Checks | Create, test, version, enable or disable cross-report checks |
+| admin-ui | Worked examples | Per stage: the examples that ship in the prompt, read-only, above the administrator's own. Add a pair — what the model is shown, and a good answer — scoped like any definition and validated against the stage's schema on save. At most four active per stage, so what is stored is what the model sees. A confirmed mapping, a requirement a reviewer rewrote and an approved rule can each be promoted into one with a click (ADR-038) |
 | admin-ui | Compliance and scope | Must-have compliance rules and reverse pass categories |
 | admin-ui | Reference data | Attribute aliases and masked columns |
 | admin-ui | Settings | Every runtime setting with the layer it came from, its change history, and a model connection test (ADR-023) |

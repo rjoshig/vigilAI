@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.12**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 in progress** (`phase-6.13.md`): 6.13a repairs, 6.13b reviewer loop and 6.13c judgment checks are complete and pushed. **Next: 6.13d**, the controlled examples library — `prompt_examples` table versioned like every other definition, `Prompt.render_with_examples` (scope-aware, at most four, part of the cache key), promotion from a confirmed meaning entry / requirement edit / approved candidate, an admin Examples screen, and ADR-038. Then 6.13e (real replay) and 6.13f (docs). Two follow-ups: give the demo seed a run with a coverage gap so the browser test runs; the user deletes the old remote branches themselves |
+| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38. **Phase 6.13 in progress** (`phase-6.13.md`): 6.13a repairs, 6.13b reviewer loop, 6.13c judgment checks and 6.13d worked examples are complete and pushed. **Next: 6.13e**, a replay that replays — the candidate replay becomes a worker job that re-parses the stored report parts and the captured configuration and evaluates the candidate for real, `validate_rule` parses a drafted check with `expressions.validate`, and the golden-set claim leaves the models and the setting's help text. Then 6.13f (the remaining documents: both training documents' Train AI sections and `gd-rollout-plan.md` stage 3). Two follow-ups: give the demo seed a run with a coverage gap so the browser test runs; the user deletes the old remote branches themselves |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,41 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.13d: worked examples an administrator can give the model)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13d complete, gates green.
+
+Every prompt's worked examples lived in Python. An administrator could teach the model
+background prose, the validation guides and the meaning map, and not one *this wording
+means this requirement* pair. `prompt_examples` (migration `e6f8a0b2c4d6`) holds theirs,
+for six stages: extraction, description, tracing, judgment, classification and synthesis.
+
+What makes it safe is what the screen shows. An example is a pair, never a sentence: what
+the model would be shown and a good answer, with the answer validated against that
+stage's own Pydantic schema on save, so an example the pipeline could not parse is
+refused with the field named. The personal-data tripwire runs on save, because an example
+is text pasted from a real delivery. The block is rendered after the built-in examples,
+numbered on from them, under a line saying they show a shape and are not rules — and it
+is inserted into the *rendered* prompt, so nothing an administrator wrote is ever read as
+a placeholder, and the text being part of the prompt is what changes the cache key.
+
+The cap is enforced where it is set: a stage carries four, and the console refuses a
+fifth active one rather than storing a row that looks live and reaches nothing. Scope is
+the one vocabulary; the narrowest are shown first. Versions per stage, with revert.
+
+Promotion needs a click. The confirmed mapping keeps its button on the Meaning screen;
+the other two sources have no screen an administrator looks at (the training console
+lists drafts, and a requirement edit happens in the user app), so `GET /admin/corrections`
+lists the requirements reviewers rewrote, and the Examples screen offers both those and
+the rules approved from what reviewers wrote under *Teach from a correction somebody
+already made*.
+
+ADR-038 is written. 1213 Python tests, 86 admin-ui, 91 user-ui.
+
+**Next:** 6.13e, a replay that replays.
 
 ---
 

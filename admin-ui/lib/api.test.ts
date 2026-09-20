@@ -101,6 +101,30 @@ describe("the admin API client", () => {
     expect(JSON.parse(init.body).expression).toBe("billing_count <= delivered_count");
   });
 
+  it("sends a worked example, answer and all", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 1, stage: "s2_extract" }));
+    await api.saveExample({
+      stage: "s2_extract",
+      scope: "everywhere",
+      given: { section: "9 Channel\nDeliver by SFTP only." },
+      answer: { requirements: [{ req_type: "other" }] },
+      note: "",
+      is_active: true,
+      sort_order: 0,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/examples");
+    expect(JSON.parse(init.body).answer.requirements[0].req_type).toBe("other");
+  });
+
+  it("promotes a decision somebody already confirmed", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 2, stage: "s4_trace" }));
+    await api.promoteExample({ source: "meaning", id: 7 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/examples/promote");
+    expect(JSON.parse(init.body)).toEqual({ source: "meaning", id: 7 });
+  });
+
   it("toggles a check with a query parameter", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 3, is_active: false }));
     await api.setCheckActive(3, false);

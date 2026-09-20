@@ -537,7 +537,11 @@ def _run_judgment_check(
         result = context.client.complete(
             JUDGMENT_PROMPT.system,
             preamble(context.guidance)
-            + JUDGMENT_PROMPT.render(instruction=check.instruction.strip(), values=rendered),
+            + JUDGMENT_PROMPT.render_with_examples(
+                context.examples.get("admin_judgment", ()),
+                instruction=check.instruction.strip(),
+                values=rendered,
+            ),
             JudgmentResponse,
             stage="admin_judgment",
             prompt_version=JUDGMENT_PROMPT.version,

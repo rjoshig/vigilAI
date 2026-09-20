@@ -204,7 +204,8 @@ def _judge(context: RunContext, rule: Rule, candidates: Sequence[ConfigElement])
             TRACE_PROMPT.system,
             preamble(context.guidance, "config")
             + guide_block(context.guidance)
-            + TRACE_PROMPT.render(
+            + TRACE_PROMPT.render_with_examples(
+                context.examples.get("s4_trace", ()),
                 requirement=describe_rule(rule),
                 element=_describe_element(element),
             ),
