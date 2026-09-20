@@ -9,7 +9,7 @@
  * so rather than looking like a required setting.
  */
 
-import { Download, Eye, Plus, Trash2, Upload } from "lucide-react";
+import { Download, Eye, Plus, Upload } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -32,6 +32,8 @@ import {
   Table,
   Textarea,
 } from "@/components/ui/primitives";
+import { BulkBar } from "@/components/bulk-bar";
+import { DeleteButton } from "@/components/confirm-delete";
 import { GuideEditor } from "@/components/guide-editor";
 import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
@@ -93,6 +95,7 @@ export default function ArtifactsPage() {
   const [editing, setEditing] = React.useState<string | null>(null);
   const [versions, setVersions] = React.useState<string | null>(null);
   const [guide, setGuide] = React.useState<string | null>(null);
+  const [selectedValues, setSelectedValues] = React.useState<number[]>([]);
   const [adding, setAdding] = React.useState(false);
   const [newType, setNewType] = React.useState({ ...NEW_TYPE });
   const [draft, setDraft] = React.useState({ ...EMPTY_POINTER });
@@ -325,17 +328,13 @@ export default function ArtifactsPage() {
                         {versions === type.key ? "Hide versions" : "Versions"}
                       </Button>
                       {type.is_builtin ? null : (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          disabled={busy}
-                          aria-label={`Delete ${type.label}`}
-                          onClick={() =>
-                            void act("delete the type", () => api.deleteArtifactType(type.key))
+                        <DeleteButton
+                          label={type.label}
+                          busy={busy}
+                          onDelete={(confirm) =>
+                            act("delete the type", () => api.deleteArtifactType(type.key, confirm))
                           }
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        />
                       )}
                     </TD>
                   </TR>
@@ -522,6 +521,20 @@ export default function ArtifactsPage() {
             <CardHeader className="border-b">
               <CardTitle>Named values</CardTitle>
             </CardHeader>
+            <div className="px-4 pt-3">
+              <BulkBar
+                count={selectedValues.length}
+                busy={busy}
+                actions={[{ word: "delete", label: "Delete selected", destructive: true }]}
+                onClear={() => setSelectedValues([])}
+                onAct={(confirm) =>
+                  act("delete the named values", async () => {
+                    await api.bulkDelete("named-values", selectedValues, confirm);
+                    setSelectedValues([]);
+                  })
+                }
+              />
+            </div>
             {!values ? (
               <Skeleton className="m-4 h-32" />
             ) : values.length === 0 ? (
@@ -530,6 +543,7 @@ export default function ArtifactsPage() {
               <Table>
                 <thead>
                   <TR className="hover:bg-transparent">
+                    <TH className="w-8" />
                     <TH>Name</TH>
                     <TH>Report · sheet</TH>
                     <TH>Resolves on sample</TH>
@@ -540,6 +554,20 @@ export default function ArtifactsPage() {
                 <tbody>
                   {values.map((value) => (
                     <TR key={value.id}>
+                      <TD>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${value.name}`}
+                          checked={selectedValues.includes(value.id)}
+                          onChange={() =>
+                            setSelectedValues((current) =>
+                              current.includes(value.id)
+                                ? current.filter((one) => one !== value.id)
+                                : [...current, value.id]
+                            )
+                          }
+                        />
+                      </TD>
                       <TD className="mono">{value.name}</TD>
                       <TD className="text-xs">
                         {value.report_type} · {value.sheet || "—"}
@@ -555,17 +583,15 @@ export default function ArtifactsPage() {
                         {value.used_by.length > 0 ? value.used_by.join(", ") : "—"}
                       </TD>
                       <TD className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          disabled={busy}
-                          aria-label={`Delete ${value.name}`}
-                          onClick={() =>
-                            void act("delete the named value", () => api.deleteNamedValue(value.id))
+                        <DeleteButton
+                          label={`named value ${value.name}`}
+                          busy={busy}
+                          onDelete={(confirm) =>
+                            act("delete the named value", () =>
+                              api.deleteNamedValue(value.id, confirm)
+                            )
                           }
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        />
                       </TD>
                     </TR>
                   ))}
@@ -767,17 +793,13 @@ function SampleStrip({
               >
                 <Download className="h-3.5 w-3.5" /> Download
               </a>
-              <Button
-                variant="ghost"
-                size="xs"
-                disabled={disabled}
-                aria-label={`Remove ${sample.label || sample.filename}`}
-                onClick={() =>
-                  void run("remove the sample", () => api.deleteSample(type.key, sample.id))
+              <DeleteButton
+                label={`sample ${sample.label || sample.filename}`}
+                busy={disabled}
+                onDelete={(confirm) =>
+                  run("remove the sample", () => api.deleteSample(type.key, sample.id, confirm))
                 }
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Remove
-              </Button>
+              />
             </div>
           </div>
         ))}

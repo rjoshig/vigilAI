@@ -205,6 +205,8 @@ export interface TestResult {
 
 export interface ComplianceRule {
   id: number;
+  /** Bumped on every edit. */
+  version: number;
   name: string;
   json_path_contains: string;
   expected_value: unknown;
@@ -551,4 +553,16 @@ export interface GuideEntry {
   comparison: GuideComparison;
   tolerance: number;
   examples: GuideExample[];
+}
+
+/** What a bulk delete did (ADR-032). */
+export interface BulkResult {
+  deleted: number;
+  missing: number[];
+}
+
+/** What a bulk rule action did. */
+export interface RulesBulkResult {
+  changed: number;
+  failed: string[];
 }

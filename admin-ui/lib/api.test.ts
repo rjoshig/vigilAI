@@ -70,15 +70,16 @@ describe("the admin API client", () => {
 
   it("returns nothing when a sample is deleted", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    await expect(api.deleteSample("billing", 7)).resolves.toBeUndefined();
+    await expect(api.deleteSample("billing", 7, "delete")).resolves.toBeUndefined();
     expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("confirm=delete");
   });
 
   it("deletes a scope by its code", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    await api.deleteScope("ARCHIVE");
+    await api.deleteScope("ARCHIVE", "delete");
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/v1/admin/scopes/ARCHIVE");
+    expect(url).toBe("/api/v1/admin/scopes/ARCHIVE?confirm=delete");
     expect(init.method).toBe("DELETE");
   });
 
@@ -123,15 +124,15 @@ describe("the admin API client", () => {
 
   it("returns nothing for a 204 delete", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    await expect(api.deleteAlias(1)).resolves.toBeUndefined();
+    await expect(api.deleteAlias(1, "delete")).resolves.toBeUndefined();
   });
 
   it("raises an ApiError carrying the conflict detail", async () => {
     fetchMock.mockImplementation(() =>
       Promise.resolve(jsonResponse({ detail: "billing_count is used by two checks" }, 409))
     );
-    await expect(api.deleteNamedValue(1)).rejects.toBeInstanceOf(ApiError);
-    await expect(api.deleteNamedValue(1)).rejects.toMatchObject({ status: 409 });
+    await expect(api.deleteNamedValue(1, "delete")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.deleteNamedValue(1, "delete")).rejects.toMatchObject({ status: 409 });
   });
 
   it("reads the auth switches from the auth prefix, not the admin one", async () => {
@@ -453,5 +454,35 @@ describe("the admin API client", () => {
   it("reads the first message out of a validation error body", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: [{ msg: "field required" }] }, 422));
     await expect(api.testExpression("")).rejects.toMatchObject({ detail: "field required" });
+  });
+});
+
+describe("typed deletes and bulk actions (ADR-032)", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the ids and the word to the bulk endpoint", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ deleted: 2, missing: [] }));
+    const result = await api.bulkDelete("aliases", [1, 2], "delete");
+    expect(result.deleted).toBe(2);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/aliases/bulk-delete");
+    expect(JSON.parse(String(init.body))).toEqual({ ids: [1, 2], confirm: "delete" });
+  });
+
+  it("sends a bulk rule action with the action word", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ changed: 1, failed: [] }));
+    await api.actOnRules([{ rule_kind: "check", id: 3 }], "disable", "disable");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/rules/bulk");
+    expect(JSON.parse(String(init.body)).action).toBe("disable");
   });
 });

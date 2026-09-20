@@ -56,6 +56,14 @@ npm run build         # production build
 - UI primitives under `components/ui/` are lightweight, shadcn-styled, dependency-free
   local components (copy from ui2).
 
+## Destructive actions (ADR-032)
+
+- **admin-ui**: every delete opens `components/confirm-delete.tsx` and the person types
+  `delete`; the API refuses without it. Long lists offer `components/bulk-bar.tsx`,
+  one typed word per batch.
+- **user-ui**: a delete asks "are you sure" through `components/confirm-dialog.tsx`,
+  never a typed word.
+
 ## API layer
 
 - **All backend calls go through the typed client in `lib/api.ts`.** No raw `fetch` in

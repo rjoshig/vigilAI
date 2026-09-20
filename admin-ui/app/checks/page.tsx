@@ -31,6 +31,7 @@ import {
   Table,
   Textarea,
 } from "@/components/ui/primitives";
+import { BulkBar } from "@/components/bulk-bar";
 import { ScopePicker, scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
 import type { Check, CheckIn, DraftResponse, Scope, Severity, TestResult } from "@/lib/types";
@@ -57,7 +58,8 @@ const EMPTY: CheckIn = {
 export default function ChecksPage() {
   const [checks, setChecks] = React.useState<Check[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [authoring, setAuthoring] = React.useState(false);
+  const [authoring, setAuthoring] = React.useState<false | "new" | Check>(false);
+  const [selected, setSelected] = React.useState<number[]>([]);
   const [programmes, setProgrammes] = React.useState<Scope[] | null>(null);
 
   const load = React.useCallback(async () => {
@@ -90,7 +92,7 @@ export default function ChecksPage() {
         title="Checks"
         description="Cross-report checks defined as data. The model helps write a check once; code runs it on every request at no token cost. Versioned, scoped, and switchable. Evaluated by code on every run; nothing here is sent to the model."
         action={
-          <Button onClick={() => setAuthoring(true)}>
+          <Button onClick={() => setAuthoring("new")}>
             <Plus className="h-4 w-4" /> New check
           </Button>
         }
@@ -104,8 +106,28 @@ export default function ChecksPage() {
 
       {!checks ? <Skeleton className="h-64" /> : null}
 
+      <p className="mb-3 text-xs text-muted-foreground">
+        A check is arithmetic over named values, evaluated by code. To tell the model what a report
+        cell <i>means</i> and where it answers to, use the report type&apos;s guide on Artifact
+        types; a concrete guide entry becomes a check here on its own.
+      </p>
+
       {checks ? (
         <Card className="p-0">
+          <div className="px-4 pt-3">
+            <BulkBar
+              count={selected.length}
+              actions={[
+                { word: "delete", label: "Delete selected (restorable)", destructive: true },
+              ]}
+              onClear={() => setSelected([])}
+              onAct={async (confirm) => {
+                await api.bulkDelete("checks", selected, confirm);
+                setSelected([]);
+                await load();
+              }}
+            />
+          </div>
           {checks.length === 0 ? (
             <EmptyState
               title="No checks yet"
@@ -115,6 +137,7 @@ export default function ChecksPage() {
             <Table>
               <thead>
                 <TR className="hover:bg-transparent">
+                  <TH className="w-8" />
                   <TH>Name</TH>
                   <TH>Ver</TH>
                   <TH>Kind</TH>
@@ -127,6 +150,20 @@ export default function ChecksPage() {
               <tbody>
                 {checks.map((check) => (
                   <TR key={check.id} className={cn(!check.is_active && "opacity-60")}>
+                    <TD>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${check.name}`}
+                        checked={selected.includes(check.id)}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(check.id)
+                              ? current.filter((one) => one !== check.id)
+                              : [...current, check.id]
+                          )
+                        }
+                      />
+                    </TD>
                     <TD>
                       <div className="font-semibold">{check.name}</div>
                       {check.reasoning ? (
@@ -152,6 +189,9 @@ export default function ChecksPage() {
                         onClick={() => void toggle(check)}
                       >
                         {check.is_active ? "On" : "Off"}
+                      </Button>{" "}
+                      <Button size="xs" variant="ghost" onClick={() => setAuthoring(check)}>
+                        Edit
                       </Button>
                     </TD>
                   </TR>
@@ -164,6 +204,7 @@ export default function ChecksPage() {
 
       {authoring ? (
         <AuthorDialog
+          initial={authoring === "new" ? null : authoring}
           programmes={programmes}
           onClose={() => setAuthoring(false)}
           onSaved={() => {
@@ -180,14 +221,30 @@ function AuthorDialog({
   onClose,
   onSaved,
   programmes,
+  initial,
 }: {
   onClose: () => void;
   onSaved: () => void;
   programmes: Scope[] | null;
+  /** An existing check to edit; saving it writes a new version under the same name. */
+  initial: Check | null;
 }) {
   const [description, setDescription] = React.useState("");
   const [draft, setDraft] = React.useState<DraftResponse | null>(null);
-  const [check, setCheck] = React.useState<CheckIn>({ ...EMPTY });
+  const [check, setCheck] = React.useState<CheckIn>(
+    initial
+      ? {
+          name: initial.name,
+          kind: initial.kind,
+          expression: initial.expression,
+          instruction: initial.instruction,
+          reasoning: initial.reasoning,
+          severity: initial.severity,
+          scope: initial.scope,
+          is_active: initial.is_active,
+        }
+      : { ...EMPTY }
+  );
   const [result, setResult] = React.useState<TestResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);

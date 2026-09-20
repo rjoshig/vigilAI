@@ -594,6 +594,8 @@ class ComplianceRuleRow(Base):
     id: Mapped[int] = _pk()
     name: Mapped[str] = mapped_column(sa.String(100), unique=True)
     requirement: Mapped[Any] = mapped_column(Json, default=dict)
+    #: Bumped on every edit (ADR-032); a finding records the version that produced it.
+    version: Mapped[int] = mapped_column(sa.Integer, default=1)
     scope: Mapped[str] = mapped_column(sa.String(200), default="all")
     reasoning: Mapped[str] = mapped_column(sa.Text, default="")
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)

@@ -9,7 +9,6 @@
  * process (`docs/design.md` "Processing pipeline", step 6).
  */
 
-import { Trash2 } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -30,6 +29,8 @@ import {
   TR,
   Table,
 } from "@/components/ui/primitives";
+import { BulkBar } from "@/components/bulk-bar";
+import { DeleteButton } from "@/components/confirm-delete";
 import { ScopePicker, scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
 import type { Category, ComplianceRule, Scope } from "@/lib/types";
@@ -38,6 +39,8 @@ export default function CompliancePage() {
   const [rules, setRules] = React.useState<ComplianceRule[] | null>(null);
   const [categories, setCategories] = React.useState<Category[] | null>(null);
   const [programmes, setProgrammes] = React.useState<Scope[] | null>(null);
+  const [selected, setSelected] = React.useState<number[]>([]);
+  const [editing, setEditing] = React.useState<ComplianceRule | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [draft, setDraft] = React.useState({
@@ -87,6 +90,33 @@ export default function CompliancePage() {
     }
   }
 
+  async function saveEdit() {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      await api.updateComplianceRule(editing.id, {
+        name: editing.name.trim(),
+        json_path_contains: editing.json_path_contains.trim(),
+        expected_value: editing.expected_value,
+        scope: editing.scope.trim() || "all",
+        reasoning: editing.reasoning,
+        is_active: editing.is_active,
+      });
+      setEditing(null);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not save the rule.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleSelected(id: number) {
+    setSelected((current) =>
+      current.includes(id) ? current.filter((one) => one !== id) : [...current, id]
+    );
+  }
+
   async function toggleCategory(category: Category) {
     setBusy(true);
     try {
@@ -126,41 +156,139 @@ export default function CompliancePage() {
         ) : rules.length === 0 ? (
           <EmptyState title="No compliance rules yet" />
         ) : (
-          <Table>
-            <thead>
-              <TR className="hover:bg-transparent">
-                <TH>Name</TH>
-                <TH>Config path must contain</TH>
-                <TH>Scope</TH>
-                <TH>Reasoning</TH>
-                <TH />
-              </TR>
-            </thead>
-            <tbody>
-              {rules.map((rule) => (
-                <TR key={rule.id}>
-                  <TD className="font-semibold">{rule.name}</TD>
-                  <TD className="mono text-xs">{rule.json_path_contains}</TD>
-                  <TD className="text-xs">{scopeLabel(rule.scope, programmes)}</TD>
-                  <TD className="text-xs text-muted-foreground">{rule.reasoning || "—"}</TD>
-                  <TD className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      disabled={busy}
-                      aria-label={`Delete ${rule.name}`}
-                      onClick={async () => {
-                        await api.deleteComplianceRule(rule.id);
-                        await load();
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </TD>
+          <>
+            <div className="px-4 pt-3">
+              <BulkBar
+                count={selected.length}
+                busy={busy}
+                actions={[{ word: "delete", label: "Delete selected", destructive: true }]}
+                onClear={() => setSelected([])}
+                onAct={async (confirm) => {
+                  setBusy(true);
+                  try {
+                    await api.bulkDelete("compliance-rules", selected, confirm);
+                    setSelected([]);
+                    await load();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              />
+            </div>
+            <Table>
+              <thead>
+                <TR className="hover:bg-transparent">
+                  <TH className="w-8" />
+                  <TH>Name</TH>
+                  <TH>Config path must contain</TH>
+                  <TH>Scope</TH>
+                  <TH>Reasoning</TH>
+                  <TH />
                 </TR>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {rules.map((rule) => (
+                  <React.Fragment key={rule.id}>
+                    <TR>
+                      <TD>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${rule.name}`}
+                          checked={selected.includes(rule.id)}
+                          onChange={() => toggleSelected(rule.id)}
+                        />
+                      </TD>
+                      <TD className="font-semibold">
+                        {rule.name}{" "}
+                        <Badge tone="outline" title="Version">
+                          v{rule.version}
+                        </Badge>
+                      </TD>
+                      <TD className="mono text-xs">{rule.json_path_contains}</TD>
+                      <TD className="text-xs">{scopeLabel(rule.scope, programmes)}</TD>
+                      <TD className="text-xs text-muted-foreground">{rule.reasoning || "—"}</TD>
+                      <TD className="whitespace-nowrap text-right">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={busy}
+                          onClick={() => setEditing(editing?.id === rule.id ? null : { ...rule })}
+                        >
+                          {editing?.id === rule.id ? "Close" : "Edit"}
+                        </Button>{" "}
+                        <DeleteButton
+                          label={rule.name}
+                          busy={busy}
+                          onDelete={async (confirm) => {
+                            await api.deleteComplianceRule(rule.id, confirm);
+                            await load();
+                          }}
+                        />
+                      </TD>
+                    </TR>
+                    {editing?.id === rule.id ? (
+                      <TR className="hover:bg-transparent">
+                        <TD colSpan={6} className="bg-muted/30">
+                          <div className="grid gap-3 py-2 sm:grid-cols-3">
+                            <div className="flex flex-col gap-1">
+                              <Label htmlFor={`ce-name-${rule.id}`}>Name</Label>
+                              <Input
+                                id={`ce-name-${rule.id}`}
+                                value={editing.name}
+                                onChange={(event) =>
+                                  setEditing({ ...editing, name: event.target.value })
+                                }
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <Label htmlFor={`ce-path-${rule.id}`}>Config path contains</Label>
+                              <Input
+                                id={`ce-path-${rule.id}`}
+                                className="mono"
+                                value={editing.json_path_contains}
+                                onChange={(event) =>
+                                  setEditing({ ...editing, json_path_contains: event.target.value })
+                                }
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <Label htmlFor={`ce-reason-${rule.id}`}>Reasoning</Label>
+                              <Input
+                                id={`ce-reason-${rule.id}`}
+                                value={editing.reasoning}
+                                onChange={(event) =>
+                                  setEditing({ ...editing, reasoning: event.target.value })
+                                }
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <ScopePicker
+                                idPrefix={`ce-${rule.id}`}
+                                value={editing.scope}
+                                programmes={programmes}
+                                disabled={busy}
+                                onChange={(scope) => setEditing({ ...editing, scope })}
+                              />
+                            </div>
+                            <div className="flex items-end gap-2">
+                              <Button
+                                disabled={
+                                  busy || !editing.name.trim() || !editing.json_path_contains.trim()
+                                }
+                                onClick={() => void saveEdit()}
+                              >
+                                Save (becomes v{rule.version + 1})
+                              </Button>
+                            </div>
+                          </div>
+                        </TD>
+                      </TR>
+                    ) : null}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </Table>
+          </>
         )}
         <CardContent className="grid gap-3 border-t pt-4 sm:grid-cols-4">
           <div className="flex flex-col gap-1">
