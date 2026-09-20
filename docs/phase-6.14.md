@@ -191,51 +191,54 @@ who knows the product can turn them off.
       date disables the check loudly rather than silently (the smaller defect listed in
       `docs/phase-6.13.md`).
 
-### 6.14c — What every field does to a run · ⬜ not started
+### 6.14c — What every field does to a run · 🟡 in progress
 
-- [ ] `docs/model-context.md`: the single register of every field an administrator or a
+- [x] `docs/model-context.md`: the single register of every field an administrator or a
       user can write, and for each — which prompt block it lands in, which stages read it,
       the cap that applies, and whether code or the model acts on it. Derived from the
       call sites, not from memory. This is the source the UI labels quote.
-- [ ] One `<FieldEffect>` component in each app, with three variants: **reaches the
+- [x] One `<FieldEffect>` component in each app, with three variants: **reaches the
       model** (background, never a requirement), **evaluated by code**, and **reference
       only**. One wording each, used everywhere. The five ad-hoc phrasings found in
       `configs`, `config-notes`, `checks`, `artifacts` and `scopes` are replaced by it.
-- [ ] Every field that reaches a prompt carries the marker, including the ones that do not
-      today: artifact AI context, standing instructions, configuration notes, guide
-      entries, meaning entries, programme rules, examples.
+- [~] Artifact **AI context** and programme **standing instructions** carry the marker
+      and an explanation. The remaining prompt-reaching fields — configuration notes,
+      guide entries, meaning entries, programme rules, examples — are listed in
+      `docs/model-context.md` and still need theirs; **outstanding**, carried in the
+      session log.
 - [ ] Where a cap applies, the field shows what is left, not just the limit — an
       administrator writing the eleventh configuration note should see that the block is
       full before they write it, not after (`MAX_BLOCK_CHARS`, `MAX_PER_STAGE`).
-- [ ] Tests: every variant renders; a field whose registry entry claims a prompt block
+      **Outstanding:** the caps are stated in the marker text, but not yet counted down
+      live. Needs the API to report the block's remaining budget for a given run.
+- [x] Tests: every variant renders; a field whose registry entry claims a prompt block
       that `docs/model-context.md` does not list fails the test, so the register cannot
       drift from the code silently.
 
-### 6.14d — Tooltips, on by default · ⬜ not started
+### 6.14d — Tooltips, on by default · 🟡 in progress
 
-- [ ] A setting `ui.tooltips` in the `Appearance` group, `default=True`, with its `.env`
+- [x] A setting `ui.tooltips` in the `Appearance` group, `default=True`, with its `.env`
       name. Off hides every tooltip in both apps; nothing else changes.
-- [ ] A `<Tooltip>` primitive in `admin-ui/components/ui/primitives.tsx` and its user-ui
+- [x] A `<Tooltip>` primitive in `admin-ui/components/ui/primitives.tsx` and its user-ui
       twin: keyboard reachable, dismissible, readable by a screen reader, and absent from
       the DOM rather than merely hidden when the setting is off.
-- [ ] Every admin screen's heading and every non-obvious field carries one, saying what
-      the surface is for, how it is meant to be used, and what belongs elsewhere. The
-      overlap table in `docs/admin-training.md` is the source for "what belongs
-      elsewhere"; the tooltips quote it rather than restating it.
-- [ ] Tooltip text lives beside the field, not in a central bundle: a field and its
+- [~] Artifact types and Delivery programmes carry one, each naming what belongs
+      elsewhere from the overlap table in `docs/admin-training.md`. The other admin
+      screens still need theirs; **outstanding**, carried in the session log.
+- [x] Tooltip text lives beside the field, not in a central bundle: a field and its
       explanation are edited in one place or they drift.
-- [ ] Tests: the setting toggles them; a tooltip is reachable by keyboard; the browser
+- [x] Tests: the setting toggles them; a tooltip is reachable by keyboard; the browser
       test opens one on the Artifact types screen.
 
-### 6.14e — The theme locked by default · ⬜ not started
+### 6.14e — The theme locked by default · ✅ complete
 
-- [ ] `ui.theme_locked` changes `default` from `False` to `True`. Both apps start on the
+- [x] `ui.theme_locked` changes `default` from `False` to `True`. Both apps start on the
       configured default theme and the picker is hidden until an administrator unlocks it.
-- [ ] The Appearance group says plainly what locking does and that unlocking is one
+- [x] The Appearance group says plainly what locking does and that unlocking is one
       switch, so the new default does not read as a missing feature.
-- [ ] `docs/user-training.md` and `docs/admin-training.md` are corrected in the same
+- [x] `docs/user-training.md` and `docs/admin-training.md` are corrected in the same
       commit: both currently describe a picker every user can reach.
-- [ ] Tests: locked by default with no override; an unlocked console restores the picker
+- [x] Tests: locked by default with no override; an unlocked console restores the picker
       in both apps.
 
 ## Acceptance criteria · ⬜ not started

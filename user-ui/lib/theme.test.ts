@@ -45,14 +45,29 @@ describe("stepping through the palettes", () => {
 
 describe("the appearance answer", () => {
   it("reads the theme and the lock, falling back on anything odd", () => {
-    expect(parseAppearance({ theme: "classic-teal", locked: true }, "default")).toEqual({
+    expect(
+      parseAppearance({ theme: "classic-teal", locked: true, tooltips: true }, "default")
+    ).toEqual({
       theme: "classic-teal",
       locked: true,
+      tooltips: true,
     });
     expect(parseAppearance({ theme: "neon" }, "default")).toEqual({
       theme: "default",
       locked: false,
+      tooltips: true,
     });
-    expect(parseAppearance(null, "classic-teal")).toEqual({ theme: "classic-teal", locked: false });
+    expect(parseAppearance(null, "classic-teal")).toEqual({
+      theme: "classic-teal",
+      locked: false,
+      tooltips: true,
+    });
+  });
+
+  it("keeps the explanations on unless the deployment says otherwise", () => {
+    // A page that cannot reach the API should still explain itself rather than
+    // silently going quiet (Phase 6.14d).
+    expect(parseAppearance({ theme: "default" }, "default").tooltips).toBe(true);
+    expect(parseAppearance({ theme: "default", tooltips: false }, "default").tooltips).toBe(false);
   });
 });

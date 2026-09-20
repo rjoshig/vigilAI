@@ -43,6 +43,12 @@ export const PALETTE_STORAGE_KEY = "greenlight-ai-palette";
 export interface Appearance {
   theme: Palette;
   locked: boolean;
+  /**
+   * Whether the consoles explain each screen (Phase 6.14d). On by default. It never
+   * hides the markers saying which fields reach the model: those are facts about the
+   * run, not help text.
+   */
+  tooltips: boolean;
 }
 
 /** Narrow a value to a known palette, falling back to the brand one. */
@@ -70,6 +76,9 @@ export function parseAppearance(body: unknown, fallback: Palette): Appearance {
   return {
     theme: (PALETTES as readonly string[]).includes(raw) ? (raw as Palette) : fallback,
     locked: record.locked === true,
+    // Explanations are on unless the deployment says otherwise, so a page that cannot
+    // reach the API still shows them rather than silently going quiet.
+    tooltips: record.tooltips !== false,
   };
 }
 
@@ -80,7 +89,7 @@ export function parseAppearance(body: unknown, fallback: Palette): Appearance {
  * page never waits on the API to choose its colours.
  */
 export async function fetchAppearance(): Promise<Appearance> {
-  const fallback: Appearance = { theme: configuredPalette(), locked: false };
+  const fallback: Appearance = { theme: configuredPalette(), locked: true, tooltips: true };
   const base = process.env.GREENLIGHT_AI_API_URL ?? "http://127.0.0.1:8000";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 1500);

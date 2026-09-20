@@ -33,6 +33,7 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { BulkBar } from "@/components/bulk-bar";
+import { Explain, FieldEffect } from "@/components/explain";
 import { DeleteButton } from "@/components/confirm-delete";
 import { GuideEditor } from "@/components/guide-editor";
 import { VersionsPanel } from "@/components/versions-panel";
@@ -645,7 +646,20 @@ function ArtifactEditor({
         </div>
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor={`ctx-${type.key}`}>What the AI should look at</Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor={`ctx-${type.key}`}>What the AI should look at</Label>
+          <Explain label="What AI context is for">
+            Say what this document <em>is</em> and what matters in it — &ldquo;the score column is
+            the V3 score, not the bureau score&rdquo;. It is background the model reads before it
+            judges anything.
+            <br />
+            <br />
+            It is not the place for a rule. Something that must hold belongs in a check, a
+            compliance rule or a programme rule, where code evaluates it. Something true of a whole
+            programme belongs in that programme&rsquo;s standing instructions; something true of one
+            configuration belongs in a note on it.
+          </Explain>
+        </div>
         <Textarea
           id={`ctx-${type.key}`}
           rows={3}
@@ -653,10 +667,10 @@ function ArtifactEditor({
           value={context}
           onChange={(event) => setContext(event.target.value)}
         />
-        <span className="text-[0.7rem] text-muted-foreground">
-          Passed to the model as background, never as a requirement. Requirements come only from the
-          OSL.
-        </span>
+        <FieldEffect
+          kind="model"
+          note="Read at extraction, description, tracing and verification. Capped at 1,500 characters, and 6,000 across everything an administrator contributes to one prompt."
+        />
       </div>
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-1.5 text-xs">

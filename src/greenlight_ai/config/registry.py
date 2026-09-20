@@ -420,14 +420,29 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         choices=("classic-teal-navy", "classic-teal", "light-blue-yellow", "default"),
     ),
     SettingSpec(
+        key="ui.tooltips",
+        env="GREENLIGHT_AI_UI_TOOLTIPS",
+        label="Explain each screen",
+        group="Appearance",
+        kind="bool",
+        default=True,
+        help="On by default: each admin screen and its less obvious fields carry a "
+        "short note saying what the surface is for, how it is meant to be used, and "
+        "what belongs somewhere else. Switch it off once the console is familiar; "
+        "nothing else changes, and the markers saying which fields reach the model "
+        "stay either way, because those are facts about the run rather than help.",
+    ),
+    SettingSpec(
         key="ui.theme_locked",
         env="GREENLIGHT_AI_UI_THEME_LOCKED",
         label="Lock the theme",
         group="Appearance",
         kind="bool",
-        default=False,
-        help="Hides the theme picker in both apps and applies the default theme "
-        "everywhere, within the settings cache window.",
+        default=True,
+        help="On by default: both apps show the default theme and the picker is "
+        "hidden, so everyone reviewing a delivery is looking at the same colours. "
+        "Switch this off to let each person choose their own; nothing else changes, "
+        "and the choice takes effect within the settings cache window.",
     ),
     # --- platform, read-only ----------------------------------------------------
     SettingSpec(

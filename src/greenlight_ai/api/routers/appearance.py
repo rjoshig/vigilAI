@@ -28,6 +28,10 @@ class AppearanceOut(BaseModel):
     locked: bool = False
     #: Every palette the apps know, in picker order.
     palettes: list[str] = Field(default_factory=list)
+    #: Whether the consoles explain each screen (Phase 6.14d). On by default; an
+    #: administrator who knows the product can switch it off. It never hides the
+    #: markers that say which fields reach the model: those are facts about the run.
+    tooltips: bool = True
 
 
 @router.get("", response_model=AppearanceOut)
@@ -44,4 +48,5 @@ def appearance(session: Session = Depends(get_session)) -> AppearanceOut:
         theme=str(store.resolve(session, "ui.theme").value),
         locked=bool(store.resolve(session, "ui.theme_locked").value),
         palettes=list(SETTINGS_BY_KEY["ui.theme"].choices),
+        tooltips=bool(store.resolve(session, "ui.tooltips").value),
     )
