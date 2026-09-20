@@ -61,7 +61,16 @@ function RunProgress({ run }: { run: RunSummary }) {
   if (run.status === "failed") {
     // The stored error already names the stage it failed at, so prefixing it again
     // produced "Failed at s1_parse: PipelineError: s1_parse: …".
-    return <span className="text-xs text-destructive">{run.error || "Failed"}</span>;
+    // The list shows the stage and the first few words; the run page carries the whole
+    // message, so a long traceback never stretches a row.
+    const message = run.error || "Failed";
+    const brief =
+      message.length > ERROR_PREVIEW_CHARS ? `${message.slice(0, ERROR_PREVIEW_CHARS)}…` : message;
+    return (
+      <span className="text-xs text-destructive" title={message}>
+        Failed{run.current_stage ? ` at ${run.current_stage}` : ""} · {brief}
+      </span>
+    );
   }
   if (run.status === "draft") {
     return <span className="text-xs text-muted-foreground">Draft — no files uploaded yet</span>;
@@ -77,6 +86,9 @@ function RunProgress({ run }: { run: RunSummary }) {
     </span>
   );
 }
+
+/** How much of a failure message the list shows; the run page shows it all. */
+const ERROR_PREVIEW_CHARS = 40;
 
 export default function RunsPage() {
   const [runs, setRuns] = React.useState<RunSummary[] | null>(null);
