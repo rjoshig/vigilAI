@@ -125,43 +125,46 @@ Tooltips explain intended use — what this surface is *for*, how it is meant to
 and what belongs somewhere else. They are a setting, on by default, and an administrator
 who knows the product can turn them off.
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.14a — The artifact match check · ⬜ not started
+### 6.14a — The artifact match check · ✅ complete
 
-- [ ] `ConfigDocument` exposes `customer` alongside the `configuration_id` it already
+- [x] `ConfigDocument` exposes `customer` alongside the `configuration_id` it already
       requires. The parser keeps raising when `configuration_id` is missing; a missing
       `customer` is absence, not a parse error.
-- [ ] `checks/artifact_match.py`: pure functions comparing submitted against declared for the
+- [x] `checks/artifact_match.py`: pure functions comparing submitted against declared for the
       configuration id, the customer and the credit date. No model call, no I/O. Each
       returns the field, both values, and how they were compared, so the screen can show
       the comparison rather than a verdict.
-- [ ] Customer comparison normalises the way alias lookups do (case, punctuation,
+- [x] Customer comparison normalises the way alias lookups do (case, punctuation,
       whitespace, common suffixes) and reports *near* matches distinctly from *different*
       ones. "Acme Card Services" against "ACME Card Services, Inc." is a near match and
       says so; it is still shown, because a reviewer decides.
-- [ ] A run status `held` and an `artifact_mismatch` table: run, field, submitted,
+- [x] A run status `held` and an `artifact_mismatch` table: run, field, submitted,
       declared, kind (`different` · `near` · `absent`), accepted-by, accepted-at, reason.
-- [ ] `POST /runs` runs the gate synchronously after storing the files. A run with no
+- [x] `POST /runs` runs the gate synchronously after storing the files. A run with no
       mismatch is `queued` exactly as today. A run with one is `held`, and the response
       carries the mismatches. **No existing clean-submission path changes.**
-- [ ] `POST /runs/{id}/match/accept`: a reason per mismatch, required and non-empty,
+- [x] `POST /runs/{id}/match/accept`: a reason per mismatch, required and non-empty,
       recorded with the current user; the run moves to `queued`. Accepting is the only
       transition out of `held` besides deleting the run. **Anyone who can submit a run
       can accept a mismatch** — the check exists to put the disagreement in front of the
       person, not to route it to somebody else. Who ought to be consulted before
       accepting is a matter for the delivery process, not a role in the tool (ADR-041).
-- [ ] The worker refuses to execute a `held` run, so a queue consumer cannot race past the
+- [x] The worker refuses to execute a `held` run, so a queue consumer cannot race past the
       gate.
-- [ ] user-ui: the new-run form shows the mismatches with both values side by side, a
-      reason box per mismatch, **Accept and run** and **Cancel**. Cancel leaves the run
-      `held`, it does not delete the upload. The runs list shows `held` with its own
-      badge and the count of unaccepted mismatches.
-- [ ] Accepted mismatches appear on the review screen above the findings, and in the
+- [x] user-ui: a hold is a state the run is in, not a moment during submission, so the
+      panel lives on the **run page** and the form pushes there as it always did. It
+      shows both values side by side per field, marks a near match as such, and offers
+      four one-click common reasons above a free-text box so the required reason never
+      becomes a formality. **Accept and run** clears every mismatch at once. Navigating
+      away leaves the run `held` with its files intact. `held` is in the status
+      vocabulary of both the badge tone and the label map, so the runs list shows it.
+- [x] Accepted mismatches appear on the review screen above the findings, and in the
       frozen report beside the coverage attestation, with who accepted and why. They
       **do not** block the finalize gate: the question was asked and answered once, and
       the report carries the answer forward for the reviewer to weigh (ADR-041).
-- [ ] Tests: each comparison in isolation; a clean run is unaffected end to end; a held
+- [x] Tests: each comparison in isolation; a clean run is unaffected end to end; a held
       run is refused by the worker; acceptance requires a reason; an accepted run runs;
       the frozen report carries the acceptance; the near-match case is reported as near;
       **finalize is not blocked by an accepted

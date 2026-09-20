@@ -70,6 +70,40 @@ def _stored(session: Session, run_id: int) -> models.FinalReport | None:
     ).scalar_one_or_none()
 
 
+def _accepted_mismatches(session: Session, run_id: int) -> list[dict[str, str]]:
+    """The artifact disagreements somebody accepted before the run started (ADR-041).
+
+    Args:
+        session: An open session.
+        run_id: The run.
+
+    Returns:
+        One entry per accepted mismatch, with the field's display label, both values
+        and who accepted it. Empty when the artifacts agreed, which is the usual case
+        and renders nothing.
+    """
+    from greenlight_ai.api.routers.runs import MATCH_FIELD_LABELS
+
+    rows = session.execute(
+        sa.select(models.ArtifactMismatch)
+        .where(
+            models.ArtifactMismatch.run_id == run_id,
+            models.ArtifactMismatch.accepted_at.is_not(None),
+        )
+        .order_by(models.ArtifactMismatch.id)
+    ).scalars()
+    return [
+        {
+            "label": MATCH_FIELD_LABELS.get(row.field, row.field),
+            "submitted": row.submitted,
+            "declared": row.declared,
+            "accepted_by": row.accepted_by,
+            "reason": row.reason,
+        }
+        for row in rows
+    ]
+
+
 def _name_of(session: Session, user_id: int | None) -> str:
     """The display name for an account id.
 
@@ -198,6 +232,7 @@ def finalize(
         generated_by=user.name,
         drift=drift.compute_drift(session, run),
         attestation=confirmed,
+        mismatches=_accepted_mismatches(session, run_id),
         submitted_by=_name_of(session, run.user_id),
         reviewers=_reviewers(session, findings),
     )

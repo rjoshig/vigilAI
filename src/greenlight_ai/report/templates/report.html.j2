@@ -266,6 +266,25 @@
       <div class="card small muted">Nothing was marked Not OK.</div>
       {% endif %}
 
+      {% if mismatches %}
+      <h2>Accepted before the run started</h2>
+      <p class="small muted">
+        The artifacts did not match what was submitted. The disagreement was shown
+        before anything was validated, and accepted with a reason. Compared by code.
+      </p>
+      <table>
+        <tr><th>Field</th><th>Submitted</th><th>The file said</th><th>Accepted by, and why</th></tr>
+        {% for mismatch in mismatches %}
+        <tr>
+          <td class="small">{{ mismatch.label }}</td>
+          <td class="mono">{{ mismatch.submitted }}</td>
+          <td class="mono">{{ mismatch.declared }}</td>
+          <td class="small">{{ mismatch.accepted_by }} — {{ mismatch.reason }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+
       {% if attestation %}
       <h2>What was checked</h2>
       <p class="small muted">

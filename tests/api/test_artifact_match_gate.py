@@ -210,3 +210,50 @@ class TestAnAcceptedRunRunsAndReports:
         assert detail["status"] == "needs_review"
         assert len(detail["mismatches"]) == 1
         assert detail["mismatches"][0]["reason"] == "Typo on the form."
+
+
+class TestTheFrozenReport:
+    """A waiver is visible at sign-off, not only at submit (ADR-041)."""
+
+    def test_the_report_names_what_was_accepted_and_why(
+        self,
+        submit: Callable[..., Any],
+        client: TestClient,
+        api: str,
+        worker: Worker,
+        seed_aliases: None,
+        clear_gate: Callable[..., None],
+    ) -> None:
+        """The reviewer signing the delivery sees the question somebody waived."""
+        run_id = submit(configuration_id="CFG-WRONG").json()["run_id"]
+        client.post(
+            f"{api}/runs/{run_id}/match/accept",
+            json={"reason": "Re-run of an archived delivery."},
+        )
+        worker.run_once()
+        clear_gate(run_id)
+
+        response = client.post(f"{api}/runs/{run_id}/finalize")
+        assert response.status_code == 201, response.text
+        html = client.get(f"{api}/runs/{run_id}/report").text
+        assert "Accepted before the run started" in html
+        assert "CFG-WRONG" in html
+        assert "CFG-SYNTH-GEO-02" in html
+        assert "Re-run of an archived delivery." in html
+
+    def test_a_clean_run_renders_no_such_section(
+        self,
+        submit: Callable[..., Any],
+        client: TestClient,
+        api: str,
+        worker: Worker,
+        seed_aliases: None,
+        clear_gate: Callable[..., None],
+    ) -> None:
+        """Configuring nothing changes nothing: the usual report is untouched."""
+        run_id = submit().json()["run_id"]
+        worker.run_once()
+        clear_gate(run_id)
+        client.post(f"{api}/runs/{run_id}/finalize")
+        html = client.get(f"{api}/runs/{run_id}/report").text
+        assert "Accepted before the run started" not in html
