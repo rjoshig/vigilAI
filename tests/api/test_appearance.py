@@ -21,6 +21,7 @@ def test_the_default_theme_comes_from_the_environment_then_the_built_in(
         "locked": True,
         "palettes": ["classic-teal-navy", "classic-teal", "light-blue-yellow", "default"],
         "tooltips": True,
+        "tagline": "Nothing ships without a green light.",
     }
 
     monkeypatch.setenv("GREENLIGHT_AI_UI_THEME", "classic-teal")
@@ -79,3 +80,18 @@ def test_the_console_can_switch_the_explanations_off(
     assert saved.status_code == 200, saved.text
     store.invalidate()
     assert client.get(f"{api}/appearance").json()["tooltips"] is False
+
+
+def test_the_tagline_comes_from_the_console(
+    client: TestClient, api: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What the sidebar says under the mark, without a deploy (Phase 6.14h)."""
+    from greenlight_ai.config import store
+
+    saved = client.post(
+        f"{api}/admin/settings",
+        json={"key": "ui.tagline", "value": "QC for Global Delivery."},
+    )
+    assert saved.status_code == 200, saved.text
+    store.invalidate()
+    assert client.get(f"{api}/appearance").json()["tagline"] == "QC for Global Delivery."

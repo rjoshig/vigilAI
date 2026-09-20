@@ -725,6 +725,45 @@ class CoverageAcknowledgement(Base):
     created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
+class Announcement(Base):
+    """A message an administrator puts at the top of an app for a while.
+
+    "Maintenance starts at 11pm on the 6th." The tool cannot know that, nobody should
+    have to deploy to say it, and an email is read by whoever happens to open it. A
+    scheduled banner is read by whoever is actually using the app when it matters.
+
+    Scheduling is part of it rather than a convenience: a notice nobody remembers to
+    take down is how an app comes to carry a stale warning for a month, which teaches
+    people to stop reading banners at all.
+    """
+
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = _pk()
+    #: ``info`` · ``warning`` · ``critical``. Chosen by the author; the apps render
+    #: each differently and none of them is dismissible, because a notice somebody
+    #: scheduled is a notice they wanted seen.
+    level: Mapped[str] = mapped_column(sa.String(20), default="info", index=True)
+    #: Who sees it: ``user``, ``admin`` or ``both``. The two apps have different
+    #: audiences and most messages are for one of them.
+    audience: Mapped[str] = mapped_column(sa.String(20), default="both", index=True)
+    message: Mapped[str] = mapped_column(sa.Text, default="")
+
+    #: When it starts and stops showing. Both are required: a banner with no end is
+    #: the stale-notice problem this is meant to avoid.
+    starts_at: Mapped[dt.datetime] = mapped_column(Utc)
+    ends_at: Mapped[dt.datetime] = mapped_column(Utc)
+    #: An off switch that does not lose the row, so a scheduled notice can be pulled
+    #: without retyping it next month.
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+
+
 class FieldLabel(Base):
     """What a delivery calls one of the fields the tool checks (Phase 6.14b).
 

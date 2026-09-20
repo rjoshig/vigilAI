@@ -30,7 +30,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from greenlight_ai import scopes
+from greenlight_ai import announcements, scopes
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
@@ -52,6 +52,7 @@ from greenlight_ai.checks.expressions import (
 from greenlight_ai.checks import guides
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
 from greenlight_ai.checks import field_labels
+from greenlight_ai.db.types import utcnow
 from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.training import lifecycle
 from greenlight_ai.llm.cache import LLMCache
@@ -1690,6 +1691,189 @@ def save_category(
 
 
 # ------------------------------------------------------------------ reference data
+
+
+def _announcement_out(row: models.Announcement, now: Any = None) -> wire.AnnouncementOut:
+    """Render one notice for the console.
+
+    Args:
+        row: The stored row.
+        now: The moment to judge "showing" against; the real one when omitted.
+
+    Returns:
+        The wire model, saying whether it is showing at this moment so nobody has to
+        compare dates in their head.
+    """
+    moment = now or utcnow()
+    return wire.AnnouncementOut(
+        id=row.id,
+        level=row.level,
+        audience=row.audience,
+        message=row.message,
+        starts_at=row.starts_at,
+        ends_at=row.ends_at,
+        is_active=row.is_active,
+        created_by=row.created_by,
+        showing_now=bool(row.is_active and row.starts_at <= moment < row.ends_at),
+    )
+
+
+@router.get("/announcements", response_model=list[wire.AnnouncementOut])
+def list_announcements(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.AnnouncementOut]:
+    """Every scheduled notice, soonest first.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The notices, including expired ones, which are kept so a recurring message can
+        be switched back on rather than retyped.
+    """
+    rows = session.execute(
+        sa.select(models.Announcement).order_by(models.Announcement.starts_at.desc())
+    ).scalars()
+    return [_announcement_out(row) for row in rows]
+
+
+@router.post(
+    "/announcements", response_model=wire.AnnouncementOut, status_code=status.HTTP_201_CREATED
+)
+def create_announcement(
+    payload: wire.AnnouncementIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.AnnouncementOut:
+    """Schedule a notice.
+
+    Args:
+        payload: The message, its level, its audience and its window.
+        session: The request's session.
+        user: The caller, recorded against the row.
+
+    Returns:
+        The stored notice.
+
+    Raises:
+        HTTPException: 422 with the reason when it cannot be scheduled as written.
+    """
+    require_admin(user)
+    try:
+        announcements.validate(
+            session,
+            payload.message,
+            payload.level,
+            payload.audience,
+            payload.starts_at,
+            payload.ends_at,
+        )
+    except announcements.AnnouncementError as exc:
+        raise HTTPException(HTTP_422, str(exc)) from exc
+
+    row = models.Announcement(
+        level=payload.level,
+        audience=payload.audience,
+        message=payload.message.strip(),
+        starts_at=payload.starts_at,
+        ends_at=payload.ends_at,
+        is_active=payload.is_active,
+        created_by=user.name,
+        created_by_user_id=user.id,
+    )
+    session.add(row)
+    session.flush()
+    repository.audit(
+        session,
+        "admin.announcement_scheduled",
+        detail=f"{payload.level}/{payload.audience} until {payload.ends_at:%Y-%m-%d %H:%M}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _announcement_out(row)
+
+
+@router.post("/announcements/{announcement_id}/active", response_model=wire.AnnouncementOut)
+def set_announcement_active(
+    announcement_id: int,
+    active: bool = Query(...),
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.AnnouncementOut:
+    """Switch a notice on or off without losing it.
+
+    Args:
+        announcement_id: The row id.
+        active: Whether it should show inside its window.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The updated notice.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 422 when switching it back on
+            would exceed the limit.
+    """
+    require_admin(user)
+    row = session.get(models.Announcement, announcement_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"notice {announcement_id} not found")
+    if active and not row.is_active:
+        try:
+            announcements.validate(
+                session,
+                row.message,
+                row.level,
+                row.audience,
+                row.starts_at,
+                row.ends_at,
+                exclude_id=row.id,
+            )
+        except announcements.AnnouncementError as exc:
+            raise HTTPException(HTTP_422, str(exc)) from exc
+    row.is_active = active
+    repository.audit(
+        session,
+        "admin.announcement_on" if active else "admin.announcement_off",
+        detail=row.message[:80],
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _announcement_out(row)
+
+
+@router.delete("/announcements/{announcement_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_announcement(
+    announcement_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
+) -> None:
+    """Delete a notice.
+
+    Args:
+        announcement_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.Announcement, announcement_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"notice {announcement_id} not found")
+    session.delete(row)
+    repository.audit(
+        session,
+        "admin.announcement_deleted",
+        detail=row.message[:80],
+        user_id=user.id,
+        actor=user.name,
+    )
 
 
 @router.get("/field-labels", response_model=list[wire.FieldLabelOut])

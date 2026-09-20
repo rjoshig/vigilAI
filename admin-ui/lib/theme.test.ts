@@ -51,16 +51,19 @@ describe("the appearance answer", () => {
       theme: "classic-teal",
       locked: true,
       tooltips: true,
+      tagline: "",
     });
     expect(parseAppearance({ theme: "neon" }, "default")).toEqual({
       theme: "default",
       locked: false,
       tooltips: true,
+      tagline: "",
     });
     expect(parseAppearance(null, "classic-teal")).toEqual({
       theme: "classic-teal",
       locked: false,
       tooltips: true,
+      tagline: "",
     });
   });
 

@@ -323,6 +323,32 @@ class AliasOut(AliasIn):
     id: int
 
 
+class AnnouncementIn(BaseModel):
+    """A notice to show at the top of an app for a while (Phase 6.14g)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: ``info`` · ``warning`` · ``critical``.
+    level: str = "info"
+    #: ``user`` · ``admin`` · ``both``.
+    audience: str = "both"
+    message: str = Field(min_length=1, max_length=2000)
+    #: Both required. A notice with no end is the stale-banner problem this avoids.
+    starts_at: dt.datetime
+    ends_at: dt.datetime
+    is_active: bool = True
+
+
+class AnnouncementOut(AnnouncementIn):
+    """A stored notice."""
+
+    id: int
+    created_by: str = ""
+    #: Whether it is showing at this moment, so the console can say so rather than
+    #: leaving an administrator to compare dates in their head.
+    showing_now: bool = False
+
+
 class FieldLabelIn(BaseModel):
     """What a delivery calls one of the fields the tool checks (Phase 6.14b).
 

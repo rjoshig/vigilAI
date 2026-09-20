@@ -5,6 +5,7 @@
 import type {
   AdminUser,
   Alias,
+  Announcement,
   FieldLabel,
   ArtifactType,
   ArtifactTypeIn,
@@ -321,6 +322,28 @@ export const api = {
   /** Delete an attribute alias. */
   deleteAlias: (id: number, confirm: string): Promise<void> =>
     request<void>(`/aliases/${id}?confirm=${encodeURIComponent(confirm)}`, { method: "DELETE" }),
+
+  /** Every scheduled notice, soonest first, including expired ones. */
+  listAnnouncements: (): Promise<Announcement[]> => request<Announcement[]>("/announcements"),
+
+  /** Schedule a notice. The server refuses a sixth, and says why. */
+  createAnnouncement: (payload: {
+    level: string;
+    audience: string;
+    message: string;
+    starts_at: string;
+    ends_at: string;
+  }): Promise<Announcement> => request<Announcement>("/announcements", json("POST", payload)),
+
+  /** Switch a notice on or off without losing it. */
+  setAnnouncementActive: (id: number, active: boolean): Promise<Announcement> =>
+    request<Announcement>(`/announcements/${id}/active?active=${active}`, { method: "POST" }),
+
+  /** Delete a notice. */
+  deleteAnnouncement: (id: number, confirm: string): Promise<void> =>
+    request<void>(`/announcements/${id}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    }),
 
   /** What deliveries call the fields the tool checks, built-ins first. */
   listFieldLabels: (): Promise<FieldLabel[]> => request<FieldLabel[]>("/field-labels"),

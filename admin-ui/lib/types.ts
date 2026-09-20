@@ -258,6 +258,25 @@ export interface FieldLabel {
   is_builtin: boolean;
 }
 
+/**
+ * A message scheduled at the top of an app (Phase 6.14g).
+ *
+ * Shown automatically between `starts_at` and `ends_at`, then gone. Not dismissible:
+ * a notice somebody scheduled is one they wanted read.
+ */
+export interface Announcement {
+  id: number;
+  level: "info" | "warning" | "critical";
+  audience: "user" | "admin" | "both";
+  message: string;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+  created_by: string;
+  /** Whether it is in force at this moment, so the screen need not compare dates. */
+  showing_now: boolean;
+}
+
 export interface MaskedColumn {
   id: number;
   pattern: string;

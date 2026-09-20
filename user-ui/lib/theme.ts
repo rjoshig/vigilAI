@@ -49,6 +49,8 @@ export interface Appearance {
    * run, not help text.
    */
   tooltips: boolean;
+  /** The line under the mark in the sidebar (Phase 6.14h). */
+  tagline: string;
 }
 
 /** Narrow a value to a known palette, falling back to the brand one. */
@@ -79,6 +81,7 @@ export function parseAppearance(body: unknown, fallback: Palette): Appearance {
     // Explanations are on unless the deployment says otherwise, so a page that cannot
     // reach the API still shows them rather than silently going quiet.
     tooltips: record.tooltips !== false,
+    tagline: typeof record.tagline === "string" ? record.tagline : "",
   };
 }
 
@@ -89,7 +92,12 @@ export function parseAppearance(body: unknown, fallback: Palette): Appearance {
  * page never waits on the API to choose its colours.
  */
 export async function fetchAppearance(): Promise<Appearance> {
-  const fallback: Appearance = { theme: configuredPalette(), locked: true, tooltips: true };
+  const fallback: Appearance = {
+    theme: configuredPalette(),
+    locked: true,
+    tooltips: true,
+    tagline: "",
+  };
   const base = process.env.GREENLIGHT_AI_API_URL ?? "http://127.0.0.1:8000";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 1500);

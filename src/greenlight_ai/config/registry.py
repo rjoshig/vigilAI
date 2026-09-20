@@ -420,6 +420,16 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         choices=("classic-teal-navy", "classic-teal", "light-blue-yellow", "default"),
     ),
     SettingSpec(
+        key="ui.tagline",
+        env="GREENLIGHT_AI_UI_TAGLINE",
+        label="Tagline",
+        group="Appearance",
+        kind="str",
+        default="Nothing ships without a green light.",
+        help="The line under the mark in both apps' sidebars. Change it to say what "
+        "this deployment is for, or clear it to show nothing.",
+    ),
+    SettingSpec(
         key="ui.tooltips",
         env="GREENLIGHT_AI_UI_TOOLTIPS",
         label="Explain each screen",

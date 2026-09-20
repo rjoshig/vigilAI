@@ -20,22 +20,31 @@
  * reaches the model nor is compared stays undecorated.
  */
 
-import { Cpu, HelpCircle, Ruler, BookOpen } from "lucide-react";
+import { Cpu, HelpCircle, NotebookPen, Ruler, Tag, Users } from "lucide-react";
 import * as React from "react";
 
 import { usePalette } from "@/components/palette-provider";
 import { cn } from "@/lib/utils";
 
 /**
- * What a field does to a run.
+ * What a field does to a run — who or what actually reads it.
+ *
+ * The distinction people most need is not "is this stored" but "does this change the
+ * answer, and whose answer". Somebody writing a note deserves to know whether they are
+ * teaching the model, feeding a comparison, leaving a message for the next reviewer, or
+ * writing to themselves.
  *
  * - `model` — its text is rendered into a prompt as background. It can change what the
- *   model pays attention to; it can never make anything pass or fail (ADR-001).
+ *   model pays attention to and so improve what it finds; it can never make anything
+ *   pass or fail (ADR-001).
  * - `code` — code evaluates it against the artifacts. It can make a finding.
- * - `reference` — neither. It is read by people, or it is a specimen the tool measures
- *   other things against.
+ * - `reviewer` — a person reads it later: on the review screen, or on the frozen
+ *   report at sign-off. Nothing automated acts on it.
+ * - `notes` — your own record. Nothing reads it but you.
+ * - `record` — it identifies or files the run: how it is found, grouped and compared
+ *   with earlier ones.
  */
-export type FieldEffectKind = "model" | "code" | "reference";
+export type FieldEffectKind = "model" | "code" | "reviewer" | "notes" | "record";
 
 const EFFECT: Record<
   FieldEffectKind,
@@ -43,23 +52,37 @@ const EFFECT: Record<
 > = {
   model: {
     icon: Cpu,
-    label: "Reaches the model",
+    label: "Helps the AI",
     detail:
-      "Rendered into the prompt as background. It changes what the model pays attention to; it never makes anything pass or fail on its own.",
+      "Rendered into the prompt as background, so the model reads this delivery the way you would. Better context here means better findings. It never makes anything pass or fail on its own — every comparison is made by code.",
     className: "text-info",
   },
   code: {
     icon: Ruler,
-    label: "Evaluated by code",
+    label: "Checked by code",
     detail:
-      "Compared against the artifacts by code, not read by the model. It can produce a finding.",
+      "Compared against the artifacts by code, not read by the model. It can produce a finding, and the same inputs always give the same answer.",
     className: "text-success",
   },
-  reference: {
-    icon: BookOpen,
-    label: "Reference only",
+  reviewer: {
+    icon: Users,
+    label: "Read by a person",
     detail:
-      "Read by people, or used as a specimen other definitions resolve against. It does not reach a prompt and nothing is compared against it.",
+      "Shown to whoever reviews or signs off this run. Nothing automated acts on it, and it reaches no model.",
+    className: "text-foreground",
+  },
+  notes: {
+    icon: NotebookPen,
+    label: "Your own note",
+    detail:
+      "Kept with the run for you and anyone looking at it later. It reaches no model and no check.",
+    className: "text-muted-foreground",
+  },
+  record: {
+    icon: Tag,
+    label: "Identifies the run",
+    detail:
+      "How this run is found, grouped, and compared with earlier runs of the same configuration. Code checks it against what the uploaded files declare before anything is validated.",
     className: "text-muted-foreground",
   },
 };
