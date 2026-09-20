@@ -164,20 +164,7 @@ class LLMSettings(BaseModel):
             raise ConfigError(f"{key} must be a boolean, got {raw!r}")
 
         def lenses(key: str) -> tuple[str, ...]:
-            raw = get(key).lower()
-            if not raw:
-                return ()
-            names = tuple(part.strip() for part in raw.split(",") if part.strip())
-            allowed = {"single", "delivery", "compliance", "requirements"}
-            unknown = [name for name in names if name not in allowed]
-            if unknown:
-                raise ConfigError(
-                    f"{key} may name only {', '.join(sorted(allowed))}; got "
-                    f"{', '.join(unknown)}"
-                )
-            if "single" in names and len(names) > 1:
-                raise ConfigError(f"{key}: 'single' is the one-prompt mode and stands alone")
-            return names
+            return parse_lenses(get(key), key)
 
         provider = get("LLM_PROVIDER").lower()
         if provider not in ("openai", "anthropic", "mock"):
@@ -204,6 +191,43 @@ class LLMSettings(BaseModel):
             )
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
+
+
+#: The lenses a deployment may switch on (Phase 6.11e). ``single`` is the one-prompt
+#: second opinion and stands alone.
+LENS_NAMES: Final[frozenset[str]] = frozenset({"single", "delivery", "compliance", "requirements"})
+
+
+def parse_lenses(raw: str, key: str = "LLM_VERIFY_LENSES") -> tuple[str, ...]:
+    """Read a comma-separated lens list, from the environment or the console.
+
+    One parser for both layers, because the console and ``.env`` must agree on what a
+    valid value is: a lens list the console accepted and the worker refused would be a
+    setting that lies (ADR-023).
+
+    Args:
+        raw: The value as written, e.g. ``"delivery,compliance"``.
+        key: What to call it in an error.
+
+    Returns:
+        The lens names, in the order given. Empty when nothing was written, which stage 8
+        reads as verification switched off.
+
+    Raises:
+        ConfigError: When a name is unknown, or ``single`` is combined with another.
+    """
+    lowered = raw.strip().lower()
+    if not lowered:
+        return ()
+    names = tuple(part.strip() for part in lowered.split(",") if part.strip())
+    unknown = [name for name in names if name not in LENS_NAMES]
+    if unknown:
+        raise ConfigError(
+            f"{key} may name only {', '.join(sorted(LENS_NAMES))}; got {', '.join(unknown)}"
+        )
+    if "single" in names and len(names) > 1:
+        raise ConfigError(f"{key}: 'single' is the one-prompt mode and stands alone")
+    return names
 
 
 def resolved_llm_settings(session: Any, environ: Mapping[str, str] | None = None) -> LLMSettings:
@@ -239,4 +263,8 @@ def resolved_llm_settings(session: Any, environ: Mapping[str, str] | None = None
         log_prompts=bool(value("llm.log_prompts")),
         pii_tripwire=bool(value("llm.pii_tripwire")),
         prompt_version=LLMSettings.from_env(environ).prompt_version,
+        # Both were built in 6.11e and dropped here, so a deployment with the database
+        # reachable ran with the lenses pinned to ``single`` whatever ``.env`` said.
+        verify_lenses=parse_lenses(str(value("llm.verify_lenses")), "llm.verify_lenses"),
+        max_lens_calls_per_run=int(value("llm.max_lens_calls_per_run")),
     )

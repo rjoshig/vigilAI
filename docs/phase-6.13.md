@@ -53,15 +53,15 @@ Smaller: `last_fired_at` is the last *review*, not the last firing; observation 
 refreshed at approval; an unparseable credit date silently disables its check;
 `checks/runner.py` is named in a docstring and does not exist.
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.13a — Repairs · ⬜ not started
+### 6.13a — Repairs · 🟡 in progress
 
-- [ ] **D1.** `llm.verify_lenses` and `llm.max_lens_calls_per_run` are settings in
+- [x] **D1.** `llm.verify_lenses` and `llm.max_lens_calls_per_run` are settings in
       `config/registry.py` with their `.env` names; `resolved_llm_settings` passes both;
       the existing `lenses()` validator applies. A worker context built from the
       environment, and one built from a console override, carries them.
-- [ ] **D2.** `store_upload` takes the part and writes `<kind><suffix>` for part one (so
+- [x] **D2.** `store_upload` takes the part and writes `<kind><suffix>` for part one (so
       every existing storage key stays valid) and `<kind>-<part><suffix>` beyond. The
       parts test uses distinct bytes per part and asserts distinct storage keys and
       distinct hashes on disk.

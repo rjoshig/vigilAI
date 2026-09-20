@@ -439,6 +439,7 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
                         kind,
                         data_dir,
                         str(run.id),
+                        part=part,
                     ),
                     part,
                     part_label,

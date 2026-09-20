@@ -307,7 +307,7 @@ that drops means something is changing prompts or inputs on every run.
 ## What the model reads, and how much of it (Phase 6.11)
 
 **Three lenses, or one.** Stage 8 reads each high-severity finding a second time.
-`LLM_VERIFY_LENSES` decides who does the reading. `single`, the default, is the one
+**Second-opinion lenses** on the Settings screen (or `LLM_VERIFY_LENSES` in `.env`) decides who does the reading, and **Lens calls per run** caps what it may cost. `single`, the default, is the one
 second opinion the tool has always asked for. Naming lenses —
 `delivery,compliance,requirements` — has three readers see the same evidence
 independently, never each other's answers, with code merging them: all agree and the

@@ -87,3 +87,16 @@ def test_settings_are_immutable() -> None:
 def test_zero_max_tokens_is_rejected() -> None:
     with pytest.raises(ConfigError):
         LLMSettings.from_env({"LLM_MAX_TOKENS": "0"})
+
+
+def test_lenses_are_read_from_the_environment() -> None:
+    settings = LLMSettings.from_env(
+        {"LLM_VERIFY_LENSES": "delivery, requirements", "LLM_MAX_LENS_CALLS_PER_RUN": "9"}
+    )
+    assert settings.verify_lenses == ("delivery", "requirements")
+    assert settings.max_lens_calls_per_run == 9
+
+
+def test_single_stands_alone_in_the_lens_list() -> None:
+    with pytest.raises(ConfigError, match="stands alone"):
+        LLMSettings.from_env({"LLM_VERIFY_LENSES": "single,delivery"})

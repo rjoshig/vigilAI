@@ -99,6 +99,7 @@ def store_upload(
     data_dir: Path,
     run_key: str,
     max_bytes: int = MAX_UPLOAD_BYTES,
+    part: int = 1,
 ) -> StoredFile:
     """Validate an upload and write it to the shared volume.
 
@@ -110,6 +111,10 @@ def store_upload(
         data_dir: The shared volume.
         run_key: The per-run directory name.
         max_bytes: The size limit.
+        part: Which file of this kind this is, from one. The first keeps the bare
+            ``<kind>`` name every existing storage key uses; later parts are suffixed,
+            because three labelled parts written to one path were three rows over one
+            file, and every "part" was checked against whichever upload came last.
 
     Returns:
         A record of what was written.
@@ -130,7 +135,8 @@ def store_upload(
 
     target_dir = data_dir / "runs" / run_key
     target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"{kind}{suffix}"
+    stem = kind if part <= 1 else f"{kind}-{part}"
+    target = target_dir / f"{stem}{suffix}"
 
     digest = hashlib.sha256()
     written = 0
