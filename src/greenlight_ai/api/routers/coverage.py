@@ -16,7 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from greenlight_ai.api import gate, schemas
-from greenlight_ai.api.deps import CurrentUser, current_user, get_session
+from greenlight_ai.api.deps import CurrentUser, current_user, get_auth_settings, get_session
+from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.db import models, repository
 from greenlight_ai.db.types import utcnow
 
@@ -69,6 +70,7 @@ def read_coverage(
     run_id: int,
     session: Session = Depends(get_session),
     _user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
 ) -> schemas.CoverageOut:
     """What this run checked, and what it did not.
 
@@ -124,7 +126,7 @@ def read_coverage(
         )
         for row in unevaluated_rows
     ]
-    state = gate.gate_state(session, run)
+    state = gate.gate_state(session, run, auth.user_auth)
 
     return schemas.CoverageOut(
         requirements=requirements,
@@ -232,3 +234,140 @@ def acknowledge(
     )
     _LOG.info("run %s: %d coverage gap(s) acknowledged by %s", run.id, written, user.name)
     return written
+
+
+@router.get("/runs/{run_id}/second-approval", response_model=schemas.SecondApprovalOut)
+def read_second_approval(
+    run_id: int,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
+) -> schemas.SecondApprovalOut:
+    """Whether this run needs a second person, and whether one has signed (ADR-036).
+
+    Args:
+        run_id: The run.
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        What the rule is waiting on. ``required`` is false for a programme that does
+        not ask, which is every programme by default.
+
+    Raises:
+        HTTPException: 404 when the run does not exist.
+    """
+    run = _run_or_404(session, run_id)
+    programme = (
+        session.execute(
+            sa.select(models.RunScope).where(models.RunScope.code == run.scope)
+        ).scalar_one_or_none()
+        if run.scope
+        else None
+    )
+    approval = session.execute(
+        sa.select(models.SecondApproval).where(models.SecondApproval.run_id == run.id)
+    ).scalar_one_or_none()
+    outstanding = gate.second_approval_needed(session, run, auth.user_auth)
+
+    return schemas.SecondApprovalOut(
+        required=bool(programme is not None and programme.second_approver),
+        findings=outstanding or list(approval.covered or []) if approval else outstanding,
+        outstanding=bool(outstanding),
+        approved_by=approval.actor if approval else "",
+        approved_at=approval.created_at if approval else None,
+        note=approval.note if approval else "",
+    )
+
+
+@router.post("/runs/{run_id}/second-approval", response_model=schemas.SecondApprovalOut)
+def approve_second(
+    run_id: int,
+    payload: schemas.SecondApprovalPayload,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
+) -> schemas.SecondApprovalOut:
+    """Record that a second person has approved what the reviewer waved through.
+
+    Not a re-review: the first reviewer decided, and this says somebody else saw the
+    decisions the programme treats as serious and agreed the run can be frozen.
+
+    Args:
+        run_id: The run.
+        payload: An optional note.
+        session: The request's session.
+        user: The approver.
+
+    Returns:
+        The state of the rule afterwards.
+
+    Raises:
+        HTTPException: 404 when the run does not exist, 409 when it is already
+            finalized, 422 when nothing is waiting for a signature or when the
+            approver is the person who made the decisions. A signature from the
+            reviewer is not a second pair of eyes, which is also why this control
+            means nothing with login off: everyone is the same placeholder (ADR-022).
+    """
+    run = _run_or_404(session, run_id)
+    frozen = session.execute(
+        sa.select(sa.func.count())
+        .select_from(models.FinalReport)
+        .where(models.FinalReport.run_id == run.id)
+    ).scalar_one()
+    if int(frozen) > 0:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run_id} is finalized; its report is frozen",
+        )
+
+    outstanding = gate.second_approval_needed(session, run, auth.user_auth)
+    if not outstanding:
+        raise HTTPException(422, "nothing on this run is waiting for a second approval")
+
+    reviewers = {
+        row
+        for row in session.execute(
+            sa.select(models.Finding.reviewed_by_user_id).where(
+                models.Finding.run_id == run.id,
+                models.Finding.finding_id.in_(outstanding),
+            )
+        ).scalars()
+        if row is not None
+    }
+    if user.id is not None and user.id in reviewers:
+        raise HTTPException(
+            422,
+            "a second approval has to come from someone other than the reviewer who "
+            "made these decisions",
+        )
+
+    existing = session.execute(
+        sa.select(models.SecondApproval).where(models.SecondApproval.run_id == run.id)
+    ).scalar_one_or_none()
+    if existing is not None:
+        session.delete(existing)
+        session.flush()
+
+    session.add(
+        models.SecondApproval(
+            run_id=run.id,
+            actor=user.name,
+            actor_user_id=user.id,
+            note=payload.note,
+            covered=list(outstanding),
+            created_at=utcnow(),
+        )
+    )
+    repository.audit(
+        session,
+        "run.second_approval",
+        run.id,
+        ", ".join(outstanding),
+        user_id=user.id,
+        actor=user.name,
+    )
+    _LOG.info(
+        "run %s: second approval by %s over %d finding(s)", run.id, user.name, len(outstanding)
+    )
+    return read_second_approval(run_id, session, user, auth)

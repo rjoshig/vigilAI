@@ -282,6 +282,28 @@ disables the rule it replaces, naming this one as its successor; **keep both** s
 have looked and they cover different ground. Approve alone is refused, because
 overlapping rules accumulate quietly and are very hard to untangle later.
 
+
+## Asking for a second approver (ADR-036)
+
+Each delivery programme has a **second approver** switch, off by default. With it on, a
+run in that programme cannot be frozen when the reviewer marked **OK** something the
+programme treats as serious — a breach of a rule you called `must`, or a compliance
+rule the configuration does not implement — until somebody else signs.
+
+Three things about it are worth knowing before you turn it on.
+
+- **It is a signature, not a re-review.** The second person is shown what was waved
+  through and says the run can be frozen. Nothing claims they redid the work.
+- **It has to be someone else.** An approval from the reviewer who made those decisions
+  is refused. That is the whole of what the control asserts.
+- **It does nothing while login is off.** Everyone is then the same placeholder
+  account, so a "second" approver is the same person and no affected run could ever be
+  frozen. Rather than deadlock, the rule stands down. If you want this control, turn
+  login on first (see the deployment checklist). A gate nobody can pass is worse than
+  no gate.
+
+Who approved, when, and what they covered are recorded on the frozen report.
+
 ## A weekly routine that keeps the tool honest
 
 1. Read the training queue. Reject what cannot be a rule, with reasons; synthesize

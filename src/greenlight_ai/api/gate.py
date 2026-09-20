@@ -31,6 +31,8 @@ from greenlight_ai.pipeline.coverage import Coverage
 
 __all__ = [
     "GateState",
+    "SERIOUS_TYPES",
+    "second_approval_needed",
     "acknowledged_targets",
     "attestation",
     "gate_state",
@@ -49,6 +51,18 @@ DECISION_REQUIRED: Final[tuple[str, ...]] = ("high", "review")
 #: pass, so it needs an acknowledgement even though it is not a disagreement.
 _UNEVALUATED_TYPE: Final[str] = "could_not_evaluate"
 
+#: The findings a programme may treat as needing a second pair of eyes when the first
+#: reviewer waves them through: a breach of a rule the programme calls `must`, and a
+#: compliance rule the configuration does not implement (ADR-036). Both are things the
+#: programme decided in advance are not one person's call.
+SERIOUS_TYPES: Final[tuple[str, ...]] = (
+    "programme_rule_violation",
+    "rule_missing_in_config",
+)
+
+#: The decisions that count as waving something through.
+_WAVED_THROUGH: Final[tuple[str, ...]] = ("false_positive", "accepted_risk")
+
 
 @dataclass(frozen=True, slots=True)
 class GateState:
@@ -66,6 +80,9 @@ class GateState:
     undecided_findings: tuple[str, ...] = ()
     unacknowledged_requirements: tuple[str, ...] = ()
     unacknowledged_findings: tuple[str, ...] = ()
+    #: Serious findings the first reviewer marked OK on a programme that asks for a
+    #: second approver, when nobody else has signed off yet (ADR-036).
+    awaiting_second_approval: tuple[str, ...] = ()
 
     @property
     def can_finalize(self) -> bool:
@@ -78,6 +95,7 @@ class GateState:
             self.undecided_findings
             or self.unacknowledged_requirements
             or self.unacknowledged_findings
+            or self.awaiting_second_approval
         )
 
     @property
@@ -101,6 +119,11 @@ class GateState:
             parts.append(
                 f"{len(self.unacknowledged_findings)} check(s) that could not be evaluated "
                 "have not been acknowledged"
+            )
+        if self.awaiting_second_approval:
+            parts.append(
+                f"{len(self.awaiting_second_approval)} serious finding(s) were marked OK and "
+                "this programme asks a second person to approve that"
             )
         if not parts:
             return ""
@@ -166,12 +189,89 @@ def _unevaluated_finding_ids(session: Session, run_id: int) -> list[str]:
     return list(rows)
 
 
-def gate_state(session: Session, run: models.Run) -> GateState:
+def second_approval_needed(session: Session, run: models.Run, user_auth: bool = False) -> list[str]:
+    """Which serious findings a second person has not yet approved (ADR-036).
+
+    A programme decides in advance that some findings are not one reviewer's call: a
+    breach of a rule it calls `must`, and a compliance rule the configuration does not
+    implement. When the reviewer waves one of those through, someone else signs off
+    before the run can be frozen.
+
+    Off unless the programme asks for it, **and inert while login is off**: every action
+    then belongs to the same placeholder account, so a second approver would be the same
+    person and no run in the programme could ever be frozen. A gate nobody can pass is
+    worse than no gate. With login on, the approver must be a different account from the
+    reviewer, which is the whole of what this control asserts.
+
+    Args:
+        session: An open session.
+        run: The run row.
+        user_auth: Whether login is on for the user app. The caller passes the
+            settings the app is actually running with, rather than this re-reading the
+            environment: an app built with login on must not be told it is off.
+
+    Returns:
+        The finding ids awaiting a second approval, or an empty list when the
+        programme does not ask, when login is off, when nothing serious was waved
+        through, or when somebody has already signed.
+    """
+    if not run.scope:
+        return []
+    if not user_auth:
+        # With login off every action belongs to the same placeholder account, so a
+        # "second" approver is the same person. The control cannot be satisfied and
+        # would make every affected run unfinalizable, which is worse than not having
+        # it: a gate nobody can pass teaches people to look for a way round (ADR-022,
+        # ADR-036). The admin console says so beside the switch.
+        return []
+    programme = session.execute(
+        sa.select(models.RunScope).where(models.RunScope.code == run.scope)
+    ).scalar_one_or_none()
+    if programme is None or not programme.second_approver:
+        return []
+
+    waved = list(
+        session.execute(
+            sa.select(models.Finding)
+            .where(
+                models.Finding.run_id == run.id,
+                models.Finding.type.in_(SERIOUS_TYPES),
+                models.Finding.review_status.in_(_WAVED_THROUGH),
+                models.Finding.shadow.is_(False),
+            )
+            .order_by(models.Finding.id)
+        ).scalars()
+    )
+    if not waved:
+        return []
+
+    approval = session.execute(
+        sa.select(models.SecondApproval).where(models.SecondApproval.run_id == run.id)
+    ).scalar_one_or_none()
+    if approval is not None:
+        reviewers = {f.reviewed_by_user_id for f in waved if f.reviewed_by_user_id is not None}
+        # A signature from the person who made the decision is not a second pair of
+        # eyes. With login off everyone is the same placeholder, so this is exactly
+        # where the control is worth nothing and says so (ADR-022).
+        if approval.actor_user_id is not None and approval.actor_user_id in reviewers:
+            _LOG.info(
+                "run %s: the second approval is by the reviewer, so it does not count",
+                run.id,
+            )
+        else:
+            return []
+
+    return [f.finding_id for f in waved]
+
+
+def gate_state(session: Session, run: models.Run, user_auth: bool = False) -> GateState:
     """Work out whether a run can be frozen.
 
     Args:
         session: An open session.
         run: The run row.
+        user_auth: Whether login is on, which decides whether the four-eyes rule can
+            mean anything (ADR-036).
 
     Returns:
         What is outstanding.
@@ -190,6 +290,7 @@ def gate_state(session: Session, run: models.Run) -> GateState:
     acknowledged = acknowledged_targets(session, run.id)
     coverage = run_coverage(run)
     return GateState(
+        awaiting_second_approval=tuple(second_approval_needed(session, run, user_auth)),
         undecided_findings=tuple(undecided),
         unacknowledged_requirements=tuple(
             entry.rule_id for entry in coverage.unresolved if entry.rule_id not in acknowledged
@@ -234,8 +335,33 @@ def attestation(session: Session, run: models.Run) -> dict[str, Any]:
         "unevaluated_checks": unevaluated,
         "reports_without_checks": list(coverage.unchecked_reports),
         "shadow_findings": int(shadow),
+        "second_approval": _second_approval_record(session, run),
         "definition_versions": dict(run.definition_versions or {}),
         "notices": list(coverage.notices),
+    }
+
+
+def _second_approval_record(session: Session, run: models.Run) -> dict[str, Any]:
+    """Who signed the four-eyes approval, for the attestation (ADR-036).
+
+    Args:
+        session: An open session.
+        run: The run row.
+
+    Returns:
+        The approver, when and what they covered, or an empty mapping when this
+        programme does not ask for one.
+    """
+    approval = session.execute(
+        sa.select(models.SecondApproval).where(models.SecondApproval.run_id == run.id)
+    ).scalar_one_or_none()
+    if approval is None:
+        return {}
+    return {
+        "approved_by": approval.actor,
+        "approved_at": approval.created_at.isoformat() if approval.created_at else "",
+        "covered": list(approval.covered or []),
+        "note": approval.note,
     }
 
 

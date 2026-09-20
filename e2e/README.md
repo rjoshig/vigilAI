@@ -57,6 +57,9 @@ run: these tests finalize runs and approve rules, and both are one-way.
   item fails a later assertion for a reason the test cannot see.
 - **Assert the outcome, not the status of one reply.** A second identical finalize is
   refused by design (ADR-005); what matters is that the run ends up frozen.
+- **Check the server, not the screen, for anything a later step depends on.** A
+  decision the card shows is one the browser believes it made; the gate reads what the
+  server stored, and the two differ while a request is in flight.
 - **The screens read their run when they mount.** They do not promise to live-update, so
   a test that changes state and then checks a screen reloads it rather than asserting
   something the app never claimed.

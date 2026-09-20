@@ -153,6 +153,28 @@ class CoverageOut(BaseModel):
     reason: str = ""
 
 
+class SecondApprovalPayload(BaseModel):
+    """A second person signing off what the first waved through (ADR-036)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str = ""
+
+
+class SecondApprovalOut(BaseModel):
+    """What the four-eyes rule is waiting on, and who has signed."""
+
+    #: Whether this run's programme asks for a second approver at all.
+    required: bool = False
+    #: Serious findings the reviewer marked OK. Empty when nothing was waved through.
+    findings: list[str] = Field(default_factory=list)
+    #: Whether the signature that is needed is still outstanding.
+    outstanding: bool = False
+    approved_by: str = ""
+    approved_at: Optional[dt.datetime] = None
+    note: str = ""
+
+
 class AcknowledgePayload(BaseModel):
     """Recording that a person has seen a gap."""
 

@@ -114,6 +114,13 @@ export interface ScopeIn {
   keywords: string[];
   is_active: boolean;
   sort_order: number;
+  /**
+   * Whether a run in this programme needs a second person to approve before it can be
+   * frozen, when the reviewer waved through something this programme treats as
+   * serious. Off by default, and inert while login is off, because both people would
+   * then be the same placeholder account (ADR-036).
+   */
+  second_approver: boolean;
 }
 
 export interface Scope extends ScopeIn {

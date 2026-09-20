@@ -846,6 +846,7 @@ def list_scopes(
             standing_instructions=row.standing_instructions,
             is_active=row.is_active,
             sort_order=row.sort_order,
+            second_approver=row.second_approver,
             keywords=list(row.keywords or []),
             runs_using=counts.get(row.code, 0),
             version=latest.get(f"programme_rules:{row.code}", 0),
@@ -898,6 +899,7 @@ def save_scope(
     row.standing_instructions = payload.standing_instructions
     row.is_active = payload.is_active
     row.sort_order = payload.sort_order
+    row.second_approver = payload.second_approver
     row.keywords = [word.strip() for word in payload.keywords if word.strip()]
     session.flush()
 
@@ -910,6 +912,7 @@ def save_scope(
         standing_instructions=row.standing_instructions,
         is_active=row.is_active,
         sort_order=row.sort_order,
+        second_approver=row.second_approver,
         keywords=list(row.keywords or []),
         version=versions.latest_version(session, "programme_rules", row.code),
     )

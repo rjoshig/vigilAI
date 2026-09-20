@@ -562,6 +562,38 @@ class RunScope(Base):
     standing_instructions: Mapped[str] = mapped_column(sa.Text, default="")
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+    #: Whether a run in this programme needs a **second** person to approve before it
+    #: can be frozen, when the first reviewer waved through something the programme
+    #: treats as serious: a `must` programme-rule breach or a compliance finding
+    #: marked OK. Off by default, and meaningless with login off, since both people
+    #: would be the same placeholder account (ADR-036).
+    second_approver: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+
+
+class SecondApproval(Base):
+    """A second person has looked at what the first waved through (ADR-036).
+
+    Not a re-review. The first reviewer decided; this records that somebody else, who
+    is not them, saw the decisions the programme treats as serious and agreed the run
+    can be frozen. It is the lightest form of the control that is worth anything: a
+    signature from a different person.
+    """
+
+    __tablename__ = "second_approvals"
+    __table_args__ = (sa.UniqueConstraint("run_id", name="uq_second_approval_run"),)
+
+    id: Mapped[int] = _pk()
+    run_id: Mapped[int] = mapped_column(
+        sa.ForeignKey("runs.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    actor: Mapped[str] = mapped_column(sa.String(200), default="")
+    actor_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
+    note: Mapped[str] = mapped_column(sa.Text, default="")
+    #: What they were shown: the finding ids the programme treats as serious that the
+    #: first reviewer marked OK. Stored so the record says what was approved, not
+    #: merely that something was.
+    covered: Mapped[Any] = mapped_column(Json, default=list)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
 
 
 class NamedValueRow(Base):

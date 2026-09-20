@@ -1092,3 +1092,49 @@ attestation makes the frozen report meaningfully stronger evidence: it states th
 limits of what was verified rather than implying there were none. Two fixtures showed
 the hole while this was built — every synthetic case, the clean baseline included,
 carries two checks that could not be evaluated and used to pass through undecided.
+
+## ADR-036 — A second approver is a programme's choice, and stands down when login is off
+
+**Status:** accepted 2026-09-20. Deferred from Phase 6.11 and built after it.
+
+**Context:** ADR-035 made the finalize gate fail closed, but every decision on it is
+still one person's. Some findings are not: a breach of a rule a programme calls `must`,
+and a compliance rule the configuration does not implement, are things a programme
+decided in advance that nobody waves through alone. The question was whether to build
+four-eyes at all, and if so how narrow to make it.
+
+**Decision:**
+
+1. **The programme decides, not the product.** A delivery programme carries a
+   `second_approver` switch, off by default. Programmes differ in how much a waved-through
+   compliance finding costs, and a global rule would be wrong for most of them.
+2. **Only what was waved through.** The rule triggers on a `programme_rule_violation`
+   or a `rule_missing_in_config` the reviewer marked **OK** — false positive or accepted
+   risk. Deciding one Not OK is the delivery being corrected, which needs no second
+   signature. Seriousness alone is not the trigger; waving it through is.
+3. **A signature, not a re-review.** The second person is not asked to redo the review.
+   They are shown what was waved through and they sign that the run can be frozen. That
+   is the whole of what this control asserts, and claiming more of it would be a lie
+   about what actually happened.
+4. **From someone else.** The approver must be a different account from the reviewer
+   who made those decisions, refused with a 422 otherwise. A signature from the person
+   who made the decision is not a second pair of eyes.
+5. **Inert while login is off.** With login off every action belongs to the same
+   placeholder account (ADR-022), so a second approver would be the same person and the
+   gate could never be passed: every affected run would be unfinalizable forever. The
+   rule therefore stands down entirely rather than deadlocking. **A gate nobody can
+   pass is worse than no gate** — it teaches people to look for a way round, and the way
+   round is usually turning the whole thing off. The admin console says this beside the
+   switch, and the deployment checklist says it beside login.
+6. **The gate reads the settings the app is running with**, passed in rather than
+   re-read from the environment. An app built with login on must not be told it is off.
+7. **It reaches the frozen report.** The attestation records who approved, when, what
+   they covered and any note, because a report that is evidence of a review should say
+   whose approval it carries.
+
+**Consequences:** A programme that switches this on and runs without login gets nothing,
+silently in the gate and loudly in the console. That asymmetry is deliberate: the
+failure mode of a control that cannot be satisfied is worse than the failure mode of one
+that is absent, and the honest place to say so is where somebody is deciding. The
+control is narrow enough to be true — one signature, from someone else, over a named
+list — and nothing about it implies the second person re-derived the first's work.

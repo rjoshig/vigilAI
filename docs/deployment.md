@@ -169,6 +169,10 @@ looks like protection and is not.
       decision should each name the person. That is the question this phase exists to
       answer, and the check takes a minute.
 
+A programme's **second approver** switch depends on this: with login off it stands down
+entirely, because both people would be the same account (ADR-036). Turn login on before
+relying on it.
+
 With login off, every action is attributed to the seeded placeholder account rather
 than to nobody, so the frozen report still names a submitter and a reviewer. That is
 attribution, not authentication, and it should not be mistaken for it.

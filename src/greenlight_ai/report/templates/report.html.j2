@@ -294,6 +294,12 @@
       <p class="small"><b>Report(s) no check examined:</b>
         {% for kind in attestation.reports_without_checks %}{{ kind|replace("_", " ") }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
       {% endif %}
+      {% if attestation.second_approval %}
+      <p class="small"><b>Second approval:</b>
+        {{ attestation.second_approval.approved_by }} approved
+        {{ attestation.second_approval.covered|length }} finding(s) the reviewer marked OK
+        that this programme treats as needing a second person{% if attestation.second_approval.note %}: {{ attestation.second_approval.note }}{% endif %}.</p>
+      {% endif %}
       {% if attestation.notices %}
       <p class="small"><b>Notices:</b>
         {% for notice in attestation.notices %}{{ notice }}{% if not loop.last %} {% endif %}{% endfor %}</p>

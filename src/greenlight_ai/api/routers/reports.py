@@ -17,7 +17,14 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from greenlight_ai.api import gate
-from greenlight_ai.api.deps import CurrentUser, current_user, get_data_dir, get_session
+from greenlight_ai.api.deps import (
+    CurrentUser,
+    current_user,
+    get_auth_settings,
+    get_data_dir,
+    get_session,
+)
+from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.db import models, repository, drift
 from greenlight_ai.report.pdf import PdfUnavailable, render_pdf, renderer_available
 from greenlight_ai.report.render import render_report, write_report
@@ -112,6 +119,7 @@ def finalize(
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
 ) -> dict[str, object]:
     """Render and freeze the final report.
 
@@ -148,7 +156,7 @@ def finalize(
 
     # The gate is ADR-035's and lives in one place, so what the screen shows and what
     # this refuses cannot drift apart.
-    state = gate.gate_state(session, run)
+    state = gate.gate_state(session, run, auth.user_auth)
     if not state.can_finalize:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

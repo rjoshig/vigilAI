@@ -42,18 +42,30 @@ async function decideEveryFinding(page: Page): Promise<void> {
   );
   expect(ids).toHaveLength(expected);
 
-  for (const id of ids) {
-    const card = page.locator(`[data-testid="finding-card"][data-finding="${id}"]`);
-    await expect(card).toBeVisible();
-    await card.getByRole("textbox").fill("checked by hand");
-    await card.getByRole("button", { name: "False positive" }).click();
-    // Clicking only starts the request; the attribute changing is it landing.
-    await expect(card).toHaveAttribute("data-review-status", "false_positive");
-  }
+  // Decide each one, then check against the server rather than the screen. A decision
+  // the card shows is a decision the browser believes it made; what the gate reads is
+  // what the server stored, and the two can differ while a request is in flight.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (const id of ids) {
+      const card = page.locator(`[data-testid="finding-card"][data-finding="${id}"]`);
+      await expect(card).toBeVisible();
+      if ((await card.getAttribute("data-review-status")) !== "undecided") continue;
+      await card.getByRole("textbox").fill("checked by hand");
+      await card.getByRole("button", { name: "False positive" }).click();
+      await expect(card).toHaveAttribute("data-review-status", "false_positive");
+    }
 
-  await expect(
-    page.locator('[data-testid="finding-card"][data-review-status="undecided"]')
-  ).toHaveCount(0);
+    const stored = await (await page.request.get(`/api/v1/runs/${RUN}/findings`)).json();
+    const left = stored.filter(
+      (f: { shadow?: boolean; review_status: string }) =>
+        !f.shadow && f.review_status === "undecided"
+    );
+    if (left.length === 0) return;
+    await page.reload();
+    await page.getByRole("button", { name: /^Findings/ }).click();
+    await expect(page.getByTestId("finding-card")).toHaveCount(expected);
+  }
+  throw new Error("some findings stayed undecided after three passes");
 }
 
 /** How many coverage gaps are still waiting for someone to say they saw them. */

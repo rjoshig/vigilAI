@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, and every open item in 6.1, 6.2 and 6.4 closed.** Next: four-eyes, then Phase 6.12 |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phase 6.11 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036).** Next: Phase 6.12 |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -100,6 +100,44 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (four eyes on what one reviewer waved through)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1084 Python
+tests, 91 user-ui, 81 admin-ui.
+
+A delivery programme can now require that someone other than the reviewer signs off a
+run whose serious findings the reviewer marked OK: a breach of a rule the programme
+calls `must`, or a compliance rule the configuration does not implement. ADR-036 has
+the shape. Off by default, because programmes differ in what a waved-through compliance
+finding costs.
+
+It is deliberately narrow. **A signature, not a re-review**: the second person is shown
+what was waved through and says the run can be frozen, and nothing claims they redid the
+work. **From someone else**: an approval from the reviewer who made those decisions is
+refused. Deciding a serious finding Not OK needs no second signature — the trigger is
+waving it through, not seriousness.
+
+### The thing worth remembering
+
+**With login off the rule stands down entirely.** Everyone is then the same placeholder
+account, so a "second" approver is the same person and every affected run would be
+unfinalizable forever. A gate nobody can pass is worse than no gate: it teaches people
+to look for a way round, and the way round is switching the whole thing off. The first
+test written failed for exactly this reason, which is how the trap was found. The admin
+console says it beside the switch and the deployment checklist says it beside login.
+
+A second thing came out of that: the gate was reading auth settings from the
+environment rather than the ones the app was built with, so an app running with login
+on was told it was off. The settings are passed in now.
+
+### Next concrete action
+
+Phase 6.12: one front door for the admin console — say it in words, the model routes the
+statement onto the right existing rule surface and drafts it, an administrator confirms
+it into shadow — and one scope vocabulary in place of today's three.
 
 ---
 

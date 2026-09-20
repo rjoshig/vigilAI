@@ -138,6 +138,10 @@ class ScopeIn(BaseModel):
     standing_instructions: str = ""
     is_active: bool = True
     sort_order: int = 100
+    #: Whether a run in this programme needs a second person to approve before it can
+    #: be frozen, when the reviewer waved through something this programme treats as
+    #: serious. Off by default, and meaningless with login off (ADR-036).
+    second_approver: bool = False
     #: Words that mark a delivery as this programme's; the classification check
     #: scans the inputs for them (ADR-026).
     keywords: list[str] = Field(default_factory=list)
