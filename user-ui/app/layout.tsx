@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/app-shell";
+import { MaintenanceGate } from "@/components/maintenance-gate";
 import { AuthGate } from "@/components/auth-gate";
 import { PaletteProvider } from "@/components/palette-provider";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -24,7 +25,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeProvider>
           <PaletteProvider initial={appearance}>
             <AuthGate>
-              <AppShell>{children}</AppShell>
+              <MaintenanceGate>
+                <AppShell>{children}</AppShell>
+              </MaintenanceGate>
             </AuthGate>
           </PaletteProvider>
         </ThemeProvider>

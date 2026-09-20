@@ -86,3 +86,22 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(socket.socket, "connect", guard)
     monkeypatch.setattr(socket, "create_connection", guard)
+
+
+@pytest.fixture(autouse=True)
+def no_submission_grace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start runs at once in the suite (Phase 6.14j).
+
+    A submitted run normally waits thirty seconds before the worker may take it, so the
+    person who submitted it can change their mind having spent nothing. The tests drive
+    the worker inline and immediately, so the window would make every one of them look
+    like a queue that never moves.
+
+    Switched off here rather than defaulted to zero, because the default is a product
+    decision and a test environment is not the place to make it. The tests that are
+    *about* the window set it themselves.
+
+    Args:
+        monkeypatch: pytest's patcher, which restores the environment afterwards.
+    """
+    monkeypatch.setenv("GREENLIGHT_AI_QUEUE_GRACE_S", "0")

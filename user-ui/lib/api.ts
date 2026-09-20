@@ -193,6 +193,16 @@ export const api = {
     });
   },
 
+  /**
+   * Take back a run that has not started (Phase 6.14j).
+   *
+   * Free while it is queued: nothing has been sent to the model, so there is nothing
+   * to unwind. The files are kept, so the next step is cloning it corrected.
+   */
+  cancelRun(runId: number): Promise<RunSummary> {
+    return request<RunSummary>(`/runs/${runId}/cancel`, { method: "POST" });
+  },
+
   /** List a run's findings, worst first. */
   listFindings(runId: number): Promise<Finding[]> {
     return request<Finding[]>(`/runs/${runId}/findings`);

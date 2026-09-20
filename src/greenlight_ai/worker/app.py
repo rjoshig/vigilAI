@@ -23,6 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from greenlight_ai.auth.sessions import purge_expired_sessions
 from greenlight_ai.training.lifecycle import purge_deleted_rules
 from greenlight_ai.db import models, repository
+from greenlight_ai import availability
 from greenlight_ai.db.queue import ClaimedJob, JobQueue
 from greenlight_ai.db.session import create_all, create_engine, session_factory, session_scope
 from greenlight_ai.db.settings import DbSettings
@@ -79,6 +80,9 @@ class Worker:
         self._is_sqlite = is_sqlite
         self._llm_settings = llm_settings or LLMSettings.from_env()
         self._stopping = False
+        #: Whether the held-queue message has been logged, so a held queue writes
+        #: one line rather than one per poll.
+        self._queue_hold_logged = False
         self._last_purge_scheduled = 0.0
         self._handlers: Mapping[str, Callable[[ClaimedJob], None]] = {
             TASK_RUN_PIPELINE: self._run_pipeline,
@@ -148,6 +152,20 @@ class Worker:
             ``True`` when a job was processed.
         """
         with session_scope(self._factory) as session:
+            # An administrator can hold the queue (Phase 6.14j). Nothing new is
+            # claimed while it is held; work already running finishes, because
+            # stopping a run halfway leaves a half-validated delivery that no
+            # reviewer can tell from a whole one. Checked here rather than inside
+            # `claim` so the queue stays a queue and the policy stays in one place.
+            if not availability.read(session).starting:
+                if not self._queue_hold_logged:
+                    _LOG.info("the queue is held; nothing new will be started")
+                    self._queue_hold_logged = True
+                return False
+            if self._queue_hold_logged:
+                _LOG.info("the queue has been released")
+                self._queue_hold_logged = False
+
             queue = JobQueue(session, self._is_sqlite)
             queue.reclaim_stale(STALE_CLAIM_SECONDS)
             job = queue.claim(list(self._handlers))

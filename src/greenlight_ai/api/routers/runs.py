@@ -35,6 +35,7 @@ from greenlight_ai.api.deps import (
     get_data_dir,
     get_session,
 )
+from greenlight_ai import availability
 from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.checks import artifact_match, field_labels
 from greenlight_ai.api.uploads import UploadError, store_upload
@@ -410,6 +411,17 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
             f"which is the configured limit of {starts_allowed}. Try again shortly.",
         )
 
+    # Before a single byte is stored: is the tool accepting work at all? (Phase 6.14j)
+    # Refusing here rather than after the upload means somebody who cannot submit has
+    # not waited for seven files to travel first.
+    available = availability.read(session)
+    if not available.accepting:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            available.message
+            or "Greenlight AI is not accepting submissions at the moment. Try again shortly.",
+        )
+
     run = models.Run(
         customer_name=customer_name.strip(),
         order_number=order_number.strip(),
@@ -524,7 +536,9 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
             mismatches=[_mismatch_out(row) for row in mismatches],
         )
 
-    queue.enqueue(TASK_RUN_PIPELINE, run_id=run.id)
+    # The change-your-mind window. `run_after` already means "earliest a job may be
+    # claimed", so this is the existing mechanism given a purpose rather than a new one.
+    queue.enqueue(TASK_RUN_PIPELINE, run_id=run.id, run_after=utcnow() + available.grace)
     repository.audit(
         session,
         "run.created",
@@ -725,6 +739,63 @@ def _record_mismatches(
     return rows
 
 
+@router.post("/{run_id}/cancel", response_model=schemas.RunSummary)
+def cancel_run(
+    run_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> schemas.RunSummary:
+    """Take back a submission that has not started (Phase 6.14j).
+
+    The wrong file, the wrong order number, a second thought. A run that has not been
+    picked up has cost nothing — no model call, no tokens, no partial state — so
+    cancelling is free and leaves nothing to unwind. Once a run is under way it is not
+    cancellable: stopping halfway leaves a half-validated delivery that no reviewer can
+    tell from a whole one.
+
+    The files are kept. A cancelled run stays on the list with its inputs, so the
+    ordinary next step is to clone it with the mistake corrected rather than to hunt
+    for seven files again.
+
+    Args:
+        run_id: The run to cancel.
+        request: The incoming request, carrying the backend flag for the queue.
+        session: The request's session.
+        user: Who cancelled, recorded in the audit trail.
+
+    Returns:
+        The run, now cancelled.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when it has already started.
+    """
+    run = session.get(models.Run, run_id)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"run {run_id} not found")
+    if run.status not in ("queued", "held"):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run_id} is {run.status}; only a run that has not started can be cancelled",
+        )
+
+    claimed = _queue(request, session).cancel_jobs(run_id)
+    if claimed is False:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run_id} was picked up a moment ago and is running now",
+        )
+
+    run.status = "cancelled"
+    run.finished_at = utcnow()
+    session.flush()
+    repository.audit(
+        session, "run.cancelled", run.id, f"was {run.status}", user_id=user.id, actor=user.name
+    )
+    _LOG.info("run %d cancelled by %s", run.id, user.name)
+    return _summary(session, run)
+
+
 @router.post("/{run_id}/match/accept", response_model=schemas.AcceptMismatchesResult)
 def accept_mismatches(
     run_id: int,
@@ -782,7 +853,11 @@ def accept_mismatches(
     if not still_open:
         run.status = "queued"
         session.flush()
-        queue.enqueue(TASK_RUN_PIPELINE, run_id=run.id)
+        queue.enqueue(
+            TASK_RUN_PIPELINE,
+            run_id=run.id,
+            run_after=utcnow() + availability.read(session).grace,
+        )
         _LOG.info("run %d accepted by %s and queued", run.id, user.name)
     repository.audit(
         session,

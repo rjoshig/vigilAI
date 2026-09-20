@@ -22,6 +22,9 @@ def test_the_default_theme_comes_from_the_environment_then_the_built_in(
         "palettes": ["classic-teal-navy", "classic-teal", "light-blue-yellow", "default"],
         "tooltips": True,
         "tagline": "Nothing ships without a green light.",
+        "maintenance": False,
+        "accepting": True,
+        "unavailable_message": "",
     }
 
     monkeypatch.setenv("GREENLIGHT_AI_UI_THEME", "classic-teal")

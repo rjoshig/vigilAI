@@ -32,6 +32,7 @@ export const STATUS_TONE: Record<
 > = {
   draft: "muted",
   held: "warn",
+  cancelled: "muted",
   queued: "muted",
   running: "info",
   needs_review: "warn",
@@ -43,6 +44,7 @@ export const STATUS_TONE: Record<
 export const STATUS_LABEL: Record<RunStatus, string> = {
   draft: "Draft",
   held: "Held — check the artifacts",
+  cancelled: "Cancelled",
   queued: "Queued",
   running: "Running",
   needs_review: "Needs review",

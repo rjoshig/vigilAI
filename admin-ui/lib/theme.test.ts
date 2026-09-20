@@ -52,18 +52,27 @@ describe("the appearance answer", () => {
       locked: true,
       tooltips: true,
       tagline: "",
+      maintenance: false,
+      accepting: true,
+      unavailableMessage: "",
     });
     expect(parseAppearance({ theme: "neon" }, "default")).toEqual({
       theme: "default",
       locked: false,
       tooltips: true,
       tagline: "",
+      maintenance: false,
+      accepting: true,
+      unavailableMessage: "",
     });
     expect(parseAppearance(null, "classic-teal")).toEqual({
       theme: "classic-teal",
       locked: false,
       tooltips: true,
       tagline: "",
+      maintenance: false,
+      accepting: true,
+      unavailableMessage: "",
     });
   });
 
