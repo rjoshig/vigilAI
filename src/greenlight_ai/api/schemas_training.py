@@ -31,7 +31,9 @@ __all__ = [
     "FrontDoorOut",
 ]
 
-AnchorKind = Literal["report_cell", "report_field", "osl_section", "config_path", "finding"]
+AnchorKind = Literal[
+    "report_cell", "report_field", "osl_section", "config_path", "finding", "rule", "run"
+]
 
 
 class Anchor(BaseModel):

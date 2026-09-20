@@ -103,6 +103,39 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-20 (Phase 6.13a: the repairs)
+
+**Branch:** `feature/loop-closes` · **Status:** 6.13a complete, gates green.
+
+A second review traced the flow from upload to frozen report, the learning loop, and
+every Train AI surface in the user app, in code, and found fifteen defects that no test
+caught and no screen showed. `phase-6.13.md` lists them. Every one is fixed in this
+milestone except D9 (judgment checks, its own milestone) and D11 (replay, its own), and
+every fix carries a test that failed on `dev` first.
+
+The two that mattered most: **the worker dropped the lens settings** — the console-aware
+resolver built `LLMSettings` without them, so with the database reachable every
+deployment ran on `single` whatever `.env` said — and **several files for one report kind
+overwrote each other on disk**, so three labelled parts were three rows over one file.
+The parts test passed because it uploaded identical bytes three times; it now uploads
+distinct bytes and checks the files on disk.
+
+The rest: a learned compliance rule wrote its own name as the path to look for; shadow
+compliance rules never ran and their findings carried no rule reference; shadow
+programme rules interrupted reviewers; the programme read saw `criteria: ()` instead of
+the OSL sentence; AI context written on a report type reached no prompt; the console
+could not approve a candidate that overlapped anything; pressing Save twice made two
+observations; configuration notes appeared on My observations as "waiting"; a compliance
+rule's expected value was never compared; every observation in a batch was linked to one
+candidate. Two more came out while fixing: the redraft after a critique took the *first*
+rule in the answer rather than the one about the same thing, and `last fired` on the
+Rules screen was the last review.
+
+The synthesis prompt is at version 2: statements are numbered and a rule says which it
+came from; a compliance rule carries `json_path_contains`.
+
+---
+
 ## Session: 2026-09-20 (Phase 6.12: one scope vocabulary and one front door)
 
 **Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1135 Python

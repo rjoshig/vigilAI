@@ -29,18 +29,14 @@ import { fmtTime } from "@/lib/utils";
 /** What each status means to the person who wrote the observation. */
 const STATUS_TEXT: Record<ObservationStatus, string> = {
   new: "Waiting for an administrator to look at it",
-  queued: "An administrator has picked it up",
   synthesized: "The model has drafted a rule from it, for an administrator to approve",
   rejected: "Not taken forward",
-  superseded: "Replaced by a later observation",
 };
 
 const STATUS_TONE: Record<ObservationStatus, "muted" | "info" | "success" | "destructive"> = {
   new: "muted",
-  queued: "info",
   synthesized: "success",
   rejected: "destructive",
-  superseded: "muted",
 };
 
 export default function ObservationsPage() {

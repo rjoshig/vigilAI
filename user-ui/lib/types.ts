@@ -355,7 +355,8 @@ export interface TrainingConfig {
   enabled: boolean;
 }
 
-export type AnchorKind = "report_cell" | "report_field" | "osl_section" | "config_path" | "finding";
+export type AnchorKind =
+  "report_cell" | "report_field" | "osl_section" | "config_path" | "finding" | "rule" | "run";
 
 /**
  * What an observation points at. The anchor is what makes reliable synthesis possible;
@@ -379,7 +380,7 @@ export type ObservationKind =
 export type ObservationScope = "global" | "customer" | "programme";
 
 /** Where an observation can be in its lifecycle. It never runs; only an approved rule does. */
-export type ObservationStatus = "new" | "queued" | "synthesized" | "rejected" | "superseded";
+export type ObservationStatus = "new" | "synthesized" | "rejected";
 
 /** The body `POST /observations` and `PATCH /observations/{id}` both take. */
 export interface ObservationInput {

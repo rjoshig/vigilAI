@@ -486,12 +486,17 @@ function CandidateCard({
           <ul className="mt-0.5">
             {candidate.conflicts.map((conflict) => (
               <li key={`${conflict.rule_kind}-${conflict.id}`}>
-                {conflict.rule_kind} #{conflict.id} · {conflict.summary} · {conflict.scope} ·{" "}
+                <span className="font-medium">{conflict.name || `#${conflict.id}`}</span> ·{" "}
+                {conflict.rule_kind.replace("_", " ")} · {conflict.summary} · {conflict.scope} ·{" "}
                 {conflict.state}
                 {conflict.same ? " · says the same thing" : ""}
               </li>
             ))}
           </ul>
+          <p className="mt-1">
+            Approving asks you to choose: replace the older rule, or keep both because they cover
+            different ground.
+          </p>
         </div>
       ) : null}
 
@@ -523,15 +528,45 @@ function CandidateCard({
             >
               {replayed ? "Replay again" : "Replay"}
             </Button>
-            <Button
-              size="xs"
-              disabled={busy}
-              onClick={() =>
-                onAct("approve the candidate", () => api.approveCandidate(candidate.id))
-              }
-            >
-              Approve into shadow
-            </Button>
+            {candidate.conflicts.length > 0 ? (
+              <>
+                <Button
+                  size="xs"
+                  disabled={busy}
+                  title="The overlapping rule is disabled and this one takes its place, in shadow"
+                  onClick={() =>
+                    onAct("approve the candidate and replace the older rule", () =>
+                      api.approveCandidate(candidate.id, { resolution: "supersede" })
+                    )
+                  }
+                >
+                  Approve — replace the older rule
+                </Button>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={busy}
+                  title="Both rules run; you have looked and they cover different ground"
+                  onClick={() =>
+                    onAct("approve the candidate and keep both rules", () =>
+                      api.approveCandidate(candidate.id, { resolution: "keep_both" })
+                    )
+                  }
+                >
+                  Approve — keep both
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="xs"
+                disabled={busy}
+                onClick={() =>
+                  onAct("approve the candidate", () => api.approveCandidate(candidate.id))
+                }
+              >
+                Approve into shadow
+              </Button>
+            )}
             <ReasonForm
               label="Reject"
               busy={busy}

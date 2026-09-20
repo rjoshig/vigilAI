@@ -146,6 +146,8 @@ def load_admin_config(
 
     compliance = tuple(
         ComplianceRule(
+            id=row.id,
+            state=row.state,
             name=row.name,
             json_path_contains=str((row.requirement or {}).get("json_path_contains", "")),
             expected_value=(row.requirement or {}).get("expected_value", True),
@@ -220,6 +222,20 @@ def load_admin_config(
         f"check:{row.id}"
         for row in session.execute(
             sa.select(models.CheckDefinitionRow).where(models.CheckDefinitionRow.state == "shadow")
+        ).scalars()
+    }
+    # Compliance and programme rules have the same lifecycle and were missing here, so a
+    # shadow compliance rule never ran and a shadow programme rule interrupted reviewers.
+    shadow_refs |= {
+        f"compliance_rule:{row}"
+        for row in session.execute(
+            sa.select(models.ComplianceRuleRow.id).where(models.ComplianceRuleRow.state == "shadow")
+        ).scalars()
+    }
+    shadow_refs |= {
+        f"programme_rule:{row}"
+        for row in session.execute(
+            sa.select(models.ProgrammeRule.id).where(models.ProgrammeRule.state == "shadow")
         ).scalars()
     }
 

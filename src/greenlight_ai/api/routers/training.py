@@ -267,6 +267,11 @@ def list_observations(
     )
     if mine and user.id is not None:
         statement = statement.where(models.TrainingObservation.author_user_id == user.id)
+    if mine and not kind:
+        # A configuration note is guidance that already reaches the model; listing it
+        # as "waiting for an administrator" told the author two opposite things. Notes
+        # have their own screen, and are still here when asked for by kind.
+        statement = statement.where(models.TrainingObservation.kind != "config_note")
     if obs_status:
         statement = statement.where(models.TrainingObservation.status == obs_status)
     if kind:
@@ -968,8 +973,11 @@ def _statistics(session: Session) -> dict[str, tuple[int, int, dt.datetime | Non
             models.Finding.rule_ref,
             sa.func.count(),
             sa.func.sum(sa.case((models.Finding.review_status == "false_positive", 1), else_=0)),
-            sa.func.max(models.Finding.reviewed_at),
+            # The run's date, not the review's: a rule that fires on every run and is
+            # never triaged used to show "last fired: never" (6.13a).
+            sa.func.max(models.Run.created_at),
         )
+        .join(models.Run, models.Run.id == models.Finding.run_id)
         .where(models.Finding.rule_ref != "")
         .group_by(models.Finding.rule_ref)
     ).all()

@@ -370,7 +370,8 @@ export interface ProviderTestResult {
 
 /* ------------------------------------------------- The training loop (ADR-021) */
 
-export type AnchorKind = "report_cell" | "report_field" | "osl_section" | "config_path" | "finding";
+export type AnchorKind =
+  "report_cell" | "report_field" | "osl_section" | "config_path" | "finding" | "rule" | "run";
 
 /**
  * What an observation points at. The anchor is what makes reliable synthesis
@@ -433,6 +434,8 @@ export interface Observation {
 export interface CandidateConflict {
   rule_kind: string;
   id: number;
+  /** What the overlapping rule is called, so the choice is between named things. */
+  name: string;
   summary: string;
   scope: string;
   state: string;
@@ -493,6 +496,12 @@ export interface CandidateApproval {
   scope?: string;
   /** Straight to active rather than into shadow. Rarely the right answer. */
   activate_now?: boolean;
+  /**
+   * What to do about an overlap with a rule that already exists: replace it, or keep
+   * both because they cover different ground. Required when the candidate has
+   * conflicts; the API refuses without it (Phase 6.11g).
+   */
+  resolution?: "supersede" | "keep_both";
 }
 
 export type RuleState = "active" | "shadow" | "disabled" | "deleted" | "draft";

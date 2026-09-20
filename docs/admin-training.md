@@ -329,10 +329,19 @@ overlap a rule that already exists. At most one redraft follows, and both versio
 kept on the candidate, so the distance between the model's first attempt and what you
 approve is visible.
 
-**Approving a candidate that overlaps an existing rule now asks which.** **Supersede**
-disables the rule it replaces, naming this one as its successor; **keep both** says you
-have looked and they cover different ground. Approve alone is refused, because
-overlapping rules accumulate quietly and are very hard to untangle later.
+**Approving a candidate that overlaps an existing rule asks which.** The overlap names
+the rule it found, and the card offers two buttons in place of one: **Approve — replace
+the older rule** disables the rule it replaces, naming this one as its successor;
+**Approve — keep both** says you have looked and they cover different ground. Overlaps
+are found again at the moment you approve, so a rule created since the draft was made
+is not missed. Overlapping rules accumulate quietly and are very hard to untangle later.
+
+**Every rule kind now runs in shadow and carries statistics.** A learned compliance rule
+names the configuration path it looks for, runs in shadow like a check, and its findings
+count on the Rules screen; a programme rule put in shadow stays hidden from reviewers.
+**Last fired** is the date of the run the rule fired on, not the date somebody reviewed
+it. A compliance rule with an expected value is checked for that value, not just for the
+path being present.
 
 
 ## Asking for a second approver (ADR-036)

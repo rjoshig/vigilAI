@@ -197,9 +197,17 @@ before it starts producing findings. You will hear back either way.
   know why it should not have. Say what you expect, how serious a breach would be,
   and how far it applies: this customer, this programme, or everywhere. The control
   pre-fills what you were looking at, which is what makes your note usable.
+- **Saving twice rewords, it does not duplicate.** After a save the form stays open on
+  the observation you just wrote; change anything and press **Save changes** to reword
+  it. If the tool answers that **a rule already covers this**, or that a running rule
+  **says the opposite**, each rule it names carries a **Say this rule is wrong** button,
+  which starts a correction pointed at that rule. That correction is the most useful
+  thing you can tell an administrator.
 - **My observations** lists what you have written and what became of it: waiting,
   synthesized into a rule, or rejected with the administrator's reason. You can edit
-  an observation until an administrator picks it up.
+  an observation until an administrator picks it up. Configuration notes are not
+  listed here: a note already reaches the model on every run of its configuration, and
+  it lives on the configuration's own screen.
 - **Do not paste account numbers, names, or any personal data.** The tool refuses to
   save text that looks like it, and tells you so, because the only moment it can be
   removed is before it is saved.

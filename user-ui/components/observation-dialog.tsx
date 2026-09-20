@@ -137,24 +137,30 @@ export function ObservationDialog({
   // than at the candidate stage, which would be weeks later through an administrator
   // (Phase 6.1e).
   const [coveredBy, setCoveredBy] = React.useState<CoveringRule[]>([]);
+  // The row this form is now editing: the one passed in, or the one it just created.
+  // Pressing Save a second time used to create a second observation (Phase 6.13a).
+  const [current, setCurrent] = React.useState<Observation | undefined>(existing);
+  // Anchors are state, because "say the existing rule is wrong" adds one.
+  const [pointing, setPointing] = React.useState<Anchor[]>(existing ? existing.anchors : anchors);
 
   async function save() {
     setSaving(true);
     setError(null);
     const body: ObservationInput = {
       kind,
-      anchors: existing ? existing.anchors : anchors,
+      anchors: pointing,
       statement: statement.trim(),
       expectation: expectation.trim(),
       severity_hint: severity,
       scope_hint: scope,
-      run_id: existing ? existing.run_id : (runId ?? null),
-      finding_id: existing ? existing.finding_id : (findingId ?? null),
+      run_id: current ? current.run_id : (runId ?? null),
+      finding_id: current ? current.finding_id : (findingId ?? null),
     };
     try {
-      const stored = existing
-        ? await api.updateObservation(existing.id, body)
+      const stored = current
+        ? await api.updateObservation(current.id, body)
         : await api.createObservation(body);
+      setCurrent(stored);
       setSaved(true);
       setCoveredBy(stored.covered_by ?? []);
       onSaved?.(stored);
@@ -164,6 +170,24 @@ export function ObservationDialog({
     } finally {
       setSaving(false);
     }
+  }
+
+  /**
+   * Start a fresh observation saying that a rule already running is wrong. The panel
+   * used to ask for exactly this and offer no way to do it: the only button created a
+   * duplicate of what had just been saved.
+   */
+  function disputeRule(rule: CoveringRule) {
+    setCurrent(undefined);
+    setSaved(false);
+    setCoveredBy([]);
+    setKind("correction");
+    setStatement(`The rule "${rule.summary}" is wrong: `);
+    setExpectation("");
+    setPointing([
+      ...pointing.filter((anchor) => anchor.kind !== "rule"),
+      anchorOf("rule", { reference: `${rule.kind}:${rule.id}`, value: rule.summary }),
+    ]);
   }
 
   return (
@@ -200,8 +224,12 @@ export function ObservationDialog({
           {error ? <ErrorState message={error} /> : null}
 
           {saved ? (
-            <p className="rounded-md border border-success/40 bg-success/10 px-2.5 py-2 text-xs">
-              Saved. You can follow what becomes of it on the Observations page.
+            <p
+              className="rounded-md border border-success/40 bg-success/10 px-2.5 py-2 text-xs"
+              data-testid="observation-saved"
+            >
+              Saved. Change anything above and press Save again to reword it; follow what becomes of
+              it on the Observations page.
             </p>
           ) : null}
 
@@ -216,13 +244,15 @@ export function ObservationDialog({
                   : "A rule already covers this."}
               </b>{" "}
               Your observation is saved either way, and an administrator will see both. If the
-              existing rule is wrong, say so in a moment — that is the most useful thing you can
-              tell us.
+              existing rule is wrong, say so — that is the most useful thing you can tell us.
               <ul className="mt-1 space-y-0.5">
                 {coveredBy.map((rule) => (
-                  <li key={`${rule.kind}-${rule.id}`}>
+                  <li key={`${rule.kind}-${rule.id}`} className="flex flex-wrap items-center gap-2">
                     <span className="mono">{rule.summary}</span>
-                    {rule.contradicts ? " — this is what yours contradicts" : ""}
+                    {rule.contradicts ? <span>— this is what yours contradicts</span> : null}
+                    <Button size="xs" variant="outline" onClick={() => disputeRule(rule)}>
+                      Say this rule is wrong
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -306,7 +336,8 @@ export function ObservationDialog({
             {saved ? "Close" : "Cancel"}
           </Button>
           <Button disabled={statement.trim().length < 3 || saving} onClick={() => void save()}>
-            <Lightbulb className="h-4 w-4" /> {saving ? "Saving…" : "Save observation"}
+            <Lightbulb className="h-4 w-4" />{" "}
+            {saving ? "Saving…" : current ? "Save changes" : "Save observation"}
           </Button>
         </div>
       </Card>

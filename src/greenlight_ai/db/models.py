@@ -762,7 +762,7 @@ class TrainingObservation(Base):
     customer_name: Mapped[str] = mapped_column(sa.String(200), default="", index=True)
     scope_code: Mapped[str] = mapped_column(sa.String(20), default="")
 
-    #: new · queued · synthesized · rejected · superseded. Forward only.
+    #: new · synthesized · rejected. Forward only.
     status: Mapped[str] = mapped_column(sa.String(20), default="new", index=True)
     status_note: Mapped[str] = mapped_column(sa.Text, default="")
     #: Which candidate it fed, set when it is synthesized. The row itself is untouched.
@@ -805,7 +805,8 @@ class RuleCandidate(Base):
     model_draft: Mapped[Any] = mapped_column(Json, default=dict)
     model_used: Mapped[str] = mapped_column(sa.String(200), default="")
     prompt_version: Mapped[str] = mapped_column(sa.String(20), default="")
-    #: Overlaps with an active rule, found by fingerprint at approval time.
+    #: Overlaps with an existing rule, found by fingerprint at synthesis and found again
+    #: at approval, because a rule created in between is exactly what the gate is for.
     conflicts: Mapped[Any] = mapped_column(Json, default=list)
     #: What a replay against the golden set and recent runs would have changed.
     replay: Mapped[Any] = mapped_column(Json, default=dict)

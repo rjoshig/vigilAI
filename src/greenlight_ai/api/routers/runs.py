@@ -515,15 +515,22 @@ def _parse_date(value: str | None) -> dt.date | None:
         value: The submitted string.
 
     Returns:
-        The date, or ``None`` when absent or unparseable. A bad date is not worth
-        rejecting an upload over; it is a label, not an input to the comparison.
+        The date, or ``None`` when absent.
+
+    Raises:
+        HTTPException: 422 when the value is not a date. It used to become ``None``
+            quietly, which switched the credit-date check off for that run with nobody
+            told; a label the tool checks against is an input after all (6.13a).
     """
-    if not value:
+    if not value or not value.strip():
         return None
     try:
         return dt.date.fromisoformat(value.strip())
-    except ValueError:
-        return None
+    except ValueError as exc:
+        raise HTTPException(
+            HTTP_422_UNPROCESSABLE,
+            f"credit_date must be a date written YYYY-MM-DD, not {value.strip()!r}",
+        ) from exc
 
 
 def _capture_config_from_upload(

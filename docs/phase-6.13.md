@@ -55,7 +55,7 @@ refreshed at approval; an unparseable credit date silently disables its check;
 
 ## Scope · 🟡 in progress
 
-### 6.13a — Repairs · 🟡 in progress
+### 6.13a — Repairs · ✅ complete
 
 - [x] **D1.** `llm.verify_lenses` and `llm.max_lens_calls_per_run` are settings in
       `config/registry.py` with their `.env` names; `resolved_llm_settings` passes both;
@@ -65,30 +65,30 @@ refreshed at approval; an unparseable credit date silently disables its check;
       every existing storage key stays valid) and `<kind>-<part><suffix>` beyond. The
       parts test uses distinct bytes per part and asserts distinct storage keys and
       distinct hashes on disk.
-- [ ] **D3 + D15.** `SynthesizedRule` gains `json_path_contains` and `from_statements`
+- [x] **D3 + D15.** `SynthesizedRule` gains `json_path_contains` and `from_statements`
       (one-based indexes into the statements block); `validate_rule` requires a path for
       a compliance rule; `approve` writes it; `synthesize` links each candidate to the
       observations whose statements produced it, falling back to the whole batch only
       when the model said nothing. Synthesis prompt version bumped; the scripted stand-in
       and the mock answer follow.
-- [ ] **D4 · D5 · D6 · D14.** `ComplianceRule` carries `id` and `state`; `applies_to`
+- [x] **D4 · D5 · D6 · D14.** `ComplianceRule` carries `id` and `state`; `applies_to`
       mirrors `CheckDefinition`; compliance findings carry `rule_ref` and `shadow`; when
       the path is found, code compares the block's value with `expected_value`;
       `shadow_rule_refs` covers compliance and programme rules. Statistics then work for
       all four rule kinds, and `last_fired_at` comes from the run's date.
-- [ ] **D7.** The programme read receives `rule.source_text`.
-- [ ] **D8.** Lens and verify calls pass the report kind from the finding's evidence to
+- [x] **D7.** The programme read receives `rule.source_text`.
+- [x] **D8.** Lens and verify calls pass the report kind from the finding's evidence to
       `preamble`, so AI context written on a report type reaches the model where that
       report is discussed. The console's AI-context field says which stages read it, per
       artifact kind.
-- [ ] **D10.** `find_conflicts` returns `name` and runs again inside `approve`; the admin
+- [x] **D10.** `find_conflicts` returns `name` and runs again inside `approve`; the admin
       app sends `resolution`, offering *Replace the older rule* / *Keep both* when a
       candidate has conflicts.
-- [ ] **D12 · D13.** After a successful save the dialog edits the row it just created, so
+- [x] **D12 · D13.** After a successful save the dialog edits the row it just created, so
       a second Save is an update; *Say the existing rule is wrong* opens a correction
       anchored to the covering rule (new anchor kind `rule`). *My observations* excludes
       configuration notes unless asked for them by kind.
-- [ ] **Smaller.** A bad credit date is refused at submit with a 422; `queued` and
+- [x] **Smaller.** A bad credit date is refused at submit with a 422; `queued` and
       `superseded` leave the model docstring and the UI copy; the `checks/runner.py`
       reference is corrected.
 

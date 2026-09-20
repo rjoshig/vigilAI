@@ -250,10 +250,17 @@ class SynthesizedRule(BaseModel):
     report_kinds: list[str] = Field(default_factory=list)
     #: For a check: an expression over named values, evaluated by code.
     expression: str = ""
+    #: For a compliance rule: the fragment every implementing configuration path must
+    #: contain, e.g. ``suppressions.deceased``. Without it a compliance rule has nothing
+    #: to look for (Phase 6.13a, D3).
+    json_path_contains: str = ""
     reasoning: str = ""
     severity: Severity = "medium"
     #: Why it cannot be expressed, when ``target_kind`` is ``unsupported``.
     cannot_express: str = ""
+    #: Which numbered statements this rule came from, so a candidate names the
+    #: observations that produced it rather than the whole batch (Phase 6.13a, D15).
+    from_statements: list[int] = Field(default_factory=list)
 
 
 class SynthesisResponse(BaseModel):

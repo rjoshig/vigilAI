@@ -212,8 +212,8 @@ export default function ReviewPage() {
                 onClick={() =>
                   setObserving({
                     anchors: [
-                      anchorOf("osl_section", {
-                        reference: `run:${run.id}`,
+                      anchorOf("run", {
+                        reference: String(run.id),
                         value: `${run.customer_name} · ${run.order_number}`,
                       }),
                     ],
