@@ -119,6 +119,8 @@ class ArtifactTypeOut(ArtifactTypeIn):
     runs_using: int = 0
     #: The validation guide (Phase 6.8b), with examples filled from the samples.
     guide: list[GuideEntry] = Field(default_factory=list)
+    #: The newest definition version (ADR-029); zero before the first save.
+    version: int = 0
 
 
 class ScopeIn(BaseModel):
@@ -144,6 +146,8 @@ class ScopeOut(ScopeIn):
 
     id: int
     runs_using: int = 0
+    #: The newest version of its rule set (ADR-029); zero before the first save.
+    version: int = 0
 
 
 class TemplateOut(BaseModel):

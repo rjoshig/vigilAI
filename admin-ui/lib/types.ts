@@ -93,6 +93,8 @@ export interface ArtifactType extends ArtifactTypeIn {
   runs_using: number;
   /** The validation guide, examples filled from the samples. */
   guide: GuideEntry[];
+  /** The newest definition version; zero before the first save (ADR-029). */
+  version: number;
 }
 
 /** A delivery programme: AM, AS, Archives, or the catch-all. */
@@ -115,6 +117,8 @@ export interface ScopeIn {
 export interface Scope extends ScopeIn {
   id: number;
   runs_using: number;
+  /** The newest version of its rule set; zero before the first save (ADR-029). */
+  version: number;
 }
 
 /**

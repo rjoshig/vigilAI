@@ -35,6 +35,8 @@ import {
 import { GuideEditor } from "@/components/guide-editor";
 import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { versionLabel } from "@/lib/versions";
 import type { ArtifactType, NamedValue, Sample, SamplePreview } from "@/lib/types";
 
 const EMPTY_POINTER = {
@@ -59,6 +61,30 @@ const NEW_TYPE = {
   is_required: false,
   sort_order: 100,
 };
+
+type InputGroup = ArtifactType["kind"];
+
+/** The three kinds of input, each its own tab, so an OSL is never mistaken for a report. */
+const INPUT_GROUPS: { key: InputGroup; label: string; title: string; hint: string }[] = [
+  {
+    key: "osl",
+    label: "Requirements (OSL)",
+    title: "The OSL — the requirement specification",
+    hint: "A Word or PDF document. The source of truth every other input is validated against.",
+  },
+  {
+    key: "config",
+    label: "Solution Canvas (ETL configuration)",
+    title: "The ETL configuration — the Solution Canvas config JSON",
+    hint: "What the delivery was actually built to do. Validated against the OSL.",
+  },
+  {
+    key: "report",
+    label: "Reports",
+    title: "Output reports",
+    hint: "Excel workbooks the delivery produced. Switching a type off removes its upload slot for every user, at once. Named values and validation guides belong here.",
+  },
+];
 
 export default function ArtifactsPage() {
   const [types, setTypes] = React.useState<ArtifactType[] | null>(null);
@@ -118,6 +144,8 @@ export default function ArtifactsPage() {
     );
   }
 
+  const [group, setGroup] = React.useState<InputGroup>("osl");
+  const shownTypes = (types ?? []).filter((t) => t.kind === group);
   const reportKeys = (types ?? []).filter((t) => t.kind === "report").map((t) => t.key);
   const sheets = types?.find((t) => t.key === draft.report_type)?.sheets ?? [];
 
@@ -134,17 +162,44 @@ export default function ArtifactsPage() {
         </div>
       ) : null}
 
+      <div className="mb-4 flex gap-1 border-b" role="tablist" aria-label="Input types">
+        {INPUT_GROUPS.map((one) => (
+          <button
+            key={one.key}
+            type="button"
+            role="tab"
+            aria-selected={group === one.key}
+            onClick={() => setGroup(one.key)}
+            className={cn(
+              "-mb-px border-b-2 px-3.5 py-2 text-sm font-medium",
+              group === one.key
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {one.label}
+            {types ? (
+              <span className="ml-1.5 text-xs text-muted-foreground">
+                {types.filter((t) => t.kind === one.key).length}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
       <Card className="mb-4 p-0">
         <CardHeader className="flex-row items-center justify-between border-b">
           <div>
-            <CardTitle>Inputs</CardTitle>
+            <CardTitle>{INPUT_GROUPS.find((one) => one.key === group)?.title}</CardTitle>
             <span className="text-[0.7rem] text-muted-foreground">
-              Switching a type off removes its upload slot for every user, at once.
+              {INPUT_GROUPS.find((one) => one.key === group)?.hint}
             </span>
           </div>
-          <Button size="xs" variant="outline" onClick={() => setAdding(!adding)}>
-            <Plus className="h-3.5 w-3.5" /> Add a report type
-          </Button>
+          {group === "report" ? (
+            <Button size="xs" variant="outline" onClick={() => setAdding(!adding)}>
+              <Plus className="h-3.5 w-3.5" /> Add a report type
+            </Button>
+          ) : null}
         </CardHeader>
 
         {adding ? (
@@ -207,11 +262,16 @@ export default function ArtifactsPage() {
               </TR>
             </thead>
             <tbody>
-              {types.map((type) => (
+              {shownTypes.map((type) => (
                 <React.Fragment key={type.key}>
                   <TR>
                     <TD>
-                      <div className="text-sm font-medium">{type.label}</div>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        {type.label}
+                        <Badge tone="outline" title="Definition version">
+                          {versionLabel(type.version)}
+                        </Badge>
+                      </div>
                       <div className="mono text-[0.7rem] text-muted-foreground">
                         {type.key} · {type.kind}
                         {type.is_builtin ? " · built-in" : ""}
@@ -325,194 +385,196 @@ export default function ArtifactsPage() {
         )}
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Add a named value</CardTitle>
-            <span className="text-[0.7rem] text-muted-foreground">
-              A pointer into a report that checks refer to by name. Label lookup survives inserted
-              rows; prefer it over a cell address.
-            </span>
-          </CardHeader>
-          <CardContent className="grid gap-3 pt-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="nv-name">Name</Label>
-              <Input
-                id="nv-name"
-                className="mono"
-                placeholder="billing_count"
-                value={draft.name}
-                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="nv-report">Report type</Label>
-              <Select
-                id="nv-report"
-                value={draft.report_type}
-                onChange={(event) => setDraft({ ...draft, report_type: event.target.value })}
-              >
-                {reportKeys.map((key) => (
-                  <option key={key} value={key}>
-                    {types?.find((t) => t.key === key)?.label ?? key}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="nv-sheet">Sheet</Label>
-              {sheets.length > 0 ? (
+      {group === "report" ? (
+        <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Add a named value</CardTitle>
+              <span className="text-[0.7rem] text-muted-foreground">
+                A pointer into a report that checks refer to by name. Label lookup survives inserted
+                rows; prefer it over a cell address.
+              </span>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="nv-name">Name</Label>
+                <Input
+                  id="nv-name"
+                  className="mono"
+                  placeholder="billing_count"
+                  value={draft.name}
+                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="nv-report">Report type</Label>
                 <Select
-                  id="nv-sheet"
-                  value={draft.sheet}
-                  onChange={(event) => setDraft({ ...draft, sheet: event.target.value })}
+                  id="nv-report"
+                  value={draft.report_type}
+                  onChange={(event) => setDraft({ ...draft, report_type: event.target.value })}
                 >
-                  <option value="">Choose a sheet…</option>
-                  {sheets.map((sheet) => (
-                    <option key={sheet} value={sheet}>
-                      {sheet}
+                  {reportKeys.map((key) => (
+                    <option key={key} value={key}>
+                      {types?.find((t) => t.key === key)?.label ?? key}
                     </option>
                   ))}
                 </Select>
-              ) : (
-                <Input
-                  id="nv-sheet"
-                  placeholder="Summary"
-                  value={draft.sheet}
-                  onChange={(event) => setDraft({ ...draft, sheet: event.target.value })}
-                />
-              )}
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="nv-kind">Locator</Label>
-              <Select
-                id="nv-kind"
-                value={draft.kind}
-                onChange={(event) =>
-                  setDraft({ ...draft, kind: event.target.value as "label" | "cell" })
-                }
-              >
-                <option value="label">Label lookup (preferred)</option>
-                <option value="cell">Cell address</option>
-              </Select>
-            </div>
-            {draft.kind === "label" ? (
-              <>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="nv-label">Label text</Label>
-                  <Input
-                    id="nv-label"
-                    placeholder="Billing count"
-                    value={draft.label}
-                    onChange={(event) => setDraft({ ...draft, label: event.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="nv-col">Value column (0-based)</Label>
-                  <Input
-                    id="nv-col"
-                    type="number"
-                    min={0}
-                    value={draft.value_column}
-                    onChange={(event) =>
-                      setDraft({ ...draft, value_column: Number(event.target.value) })
-                    }
-                  />
-                </div>
-              </>
-            ) : (
+              </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="nv-cell">Cell</Label>
+                <Label htmlFor="nv-sheet">Sheet</Label>
+                {sheets.length > 0 ? (
+                  <Select
+                    id="nv-sheet"
+                    value={draft.sheet}
+                    onChange={(event) => setDraft({ ...draft, sheet: event.target.value })}
+                  >
+                    <option value="">Choose a sheet…</option>
+                    {sheets.map((sheet) => (
+                      <option key={sheet} value={sheet}>
+                        {sheet}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    id="nv-sheet"
+                    placeholder="Summary"
+                    value={draft.sheet}
+                    onChange={(event) => setDraft({ ...draft, sheet: event.target.value })}
+                  />
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="nv-kind">Locator</Label>
+                <Select
+                  id="nv-kind"
+                  value={draft.kind}
+                  onChange={(event) =>
+                    setDraft({ ...draft, kind: event.target.value as "label" | "cell" })
+                  }
+                >
+                  <option value="label">Label lookup (preferred)</option>
+                  <option value="cell">Cell address</option>
+                </Select>
+              </div>
+              {draft.kind === "label" ? (
+                <>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="nv-label">Label text</Label>
+                    <Input
+                      id="nv-label"
+                      placeholder="Billing count"
+                      value={draft.label}
+                      onChange={(event) => setDraft({ ...draft, label: event.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="nv-col">Value column (0-based)</Label>
+                    <Input
+                      id="nv-col"
+                      type="number"
+                      min={0}
+                      value={draft.value_column}
+                      onChange={(event) =>
+                        setDraft({ ...draft, value_column: Number(event.target.value) })
+                      }
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="nv-cell">Cell</Label>
+                  <Input
+                    id="nv-cell"
+                    className="mono"
+                    placeholder="H9"
+                    value={draft.cell}
+                    onChange={(event) => setDraft({ ...draft, cell: event.target.value })}
+                  />
+                </div>
+              )}
+              <div className="flex flex-col gap-1 sm:col-span-2">
+                <Label htmlFor="nv-desc">Description</Label>
                 <Input
-                  id="nv-cell"
-                  className="mono"
-                  placeholder="H9"
-                  value={draft.cell}
-                  onChange={(event) => setDraft({ ...draft, cell: event.target.value })}
+                  id="nv-desc"
+                  placeholder="Records billed to the customer for this order"
+                  value={draft.description}
+                  onChange={(event) => setDraft({ ...draft, description: event.target.value })}
                 />
               </div>
-            )}
-            <div className="flex flex-col gap-1 sm:col-span-2">
-              <Label htmlFor="nv-desc">Description</Label>
-              <Input
-                id="nv-desc"
-                placeholder="Records billed to the customer for this order"
-                value={draft.description}
-                onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <Button
-                disabled={!draft.name.trim() || busy}
-                onClick={() =>
-                  void act("save the named value", async () => {
-                    await api.saveNamedValue(draft);
-                    setDraft({ ...EMPTY_POINTER });
-                  })
-                }
-              >
-                Save named value
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="sm:col-span-2">
+                <Button
+                  disabled={!draft.name.trim() || busy}
+                  onClick={() =>
+                    void act("save the named value", async () => {
+                      await api.saveNamedValue(draft);
+                      setDraft({ ...EMPTY_POINTER });
+                    })
+                  }
+                >
+                  Save named value
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="p-0">
-          <CardHeader className="border-b">
-            <CardTitle>Named values</CardTitle>
-          </CardHeader>
-          {!values ? (
-            <Skeleton className="m-4 h-32" />
-          ) : values.length === 0 ? (
-            <EmptyState title="No named values yet" hint="Checks refer to reports by these." />
-          ) : (
-            <Table>
-              <thead>
-                <TR className="hover:bg-transparent">
-                  <TH>Name</TH>
-                  <TH>Report · sheet</TH>
-                  <TH>Resolves on sample</TH>
-                  <TH>Used by</TH>
-                  <TH />
-                </TR>
-              </thead>
-              <tbody>
-                {values.map((value) => (
-                  <TR key={value.id}>
-                    <TD className="mono">{value.name}</TD>
-                    <TD className="text-xs">
-                      {value.report_type} · {value.sheet || "—"}
-                    </TD>
-                    <TD>
-                      {value.resolved === null ? (
-                        <Badge tone="destructive">not found</Badge>
-                      ) : (
-                        <Badge tone="success">{value.resolved}</Badge>
-                      )}
-                    </TD>
-                    <TD className="text-xs text-muted-foreground">
-                      {value.used_by.length > 0 ? value.used_by.join(", ") : "—"}
-                    </TD>
-                    <TD className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        disabled={busy}
-                        aria-label={`Delete ${value.name}`}
-                        onClick={() =>
-                          void act("delete the named value", () => api.deleteNamedValue(value.id))
-                        }
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TD>
+          <Card className="p-0">
+            <CardHeader className="border-b">
+              <CardTitle>Named values</CardTitle>
+            </CardHeader>
+            {!values ? (
+              <Skeleton className="m-4 h-32" />
+            ) : values.length === 0 ? (
+              <EmptyState title="No named values yet" hint="Checks refer to reports by these." />
+            ) : (
+              <Table>
+                <thead>
+                  <TR className="hover:bg-transparent">
+                    <TH>Name</TH>
+                    <TH>Report · sheet</TH>
+                    <TH>Resolves on sample</TH>
+                    <TH>Used by</TH>
+                    <TH />
                   </TR>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Card>
-      </div>
+                </thead>
+                <tbody>
+                  {values.map((value) => (
+                    <TR key={value.id}>
+                      <TD className="mono">{value.name}</TD>
+                      <TD className="text-xs">
+                        {value.report_type} · {value.sheet || "—"}
+                      </TD>
+                      <TD>
+                        {value.resolved === null ? (
+                          <Badge tone="destructive">not found</Badge>
+                        ) : (
+                          <Badge tone="success">{value.resolved}</Badge>
+                        )}
+                      </TD>
+                      <TD className="text-xs text-muted-foreground">
+                        {value.used_by.length > 0 ? value.used_by.join(", ") : "—"}
+                      </TD>
+                      <TD className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={busy}
+                          aria-label={`Delete ${value.name}`}
+                          onClick={() =>
+                            void act("delete the named value", () => api.deleteNamedValue(value.id))
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TD>
+                    </TR>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </Card>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -588,7 +650,7 @@ function ArtifactEditor({
 
 /** The file extension an artifact type's sample is expected to have. */
 function acceptFor(kind: ArtifactType["kind"]): string {
-  if (kind === "osl") return ".docx";
+  if (kind === "osl") return ".docx,.pdf";
   if (kind === "config") return ".json";
   return ".xlsx";
 }
@@ -675,7 +737,13 @@ function SampleStrip({
               {sample.filename} · {sizeOf(sample.size_bytes)}
             </div>
             <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
-              {sample.sheets.length > 0 ? sample.sheets.join(", ") : "no sheets read"}
+              {sample.sheets.length > 0
+                ? sample.sheets.join(", ")
+                : type.kind === "report"
+                  ? "no sheets read"
+                  : type.kind === "osl"
+                    ? "Word or PDF, read section by section"
+                    : "JSON, read block by block"}
             </div>
             <div className="text-[0.7rem] text-muted-foreground">
               uploaded by {sample.uploaded_by || "—"}

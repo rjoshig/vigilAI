@@ -250,7 +250,7 @@ def new_run_options(
         The active upload slots and delivery programmes, in display order.
     """
     catalog.seed_defaults(session)
-    accept = {"osl": ".docx", "config": ".json"}
+    accept = {"osl": ".docx,.pdf", "config": ".json"}
     return schemas.NewRunOptions(
         artifacts=[
             schemas.ArtifactSlot(
