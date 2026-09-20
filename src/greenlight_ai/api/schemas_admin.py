@@ -323,6 +323,37 @@ class AliasOut(AliasIn):
     id: int
 
 
+class FieldLabelIn(BaseModel):
+    """What a delivery calls one of the fields the tool checks (Phase 6.14b).
+
+    Document labels, not data attribute names: the credit date is written *as-of
+    date* on one customer's reports and *cycle date* on another's. Scoped with the
+    one scope vocabulary (ADR-029), so a programme or a single configuration can
+    name its own spelling without changing anybody else's.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Which field this names. A closed set; unknown values are refused.
+    canonical: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=200)
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    is_active: bool = True
+
+
+class FieldLabelOut(FieldLabelIn):
+    """A stored label."""
+
+    id: int
+    #: The scope written the way the screens write it, e.g. "Account Monitoring".
+    scope_label: str = ""
+    created_by: str = ""
+    #: True for the spellings that ship with the tool. They cannot be edited or
+    #: deleted; a delivery that says it differently adds its own.
+    is_builtin: bool = False
+
+
 class MaskedColumnIn(BaseModel):
     """A report column pattern whose values are masked at parse time."""
 

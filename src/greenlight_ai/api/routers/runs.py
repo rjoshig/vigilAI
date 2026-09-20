@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import time
 from dataclasses import asdict
 import shutil
 import tempfile
@@ -35,7 +36,7 @@ from greenlight_ai.api.deps import (
     get_session,
 )
 from greenlight_ai.auth.settings import AuthSettings
-from greenlight_ai.checks import artifact_match
+from greenlight_ai.checks import artifact_match, field_labels
 from greenlight_ai.api.uploads import UploadError, store_upload
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import catalog, models, repository, drift
@@ -43,6 +44,7 @@ from greenlight_ai.db.queue import JobQueue
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.parsers import detect
 from greenlight_ai.parsers.base import ParseError
+from greenlight_ai.parsers.reports import parser_for
 from greenlight_ai.pipeline.s4_trace import describe_rule
 from greenlight_ai.report.pdf import renderer_available
 from greenlight_ai.rules.schema import Rule
@@ -557,6 +559,12 @@ def _mismatches_for(session: Session, run_id: int) -> list[models.ArtifactMismat
 
 
 #: How each compared field is named on screen, so the vocabulary lives in one place.
+#: How long the pre-flight may spend reading reports before it gives up and leaves
+#: the credit date to stage 7. The point of the check is to answer before the model is
+#: involved, not to make somebody wait: a submission that takes four seconds to accept
+#: is a worse experience than one whose date is confirmed a few seconds later.
+PREFLIGHT_PARSE_BUDGET_S: Final[float] = 1.5
+
 MATCH_FIELD_LABELS: Final[dict[str, str]] = {
     "configuration_id": "Configuration id",
     "customer": "Customer",
@@ -585,6 +593,72 @@ def _mismatch_out(row: models.ArtifactMismatch) -> schemas.ArtifactMismatchOut:
         accepted_at=row.accepted_at,
         accepted_by=row.accepted_by,
     )
+
+
+def _labelled_credit_date(
+    session: Session, run: models.Run, data_dir: Path, stored: list[Any]
+) -> field_labels.LabelHit | None:
+    """Read the credit date a report says it is cut as of, if one says so.
+
+    Parsing the reports here repeats work stage 1 will do, which is the honest cost of
+    asking the question before the model is involved rather than at stage 7 of 9. It is
+    bounded: a whole run parses in tens of milliseconds, and the alternative is paying
+    for a full validation against a delivery that was cut for a different date.
+
+    A report that cannot be parsed is skipped rather than reported — an unreadable
+    workbook is the pipeline's failure to describe properly, with the parser's own
+    message, not a disagreement about dates.
+
+    Args:
+        session: An open session, for the scoped labels.
+        run: The run row.
+        data_dir: The shared volume.
+        stored: The stored files.
+
+    Returns:
+        The first labelled date found, or ``None``.
+    """
+    if run.credit_date is None:
+        return None
+    labels = field_labels.resolve_labels(
+        session,
+        field_labels.CREDIT_DATE,
+        customer=run.customer_name,
+        programme=run.scope,
+        configuration_id=run.configuration_id,
+    )
+    # Smallest first, and stop at the first hit. Measured on this machine, parsing a
+    # workbook costs about 17 ms per thousand rows: a 50,000-row DIRT is 850 ms on its
+    # own, and five of those would put four seconds in front of somebody pressing
+    # Submit. The as-of line lives in a small summary report far more often than in the
+    # largest one, so reading in size order answers the common case in milliseconds and
+    # the budget below bounds the rest. Anything not read here is still checked at
+    # stage 7, which is where this check has always run.
+    candidates = sorted(
+        (
+            (file.kind, data_dir / file.storage_key)
+            for file, _, _ in stored
+            if file.kind not in ("osl", "config")
+        ),
+        key=lambda pair: pair[1].stat().st_size if pair[1].exists() else 0,
+    )
+    deadline = time.monotonic() + PREFLIGHT_PARSE_BUDGET_S
+    for kind, path in candidates:
+        if time.monotonic() > deadline:
+            _LOG.info(
+                "run %d: credit-date pre-flight stopped after %.1fs; stage 7 will check it",
+                run.id,
+                PREFLIGHT_PARSE_BUDGET_S,
+            )
+            break
+        try:
+            document = parser_for(kind).parse(path)
+        except (ParseError, OSError):
+            continue
+        hit = field_labels.find_labelled_value({kind: document}, labels)
+        if hit is not None:
+            return hit
+    return None
 
 
 def _record_mismatches(
@@ -619,12 +693,18 @@ def _record_mismatches(
 
     declared_id = decoded.get("configuration_id")
     declared_customer = decoded.get("customer")
+    hit = _labelled_credit_date(session, run, data_dir, stored)
     results = (
         artifact_match.compare_configuration_id(
             run.configuration_id, declared_id if isinstance(declared_id, str) else ""
         ),
         artifact_match.compare_customer(
             run.customer_name, declared_customer if isinstance(declared_customer, str) else ""
+        ),
+        artifact_match.compare_credit_date(
+            run.credit_date,
+            hit.value if hit else "",
+            hit.source if hit else "",
         ),
     )
 

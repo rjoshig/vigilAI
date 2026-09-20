@@ -240,6 +240,24 @@ export interface Alias {
   customer_name: string | null;
 }
 
+/**
+ * What a delivery calls one of the fields the tool checks (Phase 6.14b).
+ *
+ * Document labels, not data attribute names: a credit date is written "as-of date" on
+ * one customer's reports and "cycle date" on another's. `is_builtin` rows are the
+ * spellings the tool ships with; they cannot be edited or removed.
+ */
+export interface FieldLabel {
+  id: number;
+  canonical: string;
+  label: string;
+  scope: string;
+  scope_label: string;
+  is_active: boolean;
+  created_by: string;
+  is_builtin: boolean;
+}
+
 export interface MaskedColumn {
   id: number;
   pattern: string;

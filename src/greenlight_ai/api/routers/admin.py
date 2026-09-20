@@ -51,6 +51,7 @@ from greenlight_ai.checks.expressions import (
 )
 from greenlight_ai.checks import guides
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
+from greenlight_ai.checks import field_labels
 from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.training import lifecycle
 from greenlight_ai.llm.cache import LLMCache
@@ -1689,6 +1690,203 @@ def save_category(
 
 
 # ------------------------------------------------------------------ reference data
+
+
+@router.get("/field-labels", response_model=list[wire.FieldLabelOut])
+def list_field_labels(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.FieldLabelOut]:
+    """List what deliveries call the fields the tool checks (Phase 6.14b).
+
+    The built-in spellings are listed first and read-only, so an administrator can see
+    what is already covered before adding one. They are not rows in the table: a
+    deployment that configures nothing still checks with them.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The built-ins, then the configured labels.
+    """
+    out: list[wire.FieldLabelOut] = [
+        wire.FieldLabelOut(
+            id=0,
+            canonical=canonical,
+            label=label,
+            scope=scopes.EVERYWHERE,
+            scope_label="Everywhere",
+            is_active=True,
+            is_builtin=True,
+        )
+        for canonical, labels in field_labels.DEFAULT_LABELS.items()
+        for label in labels
+    ]
+    rows = session.execute(
+        sa.select(models.FieldLabel).order_by(models.FieldLabel.canonical, models.FieldLabel.id)
+    ).scalars()
+    out.extend(
+        wire.FieldLabelOut(
+            id=row.id,
+            canonical=row.canonical,
+            label=row.label,
+            scope=row.scope,
+            scope_label=scopes.label(row.scope),
+            is_active=row.is_active,
+            created_by=row.created_by,
+        )
+        for row in rows
+    )
+    return out
+
+
+@router.post(
+    "/field-labels", response_model=wire.FieldLabelOut, status_code=status.HTTP_201_CREATED
+)
+def create_field_label(
+    payload: wire.FieldLabelIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.FieldLabelOut:
+    """Add a label for a field the tool checks.
+
+    Args:
+        payload: The label and where it applies.
+        session: The request's session.
+        user: The caller, recorded against the row.
+
+    Returns:
+        The stored label.
+
+    Raises:
+        HTTPException: 422 when the field is not one the tool checks, or the label
+            duplicates one already in force for that scope.
+    """
+    require_admin(user)
+    if payload.canonical not in field_labels.CANONICAL_FIELDS:
+        raise HTTPException(
+            HTTP_422,
+            f"{payload.canonical!r} is not a field the tool checks; "
+            f"it checks {', '.join(field_labels.CANONICAL_FIELDS)}",
+        )
+    scope = scopes.token(payload.scope)
+    existing = session.execute(
+        sa.select(models.FieldLabel).where(
+            models.FieldLabel.canonical == payload.canonical,
+            models.FieldLabel.scope == scope,
+        )
+    ).scalars()
+    wanted = field_labels.normalize_label(payload.label)
+    if any(field_labels.normalize_label(row.label) == wanted for row in existing):
+        raise HTTPException(
+            HTTP_422, f"{payload.label!r} is already a label for {payload.canonical} here"
+        )
+
+    row = models.FieldLabel(
+        canonical=payload.canonical,
+        label=payload.label.strip(),
+        scope=scope,
+        is_active=payload.is_active,
+        created_by=user.name,
+        created_by_user_id=user.id,
+    )
+    session.add(row)
+    session.flush()
+    repository.audit(
+        session,
+        "admin.field_label_added",
+        detail=f"{payload.canonical}:{payload.label} @ {scope}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return wire.FieldLabelOut(
+        id=row.id,
+        canonical=row.canonical,
+        label=row.label,
+        scope=row.scope,
+        scope_label=scopes.label(row.scope),
+        is_active=row.is_active,
+        created_by=row.created_by,
+    )
+
+
+@router.post("/field-labels/{label_id}/active", response_model=wire.FieldLabelOut)
+def set_field_label_active(
+    label_id: int,
+    active: bool = Query(...),
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> wire.FieldLabelOut:
+    """Switch a label on or off.
+
+    Retiring a wrong label without losing the row, which is what the tool does
+    everywhere rather than deleting.
+
+    Args:
+        label_id: The row id.
+        active: Whether it should resolve.
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        The updated label.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.FieldLabel, label_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"field label {label_id} not found")
+    row.is_active = active
+    repository.audit(
+        session,
+        "admin.field_label_active" if active else "admin.field_label_inactive",
+        detail=f"{row.canonical}:{row.label}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return wire.FieldLabelOut(
+        id=row.id,
+        canonical=row.canonical,
+        label=row.label,
+        scope=row.scope,
+        scope_label=scopes.label(row.scope),
+        is_active=row.is_active,
+        created_by=row.created_by,
+    )
+
+
+@router.delete("/field-labels/{label_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_field_label(
+    label_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+    _confirmed: None = Depends(require_delete_word),
+) -> None:
+    """Delete a label.
+
+    Args:
+        label_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    require_admin(user)
+    row = session.get(models.FieldLabel, label_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"field label {label_id} not found")
+    session.delete(row)
+    repository.audit(
+        session,
+        "admin.field_label_deleted",
+        detail=f"{row.canonical}:{row.label}",
+        user_id=user.id,
+        actor=user.name,
+    )
 
 
 @router.get("/aliases", response_model=list[wire.AliasOut])

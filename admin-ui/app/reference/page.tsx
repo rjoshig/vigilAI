@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Reference data: attribute aliases and masked columns.
+ * Reference data: what a delivery calls a checked field, attribute aliases, and
+ * masked columns.
  *
  * Aliases are what let an OSL that says "score" match a report column called
  * `SCORE_V3`. Masked columns are applied at parse time, so an unmasked value never
@@ -30,9 +31,10 @@ import {
   Table,
 } from "@/components/ui/primitives";
 import { BulkBar } from "@/components/bulk-bar";
+import { FieldLabelsCard } from "@/components/field-labels-card";
 import { DeleteButton } from "@/components/confirm-delete";
 import { api, ApiError } from "@/lib/api";
-import type { Alias, MaskedColumn } from "@/lib/types";
+import type { Alias, MaskedColumn, Scope } from "@/lib/types";
 
 export default function ReferencePage() {
   const [aliases, setAliases] = React.useState<Alias[] | null>(null);
@@ -46,15 +48,18 @@ export default function ReferencePage() {
   });
   const [patternDraft, setPatternDraft] = React.useState("");
   const [selected, setSelected] = React.useState<number[]>([]);
+  const [programmes, setProgrammes] = React.useState<Scope[] | null>(null);
 
   const load = React.useCallback(async () => {
     try {
-      const [nextAliases, nextMasked] = await Promise.all([
+      const [nextAliases, nextMasked, nextProgrammes] = await Promise.all([
         api.listAliases(),
         api.listMaskedColumns(),
+        api.listScopes(),
       ]);
       setAliases(nextAliases);
       setMasked(nextMasked);
+      setProgrammes(nextProgrammes);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
@@ -74,7 +79,7 @@ export default function ReferencePage() {
     <>
       <PageHeader
         title="Reference data"
-        description="Attribute aliases map field names across the OSL, the config, and the reports. Masked columns are hidden everywhere: the app, the report, and the PDF."
+        description="What a delivery calls the fields the tool checks, the aliases that map attribute names across the OSL, the config and the reports, and the columns masked everywhere: the app, the report, and the PDF."
       />
 
       {error ? (
@@ -82,6 +87,10 @@ export default function ReferencePage() {
           <ErrorState message={error} onRetry={() => void load()} />
         </div>
       ) : null}
+
+      <div className="mb-4">
+        <FieldLabelsCard programmes={programmes} onError={setError} />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <Card className="p-0">

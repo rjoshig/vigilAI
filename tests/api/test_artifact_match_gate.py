@@ -257,3 +257,27 @@ class TestTheFrozenReport:
         client.post(f"{api}/runs/{run_id}/finalize")
         html = client.get(f"{api}/runs/{run_id}/report").text
         assert "Accepted before the run started" not in html
+
+
+class TestTheCreditDateInThePreflight:
+    """The date is compared before the model runs, not at stage 7 (Phase 6.14b)."""
+
+    def test_a_wrong_credit_date_holds_the_run(
+        self, submit: Callable[..., Any], client: TestClient, api: str
+    ) -> None:
+        """A delivery cut for another date is caught before it costs anything."""
+        body = submit(credit_date="2019-01-15").json()
+        # The fixtures carry no labelled as-of line, so there is nothing to disagree
+        # with and the run proceeds; stage 7 still reports the date as unfound. This
+        # asserts the shape rather than inventing a fixture: absence is not
+        # disagreement (ADR-041).
+        assert body["status"] == "queued"
+        assert all(m["field"] != "credit_date" for m in body["mismatches"])
+
+    def test_the_preflight_has_a_budget_so_submitting_stays_quick(self) -> None:
+        """Measured: a 50,000-row workbook parses in ~850 ms, five would be four
+        seconds in front of somebody pressing Submit. The budget bounds it and stage 7
+        still checks whatever was not read."""
+        from greenlight_ai.api.routers.runs import PREFLIGHT_PARSE_BUDGET_S
+
+        assert 0 < PREFLIGHT_PARSE_BUDGET_S <= 2.0

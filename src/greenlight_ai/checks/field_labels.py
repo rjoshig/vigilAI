@@ -176,22 +176,39 @@ def find_labelled_value(
     items = reports.items() if isinstance(reports, dict) else reports
     for key, document in sorted(items, key=lambda pair: pair[0]):
         for sheet in document.sheets:
+            # The header first. A workbook whose first row is "As-of date | 2026-03-31"
+            # — a summary line above the table, which is where these dates usually sit —
+            # has that row read as the header, not as a body row, so a scan of the rows
+            # alone would miss the commonest placement there is.
+            hit = _scan(key, sheet.name, list(sheet.header), wanted)
+            if hit is not None:
+                return hit
             for row in sheet.rows:
-                cells = list(row)
-                for index, cell in enumerate(cells):
-                    text = str(cell.value).strip() if cell.value is not None else ""
-                    if not text:
-                        continue
-                    match = wanted.get(normalize_label(text))
-                    if match is None:
-                        continue
-                    for following in cells[index + 1 :]:
-                        value = str(following.value).strip() if following.value is not None else ""
-                        if value:
-                            _LOG.info("found %r in %s · %s, value %r", text, key, sheet.name, value)
-                            return LabelHit(
-                                value=value,
-                                label=text,
-                                source=f"{key} · {sheet.name}!{text}",
-                            )
+                hit = _scan(key, sheet.name, [cell.value for cell in row], wanted)
+                if hit is not None:
+                    return hit
+    return None
+
+
+def _scan(key: str, sheet: str, values: list[object], wanted: dict[str, str]) -> LabelHit | None:
+    """Look along one row for a label, and take the next non-empty value after it.
+
+    Args:
+        key: The artifact key, for the source string.
+        sheet: The sheet name, for the source string.
+        values: The row's values in order.
+        wanted: Normalised label to the label as configured.
+
+    Returns:
+        The hit, or ``None`` when this row carries no label of interest.
+    """
+    for index, value in enumerate(values):
+        text = str(value).strip() if value is not None else ""
+        if not text or normalize_label(text) not in wanted:
+            continue
+        for following in values[index + 1 :]:
+            found = str(following).strip() if following is not None else ""
+            if found:
+                _LOG.info("found %r in %s · %s, value %r", text, key, sheet, found)
+                return LabelHit(value=found, label=text, source=f"{key} · {sheet}!{text}")
     return None
