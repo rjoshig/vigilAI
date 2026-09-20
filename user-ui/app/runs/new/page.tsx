@@ -113,7 +113,10 @@ export default function NewRunPage() {
       ? slot.is_required && filesIn(slot.key).length === 0
       : slot.is_required && !files[slot.key]
   );
-  const ready = Boolean(customer.trim() && order.trim()) && !requiredMissing && reportCount > 0;
+  const ready =
+    Boolean(customer.trim() && order.trim() && configurationId.trim()) &&
+    !requiredMissing &&
+    reportCount > 0;
 
   /** Give every report slot its first, empty part once the catalog has loaded. */
   React.useEffect(() => {
@@ -309,7 +312,7 @@ export default function NewRunPage() {
                 </span>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="configuration">Configuration ID</Label>
+                <Label htmlFor="configuration">Configuration ID *</Label>
                 <Input
                   id="configuration"
                   className="mono"
@@ -317,9 +320,10 @@ export default function NewRunPage() {
                   onChange={(event) => setConfigurationId(event.target.value)}
                 />
                 <span className="text-[0.7rem] text-muted-foreground">
-                  The order&apos;s ETL configuration number, the Solution Canvas config number. For
-                  your information and the config history; it may repeat across runs, and every run
-                  gets its own id. Not sent to the model.
+                  The order&apos;s ETL configuration number, the Solution Canvas config number.
+                  Required, and it may repeat: the same configuration is run again months later, and
+                  the credit date and run date tell the runs apart. Every run still gets its own id.
+                  Not sent to the model.
                 </span>
               </div>
               {debouncedConfigurationId ? (

@@ -145,6 +145,7 @@ def _summary(
         submitted_by=_submitter(session, run.user_id),
         scope=run.scope,
         scope_label=_scope_label(session, run.scope),
+        credit_date=run.credit_date,
         **counts,
     )
 
@@ -215,7 +216,6 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         **base.model_dump(),
         pdf_available=renderer_available(),
         notes=run.notes,
-        credit_date=run.credit_date,
         rules_version=run.rules_version,
         model_used=run.model_used,
         prompt_version=run.prompt_version,
@@ -280,7 +280,7 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     # Informational: the order's ETL configuration number. Optional and free to
     # repeat; the run's own id is its identity, and the config history is keyed on
     # this only when it is given.
-    configuration_id: Annotated[str, Form()] = "",
+    configuration_id: Annotated[str, Form(min_length=1)],
     notes: Annotated[str, Form()] = "",
     credit_date: Annotated[Optional[str], Form()] = None,
     rerun_reason: Annotated[str, Form()] = "",
