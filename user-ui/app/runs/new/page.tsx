@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import { ConfigNotes } from "@/components/config-notes";
+import { FieldEffect } from "@/components/explain";
 import { FileDrop } from "@/components/file-drop";
 import { ReportSlotField, emptyPart, type ReportPart } from "@/components/report-slot";
 import {
@@ -293,9 +294,10 @@ export default function NewRunPage() {
                   value={customer}
                   onChange={(event) => setCustomer(event.target.value)}
                 />
-                <span className="text-[0.7rem] text-muted-foreground">
-                  Scopes rules and aliases to this customer. Not sent to the model.
-                </span>
+                <FieldEffect
+                  kind="record"
+                  note="Scopes rules and aliases to this customer, and is compared with the customer your configuration file names."
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="order">
@@ -322,9 +324,12 @@ export default function NewRunPage() {
                 <span className="text-[0.7rem] text-muted-foreground">
                   The order&apos;s ETL configuration number, the Solution Canvas config number.
                   Required, and it may repeat: the same configuration is run again months later, and
-                  the credit date and run date tell the runs apart. Every run still gets its own id.
-                  Not sent to the model.
+                  the credit date tells the runs apart. Every run still gets its own id.
                 </span>
+                <FieldEffect
+                  kind="record"
+                  note="Groups this run with earlier runs of the same configuration so drift can be compared, and is checked against the id inside your configuration file before anything is validated."
+                />
               </div>
               {debouncedConfigurationId ? (
                 <div className="sm:col-span-2">
@@ -340,9 +345,12 @@ export default function NewRunPage() {
                   onChange={(event) => setCreditDate(event.target.value)}
                 />
                 <span className="text-[0.7rem] text-muted-foreground">
-                  The date the delivery is cut as of. Not sent to the model; the tool checks that
-                  the reports carry this date and raises a finding if none does.
+                  The date the delivery is cut as of.
                 </span>
+                <FieldEffect
+                  kind="code"
+                  note="Compared with the date your reports say they are cut as of. A disagreement stops the run before it starts, so a delivery cut for the wrong month is caught here rather than after it is validated."
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="scope">Delivery programme</Label>
@@ -394,9 +402,10 @@ export default function NewRunPage() {
                   onChange={(event) => setDeliveryNotes(event.target.value)}
                   placeholder="Anything about the delivery itself: which segments were sent, what is still to come."
                 />
-                <span className="text-[0.7rem] text-muted-foreground">
-                  Sent to the model as background. Accurate notes here improve the validation.
-                </span>
+                <FieldEffect
+                  kind="model"
+                  note="The more accurately this describes the delivery, the better the findings: it tells the model what it is looking at before it judges anything."
+                />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="notes">Additional notes</Label>
@@ -406,9 +415,10 @@ export default function NewRunPage() {
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Anything the reviewer should know: special instructions, known deviations, who asked for the run."
                 />
-                <span className="text-[0.7rem] text-muted-foreground">
-                  Kept for the reviewer and shown on the run. Not sent to the model.
-                </span>
+                <FieldEffect
+                  kind="reviewer"
+                  note="Shown on the run and to whoever reviews it. It reaches no model and changes no finding."
+                />
               </div>
             </CardContent>
           </Card>

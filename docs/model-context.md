@@ -1,6 +1,6 @@
 # What reaches the model, and what code decides
 
-**Last derived from the call sites:** 2026-09-20 (Phase 6.14c).
+**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i).
 
 An administrator cannot see a prompt. Everything they know about where their words end
 up comes from the label next to the box they typed them in, which makes that label the
@@ -15,6 +15,21 @@ it, so it can be checked rather than believed.
 touchpoint: a commit that changes what reaches the model, what a stage reads, or a cap
 updates this file, the field's marker in both apps, and the training documents, in that
 commit.
+
+## The five things a field can do
+
+Both apps mark every field a person can write with one of these, and the marker never
+hides — it is a fact about the run, not help text. Somebody writing a note deserves to
+know whether they are teaching the model, feeding a comparison, leaving a message for
+the next reviewer, or writing to themselves.
+
+| Marker | What it means |
+| --- | --- |
+| **Helps the AI** | Rendered into the prompt as background. Better context here means better findings; it never makes anything pass or fail. |
+| **Checked by code** | Compared against the artifacts by code. It can produce a finding, and the same inputs always give the same answer. |
+| **Read by a person** | Shown to whoever reviews or signs off the run. Nothing automated acts on it. |
+| **Your own note** | Kept with the run for you and anyone looking later. Reaches no model and no check. |
+| **Identifies the run** | How the run is found, grouped, and compared with earlier ones — and checked against what the uploaded files declare. |
 
 ## The one rule everything here obeys
 
@@ -71,7 +86,9 @@ produce a finding.
 | **Attribute aliases** | Admin → Reference data | `rules/normalize.py`, applied at stages 4, 5 and 7 |
 | **Masked columns** | Admin → Reference data | `parsers/masking.py`, at parse time (ADR-003) |
 | **Submitted identity** | The new-run form | `checks/artifact_match.py`, before any model call (ADR-041) |
-| **Credit date** | The new-run form | `pipeline/s7_reports.py::_check_credit_date` |
+| **Credit date** | The new-run form | `checks/artifact_match.py` before the run starts, against the cell `checks/field_labels.py` resolves; `pipeline/s7_reports.py` for whatever the pre-flight did not reach |
+| **Field labels** | Admin → Reference data | `checks/field_labels.py`, resolving what a delivery calls a checked field |
+| **Scheduled notices** | Admin → Settings → Notices | Nothing evaluates them; they are shown to people between their start and end (Phase 6.14g) |
 
 ## Fields that are reference only
 

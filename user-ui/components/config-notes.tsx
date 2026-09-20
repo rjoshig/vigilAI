@@ -22,6 +22,7 @@ import {
   Skeleton,
   Textarea,
 } from "@/components/ui/primitives";
+import { FieldEffect } from "@/components/explain";
 import { api, ApiError } from "@/lib/api";
 import type { ConfigNoteInput, Observation, Severity } from "@/lib/types";
 import { cn, fmtTime } from "@/lib/utils";
@@ -329,9 +330,10 @@ function NoteForm({ configurationId, existing, onCancel, onSaved }: NoteFormProp
           </Button>
         </span>
       </div>
+      <FieldEffect kind="model" note={NOTE_HELP} />
       <span className="text-[0.7rem] text-muted-foreground">
-        {NOTE_HELP} Write no account numbers, names, or other personal data; saving is refused when
-        the text looks like it carries any.
+        Write no account numbers, names, or other personal data; saving is refused when the text
+        looks like it carries any.
       </span>
     </div>
   );
