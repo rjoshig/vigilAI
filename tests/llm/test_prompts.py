@@ -28,6 +28,9 @@ PIPELINE_STAGES = {
     "s8_lens_compliance",
     "s8_lens_requirements",
     "s9_summarize",
+    # Asked only when the deterministic matcher finds nothing, so it costs a call
+    # on the exception rather than on every run (Phase 6.15, option A).
+    "compliance_locate",
 }
 
 #: The admin flow's prompts: drafting a check (once, at authoring time) and answering a
@@ -165,6 +168,7 @@ def test_worked_example_answers_validate_against_the_stage_schema(stage: str) ->
         ("s8_lens_compliance", {"finding", "evidence"}),
         ("s8_lens_requirements", {"finding", "evidence"}),
         ("s9_summarize", {"findings", "coverage"}),
+        ("compliance_locate", {"control", "paths"}),
         ("admin_classify", {"attributes", "report_types", "statement"}),
         ("admin_draft_check", {"description", "report_types"}),
         ("admin_judgment", {"instruction", "values"}),

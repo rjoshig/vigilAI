@@ -1,8 +1,8 @@
 # Phase 6.15 — A compliance rule should survive being spelled differently
 
-**Status:** 🟡 **in progress** — specified 2026-09-21 from a question the user asked and
-a measurement that answered it. **Option C is built** (below); option A is next and its
-open questions stand.
+**Status:** ✅ **complete** — 2026-09-21. Specified from a question the user asked and a
+measurement that answered it. **Options C and A are both built**; B is not, and the
+open questions at the foot of this document are answered where the build answered them.
 
 ## The question that started it
 
@@ -215,3 +215,49 @@ explicitly rather than asserting behaviour the code does not have.
 
 **Rewriting the deterministic check.** It is correct where naming matches, and the
 measurement says so. Whatever is built goes *behind* it, not instead of it.
+
+## A, as built · ✅ complete
+
+`llm/prompts/compliance_locate.py` and `pipeline/s6_reverse.py`. Asked **only** where the
+deterministic matcher has already failed, so the common case still costs nothing and a
+configuration whose naming matches never reaches the model at all.
+
+The model is asked *where the control is, if anywhere* — never whether the delivery is
+compliant. It is shown configuration paths and the shape of their contents, never a
+value (ADR-003). It answers `found`, `absent` or `unsure`.
+
+**Four things code refuses to believe**, each falling back to the finding the old
+behaviour would have produced, and each with a test:
+
+| The answer | Why it is discarded |
+| --- | --- |
+| A path that was not in the list | A hallucinated path must not clear a compliance rule. The prompt says the path will be rejected; code rejects it. |
+| Confidence below 0.6 | A locator that is unsure has told us nothing the matcher had not. |
+| `unsure`, or anything but `found` | Only a positive location counts. |
+| No answer at all | An unavailable model must never turn a miss into a pass. |
+
+**A located control is never a pass.** It becomes a **review-severity** finding naming
+the path and asking a person to confirm, with the next step written into the finding:
+add the path to the rule as an alternate and the next run matches it in code, without
+asking again. That is the write-back the specification wanted, done by a person rather
+than silently — ADR-021 — and it means the model is consulted once per customer per
+rule rather than on every run.
+
+**What this changed about the stage.** `s6_reverse.py` opened with *"Pure code, no LLM
+call"* for its whole life. It now makes one, in one place, and its documentation says
+so — as does `docs/model-context.md`, which a test keeps honest: the register lists
+which stages build a preamble, and stage 6 joining that list is what made the test fail
+until both were corrected.
+
+## The open questions, answered by the build
+
+- **Is a model-located match a finding or a confirmation prompt?** A confirmation
+  prompt, at review severity. Not a pass, because deciding compliance is a comparison.
+- **Automatic write-back or the training queue?** Neither, in the end: the finding tells
+  the person what to add, and they add it. Simpler than a queue round-trip for a
+  one-line change, and it keeps ADR-021's rule that nothing activates without a person.
+- **Run statistics saying which engine answered.** Still outstanding. A run records its
+  calls and cache hits, so the locator's cost is visible in aggregate, but a finding
+  does not yet say whether code or the model produced it.
+- **Does the same problem apply to programme rules and checks?** Still unmeasured.
+  Worth the same half-hour the compliance measurement took.
