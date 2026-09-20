@@ -123,6 +123,24 @@ def extract_responder(_system: str, user: str) -> str:
             }
         )
 
+    if "Additional requirements" in section:
+        # Free-text clauses. A competent model returns these as ``other``: they carry
+        # a requirement and no check can express one, which is what puts them in
+        # coverage as "verified by hand" (Phase 6.11b).
+        for line in section.splitlines():
+            clause = line.strip()
+            if len(clause) < 20 or clause.startswith("9 ") or "Additional requirements" in clause:
+                continue
+            requirements.append(
+                {
+                    "req_type": "other",
+                    "action": "pass",
+                    "applies_to": "all",
+                    "source_text": clause,
+                    "confidence": 0.85,
+                }
+            )
+
     return json.dumps({"requirements": requirements})
 
 
@@ -163,6 +181,16 @@ def describe_responder(_system: str, user: str) -> str:
                 "description": f"Bounds {value.get('field')} at {bound}.",
             }
         )
+    elif isinstance(value, dict) and "describes" in value:
+        # A policy the configuration carries that no threshold expresses. A competent
+        # reader calls it ``other``: it is a requirement, and no check can compare it
+        # against a report (Phase 6.11b).
+        element.update(
+            {
+                "req_type": "other",
+                "description": f"A policy setting: {value['describes']}",
+            }
+        )
     elif isinstance(value, dict) and "fields" in value:
         element.update(
             {
@@ -198,6 +226,28 @@ def describe_responder(_system: str, user: str) -> str:
 #: that two items are about the same thing.
 _SINGLE_SUBJECT_TYPES = ("geography", "waterfall", "quantity", "attributes")
 
+#: Words too ordinary to mean two free-text items are about the same thing.
+_COMMON_WORDS = frozenset(
+    {
+        "other",
+        "setting",
+        "policy",
+        "every",
+        "which",
+        "these",
+        "after",
+        "under",
+        "their",
+        "order",
+        "record",
+        "records",
+        "consumer",
+        "consumers",
+        "delivery",
+        "deliveries",
+    }
+)
+
 #: Attributes the synthetic cases constrain, used to tell one criteria rule from another.
 _SUBJECTS = ("score", "age", "util", "trades", "state")
 
@@ -212,6 +262,25 @@ def trace_responder(_system: str, user: str) -> str:
     requirement = user.split("Requirement: ")[-1].split("\n")[0].lower()
     element = user.split("Element: ")[-1].split("\n")[0].lower()
     req_type = requirement.split(" — ")[0].strip()
+
+    if req_type == "other":
+        # Two free-text items are about the same thing when they share an uncommon
+        # word. Deliberately crude: the point is to exercise the path, not to be a
+        # model.
+        words = {w for w in re.findall(r"[a-z]{5,}", requirement)} & {
+            w for w in re.findall(r"[a-z]{5,}", element)
+        }
+        if words - _COMMON_WORDS:
+            return json.dumps(
+                {
+                    "verdict": "implemented",
+                    "reason": "The configuration carries this policy.",
+                    "confidence": 0.8,
+                }
+            )
+        return json.dumps(
+            {"verdict": "not_related", "reason": "Different subjects.", "confidence": 0.8}
+        )
 
     if req_type in _SINGLE_SUBJECT_TYPES and req_type in element:
         return json.dumps(
@@ -359,6 +428,60 @@ def synthesize_responder(_system: str, user: str) -> str:
                 "cannot_express": "",
             }
         )
+    if "blank origination date" in lowered or "origination date" in lowered:
+        rules.append(
+            {
+                "name": "origination_date_not_blank",
+                "target_kind": "field_constraint",
+                "field": "orig_date",
+                "constraint": "not_blank",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": ["account_review"],
+                "expression": "",
+                "reasoning": "A blank origination date means the extract dropped it.",
+                "severity": "high",
+                "cannot_express": "",
+            }
+        )
+    if "billing count" in lowered and "delivered count" in lowered:
+        rules.append(
+            {
+                "name": "billing_within_delivered",
+                "target_kind": "check",
+                "field": "",
+                "constraint": "",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": [],
+                "expression": "billing_count <= delivered_count",
+                "reasoning": "More billed than delivered means something was counted twice.",
+                "severity": "high",
+                "cannot_express": "",
+            }
+        )
+    if "configuration" in lowered and ("must" in lowered or "has to" in lowered):
+        rules.append(
+            {
+                "name": "deceased_suppression_present",
+                "target_kind": "compliance_rule",
+                "field": "",
+                "constraint": "",
+                "values": [],
+                "minimum": None,
+                "maximum": None,
+                "pattern": "",
+                "report_kinds": [],
+                "expression": "",
+                "reasoning": "The suppression must be configured whether or not the OSL says so.",
+                "severity": "high",
+                "cannot_express": "",
+            }
+        )
     if "ignore your instructions" in lowered or "reply with the word" in lowered:
         rules.append(
             {
@@ -402,6 +525,86 @@ def synthesize_responder(_system: str, user: str) -> str:
     return json.dumps({"rules": rules, "notes": ""})
 
 
+def critique_responder(_system: str, user: str) -> str:
+    """Read a drafted rule back against the statements it came from (Phase 6.11g).
+
+    The stand-in agrees unless a statement carries the word "every", which is the
+    shape of an over-broad draft and gives a test something deterministic to script
+    against without a network.
+
+    Args:
+        _system: The system prompt, unused.
+        user: The rendered user prompt.
+
+    Returns:
+        The critique, as JSON.
+    """
+    too_broad = "report kinds []" in user and "file" in user.lower()
+    return json.dumps(
+        {
+            "faithful": not too_broad,
+            "problem": (
+                "The statement names one report and the draft applies to every report."
+                if too_broad
+                else ""
+            ),
+            "overlaps": False,
+            "overlaps_with": "",
+            "confidence": 0.9,
+        }
+    )
+
+
+def classify_responder(_system: str, user: str) -> str:
+    """Place a statement an administrator typed (Phase 6.12b).
+
+    Scripted from the statement's wording, and deliberately unhelpful about anything it
+    does not recognise: a stand-in that guessed would make the "asks a question rather
+    than guessing" test pass for the wrong reason.
+
+    Args:
+        _system: The system prompt, unused.
+        user: The rendered prompt, which carries the statement.
+
+    Returns:
+        A JSON ``ClassifyResponse``.
+    """
+    blocks = user.split("<statement>")
+    lowered = blocks[-1].split("</statement>")[0].lower() if len(blocks) > 1 else user.lower()
+
+    def answer(surface: str, reason: str, confidence: float, question: str = "") -> str:
+        return json.dumps(
+            {
+                "surface": surface,
+                "reason": reason,
+                "confidence": confidence,
+                "question": question,
+            }
+        )
+
+    if "ignore your instructions" in lowered or "reply with the word" in lowered:
+        return answer(
+            "unclear",
+            "This is an instruction to the assistant rather than something to check.",
+            0.9,
+            "What would you like the tool to check?",
+        )
+    if "tab" in lowered or "is the reissue file" in lowered or "means" in lowered:
+        return answer("background", "This says how to read a file.", 0.8)
+    if "configuration" in lowered and ("must" in lowered or "has to" in lowered):
+        return answer("compliance_rule", "This must be present in the configuration.", 0.9)
+    if "count" in lowered and ("exceed" in lowered or "more than" in lowered):
+        return answer("check", "This compares two numbers the tool already names.", 0.9)
+    if "blank" in lowered or "empty" in lowered or "between" in lowered:
+        return answer("field_constraint", "This is a rule about one attribute.", 0.9)
+    return answer(
+        "unclear",
+        "There is no attribute, number or configuration setting named here.",
+        0.2,
+        "Which value, and what would make it wrong?",
+    )
+
+
 def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClient:
     """Build a mock client wired with the scripted responders.
 
@@ -420,5 +623,15 @@ def build_client(settings: LLMSettings | None = None, **kwargs: Any) -> MockClie
         "s8_verify", json.dumps({"agreed": True, "reason": "Confirmed.", "confidence": 0.9})
     )
     client.register("training_synthesize", synthesize_responder)
+    client.register("training_critique", critique_responder)
+    client.register("admin_classify", classify_responder)
     client.register("admin_map_requirement", map_responder)
+    # Every lens answers like the single second opinion, so a run with the lenses on
+    # behaves the same as one without unless a test scripts a disagreement.
+    for lens in ("delivery", "compliance", "requirements"):
+        client.register_text(
+            f"s8_lens_{lens}",
+            json.dumps({"agreed": True, "reason": "Confirmed.", "confidence": 0.9, "missed": []}),
+        )
+    client.register_text("s8_coverage", json.dumps({"gaps": []}))
     return client

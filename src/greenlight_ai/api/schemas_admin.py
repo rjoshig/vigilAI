@@ -10,6 +10,9 @@ import datetime as dt
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from greenlight_ai import scopes
+from greenlight_ai.api.schemas import ScopeToken
 from greenlight_ai.checks.guides import GuideEntry
 
 __all__ = [
@@ -138,6 +141,10 @@ class ScopeIn(BaseModel):
     standing_instructions: str = ""
     is_active: bool = True
     sort_order: int = 100
+    #: Whether a run in this programme needs a second person to approve before it can
+    #: be frozen, when the reviewer waved through something this programme treats as
+    #: serious. Off by default, and meaningless with login off (ADR-036).
+    second_approver: bool = False
     #: Words that mark a delivery as this programme's; the classification check
     #: scans the inputs for them (ADR-026).
     keywords: list[str] = Field(default_factory=list)
@@ -200,7 +207,7 @@ class CheckIn(BaseModel):
     instruction: str = ""
     reasoning: str = ""
     severity: Severity = "medium"
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     is_active: bool = True
 
 
@@ -260,7 +267,7 @@ class ComplianceRuleIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     json_path_contains: str = Field(min_length=1)
     expected_value: Any = True
-    scope: str = "all"
+    scope: ScopeToken = scopes.EVERYWHERE
     reasoning: str = ""
     is_active: bool = True
 

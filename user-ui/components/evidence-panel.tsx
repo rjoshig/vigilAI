@@ -19,6 +19,14 @@ export interface EvidencePanelProps {
   onClose: () => void;
 }
 
+/** How each lens is named to a reviewer. Matches the server's labels. */
+const LENS_LABEL: Record<string, string> = {
+  single: "Second opinion",
+  delivery: "Delivery",
+  compliance: "Compliance",
+  requirements: "Requirements owner",
+};
+
 export function EvidencePanel({ finding, onClose }: EvidencePanelProps) {
   if (!finding) return null;
   const { evidence } = finding;
@@ -94,7 +102,35 @@ export function EvidencePanel({ finding, onClose }: EvidencePanelProps) {
             </section>
           ) : null}
 
-          {finding.verified ? (
+          {finding.lens_opinions && finding.lens_opinions.length > 1 ? (
+            <section>
+              <h3 className="mb-1 text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                How it was read
+              </h3>
+              <p className="mb-1.5 text-[0.7rem] text-muted-foreground">
+                Each reader saw the same evidence and none saw the others. Code merged what they
+                said.
+              </p>
+              <ul className="space-y-1">
+                {finding.lens_opinions.map((opinion) => (
+                  <li key={opinion.lens} className="flex items-start gap-2 text-[0.7rem]">
+                    <Badge
+                      tone={
+                        !opinion.answered ? "muted" : opinion.agreed ? "success" : "destructive"
+                      }
+                    >
+                      {LENS_LABEL[opinion.lens] ?? opinion.lens}
+                    </Badge>
+                    <span>
+                      {!opinion.answered
+                        ? "did not answer"
+                        : `${opinion.agreed ? "agreed" : "disagreed"} — ${opinion.reason || "no reason given"}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : finding.verified ? (
             <p className="text-[0.7rem] text-muted-foreground">
               {finding.verify_agreed
                 ? "A second opinion agreed with this finding."

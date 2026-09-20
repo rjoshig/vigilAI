@@ -9,14 +9,22 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Final
+from typing import Final, Sequence
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
-from greenlight_ai.api.deps import CurrentUser, current_user, get_data_dir, get_session
+from greenlight_ai.api import gate
+from greenlight_ai.api.deps import (
+    CurrentUser,
+    current_user,
+    get_auth_settings,
+    get_data_dir,
+    get_session,
+)
+from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.db import models, repository, drift
 from greenlight_ai.report.pdf import PdfUnavailable, render_pdf, renderer_available
 from greenlight_ai.report.render import render_report, write_report
@@ -62,12 +70,56 @@ def _stored(session: Session, run_id: int) -> models.FinalReport | None:
     ).scalar_one_or_none()
 
 
+def _name_of(session: Session, user_id: int | None) -> str:
+    """The display name for an account id.
+
+    Args:
+        session: The request's session.
+        user_id: The account, or ``None``.
+
+    Returns:
+        The name, or ``""`` when there is no account. With login off every action is
+        attributed to the seeded placeholder, so this is never empty in practice
+        (ADR-022).
+    """
+    if user_id is None:
+        return ""
+    row = session.get(models.User, user_id)
+    return row.name if row is not None else ""
+
+
+def _reviewers(session: Session, findings: Sequence[models.Finding]) -> list[str]:
+    """Who decided the findings on this run.
+
+    A report that is evidence of a review should name the people who reviewed it, and
+    a run is often decided by more than one (Phase 6.2d). The names come from the
+    decisions themselves, so a run nobody reviewed names nobody rather than implying
+    a review that did not happen.
+
+    Args:
+        session: The request's session.
+        findings: The run's findings.
+
+    Returns:
+        Each reviewer once, in the order they first decided something.
+    """
+    names: list[str] = []
+    for finding in findings:
+        if finding.review_status == "undecided" or finding.reviewed_by_user_id is None:
+            continue
+        name = _name_of(session, finding.reviewed_by_user_id)
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
 @router.post("/{run_id}/finalize", status_code=status.HTTP_201_CREATED)
 def finalize(
     run_id: int,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
 ) -> dict[str, object]:
     """Render and freeze the final report.
 
@@ -83,6 +135,11 @@ def finalize(
     Raises:
         HTTPException: 409 when the run is already finalized or the gate is not
             satisfied, 400 when the run never reached review.
+
+    The gate is ADR-035's: every high and every ``review`` finding decided, and every
+    coverage gap and unevaluated check acknowledged. What the person confirmed is
+    stored on the report, because a report that is evidence of a review should say
+    what the reviewer was shown.
     """
     run = _run(session, run_id)
 
@@ -97,24 +154,15 @@ def finalize(
             f"run {run_id} is {run.status}; only a reviewed run can be finalized",
         )
 
-    undecided = int(
-        session.execute(
-            sa.select(sa.func.count())
-            .select_from(models.Finding)
-            .where(
-                models.Finding.run_id == run_id,
-                models.Finding.severity == "high",
-                models.Finding.review_status == "undecided",
-                models.Finding.shadow.is_(False),
-            )
-        ).scalar_one()
-    )
-    if undecided:
+    # The gate is ADR-035's and lives in one place, so what the screen shows and what
+    # this refuses cannot drift apart.
+    state = gate.gate_state(session, run, auth.user_auth)
+    if not state.can_finalize:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"{undecided} high-severity finding(s) still need a decision before this run "
-            "can be finalized",
+            f"This run cannot be finalized yet: {state.reason}",
         )
+    confirmed = gate.attestation(session, run)
 
     findings = list(
         session.execute(
@@ -149,6 +197,9 @@ def finalize(
         ),
         generated_by=user.name,
         drift=drift.compute_drift(session, run),
+        attestation=confirmed,
+        submitted_by=_name_of(session, run.user_id),
+        reviewers=_reviewers(session, findings),
     )
 
     storage_key = write_report(rendered.html, data_dir, run_id)
@@ -158,6 +209,7 @@ def finalize(
             html_path=storage_key,
             html_sha256=rendered.sha256,
             verdict=rendered.verdict,
+            attestation=confirmed,
             generated_by=user.name,
             generated_by_user_id=user.id,
         )

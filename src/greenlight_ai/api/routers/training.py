@@ -31,15 +31,18 @@ from greenlight_ai.api.schemas_training import (
     RulesBulkAction,
     RulesBulkResult,
     RuleStateChangeOut,
+    FrontDoorIn,
+    FrontDoorOut,
     SynthesizeIn,
     TrainingConfigOut,
 )
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import models, repository
+from greenlight_ai.training import conflicts
 from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.llm.tripwire import PiiDetected, assert_clean
-from greenlight_ai.training import lifecycle, synthesis
+from greenlight_ai.training import front_door, lifecycle, synthesis
 
 __all__ = ["router"]
 
@@ -140,6 +143,8 @@ def _candidate_out(row: models.RuleCandidate) -> CandidateOut:
         model_used=row.model_used,
         prompt_version=row.prompt_version,
         conflicts=list(row.conflicts or []),
+        critique=dict(row.critique or {}),
+        redraft=dict(row.redraft or {}),
         replay=dict(row.replay or {}),
         created_by=row.created_by,
         decided_by=row.decided_by,
@@ -181,7 +186,9 @@ def create_observation(
         user: The author.
 
     Returns:
-        The stored observation. It never runs.
+        The stored observation, carrying any active rules that already cover what it
+        points at. Those are information, not a refusal: an observation contradicting
+        an active rule is often the signal that the old rule is wrong (ADR-021).
 
     Raises:
         HTTPException: 404 when Train AI mode is off, 422 when the text contains
@@ -216,6 +223,10 @@ def create_observation(
     )
     session.add(row)
     session.flush()
+    # Tell the author now what already covers this, while they can still reconsider.
+    # Saying it at the candidate stage says it weeks later, through an administrator,
+    # about a sentence they no longer remember writing (Phase 6.1e).
+    covered = conflicts.covering_rules(session, row.anchors or [], row.statement)
     repository.audit(
         session,
         "training.observation_created",
@@ -224,7 +235,9 @@ def create_observation(
         user_id=user.id,
         actor=user.name,
     )
-    return _observation_out(row)
+    out = _observation_out(row)
+    out.covered_by = covered
+    return out
 
 
 @router.get("/observations", response_model=list[ObservationOut])
@@ -543,6 +556,30 @@ def set_config_note_active(
     return _observation_out(row)
 
 
+def _what_exists(session: Session) -> tuple[list[str], list[str]]:
+    """The attribute names and report types the tool knows.
+
+    Args:
+        session: The request's session.
+
+    Returns:
+        The known attributes and the known report types, so a drafted rule that names
+        something the tool has never heard of is caught by code rather than approved.
+    """
+    known_fields = sorted(
+        {row.canonical_name for row in session.execute(sa.select(models.AttributeAlias)).scalars()}
+    )
+    report_kinds = sorted(
+        {
+            row.key
+            for row in session.execute(
+                sa.select(models.ArtifactType).where(models.ArtifactType.kind == "report")
+            ).scalars()
+        }
+    )
+    return known_fields, report_kinds
+
+
 # -------------------------------------------------------------------- candidates
 
 
@@ -588,17 +625,7 @@ def synthesize_candidates(
         )
 
     client = build_client(resolved_llm_settings(session))
-    known_fields = sorted(
-        {row.canonical_name for row in session.execute(sa.select(models.AttributeAlias)).scalars()}
-    )
-    report_kinds = sorted(
-        {
-            row.key
-            for row in session.execute(
-                sa.select(models.ArtifactType).where(models.ArtifactType.kind == "report")
-            ).scalars()
-        }
-    )
+    known_fields, report_kinds = _what_exists(session)
     try:
         created = synthesis.synthesize(
             session,
@@ -620,6 +647,82 @@ def synthesize_candidates(
         actor=user.name,
     )
     return [_candidate_out(row) for row in created]
+
+
+# -------------------------------------------------------------------- front door
+
+
+@router.post("/admin/front-door", response_model=FrontDoorOut)
+def front_door_place(
+    payload: FrontDoorIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_admin),
+) -> FrontDoorOut:
+    """Say what you want checked, in your own words, and let the tool place it.
+
+    There is no new rule table and no new evaluator behind this. The model decides
+    which of the existing surfaces the sentence belongs on; the drafting, the
+    validation, the fingerprint and the approval are the ones the training queue
+    already uses, so a candidate from here is indistinguishable from one from there.
+
+    Args:
+        payload: The sentence and where it applies.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        A candidate in draft, an offer to the surface that holds background, or the
+        question the model needs answered. Nothing is created in the last two cases.
+
+    Raises:
+        HTTPException: 404 when Train AI mode is off, 422 when the statement looks
+            like personal data or the model could not place it at all.
+    """
+    _require_enabled(session)
+    try:
+        assert_clean(payload.statement)
+    except PiiDetected as exc:
+        raise HTTPException(
+            HTTP_422,
+            f"this looks like it contains personal data, so it was not saved: {exc}",
+        ) from exc
+
+    client = build_client(resolved_llm_settings(session))
+    known_fields, report_kinds = _what_exists(session)
+    try:
+        result = front_door.place(
+            session,
+            client,
+            payload.statement,
+            scope=payload.scope,
+            known_fields=known_fields,
+            report_kinds=report_kinds,
+            actor=user.name,
+            user_id=user.id,
+        )
+    except front_door.FrontDoorError as exc:
+        raise HTTPException(HTTP_422, str(exc)) from exc
+
+    repository.audit(
+        session,
+        "training.front_door",
+        detail=(
+            f"{result.surface}: "
+            f"{result.candidate.id if result.candidate else 'nothing created'}"
+        ),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return FrontDoorOut(
+        surface=result.surface,
+        reason=result.reason,
+        confidence=result.confidence,
+        question=result.question,
+        note=result.note,
+        candidate=_candidate_out(result.candidate) if result.candidate else None,
+        observation_id=result.observation_id,
+        drafted_as=result.drafted_as,
+    )
 
 
 @router.get("/admin/candidates", response_model=list[CandidateOut])
@@ -748,7 +851,9 @@ def approve_candidate(
         The candidate, now approved.
 
     Raises:
-        HTTPException: 404 when it does not exist, 422 when it cannot become a rule.
+        HTTPException: 404 when it does not exist, 422 when it cannot become a rule or
+            when it overlaps an existing rule and no resolution was given
+            (Phase 6.11g).
     """
     row = session.get(models.RuleCandidate, candidate_id)
     if row is None:
@@ -766,6 +871,7 @@ def approve_candidate(
             actor=user.name,
             user_id=user.id,
             note=payload.note,
+            resolution=payload.resolution,
         )
     except synthesis.SynthesisError as exc:
         raise HTTPException(HTTP_422, str(exc)) from exc

@@ -66,6 +66,16 @@ The platform team, with the administrator.
       Then **Meaning** run on the real samples: Map each programme, confirm the
       mappings, and let the compiled checks run in shadow through UAT (Phase 6.10);
       a validation guide per report type for the cells that need it (Phase 6.8).
+- [ ] Phase 6.11 landed before UAT: the bulk-OK defect fixed, the finalize gate
+      fail-closed with the attestation, coverage on the review screen and the report,
+      and the benchmark harness reporting precision and recall per finding type.
+      Stage 2's benchmark is that harness run against the manual check. **Phase 6.11 is
+      complete**: the harness reports precision, recall, coverage and model calls per
+      finding type and per programme, and takes a `--lenses` switch so a change to
+      stage 8 is compared rather than argued.
+- [ ] A decision on `LLM_VERIFY_LENSES` for this deployment. It ships at `single`,
+      today's single second opinion. Moving it to the three lenses is one line and
+      should follow the harness's numbers, not precede them (ADR-034).
 - [ ] Masked columns populated from the real DIRT layout. The PII tripwire on.
 - [ ] Retention agreed and recorded as an ADR; security and compliance sign-off on
       retention and PII handling recorded as an ADR.

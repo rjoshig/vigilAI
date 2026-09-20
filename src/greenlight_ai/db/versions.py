@@ -20,6 +20,7 @@ from typing import Any, Final, Literal, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.db import models
 from greenlight_ai.db.types import utcnow
 
@@ -436,7 +437,7 @@ def _restore_programme(session: Session, code: str, snapshot: dict[str, Any]) ->
         rule = live.get(int(wanted.get("id", 0)))
         if rule is None:
             # A rule created after this version: re-create it under a new id.
-            rule = models.ProgrammeRule(scope_code=code, scope=f"programme:{code}")
+            rule = models.ProgrammeRule(scope_code=code, scope=scopes.for_programme(code).token)
             session.add(rule)
         else:
             seen.add(rule.id)

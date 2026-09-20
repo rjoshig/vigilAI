@@ -15,7 +15,7 @@ from greenlight_ai.llm.prompts.schemas import SummarizeResponse
 __all__ = ["SUMMARIZE_PROMPT", "VERSION"]
 
 #: Bump on any wording change: the version is part of the cache key (ADR-005).
-VERSION: Final[str] = "1"
+VERSION: Final[str] = "2"
 
 _SYSTEM: Final = """\
 You write the summary shown at the top of a quality-control report for a credit-data \
@@ -30,7 +30,15 @@ who has not seen the files. Name the specific values that differ where the findi
 give them.
 - List the most serious issues separately in top_issues, one short line each, most \
 serious first, at most five.
-- If the findings list is empty, say that every requirement was traced and matched.
+- You are also given the run's coverage: how many requirements a report check actually \
+compared, and how many were left unchecked or can only be verified by hand. These are \
+counts code produced. Never restate them as more than they are, and never treat an \
+unchecked requirement as one that passed.
+- If the findings list is empty and nothing was left unchecked, say that every \
+requirement was traced and matched. If the findings list is empty but requirements were \
+left unchecked, say that no disagreement was found and name how many requirements \
+nothing in the reports evidenced. An empty findings list is not a clean delivery when \
+part of it was never examined.
 - Answer with a single JSON object and nothing else. No prose, no code fence.
 """
 
@@ -54,10 +62,25 @@ scope"]}
 Example 2
 Findings:
 (none)
+Coverage: 14 of 14 requirements were checked against a report; 0 were left unchecked and \
+0 need checking by hand.
 Answer:
 {"summary": "Every requirement in the specification was traced to the configuration and \
 checked against the reports, and all of them matched. No issues were found.", \
 "top_issues": []}
+
+Example 3
+Findings:
+(none)
+Coverage: 9 of 14 requirements were checked against a report; 3 were left unchecked and \
+2 need checking by hand.
+Answer:
+{"summary": "No disagreement was found between the specification, the configuration and \
+the reports. This is not a clean bill of health: of fourteen requirements, nine were \
+compared against a report, three were traced to the configuration but evidenced by no \
+report, and two can only be verified by reading. Those five need a person before this \
+delivery is accepted.", "top_issues": ["Five requirements were not evidenced by any \
+report"]}
 """
 
 _TEMPLATE: Final = """\
@@ -66,6 +89,8 @@ Now write the summary for these findings.
 
 Findings:
 $findings
+
+Coverage: $coverage
 
 Answer:"""
 

@@ -11,9 +11,9 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev` == `main` (2026-09-20). **Next task: browser tests in CI** on `feature/browser-tests`, cut from `main` — see "Next concrete action" below |
-| Last updated | 2026-09-19 |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.12**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phases 6.11 and 6.12 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036), one scope vocabulary and the front door built (ADR-037).** Next: open a PR to `dev`; the remaining work is blocked on the target machine |
+| Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
 reports; the worker runs the nine stages; a reviewer decides each finding; the frozen
@@ -86,10 +86,8 @@ Workbook type detection that asks when unsure. And the training loop: a reviewer
 sentence, anchored to what they meant, becomes a candidate rule the model drafts, code
 validates, a replay tests, and a person approves into shadow.
 
-### Outstanding, needs the user### Outstanding, needs the user
+### Outstanding, needs the user
 
-- **Merge the Phase 0 PR and create `dev` from `main`.** Eighteen commits are stacked
-  on one session branch. This is the thing to do first.
 - **A decision on retention for DIRT files** (90 days by default), and **security and
   compliance sign-off** on retention and PII handling. Both are Phase 6 criteria and
   both want an ADR.
@@ -102,6 +100,420 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.12: one scope vocabulary and one front door)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1135 Python
+tests, 91 user-ui, 84 admin-ui.
+
+Two things, and deliberately not a third. The phase document says what was left out and
+why: the overlapping surfaces are not merged and the sixteen screens are not rewritten,
+because each merge is a migration and a behaviour change, and doing them behind a front
+door that already hides the difference would be paying the risk for something nobody
+sees.
+
+### One module reads a scope (ADR-037)
+
+Four shapes had been stored over the product's life — `all`, a bare customer name,
+`programme:CODE` and `config:ID` — and each reader recognised some of them. `scopes.py`
+is now the only thing that interprets one: `parse` takes every form, `token` renders the
+canonical one, `covers` answers the question, `label` is for a screen. The stored columns
+are untouched; a row becomes canonical the next time somebody saves it, and one pydantic
+type canonicalises the wire in both directions so no router has to remember.
+
+**This found a real bug.** A field constraint scoped to a delivery programme never ran:
+the loader compared the stored string against `all`, the customer name and `config:ID`
+and nothing else, so the rule was loaded on every run and matched on none. It was
+invisible, because a rule that never fires looks exactly like a rule with nothing to say.
+`load_admin_config` now takes the run's programme and asks `scopes.covers`.
+
+`all` became `everywhere` because `all` was already taken: the rule schema's
+`applies_to: "all"` means every **record**, not every **run**, and one of them is in the
+model's output schema.
+
+### The front door
+
+One box, `POST /admin/front-door`, and a **Tell the tool** screen at the top of the admin
+sidebar. One new prompt, `admin_classify`, answers which of the existing surfaces a
+sentence belongs on, from a closed set. Everything after that is `training.synthesis`
+unchanged: the drafting, the validation, the fingerprint, the conflict check, the
+critique pass and the approval. There is no new rule table, no new evaluator and no new
+branch in the approval path, which is the whole point — a front door that added a surface
+would make seventeen.
+
+Two answers create nothing. **Background** ("the second tab is the reissue file") is said
+to be background and offered to the screen that holds background, rather than forced into
+a rule that would then be wrong. **Unclear** comes back with the model's question and
+writes no candidate and no observation.
+
+The classification routes; it does not draft. Passing the chosen surface into the
+synthesis prompt would have meant changing that prompt, bumping its version and
+discarding its cache, to tell it something it works out anyway. When the two readings
+disagree, the answer says so instead of hiding it.
+
+### A bug in the browser harness, found on the way
+
+The browser suite was failing intermittently, and the first job was to establish that it
+was not this work: it fails the same way on the previous commit, two runs in three. The
+cause is that **Playwright starts the web servers before it runs global setup**, and
+global setup was what wiped and seeded the database. The API therefore opened the
+previous run's file and kept it after the wipe — SQLite keeps a deleted file open — so
+the whole suite read and wrote a database nothing else could see.
+
+It presented as caching and was nothing of the kind: a run already frozen before any
+test touched it, and review decisions that returned 200 and were nowhere afterwards.
+Seeding now happens inside the API's own web-server command, which is the only ordering
+that guarantees one database. Two further fixes came out of the same investigation: the
+decide loop drives from the server's list of undecided findings rather than from the
+cards, and an assertion after a reload waits for the element rather than for the
+navigation. Thirty browser tests, green twice in a row.
+
+### Tests
+
+14 on the front door, 30 on the scope module, 3 more in the admin console. The three
+statements the phase document names as acceptance criteria are asserted verbatim, and the
+scripted stand-in gained a classifier plus three rule shapes so those assertions mean
+something. The stand-in refuses anything it does not recognise, so "asks a question
+rather than guessing" cannot pass for the wrong reason.
+
+---
+
+## Session: 2026-09-20 (four eyes on what one reviewer waved through)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1084 Python
+tests, 91 user-ui, 81 admin-ui.
+
+A delivery programme can now require that someone other than the reviewer signs off a
+run whose serious findings the reviewer marked OK: a breach of a rule the programme
+calls `must`, or a compliance rule the configuration does not implement. ADR-036 has
+the shape. Off by default, because programmes differ in what a waved-through compliance
+finding costs.
+
+It is deliberately narrow. **A signature, not a re-review**: the second person is shown
+what was waved through and says the run can be frozen, and nothing claims they redid the
+work. **From someone else**: an approval from the reviewer who made those decisions is
+refused. Deciding a serious finding Not OK needs no second signature — the trigger is
+waving it through, not seriousness.
+
+### The thing worth remembering
+
+**With login off the rule stands down entirely.** Everyone is then the same placeholder
+account, so a "second" approver is the same person and every affected run would be
+unfinalizable forever. A gate nobody can pass is worse than no gate: it teaches people
+to look for a way round, and the way round is switching the whole thing off. The first
+test written failed for exactly this reason, which is how the trap was found. The admin
+console says it beside the switch and the deployment checklist says it beside login.
+
+A second thing came out of that: the gate was reading auth settings from the
+environment rather than the ones the app was built with, so an app running with login
+on was told it was off. The settings are passed in now.
+
+### Next concrete action
+
+Phase 6.12: one front door for the admin console — say it in words, the model routes the
+statement onto the right existing rule surface and drafts it, an administrator confirms
+it into shadow — and one scope vocabulary in place of today's three.
+
+---
+
+## Session: 2026-09-20 (Explore a sample: the last 6.1 item)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1076 Python
+tests, 91 user-ui, 81 admin-ui, 26 browser.
+
+A reviewer could only anchor an observation to a finding, so they could only tell the
+tool about what it had already noticed. What a person knows is usually about what it
+said nothing about. **Explore a sample** (`user-ui/app/explore`) serves the stored
+samples read-only: a workbook cell by cell with its label, an OSL by section, a
+configuration by JSON path, each of them something to point at. With Train AI mode on
+every one carries a "What should this check?" button. It is the admin console's preview
+reused, with the same masking: two renderings of one workbook that could disagree would
+be worse than one.
+
+### Found on the way, in the browser suite
+
+Two flakes that were both real, and both now written down in `e2e/README.md`:
+
+- **`reuseExistingServer` was carrying state between runs.** Global setup wipes the
+  database, so a server left from an earlier run is attached to the one it wiped. It is
+  false everywhere now.
+- **The finding list renders progressively.** A count taken from the screen missed a
+  finding, which left the gate shut for a reason the test could not see. The test asks
+  the API how many findings there are, waits for that many cards, and asserts the run
+  ends frozen rather than the status of one reply — a second identical finalize is
+  refused by design (ADR-005), which is not a failure.
+
+### Next concrete action
+
+Four-eyes: a programme-level switch requiring a second approver before finalize when a
+`must` programme breach or a compliance finding was marked OK. Off by default, and
+meaningful only with login on. Then Phase 6.12.
+
+---
+
+## Session: 2026-09-20 (closing the open items in 6.1, 6.2 and 6.4)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1071 Python
+tests, 91 user-ui, 81 admin-ui, 26 browser.
+
+Four items that had sat unticked in closed phases.
+
+**The frozen report names its submitter and its reviewers (6.2d).** Reviewers come from
+the decisions themselves, so a run nobody decided names nobody rather than implying a
+review that did not happen. With login off both are the seeded placeholder, which is
+attribution and not authentication — a distinction the deployment checklist now makes
+explicitly.
+
+**A contradiction is flagged when the observation is written, not weeks later
+(6.1e).** `training/conflicts.py` finds the active rules covering the same field or
+anchor and marks one the statement reverses. It comes back with the saved observation
+and the dialog shows it. Nothing is blocked: an observation contradicting an active
+rule is often the signal that the old rule is wrong (ADR-021). Detection at the
+candidate stage is unchanged; this is the second moment, where the author still
+remembers writing the sentence.
+
+**The deployment checklist gained a "Login and attribution" section (6.2f):** both
+switches, the bootstrap password the API refuses to serve past, two administrators
+rather than one, TLS so the cookie is `Secure`, and a spot-check of the audit log. A
+half-configured sign-in looks like protection and is not.
+
+**The Train AI indicator is covered rendered, in both states (6.4).** The suites
+covered the client that reads the switch and never the thing a person looks at.
+
+### Next concrete action
+
+Four-eyes: a programme-level switch requiring a second approver before finalize when a
+`must` programme breach or a compliance finding was marked OK. Off by default, and
+meaningful only with login on. Then Phase 6.12.
+
+---
+
+## Session: 2026-09-20 (browser tests in CI)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete — 26 browser tests green,
+twice in a row, plus every existing gate.
+
+`e2e/` holds Playwright tests over both apps against a real API, a real worker and a
+throwaway database seeded by `scripts/seed_demo.py`. Playwright starts the API and both
+apps; the worker has no URL to poll, so global setup starts it and teardown stops it.
+The scripted stand-in answers every model call, so the suite needs no network. A new
+`browser` job runs it in the manual-dispatch workflow and uploads the report on failure.
+
+Covered: the runs list in every lifecycle state, the matrix and coverage panel, the
+three decisions, Not OK refused on a high finding without a comment, the evidence
+drawer, the frozen report, drift; the whole finalize gate end to end; every admin
+screen loading without a page error, the typed-word confirmation, a setting's layer;
+the four palettes and two screens at phone width.
+
+### Found on the way
+
+**A real defect, fixed.** The coverage panel returned `null` when its request failed,
+so a reviewer would see no panel and no explanation — the panel whose entire purpose is
+to say that the absence of a finding is not a pass would have vanished silently. It now
+shows the error and offers to retry. The browser suite found it because the panel
+disappeared under a request raced by a navigation.
+
+**Three test-quality lessons**, written into `e2e/README.md` so the next suite starts
+there: assert outcomes rather than transient text (a finding card carries
+`data-review-status`, so a decision is confirmed by state and not by a message that
+clears); do not count elements before a list has loaded, and do not hold a locator that
+re-resolves as state changes; and the screens read their run when they mount, so a test
+that changes state reloads rather than asserting a live update the app never promised.
+
+### Next concrete action
+
+The small items left open in closed phases: the frozen report naming its submitter and
+reviewer (6.2), the standalone sample-exploration screen and anchoring by OSL section or
+configuration path (6.1), flagging a contradicting observation when it is written
+(6.1), the open configuration-note test (6.4), and the deployment production checklist
+(6.2).
+
+---
+
+## Session: 2026-09-20 (Phase 6.11b: the benchmark harness — 6.11 complete)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1066 Python
+tests, 88 user-ui, 81 admin-ui.
+
+`scripts/golden_set.py` now reports **coverage and model calls** beside precision and
+recall, **per programme** as well as per finding type, and takes a **`--lenses` switch**
+so a change to stage 8 is compared rather than argued. A case whose coverage drifts from
+its oracle fails even when its findings are right: a run that finds nothing because it
+compared nothing used to score perfectly.
+
+**Three new golden cases**, not the two the phase doc planned:
+
+- `unevidenced_requirement` — an `other` clause the configuration implements and no
+  report check can reach. Its findings list is empty and its coverage is not, which is
+  the whole point of Phase 6.11.
+- `report_nothing_checks` — a report type nothing examines.
+- `credit_date_not_in_reports` — **the first case in the set to produce a low-severity
+  finding.** Nothing had, which is why the bulk-OK defect fixed in 6.11a went untested.
+
+**The lens comparison, and what it settled.** Both variants score identically on the
+synthetic set: 15/15, 100% precision and recall, the same coverage, 323 calls against
+345. That is not evidence the lenses are pointless — the scripted stand-in returns the
+same canned agreement to every lens, so the comparison measures the fixtures, which is
+ADR-028's lesson over again. It does establish that the three cost about 7% more rather
+than three times more, and that turning them on changes no finding when the readers
+agree. **`LLM_VERIFY_LENSES` stays at `single`**; the comparison that decides it runs on
+the target environment. Written up in `docs/benchmarks/README.md`.
+
+### Found on the way
+
+The stand-in needed teaching to read free-text OSL clauses as `other` requirements and
+to describe a policy configuration block as one, or the new case could not exist. Two
+clauses in one case both linked to the same configuration element, leaving the other
+orphaned as a spurious finding; one clause makes the case say what it means.
+
+### Next concrete action
+
+**Browser tests in CI** on this branch: Playwright over both apps against the seeded
+stack with the scripted model, wired into the manual-dispatch workflow. Cover submit,
+review and finalize, the coverage panel and acknowledge, the PDF, login on, the training
+queue, a setting change, a rule action with the typed word, Map on Meaning, the
+palettes, a narrow viewport.
+
+---
+
+## Session: 2026-09-20 (Phase 6.11c–h: coverage, the gate, the lenses)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 1058 Python
+tests, 88 user-ui tests, `black`/`flake8`/`mypy`/lint/typecheck/format/build clean.
+
+Built in the order the user asked for: c through h, with b (the benchmark harness)
+deferred.
+
+**Coverage (6.11c).** Stage 7 records what it evaluated as it goes; `pipeline/coverage`
+turns that into one state per requirement — checked, traced but unchecked, untraced,
+verified by hand — with the reason, plus how many checks touched each uploaded report.
+Pure code. Stored on the run, served at `GET /runs/{id}/coverage`, a panel on the
+review screen and a "What was checked" section in the frozen report. The summary prompt
+is given the counts (version 2) so it cannot call a delivery clean when part of it was
+never examined. Drift gains what a report evidenced last time and does not now. A
+verification or programme reading that could not run is a notice the reviewer sees.
+
+**The gate fails closed (6.11d, ADR-035).** Every high **and** every `review` finding
+decided, every unevidenced requirement and unevaluated check acknowledged. One
+implementation in `api/gate.py` answers both the screen and finalize, refused with 409.
+Finalizing shows the attestation and stores it on the report.
+
+**Three lenses (6.11e, ADR-034).** Delivery, compliance, requirements owner, each given
+the same finding and evidence and none given another's answer; code merges. Any
+disagreement sends the finding to a person with every reason. A lens may raise a
+question from the same evidence, which becomes a review item, deduplicated across
+findings; it can never raise a severity. A lens that fails counts as neither, so two
+that agree still verify. `LLM_VERIFY_LENSES` **stays at `single`** — today's behaviour,
+call for call — until 6.11b measures the three. Also: stage 4 now receives the
+preamble, and the whole guidance block has a ceiling (it was capped per field, so ten
+configuration notes were ten times the cap).
+
+**The coverage reader (6.11f)** asks which unevidenced requirements read like
+obligations; an invented requirement id is dropped. **The critique pass (6.11g)** reads
+a drafted rule back against the statements with one redraft, keeping both versions, and
+approving a candidate that overlaps an existing rule now requires supersede or
+keep-both.
+
+**Docs:** ADR-034, ADR-035, design, architecture, privacy, glossary, both training
+documents, the rollout readiness list.
+
+### Found on the way
+
+- **No synthetic fixture leaves a requirement unevidenced**, so the coverage-reader
+  tests build the state directly rather than skipping. 6.11b adds the golden case.
+- **The same lens proposal arrives once per finding.** Deduplicated within a run, with
+  every lens that raised it named.
+
+### Next concrete action
+
+**6.11b, the benchmark harness**: expected findings in the golden fixtures, precision
+and recall per finding type and per programme out of `scripts/golden_set.py` into
+`docs/benchmarks/`, the `LLM_PIPELINE_VARIANT` switch, and the new cases (a requirement
+no report can evidence; a custom report with no checks; one that yields a low-severity
+finding). Then the measurement that decides whether `LLM_VERIFY_LENSES` moves off
+`single`. Browser tests in CI follow.
+
+---
+
+## Session: 2026-09-20 (Phase 6.11a: review defects and decision quality)
+
+**Branch:** `feature/nothing-slips` · **Status:** complete, gates green — 966 Python
+tests, 88 user-ui tests, `black`/`flake8`/`mypy`/lint/typecheck/format/build clean.
+
+- **The bulk-OK defect is fixed.** `bulk_ok_low_severity` writes `false_positive`; it
+  wrote `confirmed`, which reads as Not OK on the screen and turns the run's verdict,
+  so one click on "Mark all low OK" failed a clean delivery.
+- **Three decisions on the review screen**, not two: False positive, Accepted risk,
+  Not OK. Every OK used to be stored as `false_positive` and `accepted_risk` was
+  unreachable from the UI although the schema had it all along.
+- **A decision has to say what it means.** `decision_problem` (findings router)
+  refuses with 422 a Not OK on a high or review finding with no comment, and an
+  accepted risk with no comment at any severity. `decisionProblem`
+  (`user-ui/lib/display.ts`) is the same rule client-side, so the reviewer is asked
+  before the request rather than losing what they typed.
+- **Finalize asks once**, through `confirm-dialog`, showing the finding counts and
+  what freezing means. The attestation block replaces that body in 6.11d.
+
+**Two things found while doing it**, both recorded in `phase-6.11.md` "Found on the way":
+
+1. **No fixture case produces a low-severity finding**, so the existing bulk-OK test
+   had always passed on zero rows and proved nothing. The tests now create one
+   (`_add_low_finding`).
+2. **Every fixture case, the clean baseline included, carries two `could_not_evaluate`
+   findings at `review` severity**, and the gate lets them through undecided. That is
+   the hole 6.11c and 6.11d close, now confirmed on real output.
+
+A drift test helper that marked high findings Not OK with no comment started failing,
+correctly, and was given one.
+
+### Next concrete action
+
+**6.11b, the benchmark harness**, on the same branch: expected findings in the golden
+fixtures, precision and recall per finding type and per programme out of
+`scripts/golden_set.py` into `docs/benchmarks/`, the `LLM_PIPELINE_VARIANT` switch, and
+the two new cases (a requirement no report can evidence; a custom report type with no
+checks — and one that yields a low-severity finding, per the note above).
+
+---
+
+## Session: 2026-09-20 (product review → Phase 6.11 specified)
+
+**Branch:** session branch, docs only · **Status:** `docs/phase-6.11.md` written and
+indexed; no code changed.
+
+A review of the product as built, asked for before the next work: ease of use, human
+error, whether a compliance error can slip, and whether a multi-agent "personas
+debate" loop would help. Verified in code:
+
+- **Defect:** `POST /runs/{id}/findings/bulk-ok` writes `confirmed`, the Not OK value
+  in `display.ts` and `render.py`. "Mark all low OK" flips a clean run's verdict to
+  `not_ok`. The test asserts only "not undecided". Fix is 6.11a's first item.
+- Every OK from the screen is stored as `false_positive`; `accepted_risk` is
+  unreachable. No comment is ever required. Finalize has no confirm.
+- The gate covers high findings only; `review`-severity findings can be left
+  undecided through finalize. No coverage concept: a requirement traced but never
+  checked in any report, and a custom report with zero checks, are silent.
+- Stage 4 gets the guide block but not the preamble; the preamble clip is per field.
+- Synthesis detects conflicts but approval of a conflicting candidate is not blocked.
+- Sixteen admin surfaces, three scope vocabularies; overlap among guides, meaning
+  entries and named values, and among programme rules, compliance rules and judgment
+  checks. Named as Phase 6.12, not yet specified.
+- No benchmark harness with precision and recall, which the rollout plan's gates need.
+
+**Decisions** (user): no debate loop; three independent lenses (Delivery, Compliance,
+Requirements owner) at stage 8 merged by code, confidence only, never a severity up;
+a fail-closed finalize gate with an attestation; four-eyes deferred; the admin front
+door is Phase 6.12; 6.11 runs before browser tests, with the benchmark harness inside
+it. Full reasoning in `docs/phase-6.11.md` "The idea".
+
+### Next concrete action
+
+Cut `feature/nothing-slips` from `dev`. 6.11a first: the bulk-OK fix with the
+finalize-after-bulk-OK test, then reason codes and required comments, then the confirm
+on finalize. Then 6.11b, the harness, before any coverage or lens work. *(6.11a landed
+the same day; see the session above.)*
 
 ---
 

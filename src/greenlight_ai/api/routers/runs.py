@@ -26,8 +26,15 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from greenlight_ai.api import schemas
-from greenlight_ai.api.deps import CurrentUser, current_user, get_data_dir, get_session
+from greenlight_ai.api import gate, schemas
+from greenlight_ai.api.deps import (
+    CurrentUser,
+    current_user,
+    get_auth_settings,
+    get_data_dir,
+    get_session,
+)
+from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.api.uploads import UploadError, store_upload
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import catalog, models, repository, drift
@@ -94,27 +101,24 @@ def _severity_counts(session: Session, run_id: int) -> dict[str, int]:
     return counts
 
 
-def _can_finalize(session: Session, run_id: int) -> bool:
-    """Whether every high-severity finding has a decision (ADR-015).
+def _can_finalize(session: Session, run: models.Run, user_auth: bool = False) -> tuple[bool, str]:
+    """Whether the run can be frozen, and what stands in the way.
+
+    The gate is ADR-035's, which widens ADR-015's: every high and every ``review``
+    finding decided, and every coverage gap acknowledged. The one implementation lives
+    in :mod:`greenlight_ai.api.gate` so the answer the screen shows and the answer
+    finalize enforces cannot differ.
 
     Args:
         session: An open session.
-        run_id: The run.
+        run: The run row.
+        user_auth: Whether login is on, which the four-eyes rule needs (ADR-036).
 
     Returns:
-        ``True`` when the gate is satisfied.
+        Whether the gate is satisfied, and the reason when it is not.
     """
-    undecided = session.execute(
-        sa.select(sa.func.count())
-        .select_from(models.Finding)
-        .where(
-            models.Finding.run_id == run_id,
-            models.Finding.severity == "high",
-            models.Finding.review_status == "undecided",
-            models.Finding.shadow.is_(False),
-        )
-    ).scalar_one()
-    return int(undecided) == 0
+    state = gate.gate_state(session, run, user_auth)
+    return state.can_finalize, state.reason
 
 
 def _summary(
@@ -184,7 +188,9 @@ def _scope_label(session: Session, code: str) -> str:
     return found.label if found else code
 
 
-def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDetail:
+def _detail(
+    session: Session, run: models.Run, queue: JobQueue, user_auth: bool = False
+) -> schemas.RunDetail:
     """Build the full view of a run.
 
     Args:
@@ -196,6 +202,7 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         The detail payload.
     """
     base = _summary(session, run, queue)
+    can_finalize, blocked_by = _can_finalize(session, run, user_auth)
     finalized = (
         session.execute(
             sa.select(sa.func.count())
@@ -225,7 +232,8 @@ def _detail(session: Session, run: models.Run, queue: JobQueue) -> schemas.RunDe
         input_fingerprint=run.input_fingerprint,
         has_suppressions=run.has_suppressions,
         config_notes=[str(n) for n in (run.config_notes_snapshot or [])],
-        can_finalize=_can_finalize(session, run.id),
+        can_finalize=can_finalize,
+        finalize_blocked_by=blocked_by,
         finalized=finalized,
         stages=stages,
         files={f.kind: f.filename for f in run.files},
@@ -612,6 +620,7 @@ def get_run(
     request: Request,
     session: Session = Depends(get_session),
     _user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
 ) -> schemas.RunDetail:
     """Read one run, including live stage progress.
 
@@ -623,12 +632,14 @@ def get_run(
         request: The incoming request.
         session: The request's session.
         _user: The caller.
+        auth: The settings the app is running with, which decide whether the
+            four-eyes rule can mean anything (ADR-036).
 
     Returns:
         The run detail.
     """
     run = _get_run(session, run_id)
-    return _detail(session, run, _queue(request, session))
+    return _detail(session, run, _queue(request, session), auth.user_auth)
 
 
 @router.get("/{run_id}/findings", response_model=list[schemas.FindingOut])

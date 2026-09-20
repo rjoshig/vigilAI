@@ -27,6 +27,7 @@ import sqlalchemy as sa
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.checks.named_values import NamedValue, resolve
 from greenlight_ai.db import models
 from greenlight_ai.parsers.base import ParseError, ReportKind
@@ -289,7 +290,7 @@ def compile_checks(
                     expression=expression,
                     reasoning=reasoning,
                     severity="medium",
-                    scope="all",
+                    scope=scopes.EVERYWHERE,
                     is_active=False,
                     state="shadow",
                     origin=GUIDE_ORIGIN,

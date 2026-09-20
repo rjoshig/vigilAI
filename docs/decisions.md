@@ -990,3 +990,201 @@ OSL type.
 **Consequences:** An administrator defines what a delivery means once per programme
 from real samples, on the target machine, without a developer. The model's role is
 bounded to reading; nothing counts until a person confirms and then activates.
+
+## ADR-034 — Several lenses read a finding independently; code merges them, and no lens grades
+
+**Status:** accepted 2026-09-20 (user decision, Phase 6.11e)
+
+**Context:** The question put to this phase was whether two or three agents with
+different roles, given the same submission, should discuss it for a few rounds before
+the tool answers. The instinct behind it is right: different lenses catch different
+classes of error. A delivery lead reads a report asking whether the output matches what
+was configured; a compliance officer asks which obligation a discrepancy touches; the
+requirements owner asks whether this is what the specification asked for. One prompt
+cannot hold all three stances at once, and stage 8's single second opinion has held one.
+
+**Decision:** Build the lenses. Leave out the conversation.
+
+1. **Independent readers, merged by code.** Each lens receives the finding and its
+   evidence and nothing else, answers the same schema, and never sees another lens's
+   answer. Code merges: every answering lens agrees and the finding is verified at the
+   lowest confidence offered; any disagreement downgrades it to `review` with each
+   dissenting lens's reason attached. This is sectioning, not debate.
+2. **No debate, for four reasons that hold here specifically.** *Cost*: three agents
+   over three rounds is up to nine times the calls at that stage, on an in-house 20–40B
+   model where a run already takes five to fifteen minutes, and the cache stops helping
+   because each round's input contains the last round's output. *Convergence*: agents
+   that see each other's answers drift toward the most confident one, which removes the
+   independence that made a second reader worth having; published debate results show
+   modest gains on open reasoning and almost none where the truth is deterministic.
+   *Auditability*: a QC record must say "this finding exists because rule X, evidence
+   Y", and "three personas argued for two rounds" is neither reproducible nor
+   defensible to an auditor. *Authority*: the model may not compare or grade (ADR-001,
+   ADR-026), so the only thing the agents could debate is meaning, which stages 2, 3, 4
+   and 8 already isolate into narrow schema-bound questions.
+3. **A lens changes confidence, never severity.** It can send a finding to a person and
+   it can raise a question from the same evidence, which becomes a `review` item. It
+   cannot make anything more serious, and it cannot delete anything. The severities
+   code set stand.
+4. **A lens that does not answer counts as neither.** Two lenses that agree still
+   verify. No lens answering leaves the finding exactly as the checks produced it, and
+   the run says so as a notice rather than passing over it.
+5. **The same question asked once.** One lens reads every high-severity finding, so the
+   same observation arrives several times; a reviewer needs it once with the readings
+   that raised it named. A proposal repeated five times is five times the noise.
+6. **Switchable, capped, and measured before it is the default.** `LLM_VERIFY_LENSES`
+   stays at `single` — today's behaviour, call for call — until the golden-set
+   benchmark compares the three against it. What reviewers see changes on evidence, not
+   on argument. A per-run call cap sits beside the token budget, and empty turns
+   verification off, which the run reports.
+7. **The same discipline, twice more, off the run path.** A coverage reader labels the
+   requirements code found unevidenced (Phase 6.11f), proposing only. A critique pass
+   reads a drafted rule back against the statements it came from and allows one redraft
+   (Phase 6.11g), once per candidate at authoring time.
+
+**Consequences:** Each lens's answer is cached under its own key, so a re-run costs
+nothing and the record of what each said is complete and replayable. Verification costs
+three calls per high-severity finding when the lenses are on, which is the reason for
+the cap and the reason the default waits for a measurement. The alternative — one
+prompt asked to hold three stances — was rejected because a prompt that asks for
+everything reliably returns the average.
+
+## ADR-035 — The finalize gate fails closed, and freezing carries an attestation
+
+**Status:** accepted 2026-09-20 (user decision, Phase 6.11d). Amends ADR-015.
+
+**Context:** ADR-015 set the gate at "every high-severity finding has a decision". That
+reads the absence of a finding as a pass. It says nothing about a `review`-severity
+finding, which is precisely the one the model was unsure about; nothing about a
+requirement no report could evidence; nothing about a check that was defined and could
+not be evaluated; and nothing about a verification that failed and was logged. A
+reviewer who opens a run with three findings, decides them, and freezes the report has
+no way to learn that nine requirements were never compared against anything. That is how
+a compliance error leaves the tool as a clean report.
+
+**Decision:**
+
+1. **Coverage is a first-class output.** After stage 7, code records one state per
+   requirement — checked, traced but unchecked, untraced, verified by hand — with the
+   reason, and how many checks touched each uploaded report. Pure code, no model
+   (ADR-001). It is stored on the run, shown on the review screen and in the frozen
+   report, and given to the summary prompt as counts so the summary cannot call a
+   delivery clean when part of it was never examined.
+2. **The gate widens.** Every high **and** every `review` finding needs a decision, and
+   every requirement no report evidenced and every check that could not be evaluated
+   needs an **acknowledgement**. An acknowledgement is not a decision that the delivery
+   is fine; it is the record that the gap was in front of somebody before the report was
+   frozen. An untraced requirement needs none: it is already a high-severity finding.
+3. **The gate is one implementation.** `api/gate.py` answers both "can this be frozen"
+   for the screen and "may this be frozen" at finalize, so what a reviewer is shown and
+   what the API enforces cannot drift apart. Refused with 409, not merely greyed out.
+4. **Freezing asks once, with the numbers.** The confirmation carries the coverage
+   counts, the gaps acknowledged, the checks that could not be evaluated, the shadow
+   rules and definition versions in force, and the run's notices. The same block is
+   stored on the final report and rendered in it, because a report that is evidence of a
+   review should say what the reviewer was shown.
+5. **A run from before coverage existed is unaffected.** An empty coverage column reads
+   as nothing to acknowledge, so an old run's gate is exactly what it was.
+
+**Consequences:** Some runs that would have been frozen in three clicks now need a
+person to look at what was never checked, which is the point and is the cost. The
+attestation makes the frozen report meaningfully stronger evidence: it states the
+limits of what was verified rather than implying there were none. Two fixtures showed
+the hole while this was built — every synthetic case, the clean baseline included,
+carries two checks that could not be evaluated and used to pass through undecided.
+
+## ADR-036 — A second approver is a programme's choice, and stands down when login is off
+
+**Status:** accepted 2026-09-20. Deferred from Phase 6.11 and built after it.
+
+**Context:** ADR-035 made the finalize gate fail closed, but every decision on it is
+still one person's. Some findings are not: a breach of a rule a programme calls `must`,
+and a compliance rule the configuration does not implement, are things a programme
+decided in advance that nobody waves through alone. The question was whether to build
+four-eyes at all, and if so how narrow to make it.
+
+**Decision:**
+
+1. **The programme decides, not the product.** A delivery programme carries a
+   `second_approver` switch, off by default. Programmes differ in how much a waved-through
+   compliance finding costs, and a global rule would be wrong for most of them.
+2. **Only what was waved through.** The rule triggers on a `programme_rule_violation`
+   or a `rule_missing_in_config` the reviewer marked **OK** — false positive or accepted
+   risk. Deciding one Not OK is the delivery being corrected, which needs no second
+   signature. Seriousness alone is not the trigger; waving it through is.
+3. **A signature, not a re-review.** The second person is not asked to redo the review.
+   They are shown what was waved through and they sign that the run can be frozen. That
+   is the whole of what this control asserts, and claiming more of it would be a lie
+   about what actually happened.
+4. **From someone else.** The approver must be a different account from the reviewer
+   who made those decisions, refused with a 422 otherwise. A signature from the person
+   who made the decision is not a second pair of eyes.
+5. **Inert while login is off.** With login off every action belongs to the same
+   placeholder account (ADR-022), so a second approver would be the same person and the
+   gate could never be passed: every affected run would be unfinalizable forever. The
+   rule therefore stands down entirely rather than deadlocking. **A gate nobody can
+   pass is worse than no gate** — it teaches people to look for a way round, and the way
+   round is usually turning the whole thing off. The admin console says this beside the
+   switch, and the deployment checklist says it beside login.
+6. **The gate reads the settings the app is running with**, passed in rather than
+   re-read from the environment. An app built with login on must not be told it is off.
+7. **It reaches the frozen report.** The attestation records who approved, when, what
+   they covered and any note, because a report that is evidence of a review should say
+   whose approval it carries.
+
+**Consequences:** A programme that switches this on and runs without login gets nothing,
+silently in the gate and loudly in the console. That asymmetry is deliberate: the
+failure mode of a control that cannot be satisfied is worse than the failure mode of one
+that is absent, and the honest place to say so is where somebody is deciding. The
+control is narrow enough to be true — one signature, from someone else, over a named
+list — and nothing about it implies the second person re-derived the first's work.
+
+## ADR-037 — One module reads a scope, and the stored columns are left alone
+
+**Date:** 2026-09-20 · **Status:** accepted · **Phase:** 6.12a
+
+**Context:** A check, a compliance rule, a field constraint, a programme rule and a
+learned rule all carry a scope. Four shapes had been stored over the product's life —
+`all`, a bare customer name, `programme:CODE` (Phase 6.8) and `config:ID` (ADR-024) —
+and each reader interpreted the string for itself. The pipeline's `in_scope` knew three
+of them, the field-constraint loader knew a different three, and the two consoles knew a
+fourth set between them. A scope was therefore capable of meaning one thing on the
+screen that defined it and another in the run that used it, which is the failure this
+product exists to prevent, happening inside the product.
+
+There were two obvious answers: rewrite the columns into one form, or leave them and
+unify the reading.
+
+**Decision:**
+
+1. **One module interprets a scope string**, `greenlight_ai/scopes.py`, with a `Scope`
+   value object, a `parse` that accepts every form ever stored, a `token` that renders
+   the canonical one, and a `covers` that answers the only question anyone asks. Nothing
+   else parses a scope. `checks.definitions.in_scope` survives as the name the pipeline
+   calls and decides nothing itself.
+2. **No data migration.** Rewriting three columns across a dozen tables would be the
+   riskiest change in the product for a cosmetic gain, and a half-completed rewrite
+   would leave exactly the ambiguity it was meant to remove. A row becomes canonical the
+   next time somebody saves it, and reads identically until then. The older forms parse
+   forever; that is the contract, not a transitional courtesy.
+3. **The wire is where the vocabulary is unified.** One pydantic type canonicalises a
+   scope in both directions, so any form is accepted on input and the canonical token is
+   what goes back out. The consoles never learn that four shapes exist.
+4. **The canonical token is `everywhere`, `programme:CODE`, `customer:NAME` or
+   `config:ID`.** `all` became `everywhere` because `all` already means something else
+   in the rule schema (`applies_to: all`, meaning every record rather than every run),
+   and a bare customer name gained a prefix because it was the one form indistinguishable
+   from a typo.
+5. **A scope that names nothing covers nothing.** `programme:` with no code, or a
+   customer scope with no name, matches no run. A half-written row must not quietly
+   become a rule that runs everywhere, and the console refuses to save one.
+6. **A configuration scope is not picked, it is inherited.** It comes from a note
+   written against one configuration (ADR-024); the scope control shows it rather than
+   turning it into a customer name.
+
+**Consequences:** A programme-scoped field constraint now actually reaches the pipeline.
+It did not before: the loader compared the stored string against `all`, the customer name
+and `config:ID`, so a rule scoped to a delivery programme was loaded and never matched.
+Found by making one module answer the question. The cost is that two files, one Python
+and one TypeScript, must agree on the vocabulary; both say so at the top, and both are
+tested against the same list of stored forms.

@@ -30,6 +30,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
@@ -846,6 +847,7 @@ def list_scopes(
             standing_instructions=row.standing_instructions,
             is_active=row.is_active,
             sort_order=row.sort_order,
+            second_approver=row.second_approver,
             keywords=list(row.keywords or []),
             runs_using=counts.get(row.code, 0),
             version=latest.get(f"programme_rules:{row.code}", 0),
@@ -898,6 +900,7 @@ def save_scope(
     row.standing_instructions = payload.standing_instructions
     row.is_active = payload.is_active
     row.sort_order = payload.sort_order
+    row.second_approver = payload.second_approver
     row.keywords = [word.strip() for word in payload.keywords if word.strip()]
     session.flush()
 
@@ -910,6 +913,7 @@ def save_scope(
         standing_instructions=row.standing_instructions,
         is_active=row.is_active,
         sort_order=row.sort_order,
+        second_approver=row.second_approver,
         keywords=list(row.keywords or []),
         version=versions.latest_version(session, "programme_rules", row.code),
     )
@@ -2048,7 +2052,7 @@ def create_programme_rule(
         text=payload.text.strip(),
         strictness=payload.strictness,
         sort_order=payload.sort_order,
-        scope=f"programme:{code}",
+        scope=scopes.for_programme(code).token,
         created_by=user.name,
     )
     session.add(row)

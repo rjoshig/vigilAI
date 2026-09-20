@@ -114,6 +114,13 @@ export interface ScopeIn {
   keywords: string[];
   is_active: boolean;
   sort_order: number;
+  /**
+   * Whether a run in this programme needs a second person to approve before it can be
+   * frozen, when the reviewer waved through something this programme treats as
+   * serious. Off by default, and inert while login is off, because both people would
+   * then be the same placeholder account (ADR-036).
+   */
+  second_approver: boolean;
 }
 
 export interface Scope extends ScopeIn {
@@ -459,6 +466,24 @@ export interface Candidate {
   created_by: string;
   decided_by: string;
   created_at: string;
+}
+
+/** What the front door made of one sentence (Phase 6.12b). */
+export interface FrontDoorResult {
+  /** field_constraint · check · compliance_rule · background · unclear. */
+  surface: string;
+  /** Why the tool read it that way, in one sentence. */
+  reason: string;
+  confidence: number;
+  /** What the tool needs to know, when it could not place the sentence. */
+  question: string;
+  /** What to do next when nothing was created, or what to notice when it was. */
+  note: string;
+  /** The candidate, indistinguishable from one the training queue produced. */
+  candidate: Candidate | null;
+  observation_id: number | null;
+  /** The shape synthesis drafted, which is usually the surface. */
+  drafted_as: string;
 }
 
 /** What an administrator decides about a candidate, beyond approve or reject. */

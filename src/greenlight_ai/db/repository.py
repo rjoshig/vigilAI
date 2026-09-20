@@ -16,6 +16,7 @@ from typing import Any, Final, Iterable, Mapping, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.training.lifecycle import RUNNING_STATES
 from greenlight_ai.checks.definitions import (
@@ -29,6 +30,7 @@ from greenlight_ai.checks.named_values import NamedValue
 from greenlight_ai.db import models
 from greenlight_ai.db.types import utcnow
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
+from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, Trace
@@ -93,7 +95,10 @@ def fingerprint(file_hashes: Iterable[str], check_versions: Iterable[str] = ()) 
 
 
 def load_admin_config(
-    session: Session, customer: str = "", configuration_id: str = ""
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
 ) -> AdminConfig:
     """Load what the admin-ui contributes to a run.
 
@@ -102,6 +107,8 @@ def load_admin_config(
             ``config:<id>`` applies to it and to no other (ADR-024).
         session: An open session.
         customer: The run's customer, used to scope checks and compliance rules.
+        programme_code: The run's delivery programme, so a rule scoped to a programme
+            reaches the pipeline rather than being loaded and never matched.
 
     Returns:
         The admin configuration. Falls back to the shipped reverse-pass categories when
@@ -182,8 +189,8 @@ def load_admin_config(
         for row in session.execute(sa.select(models.NamedValueRow)).scalars()
     )
 
-    # A rule in scope for this customer, whatever its origin. Scope is "all", the
-    # customer's name, or "programme:CODE"; the narrowest that fits is what a learned
+    # A rule in scope for this run, whatever its origin. One module reads a scope
+    # token (:mod:`greenlight_ai.scopes`); the narrowest that fits is what a learned
     # rule gets by default (ADR-021).
     constraint_rows = list(
         session.execute(
@@ -203,7 +210,7 @@ def load_admin_config(
             reasoning=row.reasoning,
         )
         for row in constraint_rows
-        if row.scope in ("all", customer, f"config:{configuration_id}")
+        if scopes.covers(row.scope, customer, programme_code, configuration_id)
     )
 
     # Shadow rules run and are counted; their findings are shown to nobody, so the
@@ -307,6 +314,13 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
     run.rules_version = context.rules_version
     run.summary = context.summary
     run.top_issues = list(context.top_issues)
+    if context.coverage is not None:
+        run.coverage = coverage_module.as_rows(context.coverage)
+        run.report_coverage = [
+            {"kind": entry.kind, "checks_applied": entry.checks_applied}
+            for entry in context.coverage.reports
+        ]
+    run.notices = list(context.notices)
 
 
 def _replace_rules(session: Session, run: models.Run, rules: Sequence[Rule]) -> None:
@@ -422,6 +436,7 @@ def _replace_findings(session: Session, run: models.Run, findings: Sequence[Find
                 shadow=finding.shadow,
                 verified=finding.verified,
                 verify_agreed=finding.verify_agreed,
+                lens_opinions=list(finding.lens_opinions),
             )
         )
 
@@ -490,6 +505,7 @@ def load_findings(session: Session, run_id: int) -> list[Finding]:
             review_note=row.review_note,
             verified=row.verified,
             verify_agreed=row.verify_agreed,
+            lens_opinions=tuple(row.lens_opinions or []),
         )
         for row in rows
     ]

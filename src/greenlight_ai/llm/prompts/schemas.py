@@ -25,7 +25,13 @@ __all__ = [
     "DescribeResponse",
     "TraceResponse",
     "VerifyResponse",
+    "LensResponse",
+    "MissedItem",
     "SummarizeResponse",
+    "CoverageGap",
+    "CoverageGapResponse",
+    "CritiqueResponse",
+    "ClassifyResponse",
 ]
 
 
@@ -106,6 +112,67 @@ class VerifyResponse(BaseModel):
 
     agreed: bool
     reason: str = ""
+    confidence: Confidence = 0.5
+
+
+class MissedItem(BaseModel):
+    """Something a lens saw in the evidence that the finding does not mention."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = ""
+    reason: str = ""
+    confidence: Confidence = 0.5
+
+
+class LensResponse(VerifyResponse):
+    """One lens's reading of a finding (Phase 6.11e).
+
+    The same answer stage 8 has always wanted, plus at most one thing this lens noticed
+    and the finding did not. A proposal is never a graded finding: it becomes a review
+    item for a person (ADR-034).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    missed: tuple[MissedItem, ...] = ()
+
+
+class CoverageGap(BaseModel):
+    """One unchecked requirement that reads like an obligation (Phase 6.11f)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rule_id: str = ""
+    reason: str = ""
+    confidence: Confidence = 0.5
+
+
+class CoverageGapResponse(BaseModel):
+    """Which unchecked requirements look like obligations.
+
+    The model reads the list code produced and points; it decides nothing, and every
+    item it returns becomes a review item for a person (ADR-034).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    gaps: tuple[CoverageGap, ...] = ()
+
+
+class CritiqueResponse(BaseModel):
+    """Whether a drafted rule says what the statements said (Phase 6.11g).
+
+    It checks the draft, not the data: the model never evaluates a rule, and this
+    answer only decides whether one redraft is worth asking for (ADR-001).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    faithful: bool = True
+    problem: str = ""
+    overlaps: bool = False
+    overlaps_with: str = ""
     confidence: Confidence = 0.5
 
 
@@ -262,3 +329,29 @@ class MappingProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     requirements: list[MappingRequirement] = Field(default_factory=list)
+
+
+class ClassifyResponse(BaseModel):
+    """Which surface a statement an administrator typed belongs on (Phase 6.12b).
+
+    The model places the sentence; it never writes the rule here and never decides
+    whether anything passes. ``surface`` is a closed set, so nothing downstream reads
+    prose to find out what to do.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Where it belongs. ``background`` is a statement that is not a rule at all, and
+    #: ``unclear`` is the honest answer when the sentence could be two of the others.
+    surface: Literal[
+        "field_constraint",
+        "check",
+        "compliance_rule",
+        "background",
+        "unclear",
+    ] = "unclear"
+    #: One sentence saying why, shown to the administrator beside what it became.
+    reason: str = ""
+    confidence: Confidence = 0.5
+    #: What the model needs to know when it cannot place the sentence.
+    question: str = ""

@@ -79,6 +79,43 @@ jobs:
           npm test
           npm run build
 
+  browser:
+    name: browser tests (playwright, both apps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The scripted stand-in answers every stage, so nothing here reaches a model
+      # (ADR-003, ADR-014). SQLite keeps the job to one container (ADR-017).
+      LLM_PROVIDER: mock
+      GREENLIGHT_AI_DATA_DIR: ${{ github.workspace }}/.e2e-data
+      DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/.e2e-data/e2e.db
+      E2E_PYTHON: python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@v5 # TODO(human): pin by commit SHA (the other actions are pinned)
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: npm ci
+        working-directory: user-ui
+      - run: npm ci
+        working-directory: admin-ui
+      - run: npm ci
+        working-directory: e2e
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - run: npx playwright test
+        working-directory: e2e
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
   docs:
     name: docs integrity
     runs-on: ubuntu-latest

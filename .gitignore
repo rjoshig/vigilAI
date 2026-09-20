@@ -59,3 +59,9 @@ Thumbs.db
 *.db
 *.db-wal
 *.db-shm
+
+# Browser tests (e2e/): the throwaway stack and Playwright's own output
+/.e2e-data/
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/blob-report/

@@ -8,6 +8,7 @@ import {
   Gauge,
   GraduationCap,
   Layers,
+  Lightbulb,
   Moon,
   LogOut,
   Scale,
@@ -37,6 +38,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { href: "/tell", label: "Tell the tool", icon: Lightbulb },
   { href: "/artifacts", label: "Artifact types", icon: BookMarked },
   { href: "/scopes", label: "Delivery programmes", icon: Layers },
   { href: "/meaning", label: "Meaning", icon: Waypoints },

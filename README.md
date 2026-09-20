@@ -125,8 +125,15 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.10.md`](docs/phase-6.10.md) — **meaning**: scoped samples, the mapping
   interview (model proposes, person confirms, code compiles), and edit / typed delete
   everywhere (ADR-032, ADR-033)
+- [`docs/phase-6.11.md`](docs/phase-6.11.md) — **nothing slips**: coverage of every
+  requirement, a fail-closed finalize gate with an attestation, decision reasons, three
+  independent lenses at stage 8 merged by code, a benchmark harness (ADR-034…036)
+- [`docs/phase-6.12.md`](docs/phase-6.12.md) — **one front door**: a single place an
+  administrator says what to check in their own words, and one scope vocabulary across
+  the API, both consoles and the documents
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
+- [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
 - [`docs/llm-privacy.md`](docs/llm-privacy.md) — what may and may not reach the LLM, the cache, fixture policy
 - [`docs/deployment.md`](docs/deployment.md) — running it: docker-compose, `.env`, volumes, retention

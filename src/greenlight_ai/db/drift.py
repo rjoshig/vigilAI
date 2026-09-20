@@ -29,6 +29,7 @@ from greenlight_ai.db import models
 from greenlight_ai.rules.schema import Rule
 
 __all__ = [
+    "diff_coverage",
     "ConfigChange",
     "Drift",
     "FindingRef",
@@ -95,6 +96,10 @@ class Drift:
     carried_not_ok: tuple[FindingRef, ...] = ()
     requirements: tuple[RequirementChange, ...] = ()
     config: tuple[ConfigChange, ...] = ()
+    #: Requirements a report check evidenced last time and does not this time
+    #: (Phase 6.11c). Coverage going backwards is not a finding on its own, and it
+    #: is exactly the thing nobody notices: the findings list looks the same.
+    newly_unchecked: tuple[str, ...] = ()
     previous_config_version: int | None = None
     config_version: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
@@ -106,6 +111,46 @@ class Drift:
 
 
 # --- the previous run --------------------------------------------------------------------
+
+
+def diff_coverage(run: models.Run, previous: models.Run) -> tuple[str, ...]:
+    """Requirements a report evidenced last time and evidences no longer.
+
+    Matched on the OSL reference rather than the requirement id, which is renumbered
+    on every extraction. Pure code, like the rest of drift (ADR-030).
+
+    Args:
+        run: This run.
+        previous: The previous finalized run of the same configuration.
+
+    Returns:
+        The OSL references that went from checked to unchecked, sorted. Empty when
+        either run predates coverage, because "unknown" is not "worse".
+    """
+
+    def by_ref(rows: object) -> dict[str, str]:
+        out: dict[str, str] = {}
+        if not isinstance(rows, list):
+            return out
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            ref = str(row.get("osl_ref") or row.get("rule_id") or "")
+            if ref:
+                out[ref] = str(row.get("state", ""))
+        return out
+
+    before = by_ref(previous.coverage)
+    after = by_ref(run.coverage)
+    if not before or not after:
+        return ()
+    return tuple(
+        sorted(
+            ref
+            for ref, state in after.items()
+            if state != "checked" and before.get(ref) == "checked"
+        )
+    )
 
 
 def previous_finalized_run(session: Session, run: models.Run) -> models.Run | None:
@@ -379,6 +424,7 @@ def compute_drift(session: Session, run: models.Run) -> Drift:
         current_config.content if current_config else None,
         previous_config.content if previous_config else None,
     )
+    newly_unchecked = diff_coverage(run, previous)
     verdict = ""
     report = session.execute(
         sa.select(models.FinalReport.verdict)
@@ -409,4 +455,5 @@ def compute_drift(session: Session, run: models.Run) -> Drift:
         config=config,
         previous_config_version=previous_config.version if previous_config else None,
         config_version=current_config.version if current_config else None,
+        newly_unchecked=newly_unchecked,
     )

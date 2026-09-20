@@ -133,3 +133,82 @@ def test_the_oracle_travels_with_the_fixture(manifest: dict[str, Any]) -> None:
     for case in manifest["cases"]:
         assert "findings" in case["expected"]
         assert isinstance(case["expected"]["findings"], list)
+
+
+# --- what the benchmark measures beyond findings (Phase 6.11b) --------------------------
+
+
+def test_coverage_is_scored_beside_precision_and_recall(scores: list[CaseScore]) -> None:
+    """A run that finds nothing because it compared nothing must not score perfectly."""
+    assert all(s.coverage_matches for s in scores), [
+        (s.name, s.unevidenced, s.expected_unevidenced) for s in scores if not s.coverage_matches
+    ]
+    assert any(s.requirements for s in scores), "coverage counts reach the score"
+
+
+def test_one_case_leaves_a_requirement_no_report_evidences(scores: list[CaseScore]) -> None:
+    """The case the golden set had no example of until this phase."""
+    case = next(s for s in scores if s.name == "unevidenced_requirement")
+
+    assert case.expected == frozenset(), "its findings list is meant to be empty"
+    assert case.unevidenced == 1
+    assert case.checked < case.requirements
+
+
+def test_one_case_delivers_a_report_no_check_examines(scores: list[CaseScore]) -> None:
+    case = next(s for s in scores if s.name == "report_nothing_checks")
+
+    assert "segment_summary" in case.unchecked_reports
+
+
+def test_one_case_produces_a_low_severity_finding(scores: list[CaseScore]) -> None:
+    """Nothing exercised the low-severity path before, which hid the bulk-OK defect."""
+    case = next(s for s in scores if s.name == "credit_date_not_in_reports")
+
+    assert "credit_date_missing" in case.expected
+    assert case.passed
+
+
+def test_cases_carry_a_programme_so_the_numbers_break_down(scores: list[CaseScore]) -> None:
+    """The rollout gates are per programme, so the benchmark is too."""
+    from golden_set import per_programme
+
+    grouped = per_programme(scores)
+
+    assert set(grouped) > {"(none)"}, "at least one case names a programme"
+    assert sum(counts["cases"] for counts in grouped.values()) == len(scores)
+
+
+def test_the_report_carries_coverage_and_the_programme_table(scores: list[CaseScore]) -> None:
+    report = render(scores, "synthetic", "n/a")
+
+    assert "Coverage:" in report
+    assert "## Per programme" in report
+    assert "Reports with no check" in report
+
+
+def test_the_report_names_the_variant_it_ran(scores: list[CaseScore]) -> None:
+    """Two reports that do not say which variant produced them cannot be compared."""
+    single = render(scores, "synthetic", "n/a", ("single",))
+    lenses = render(scores, "synthetic", "n/a", ("delivery", "compliance", "requirements"))
+
+    assert "lenses: `single`" in single
+    assert "lenses: `delivery,compliance,requirements`" in lenses
+
+
+def test_coverage_that_does_not_match_the_oracle_fails_the_case() -> None:
+    """A case that starts checking less than it did is a regression no finding shows."""
+    score = CaseScore(
+        name="drifted",
+        expected=frozenset(),
+        produced=frozenset(),
+        true_positives=frozenset(),
+        false_negatives=frozenset(),
+        false_positives=frozenset(),
+        unevidenced=3,
+        expected_unevidenced=0,
+    )
+
+    assert score.passed, "its findings are right"
+    assert not score.coverage_matches, "and it still must not be reported as clean"
+    assert "Coverage does not match the oracle" in render([score], "synthetic", "n/a")

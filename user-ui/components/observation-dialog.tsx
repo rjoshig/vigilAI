@@ -29,6 +29,7 @@ import {
 import { api, ApiError } from "@/lib/api";
 import type {
   Anchor,
+  CoveringRule,
   Observation,
   ObservationInput,
   ObservationKind,
@@ -132,6 +133,10 @@ export function ObservationDialog({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
+  // What already covers this, returned when it is saved. Shown straight away rather
+  // than at the candidate stage, which would be weeks later through an administrator
+  // (Phase 6.1e).
+  const [coveredBy, setCoveredBy] = React.useState<CoveringRule[]>([]);
 
   async function save() {
     setSaving(true);
@@ -151,6 +156,7 @@ export function ObservationDialog({
         ? await api.updateObservation(existing.id, body)
         : await api.createObservation(body);
       setSaved(true);
+      setCoveredBy(stored.covered_by ?? []);
       onSaved?.(stored);
     } catch (caught) {
       // The 422 text names what to take out before saving, so it is shown as written.
@@ -197,6 +203,30 @@ export function ObservationDialog({
             <p className="rounded-md border border-success/40 bg-success/10 px-2.5 py-2 text-xs">
               Saved. You can follow what becomes of it on the Observations page.
             </p>
+          ) : null}
+
+          {saved && coveredBy.length > 0 ? (
+            <div
+              className="rounded-md border border-warn/40 bg-warn/10 px-2.5 py-2 text-xs"
+              data-testid="covered-by"
+            >
+              <b>
+                {coveredBy.some((rule) => rule.contradicts)
+                  ? "A rule already running says the opposite."
+                  : "A rule already covers this."}
+              </b>{" "}
+              Your observation is saved either way, and an administrator will see both. If the
+              existing rule is wrong, say so in a moment — that is the most useful thing you can
+              tell us.
+              <ul className="mt-1 space-y-0.5">
+                {coveredBy.map((rule) => (
+                  <li key={`${rule.kind}-${rule.id}`}>
+                    <span className="mono">{rule.summary}</span>
+                    {rule.contradicts ? " — this is what yours contradicts" : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
 
           <div className="grid gap-3 sm:grid-cols-3">

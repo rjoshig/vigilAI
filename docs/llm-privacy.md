@@ -11,6 +11,7 @@ ADR-003, ADR-004, ADR-005.
 | OSL text (headings, sentences, criteria tables) | Sample rows from the DIRT sample tab, masked or not |
 | Config JSON blocks and their JSON paths | Any cell value from a report that is not an aggregate (min, max, mean, count, null count, distinct keys) |
 | Canonical rules, trace pairs, findings (field names, thresholds, aggregate stats) | Customer identifiers beyond what the OSL itself contains |
+| A lens's finding and evidence; the list of requirements no report evidenced, as text and references; a drafted rule with the statements it came from | Any report value or configuration value not already in a finding's evidence |
 | Named values and the reasoning behind an admin check | Uploaded file contents verbatim |
 
 The model never needs sample rows to do its job. If a stage seems to need one, that is a
@@ -96,3 +97,11 @@ because its output becomes a rule applied to every run, and it is handled accord
   to reach.
 - **No report values are sent.** The model sees the sentence, what the person pointed
   at, and the list of attribute names the tool knows. It never sees a cell's contents.
+
+The **front door** (Phase 6.12b) adds one call in front of this, `admin_classify`, and
+no new exposure. It sends the administrator's sentence and the names of the attributes
+and report types the tool knows, inside a `<statement>` block labelled as data, and gets
+back one word from a closed set with a reason and a confidence. It writes nothing: the
+drafting, the validation and the approval are the ones above, so the same tripwire runs
+on the same text at the same moment and the same person still approves whatever runs. A
+sentence the model will not place creates nothing at all.

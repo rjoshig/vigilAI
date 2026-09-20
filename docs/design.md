@@ -95,7 +95,7 @@ Each stage writes status, duration, and token use to the database, so a failed r
 5. **Compare values (code).** Once a requirement and a config element are linked, code does the math. Sets: missing and extra members. Intervals: boundary and operator differences. Lists: missing and extra attributes. Order: waterfall step sequence.
 6. **Reverse pass.** The reverse pass is scoped, not exhaustive, because the OSL does not describe every detail of the extract process. Only three categories of config element are checked back against the OSL: filters and select criteria, model data such as attributes, and fixed compliance rules. Everything else in the config is ignored. Compliance rules work the other way round: each one must be present in the config even if the OSL never mentions it. The scoping is done in code from a category list kept in the admin-ui, with no LLM call.
 7. **Check reports (code).** Each requirement type has a fixed report check. Geography: every state in the state distribution must be in the allowed set. Criteria: min and max in DIRT respect the interval. Attributes: the requested fields exist in DIRT and the field distribution. Counts: waterfall steps reconcile across reports. The cross-report checks defined in the admin-ui also run here (see Configurable checks).
-8. **Verify (LLM).** Each high-severity finding goes back to the LLM with its evidence for a second opinion. Disagreements are kept but downgraded to Review. This cuts false positives.
+8. **Verify (LLM).** Each high-severity finding goes back to the LLM with its evidence for a second opinion. Disagreements are kept but downgraded to Review. This cuts false positives. Optionally three **lenses** read it instead — delivery, compliance, requirements owner — independently, never each other's answers, with code merging them (ADR-034): all agree and it is verified; any disagreement sends it to a person with every reason. A lens changes confidence, never severity, and may raise a question from the same evidence as a Review item. Stage 8 also reads the requirements no report evidenced and says which look like obligations.
 9. **Summarize (LLM).** The model gets the findings list only and writes the plain-English summary.
 
 **After the pipeline.** The run moves to needs review. A person marks findings OK or Not OK, and only then is the final report generated. See Review and final report.
@@ -173,6 +173,8 @@ A finding is one potential issue with a type, a severity, and links to its evide
 | Cross-report disagreement | DIRT row count differs from counts report | Medium |
 | Profile anomaly | Unexpected nulls, wrong type, mean far from prior runs | Low to Medium |
 | Low-confidence extraction | Rule confidence below 0.7 | Review |
+| Raised by a lens | One reader saw something in the same evidence the finding does not mention | Review |
+| Coverage gap | A requirement no report evidenced that reads like an obligation | Review |
 
 **Three-way findings.** A finding names which leg of the reconciliation broke: OSL vs config, config vs reports, or OSL vs reports. For set types it lists the exact members, for example "TX in config, not in OSL" and "NV in state distribution, not in OSL or config".
 
@@ -185,10 +187,10 @@ Users can mark a finding as **confirmed**, **false positive**, or **accepted ris
 A run does not end with the pipeline. A person reviews the findings first, and only then is the final report produced.
 
 1. The pipeline finishes and the run status becomes needs review.
-2. The review screen shows the traceability matrix and the findings. Each finding has OK and Not OK buttons and a comment box. Low-severity findings can be marked OK in bulk.
-3. Generate final report becomes active once the findings have decisions. Proposed gate: every high-severity finding needs a decision.
+2. The review screen shows the traceability matrix and the findings. Each finding offers three decisions — false positive, accepted risk, Not OK — and a comment box. An accepted risk always needs a comment, and so does Not OK on a high or review finding. Low-severity findings can be marked OK in bulk, as false positives.
+3. Generate final report becomes active once the gate is satisfied (ADR-035, ADR-036): every high and every Review finding has a decision, and every requirement no report evidenced and every check that could not be evaluated has been **acknowledged**. An acknowledgement is not a decision that the delivery is fine; it is the record that the gap was seen before the report was frozen. A delivery programme may also ask for a **second approver**: when the reviewer waves through a `must` programme breach or a missing compliance rule, someone else signs before the run can be frozen. Off by default, and inert while login is off, since both people would be the same placeholder account.
 4. The final report is one page of interactive HTML in the same format as the compare-file report. It shows the verdict, the counts, the Not OK items with their comments, and expandable detail.
-5. The report is frozen. It is stored once and never regenerated. PDF download is rendered from the stored HTML. Quick PDF export is scheduled for the last phase.
+5. The report is frozen. It is stored once and never regenerated, and generating it asks for a confirmation showing the finding counts, because the findings cannot be re-reviewed afterwards. PDF download is rendered from the stored HTML.
 
 Review decisions and report downloads never call the LLM.
 
@@ -328,11 +330,13 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | --- | --- | --- |
 | user-ui | New run | Form: customer name, order number, configuration ID, date, delivery programme (AM / AS / Archives / other), whether suppressions were applied (defaults to no), additional notes. Drag-and-drop for OSL, config JSON, and reports. Copy from a previous run. If the same inputs were already run, shows that report and asks for a reason before re-running |
 | user-ui | Runs | History with filters. Queue position and live stage progress |
-| user-ui | Review | Traceability matrix and findings. OK / Not OK and a comment per finding. Edit a requirement or a link, then Re-check. Generate final report |
+| user-ui | Review | Traceability matrix, coverage, and findings. Three decisions and a comment per finding. Edit a requirement or a link, then Re-check. Generate final report |
 | user-ui | Final report | The frozen one-page HTML report. Download PDF. Clone run |
+| user-ui | Explore a sample | The stored example of any artifact the tool accepts, read-only: a workbook cell by cell with its label, an OSL by section, a configuration by JSON path. With Train AI mode on, any of them can be pointed at to start an observation |
 | user-ui | Observations | What this person has recorded in Train AI mode and what became of it. Only when the mode is on (ADR-021) |
 | user-ui | Run stats | Stage timings, LLM calls, tokens, cache hits |
 | user-ui | Config history | Captured configs by configuration ID and version, with created and last-modified dates. Copy one into a new run. Same layout as the config history in the compare-file ui2 mock |
+| admin-ui | Tell the tool | One box: write what you want checked in your own words, and the model places it on the surface that already runs it, as a candidate in the ordinary queue. Background is offered to the screen that holds background; a sentence it cannot place comes back as a question and creates nothing (ADR-037) |
 | admin-ui | Artifact types | Define which inputs the tool accepts — the OSL, the config, and each report — with a label, a meaning, an optional sample workbook, model guidance, and an on/off switch. Named values are defined here too |
 | admin-ui | Delivery programmes | AM, AS, Archives, and a catch-all, each with standing instructions that reach the model as background (ADR-020) |
 | admin-ui | Checks | Create, test, version, enable or disable cross-report checks |
@@ -354,6 +358,7 @@ There are two outputs. The review screen in the app is the detailed working view
 - Findings list: filter by severity and type. Click a finding to open a side panel with the OSL text, the config path and value, the report cell, and matching sample rows.
 - Waterfall view: counts at each step, with breaks highlighted in red.
 - Traceability matrix: one row per requirement with three columns (OSL, config, reports) and a status of match, mismatch, partial, missing, or extra. This is the main view.
+- Coverage: how many requirements a report check actually compared, how many were traced but evidenced by nothing, how many were never traced, and how many can only be verified by hand, with the unevidenced ones listed and acknowledgeable. A report no check examined is a warning. The absence of a finding is not on its own a pass (ADR-035).
 - Attribute explorer: searchable DIRT table (min, max, mean, nulls) with pass or fail per rule. This replaces scrolling through thousands of rows.
 
 **PII in the report.** Sample rows are masked by default (for example SSN and name columns). With no login there is no unmask option in v1. The app, the HTML report, and the PDF all use masked values.
@@ -370,7 +375,8 @@ A small REST API under `/api/v1`. FastAPI generates the OpenAPI spec and docs pa
 | GET /runs, GET /runs/{id} | List, status, current stage, queue position |
 | GET /runs/{id}/requirements, PUT /runs/{id}/requirements | Read and edit requirements and trace links |
 | POST /runs/{id}/recheck | Rerun the code stages only |
-| GET /runs/{id}/findings, PATCH /findings/{id} | List findings. Set OK / Not OK and a comment |
+| GET /runs/{id}/findings, PATCH /findings/{id} | List findings. Set false positive / accepted risk / Not OK and a comment |
+| GET /runs/{id}/coverage, POST /runs/{id}/coverage/acknowledge | What was checked and what was not; record that a person has seen a gap |
 | POST /runs/{id}/finalize | Generate and freeze the final report |
 | GET /runs/{id}/report, GET /runs/{id}/report.pdf | Final HTML and PDF |
 | POST /runs/{id}/clone | New run prefilled from this one |

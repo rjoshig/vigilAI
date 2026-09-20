@@ -17,6 +17,7 @@ from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.checks.field_constraints import evaluate as evaluate_constraints
 from greenlight_ai.checks.reports import REPORT_CHECKED_KINDS, CheckOutcome, run_derived_check
+from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.rules.derive import derive_checks
 from greenlight_ai.rules.schema import Evidence, Finding, Severity
@@ -40,6 +41,9 @@ def run(context: RunContext) -> None:
     settings = context.admin
     customer = context.customer
     before = len(context.findings)
+    # A re-check runs this stage again; counting both passes would report twice the
+    # coverage of a run that did the same work once (Phase 6.11c).
+    context.coverage_record.clear()
 
     for rule in context.rules:
         for check in derive_checks(rule):
@@ -53,6 +57,10 @@ def run(context: RunContext) -> None:
             # uploaded.
             for documents, part_name in _views(context):
                 outcome = run_derived_check(check, documents, context.aliases)
+                if outcome.passed is None:
+                    context.coverage_record.unevaluated(rule.rule_id)
+                else:
+                    context.coverage_record.checked(rule.rule_id, outcome.report_kind or "")
                 if outcome.passed is True:
                     continue
                 suffix = f" ({part_name})" if part_name else ""
@@ -93,6 +101,11 @@ def run(context: RunContext) -> None:
     _run_field_constraints(context)
     _run_admin_checks(context, settings, customer)
 
+    # Coverage is settled here, where every check that was going to run has run. It
+    # is not a stage of its own: it computes nothing new, it reports what the stage
+    # just did (Phase 6.11c).
+    context.coverage = coverage_module.compute(context)
+
     _LOG.info(
         "run %s stage 7: %d findings from report checks",
         context.run_id,
@@ -116,6 +129,8 @@ def _run_field_constraints(context: RunContext) -> None:
         return
 
     for outcome in evaluate_constraints(specs, context.reports, context.aliases):
+        if outcome.passed is not None:
+            context.coverage_record.checked("", outcome.report_kind)
         if outcome.passed is True:
             continue
         ref = f"field_constraint:{outcome.spec.id}"
@@ -457,6 +472,9 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
     if not admin.checks:
         return
     values = resolve_all(named, context.reports, context.config)
+    # Which report each named value reads, so an evaluated check counts towards the
+    # coverage of every report it actually touched (Phase 6.11c).
+    homes = {value.name: str(value.report_kind) for value in named if value.kind != "config"}
 
     for check in admin.checks:
         if not check.applies_to(customer, context.guidance.scope_code):
@@ -503,6 +521,9 @@ def _run_admin_checks(context: RunContext, admin: AdminConfig, customer: str) ->
                 )
             )
             continue
+
+        for name in result.resolved:
+            context.coverage_record.checked("", homes.get(name, ""))
 
         if result.passed:
             continue

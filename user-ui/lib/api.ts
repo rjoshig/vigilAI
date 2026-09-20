@@ -28,7 +28,10 @@ import type {
   RunSummary,
   TrainingConfig,
   TypeDetection,
+  Coverage,
   Drift,
+  ExploreArtifact,
+  SamplePreview,
 } from "@/lib/types";
 
 /** Where the API lives. The Next rewrite proxies this to FastAPI, so there is no CORS. */
@@ -183,9 +186,38 @@ export const api = {
     });
   },
 
-  /** Mark every undecided low-severity finding as confirmed. */
+  /** Mark every undecided low-severity finding OK, as a false positive. */
   bulkOkLow(runId: number): Promise<number> {
     return request<number>(`/runs/${runId}/findings/bulk-ok`, { method: "POST" });
+  },
+
+  /** The samples a reviewer can explore, grouped by artifact type (Phase 6.1e). */
+  listSamples(): Promise<ExploreArtifact[]> {
+    return request<ExploreArtifact[]>("/samples");
+  },
+
+  /** What one sample contains: cells with their labels, sections, or JSON paths. */
+  previewSample(sampleId: number): Promise<SamplePreview> {
+    return request<SamplePreview>(`/samples/${sampleId}/preview`);
+  },
+
+  /** What the run checked and what it did not (Phase 6.11c). */
+  getCoverage(runId: number): Promise<Coverage> {
+    return request<Coverage>(`/runs/${runId}/coverage`);
+  },
+
+  /**
+   * Record that a person has seen one or more coverage gaps.
+   *
+   * Not a decision that the delivery is fine: the record that the gap was in front of
+   * somebody before the report was frozen, which is what the gate asks for.
+   */
+  acknowledgeCoverage(runId: number, targets: string[], note = ""): Promise<number> {
+    return request<number>(`/runs/${runId}/coverage/acknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets, note }),
+    });
   },
 
   /** Read the traceability matrix. */

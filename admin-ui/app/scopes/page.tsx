@@ -52,6 +52,9 @@ const NEW_SCOPE: Omit<Scope, "id" | "runs_using"> = {
   keywords: [],
   is_active: true,
   sort_order: 100,
+  // Off by default: programmes differ in what a waved-through compliance finding
+  // costs, and a rule that is right for one is wrong for most (ADR-036).
+  second_approver: false,
   version: 0,
 };
 
@@ -246,6 +249,7 @@ function ScopeCard({
   const [label, setLabel] = React.useState(scope.label);
   const [description, setDescription] = React.useState(scope.description);
   const [instructions, setInstructions] = React.useState(scope.standing_instructions);
+  const [secondApprover, setSecondApprover] = React.useState(scope.second_approver);
   const [keywords, setKeywords] = React.useState(scope.keywords.join(", "));
   const [showVersions, setShowVersions] = React.useState(false);
 
@@ -341,6 +345,26 @@ function ScopeCard({
             Background for reading the OSL, never a substitute for what the OSL says.
           </span>
         </div>
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={secondApprover}
+              onChange={(event) => setSecondApprover(event.target.checked)}
+            />
+            <span className="font-medium">
+              A second person approves what a reviewer waves through
+            </span>
+          </label>
+          <span className="text-[0.7rem] text-muted-foreground">
+            With this on, a run in this programme cannot be frozen when the reviewer marked OK a
+            breach of a <span className="mono">must</span> rule or a missing compliance rule, until
+            someone else signs. It is a signature, not a re-review, and it has to be someone other
+            than the reviewer. <b>It does nothing while login is off</b>, because everyone is then
+            the same placeholder account — the rule stands down rather than making the run
+            impossible to finalize (ADR-036).
+          </span>
+        </div>
         <div>
           <Button
             disabled={busy}
@@ -350,6 +374,7 @@ function ScopeCard({
                 description,
                 standing_instructions: instructions,
                 keywords: parseKeywords(keywords),
+                second_approver: secondApprover,
               })
             }
           >

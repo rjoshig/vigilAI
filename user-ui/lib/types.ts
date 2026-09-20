@@ -109,6 +109,8 @@ export interface RunDetail extends RunSummary {
   rerun_reason: string;
   input_fingerprint: string;
   can_finalize: boolean;
+  /** Why not, when can_finalize is false. Empty when the gate is satisfied. */
+  finalize_blocked_by: string;
   finalized: boolean;
   /** Whether this deployment can render a PDF at all (the optional [pdf] extra). */
   pdf_available: boolean;
@@ -133,6 +135,15 @@ export interface Evidence {
   sample_rows?: number[];
 }
 
+/** One reader's view of a finding. They never see each other; code merges them. */
+export interface LensOpinion {
+  lens: string;
+  answered: boolean;
+  agreed?: boolean;
+  reason?: string;
+  confidence?: number;
+}
+
 export interface Finding {
   id: number;
   finding_id: string;
@@ -149,6 +160,8 @@ export interface Finding {
   review_note: string;
   verified: boolean;
   verify_agreed: boolean | null;
+  /** What each of stage 8's readers said, when several read it (Phase 6.11e). */
+  lens_opinions?: LensOpinion[];
 }
 
 export interface Rule {
@@ -418,6 +431,68 @@ export interface Observation extends ObservationInput {
   is_active: boolean;
   /** Earlier wordings of a note, oldest first. Empty until it has been edited. */
   revisions: NoteRevision[];
+  /**
+   * Active rules that already cover what this points at (Phase 6.1e).
+   *
+   * Returned when the observation is saved, so the author sees it while they can
+   * still reconsider rather than hearing weeks later through an administrator.
+   */
+  covered_by?: CoveringRule[];
+}
+
+/** One populated cell of a sample, addressable the way a named value addresses it. */
+export interface CellPreview {
+  cell: string;
+  value: string;
+  label: string;
+  row: number;
+  column: number;
+}
+
+/** One sheet of a sample, or one OSL section, or one configuration block. */
+export interface SheetPreview {
+  name: string;
+  rows: number;
+  columns: number;
+  cells: CellPreview[];
+}
+
+/** What a sample contains, for someone deciding what to point at (Phase 6.1e). */
+export interface SamplePreview {
+  sample_id: number;
+  filename: string;
+  sheets: SheetPreview[];
+}
+
+/** One sample a reviewer can explore. */
+export interface ExploreSample {
+  id: number;
+  label: string;
+  filename: string;
+  sheets: string[];
+  notes: string;
+  scope_code: string;
+}
+
+/** An artifact type and the samples stored for it. */
+export interface ExploreArtifact {
+  key: string;
+  label: string;
+  /** "osl", "config", or a report kind. It decides what a preview looks like. */
+  kind: string;
+  samples: ExploreSample[];
+}
+
+/** An active rule that already covers what an observation points at (Phase 6.1e). */
+export interface CoveringRule {
+  kind: string;
+  id: number;
+  name: string;
+  summary: string;
+  scope: string;
+  state: string;
+  /** Whether the statement reads as the opposite of this rule. A hint, not a verdict. */
+  contradicts: boolean;
 }
 
 /** A finding as the drift panel refers to it (ADR-030). */
@@ -458,4 +533,45 @@ export interface Drift {
   config: DriftConfigChange[];
   previous_config_version: number | null;
   config_version: number | null;
+  /** OSL references a report evidenced last time and evidences no longer. */
+  newly_unchecked: string[];
+}
+
+/** What happened to one requirement: was it actually checked? (Phase 6.11c) */
+export type CoverageState = "checked" | "traced_unchecked" | "untraced" | "manual";
+
+export interface RequirementCoverage {
+  rule_id: string;
+  req_type: string;
+  state: CoverageState;
+  osl_ref: string;
+  summary: string;
+  reason: string;
+  acknowledged: boolean;
+  acknowledged_by: string;
+  acknowledgement_note: string;
+}
+
+export interface ReportCoverage {
+  kind: string;
+  checks_applied: number;
+}
+
+export interface UnevaluatedCheck {
+  finding_id: string;
+  title: string;
+  acknowledged: boolean;
+  acknowledged_by: string;
+  acknowledgement_note: string;
+}
+
+export interface Coverage {
+  requirements: RequirementCoverage[];
+  reports: ReportCoverage[];
+  unevaluated: UnevaluatedCheck[];
+  notices: string[];
+  counts: Record<string, number>;
+  /** Requirement ids and finding ids still waiting for an acknowledgement. */
+  outstanding: string[];
+  reason: string;
 }

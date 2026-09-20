@@ -30,6 +30,7 @@ import {
 import Link from "next/link";
 
 import { BulkBar } from "@/components/bulk-bar";
+import { scopeLabel } from "@/components/scope-picker";
 import { api, ApiError } from "@/lib/api";
 import type { Rule, RuleActionWord, RuleStateChange, RuleStateFilter } from "@/lib/types";
 
@@ -61,23 +62,6 @@ const KIND_LABELS: Record<string, string> = {
 
 function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind;
-}
-
-/**
- * A scope of `config:<id>` is stored as one token, but an administrator reads it as
- * the configuration it names (ADR-024); `programme:<code>` is a programme rule's
- * scope and reads the same way. Every other scope form is shown as stored.
- */
-function scopeLabel(scope: string): string {
-  const CONFIG_PREFIX = "config:";
-  const PROGRAMME_PREFIX = "programme:";
-  if (scope.startsWith(CONFIG_PREFIX)) {
-    return `configuration ${scope.slice(CONFIG_PREFIX.length)}`;
-  }
-  if (scope.startsWith(PROGRAMME_PREFIX)) {
-    return `programme ${scope.slice(PROGRAMME_PREFIX.length)}`;
-  }
-  return scope;
 }
 
 function when(value: string | null): string {
@@ -369,7 +353,7 @@ export default function RulesPage() {
                           <TD>
                             <Badge tone={STATE_TONES[rule.state] ?? "muted"}>{rule.state}</Badge>
                           </TD>
-                          <TD className="text-xs">{scopeLabel(rule.scope)}</TD>
+                          <TD className="text-xs">{scopeLabel(rule.scope, null)}</TD>
                           <TD className="text-xs">{rule.severity}</TD>
                           <TD className="tabular-nums">{rule.fired}</TD>
                           <TD className="tabular-nums">

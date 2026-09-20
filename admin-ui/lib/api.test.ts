@@ -318,6 +318,18 @@ describe("the admin API client", () => {
     await expect(api.synthesize([3])).rejects.toMatchObject({ status: 409 });
   });
 
+  it("sends one statement and its scope to the front door", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ surface: "check", candidate: null }));
+    await api.tellTheTool("Billing count must never exceed the delivered count.", "everywhere");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/front-door");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      statement: "Billing count must never exceed the delivered count.",
+      scope: "everywhere",
+    });
+  });
+
   it("lists draft candidates by default", async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await api.listCandidates();
