@@ -34,6 +34,7 @@ __all__ = [
     "programme_snapshot",
     "prune_versions",
     "record_artifact_version",
+    "record_meaning_version",
     "record_programme_version",
     "referenced_sample_paths",
     "remove_orphan_samples",
@@ -45,7 +46,7 @@ _LOG: Final = logging.getLogger(__name__)
 #: How many versions the console lists per object (user decision, Phase 6.8).
 KEEP_VERSIONS: Final[int] = 10
 
-VersionKind = Literal["artifact_type", "programme_rules"]
+VersionKind = Literal["artifact_type", "programme_rules", "meaning"]
 
 #: Artifact-type fields an administrator edits, in snapshot order.
 _ARTIFACT_FIELDS: Final[tuple[str, ...]] = (
@@ -208,6 +209,24 @@ def record_programme_version(
     )
 
 
+def record_meaning_version(
+    session: Session, scope_key: str, snapshot: dict[str, Any], actor: str, summary: str = ""
+) -> models.DefinitionVersion:
+    """Snapshot one scope's meaning entries after a change (Phase 6.10).
+
+    Args:
+        session: An open session.
+        scope_key: ``"global"`` or the programme code.
+        snapshot: The entries as JSON.
+        actor: Who changed them.
+        summary: What changed.
+
+    Returns:
+        The version written, or the latest when nothing changed.
+    """
+    return _record(session, "meaning", scope_key, snapshot, actor, summary)
+
+
 def _describe(before: dict[str, Any] | None, after: dict[str, Any]) -> str:
     """One line on what differs between two snapshots."""
     if before is None:
@@ -215,10 +234,16 @@ def _describe(before: dict[str, Any] | None, after: dict[str, Any]) -> str:
     changed = [
         name
         for name in after
-        if name not in ("samples", "guide", "rules") and before.get(name) != after.get(name)
+        if name not in ("samples", "guide", "rules", "entries")
+        and before.get(name) != after.get(name)
     ]
     parts = [f"{name} changed" for name in changed]
-    for collection, noun in (("samples", "sample"), ("guide", "guide entry"), ("rules", "rule")):
+    for collection, noun in (
+        ("samples", "sample"),
+        ("guide", "guide entry"),
+        ("rules", "rule"),
+        ("entries", "entry"),
+    ):
         if collection not in after:
             continue
         old = before.get(collection) or []

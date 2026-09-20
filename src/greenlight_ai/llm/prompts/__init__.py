@@ -16,6 +16,7 @@ model yet, and ADR-014 expects a bump after the first Gemma run.
 """
 
 from greenlight_ai.llm.prompts.admin_draft import DRAFT_CHECK_PROMPT
+from greenlight_ai.llm.prompts.admin_map import MAP_PROMPT
 from greenlight_ai.llm.prompts.judgment import JUDGMENT_PROMPT
 from greenlight_ai.llm.prompts.registry import PROMPTS, Prompt, get_prompt, prompt_versions
 from greenlight_ai.llm.prompts.s2_extract import EXTRACT_PROMPT
@@ -29,6 +30,7 @@ from greenlight_ai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
 __all__ = [
     "DESCRIBE_PROMPT",
     "DRAFT_CHECK_PROMPT",
+    "MAP_PROMPT",
     "JUDGMENT_PROMPT",
     "EXTRACT_PROMPT",
     "PROGRAMME_PROMPT",

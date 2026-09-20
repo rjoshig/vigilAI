@@ -2051,6 +2051,7 @@ def edit_programme_rule(
 _VERSION_KINDS: Final[dict[str, versions.VersionKind]] = {
     "artifact-type": "artifact_type",
     "programme": "programme_rules",
+    "meaning": "meaning",
 }
 
 
