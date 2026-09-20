@@ -164,6 +164,37 @@ changes underneath you while you are reading it. Two controls are yours.
 You can also **edit the wording** in place, which is the right move for a typo. Every
 edit bumps the version, so the trail survives the convenience.
 
+## What on each screen reaches the model
+
+Every field you can write carries a marker saying what it does to a run, in the same
+five words the user app uses. They are facts about the run rather than help, so they
+stay visible whatever **Explain each screen** is set to.
+
+| Marker | What it means for what you type |
+| --- | --- |
+| **Helps the AI** | Rendered into the prompt as background. Better context here means better findings; it never makes anything pass or fail. |
+| **Checked by code** | Compared against the artifacts by code. It can produce a finding, and the same inputs always give the same answer. |
+| **Read by a person** | Shown to whoever reviews or signs off. Nothing automated acts on it. |
+| **Your own note** | Kept with the run. Reaches no model and no check. |
+| **Identifies the run** | How the run is found, grouped, and compared with earlier ones. |
+
+Two places where the distinction is not obvious and is worth knowing:
+
+- **A check is one or the other, and you choose which.** An *expression* check is a
+  formula code evaluates at no token cost. A *judgment* check sends its instruction and
+  the named values you list to the model on **every run in its scope** — which is why
+  the form says use it sparingly. The model answers pass, fail or review; **code sets
+  the severity**, always.
+- **A compliance rule's reasoning does more than explain.** It appears on the finding,
+  and it is *what the model is told the control is* when code cannot find the path
+  (Phase 6.15). Describe the control in the words a configuration might use for it —
+  "screens against the OFAC SDN list" — rather than only citing the policy that
+  requires it. A rule described well is found under a name you never anticipated; one
+  described only as a regulation reference is not.
+
+The full register, derived from the code rather than from memory, is
+[`model-context.md`](model-context.md).
+
 ## Delivery programmes
 
 Account Monitoring, Account Solicitation, Archives, and Other. Each carries **standing
