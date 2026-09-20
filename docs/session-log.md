@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.9**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/edit-and-confirm` (Phase 6.10 Part A), against `dev`; Part B next on `feature/meaning` |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.10**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `feature/meaning` (Phase 6.10 Part B), against `dev` |
 | Last updated | 2026-09-19 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
@@ -102,6 +102,21 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (Phase 6.10 Part B: Meaning)
+
+**Branch:** `feature/meaning` · **Status:** complete, gates green.
+
+- Samples scoped per programme; `meaning_entries`; the mapping interview
+  (`admin_map_requirement`, one cached call per OSL section); confirm → shadow check
+  and shadow compliance rule; global + programme entries reach stages 4 and 8; the
+  Meaning screen with By requirement / By report cell tabs and versions. ADR-033.
+
+### Next concrete action
+
+Browser tests for the core flows, in CI (last item of the agreed order).
 
 ---
 

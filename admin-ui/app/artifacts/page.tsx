@@ -39,7 +39,7 @@ import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { versionLabel } from "@/lib/versions";
-import type { ArtifactType, NamedValue, Sample, SamplePreview } from "@/lib/types";
+import type { ArtifactType, NamedValue, Sample, SamplePreview, Scope } from "@/lib/types";
 
 const EMPTY_POINTER = {
   name: "",
@@ -100,15 +100,18 @@ export default function ArtifactsPage() {
   const [newType, setNewType] = React.useState({ ...NEW_TYPE });
   const [draft, setDraft] = React.useState({ ...EMPTY_POINTER });
   const [busy, setBusy] = React.useState(false);
+  const [programmes, setProgrammes] = React.useState<Scope[] | null>(null);
 
   const load = React.useCallback(async () => {
     try {
-      const [nextTypes, nextValues] = await Promise.all([
+      const [nextTypes, nextValues, nextProgrammes] = await Promise.all([
         api.listArtifactTypes(),
         api.listNamedValues(),
+        api.listScopes(),
       ]);
       setTypes(nextTypes);
       setValues(nextValues);
+      setProgrammes(nextProgrammes);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
@@ -343,6 +346,7 @@ export default function ArtifactsPage() {
                       <SampleStrip
                         type={type}
                         busy={busy}
+                        programmes={programmes}
                         onChanged={() => void load()}
                         onError={setError}
                       />
@@ -696,20 +700,23 @@ const MAX_SAMPLES = 3;
 function SampleStrip({
   type,
   busy,
+  programmes,
   onChanged,
   onError,
 }: {
   type: ArtifactType;
   busy: boolean;
+  programmes: Scope[] | null;
   onChanged: () => void;
   onError: (message: string) => void;
 }) {
   const [label, setLabel] = React.useState("");
+  const [scope, setScope] = React.useState("");
   const [working, setWorking] = React.useState(false);
   const [preview, setPreview] = React.useState<SamplePreview | null>(null);
   const [sheet, setSheet] = React.useState("");
   const fileInput = React.useRef<HTMLInputElement>(null);
-  const full = type.samples.length >= MAX_SAMPLES;
+  const full = type.samples.filter((s) => (s.scope_code || "") === scope).length >= MAX_SAMPLES;
 
   async function run(what: string, action: () => Promise<unknown>) {
     setWorking(true);
@@ -773,6 +780,15 @@ function SampleStrip({
             </div>
             <div className="text-[0.7rem] text-muted-foreground">
               uploaded by {sample.uploaded_by || "—"}
+              {sample.scope_code ? (
+                <Badge tone="outline" className="ml-1">
+                  {sample.scope_code}
+                </Badge>
+              ) : (
+                <Badge tone="muted" className="ml-1">
+                  global
+                </Badge>
+              )}
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1">
               <Button
@@ -819,6 +835,22 @@ function SampleStrip({
                 value={label}
                 onChange={(event) => setLabel(event.target.value)}
               />
+              <Label htmlFor={`sample-scope-${type.key}`} className="mt-1.5 block">
+                Belongs to
+              </Label>
+              <Select
+                id={`sample-scope-${type.key}`}
+                className="mt-1 h-7 text-xs"
+                value={scope}
+                onChange={(event) => setScope(event.target.value)}
+              >
+                <option value="">Global (every programme)</option>
+                {(programmes ?? []).map((programme) => (
+                  <option key={programme.code} value={programme.code}>
+                    {programme.label} ({programme.code})
+                  </option>
+                ))}
+              </Select>
               <input
                 ref={fileInput}
                 type="file"
@@ -829,7 +861,7 @@ function SampleStrip({
                   event.target.value = "";
                   if (!file) return;
                   void run("add the sample", async () => {
-                    await api.addSample(type.key, file, label.trim());
+                    await api.addSample(type.key, file, label.trim(), "", scope);
                     setLabel("");
                   });
                 }}

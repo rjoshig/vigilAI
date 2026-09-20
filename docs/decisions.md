@@ -957,3 +957,36 @@ edited; long lists had no way to act on many rows at once.
 **Consequences:** One component (`confirm-delete`) and one bar (`bulk-bar`) in the
 admin app; every delete route carries the same dependency; a compliance rule now has
 a version like a check.
+
+## ADR-033 — Meaning: the model proposes a requirement's links, a person confirms, code compiles
+
+**Status:** accepted 2026-09-20 (Phase 6.10)
+
+**Context:** The tool could say what a report cell means (guides) but nothing pointed
+from an OSL requirement to the configuration block that implements it and the report
+cells that evidence it; OSLs vary a little by programme and there was one unscoped
+OSL type.
+
+**Decision:**
+
+1. **Samples belong to a programme or are global**, three per type per programme. A
+   programme reads its own samples where it has any, else the global ones.
+2. **A meaning entry** is one requirement's links: OSL section, configuration path,
+   report cells, what to validate, a comparison, the model's question and the
+   administrator's note. Global entries apply to every run; a programme's entries add
+   to them and a same-key entry overrides the global one.
+3. **The interview** is one cached model call per OSL section with the section text,
+   the configuration blocks, and the report cells as labels only. The model proposes
+   links and asks when it cannot place one; it never compares (ADR-001). Proposals
+   land as rows: *proposed*, or *open* with the question.
+4. **Confirming compiles.** A confirmed entry with a configuration path, a report cell
+   that resolves on a sample, and a comparison becomes named values and a check born
+   in shadow (ADR-021), scoped `programme:CODE` or `all`; a confirmed compliance
+   suggestion becomes a shadow compliance rule. Rejecting retires both. Every change
+   is a version of the scope's meaning (ADR-029).
+5. **Cell-level meaning stays on the artifact type** (the guide); Meaning shows it as
+   a second tab rather than duplicating its storage.
+
+**Consequences:** An administrator defines what a delivery means once per programme
+from real samples, on the target machine, without a developer. The model's role is
+bounded to reading; nothing counts until a person confirms and then activates.
