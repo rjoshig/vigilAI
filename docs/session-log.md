@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.12**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `feature/nothing-slips`, cut from `dev` (2026-09-20). **Phases 6.11 and 6.12 complete, browser tests in CI, every open item in 6.1/6.2/6.4 closed, four-eyes built (ADR-036), one scope vocabulary and the front door built (ADR-037).** Next: open a PR to `dev`; the remaining work is blocked on the target machine |
+| Branch | `feature/loop-closes`, cut from `dev` (2026-09-20) after PR #38 merged phases 6.11 and 6.12. **Phase 6.13 specified** (`phase-6.13.md`). Next: 6.13a repairs, one commit each, starting with D1 (lens settings dropped by the worker) and D2 (multi-part uploads overwrite each other) |
 | Last updated | 2026-09-20 |
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
