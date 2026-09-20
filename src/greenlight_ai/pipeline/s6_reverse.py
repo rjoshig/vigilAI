@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Final
 
+from greenlight_ai.checks import compliance_match
 from greenlight_ai.checks.definitions import AdminConfig
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.pipeline.s4_trace import describe_rule
@@ -97,7 +98,16 @@ def _check_compliance(context: RunContext, admin: AdminConfig, customer: str) ->
             continue
         ref = f"compliance_rule:{rule.id}" if rule.id is not None else ""
         shadow = bool(ref) and ref in admin.shadow_rule_refs
-        matching = [b for b in context.config.blocks if rule.json_path_contains in b.json_path]
+        # Widened in 6.15: a substring test on the path could not tell a control
+        # that is absent from one that is spelled differently or nested a level
+        # deeper, and reported both at high severity.
+        hits = compliance_match.matches(
+            rule.json_path_contains,
+            [(b.json_path, b.content) for b in context.config.blocks],
+            rule.alternates,
+        )
+        found = {hit.json_path for hit in hits}
+        matching = [b for b in context.config.blocks if b.json_path in found]
         if not matching:
             context.add_finding(
                 Finding(
@@ -107,7 +117,14 @@ def _check_compliance(context: RunContext, admin: AdminConfig, customer: str) ->
                     title=f"Compliance rule {rule.name!r} is not implemented in the config",
                     detail=(
                         f"{rule.reasoning or _PRESENCE_REASON} "
-                        f"No config path contains {rule.json_path_contains!r}."
+                        f"No configuration path implements {rule.json_path_contains!r}"
+                        + (
+                            f", nor any of {list(rule.alternates)}."
+                            if rule.alternates
+                            else ". Spelling and nesting were allowed for; if this "
+                            "customer calls it something else, add that path to the "
+                            "rule as an alternate."
+                        )
                     ),
                     leg="osl_config",
                     rule_ref=ref,

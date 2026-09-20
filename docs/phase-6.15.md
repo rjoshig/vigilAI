@@ -1,9 +1,8 @@
 # Phase 6.15 — A compliance rule should survive being spelled differently
 
-**Status:** ⬜ **not started** — specified 2026-09-21 from a question the user asked and
-a measurement that answered it. **The approach is deliberately left open**; this
-document states the problem, the evidence, the constraint the answer has to satisfy,
-and three candidate shapes. It is not yet a build plan.
+**Status:** 🟡 **in progress** — specified 2026-09-21 from a question the user asked and
+a measurement that answered it. **Option C is built** (below); option A is next and its
+open questions stand.
 
 ## The question that started it
 
@@ -146,6 +145,54 @@ which is the row a real customer most often is.
 **The pragmatic reading:** C is worth doing regardless, because it is cheap and it
 removes two of the five failure shapes. A closes the remaining gap. They are not
 alternatives.
+
+## C, as built · ✅ complete
+
+`checks/compliance_match.py`. Four tests, and a block counts if **any** of them passes,
+so nothing that matched before stops matching:
+
+1. **Normalised substring** — what the old check did, with case, underscores and hyphens
+   treated as noise.
+2. **Segments in order** — the rule's segments as an ordered subsequence of the path's.
+3. **Keys inside the block** — the parser groups a nested object into one block, so
+   `{"suppressions": {"lists": {"ofac": true}}}` is the single path `suppressions.lists`
+   holding `{"ofac": true}`. The control is real and it is in the *content*.
+4. **Alternates** — other paths that also count, written by a person.
+
+Re-running the measurement against it:
+
+| Configuration shape | Before | After | With an alternate |
+| --- | --- | --- | --- |
+| Exactly as the rules expect | 0 | 0 | 0 |
+| `opt_out` vs `optout` | 1 | **0** | 0 |
+| Grouped under `exclusions` | 3 | 3 | **0** |
+| Vendor names | 3 | 3 | **0** |
+| Nested one deeper | 3 | **0** | 0 |
+| Genuinely absent | 2 | 2 | **2 — still correctly reported** |
+
+Two shapes fixed with no configuration at all, two more with one path an administrator
+types, and the check still reports a control that genuinely is not there. That last row
+is the one that makes the rest safe to ship.
+
+**Two things the build found that the specification had not.**
+
+- **The nesting row was not what it looked like.** `suppressions.lists.ofac` is not a
+  path the parser produces — it produces `suppressions.lists` holding an object. So
+  segment matching alone did not fix that row; reading the block's *content* did. The
+  specification had the symptom right and the mechanism wrong.
+- **Segment matching alone would have been a regression.** The old substring test found
+  `suppressions.ofac_sdn` for a rule saying `suppressions.ofac`, by luck, and that is
+  the right answer. Normalised segments reject it. Keeping the substring test as one of
+  the four is what makes the change purely additive.
+
+**The looseness that remains, stated rather than hidden.** The substring test cannot
+tell `suppressions.ofac_sdn` — a real control under a vendor name — from
+`suppressions.ofacish_thing`, which is not one. Dropping it would fix that and would
+also stop finding `ofac_sdn`. Between a rule that occasionally matches too generously
+and one that reports a real control as missing at high severity, the generous failure
+is the safer one: it is visible on the finding, which names the path it matched.
+Narrowing it properly is what option A is for. There is a test that states this
+explicitly rather than asserting behaviour the code does not have.
 
 ## What to settle before this becomes a build plan
 

@@ -1517,6 +1517,7 @@ def _compliance_out(row: models.ComplianceRuleRow) -> wire.ComplianceRuleOut:
         id=row.id,
         name=row.name,
         json_path_contains=str((row.requirement or {}).get("json_path_contains", "")),
+        alternates=[str(p) for p in (row.requirement or {}).get("alternates", [])],
         expected_value=(row.requirement or {}).get("expected_value", True),
         scope=row.scope,
         reasoning=row.reasoning,
@@ -1574,6 +1575,7 @@ def save_compliance_rule(
         session.add(row)
     row.requirement = {
         "json_path_contains": payload.json_path_contains,
+        "alternates": [p.strip() for p in payload.alternates if p.strip()],
         "expected_value": payload.expected_value,
     }
     row.scope = payload.scope
@@ -2643,6 +2645,7 @@ def edit_compliance_rule(
     row.name = payload.name.strip()
     row.requirement = {
         "json_path_contains": payload.json_path_contains.strip(),
+        "alternates": [p.strip() for p in payload.alternates if p.strip()],
         "expected_value": payload.expected_value,
     }
     row.scope = payload.scope.strip() or "all"
