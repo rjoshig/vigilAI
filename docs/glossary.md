@@ -114,10 +114,10 @@ uses them yet.
 | **Programme check** | A grep of the OSL, configuration, and report headers for the declared programme's keywords. A mismatch is a finding, never a block. |
 | **Field constraint** | A rule about one attribute — never blank, allowed values, a range, a format — stored as structured data and evaluated by code, though it was written in plain words. |
 
-## Identity vocabulary (Phase 6.2, specified but not built)
+## Identity vocabulary (Phase 6.2)
 
-From [`phase-6.2.md`](phase-6.2.md) and ADR-022. Login ships off; nothing in the code
-uses these yet.
+From [`phase-6.2.md`](phase-6.2.md) and ADR-022. Built and complete; **login ships
+off**, so on a default install every one of these resolves to the placeholder.
 
 | Term | Meaning |
 | --- | --- |
@@ -125,3 +125,27 @@ uses these yet.
 | **Auth switch** | `GREENLIGHT_AI_ADMIN_AUTH` and `GREENLIGHT_AI_USER_AUTH`, independent and both false by default. Off means no prompt, no cookie, today's behaviour. |
 | **Bootstrap admin** | The `admin` account created on first startup with admin auth on. Must change its password before it can do anything else. |
 | **Attribution** | The actor recorded on a run, a finding decision, a config capture, an observation, and an approval. Always present, because there is always a current user. |
+
+## What a reviewer stops seeing (Phase 6.18)
+
+From [`phase-6.18.md`](phase-6.18.md) and ADR-043. The machinery is built and
+**acts on nothing**: it records what it would do, and the evidence for letting it act is
+[`phase-7.1.md`](phase-7.1.md).
+
+| Term | Meaning |
+| --- | --- |
+| **Finding signature** | The identity of "this same finding again": one customer, one delivery programme, one rule, and one thing it fired on. A blank score column and a blank state column are two signatures however much they share a rule. |
+| **Would be hidden** (`would_demote`) | A signature shown to a reviewer ten times and waved through every one of them. A count with no exceptions in it, not a rate. |
+| **Blocked** | A signature that can never be hidden: a reviewer judged the finding real at least once, or it fires at a severity that is never demoted. |
+| **Upheld** | A verdict saying the finding was true — *confirmed*, or *accepted risk*, which means the reviewer agreed and chose to carry it. One outranks any number of dismissals. |
+| **Review load** | The admin screen that shows all of the above, and asks the question the evidence is for: *it would have hidden these — was any of them real?* |
+| **Maturity level** | Planned, not built (6.18b): *training · supervised · trusted*, set deliberately by an administrator and droppable instantly. The tool may revoke its own trust and may never grant it. |
+
+## Saying the same thing differently (Phases 6.15, 6.17a, 6.18f)
+
+| Term | Meaning |
+| --- | --- |
+| **Discriminating keyword** | A word only one programme claims. A word two programmes both list cannot tell them apart, so it is not evidence for naming either (ADR-042). |
+| **Programme reading** | The one model call at stage 7, made only where none of the declared programme's words appear: *which of these programmes do these documents read like?* Never *was the submitter right*, which is a comparison and is code's (ADR-045). |
+| **Keyword suggestion** | A phrase the model quoted from a delivery it read as the programme that was declared. Shown on the programme's card; accepting one adds it to the word list, after which the match is made in code and the model is not asked again. Nothing is applied until somebody clicks. |
+| **Compliance locator** | The equivalent at stage 6: asked only where four deterministic path tests have all missed, it says where a control is implemented, if anywhere. A located control is a review item, never a pass. |

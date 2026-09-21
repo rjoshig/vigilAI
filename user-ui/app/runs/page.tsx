@@ -95,15 +95,34 @@ export default function RunsPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [status, setStatus] = React.useState("");
   const [search, setSearch] = React.useState("");
+  const [submitter, setSubmitter] = React.useState("");
+  // Who the admin console asked for, when it linked here. Read from the query string
+  // on the client rather than with `useSearchParams`, which would put this whole page
+  // behind a Suspense boundary for a parameter that is usually absent.
+  const [submittedBy, setSubmittedBy] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const who = Number(params.get("submitted_by"));
+    if (Number.isInteger(who) && who > 0) setSubmittedBy(who);
+    const wanted = params.get("status");
+    if (wanted) setStatus(wanted);
+  }, []);
 
   const load = React.useCallback(async () => {
     try {
-      setRuns(await api.listRuns({ status: status || undefined, limit: 100 }));
+      setRuns(
+        await api.listRuns({
+          status: status || undefined,
+          submittedBy: submittedBy ?? undefined,
+          limit: 100,
+        })
+      );
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
     }
-  }, [status]);
+  }, [status, submittedBy]);
 
   React.useEffect(() => {
     void load();
@@ -116,10 +135,24 @@ export default function RunsPage() {
     return () => clearInterval(timer);
   }, [anyActive, load]);
 
+  // Everybody who appears in what was loaded, for the picker. Built from the runs
+  // themselves rather than from the accounts list: a person with no runs in view is not
+  // a filter anybody wants, and the user app has no business listing accounts.
+  const submitters = Array.from(
+    new Set((runs ?? []).map((run) => run.submitted_by).filter((name) => name))
+  ).sort((left, right) => left.localeCompare(right));
+
   const visible = (runs ?? []).filter((run) => {
+    if (submitter && run.submitted_by !== submitter) return false;
     const needle = search.trim().toLowerCase();
     if (!needle) return true;
-    return [run.customer_name, run.order_number, run.configuration_id, String(run.id)]
+    return [
+      run.customer_name,
+      run.order_number,
+      run.configuration_id,
+      run.submitted_by,
+      String(run.id),
+    ]
       .join(" ")
       .toLowerCase()
       .includes(needle);
@@ -168,11 +201,24 @@ export default function RunsPage() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           className="max-w-xs"
-          placeholder="Search run, customer, order, configuration…"
+          placeholder="Search run, customer, order, configuration, who submitted…"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           aria-label="Search runs"
         />
+        <Select
+          value={submitter}
+          onChange={(event) => setSubmitter(event.target.value)}
+          aria-label="Filter by who submitted the run"
+          disabled={submittedBy !== null}
+        >
+          <option value="">Anyone</option>
+          {submitters.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </Select>
         <Select
           value={status}
           onChange={(event) => setStatus(event.target.value)}
@@ -185,6 +231,21 @@ export default function RunsPage() {
           <option value="finalized">Finalized</option>
           <option value="failed">Failed</option>
         </Select>
+        {submittedBy !== null ? (
+          <span className="inline-flex items-center gap-1 rounded-md border border-info/40 bg-info/10 px-2 py-1 text-xs">
+            Showing one person&rsquo;s runs
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setSubmittedBy(null);
+                window.history.replaceState(null, "", "/runs");
+              }}
+            >
+              Show everyone
+            </Button>
+          </span>
+        ) : null}
         {anyActive ? (
           <span className="text-xs text-muted-foreground">Updating every 3 seconds…</span>
         ) : null}

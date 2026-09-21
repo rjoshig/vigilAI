@@ -51,6 +51,7 @@ describe("the appearance answer", () => {
       theme: "classic-teal",
       locked: true,
       tooltips: true,
+      setupMarkers: true,
       tagline: "",
       maintenance: false,
       accepting: true,
@@ -60,6 +61,7 @@ describe("the appearance answer", () => {
       theme: "default",
       locked: false,
       tooltips: true,
+      setupMarkers: true,
       tagline: "",
       maintenance: false,
       accepting: true,
@@ -69,11 +71,21 @@ describe("the appearance answer", () => {
       theme: "classic-teal",
       locked: false,
       tooltips: true,
+      setupMarkers: true,
       tagline: "",
       maintenance: false,
       accepting: true,
       unavailableMessage: "",
     });
+  });
+
+  it("keeps the setup markers on unless the deployment says otherwise", () => {
+    // The one marker a console may hide, and a page that cannot reach the API shows it
+    // rather than quietly dropping it (ADR-046).
+    expect(parseAppearance({ theme: "default" }, "default").setupMarkers).toBe(true);
+    expect(
+      parseAppearance({ theme: "default", setup_markers: false }, "default").setupMarkers
+    ).toBe(false);
   });
 
   it("keeps the explanations on unless the deployment says otherwise", () => {

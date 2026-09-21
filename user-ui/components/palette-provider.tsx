@@ -30,6 +30,8 @@ interface PaletteContextValue {
   locked: boolean;
   /** Whether this deployment explains its screens (Phase 6.14d). */
   tooltips: boolean;
+  /** Whether the "used for setup, not for runs" markers show (Phase 6.19). */
+  setupMarkers: boolean;
   /** The line under the mark in the sidebar (Phase 6.14h). */
   tagline: string;
   /** Whether the user app should show a maintenance page (Phase 6.14j). */
@@ -118,6 +120,7 @@ export function PaletteProvider({
       palettes: PALETTES,
       locked: appearance.locked,
       tooltips: appearance.tooltips,
+      setupMarkers: appearance.setupMarkers,
       tagline: appearance.tagline,
       maintenance: appearance.maintenance,
       accepting: appearance.accepting,

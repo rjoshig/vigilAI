@@ -33,6 +33,7 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { BulkBar } from "@/components/bulk-bar";
+import { CapMeter } from "@/components/cap-meter";
 import { Explain, FieldEffect } from "@/components/explain";
 import { DeleteButton } from "@/components/confirm-delete";
 import { GuideEditor } from "@/components/guide-editor";
@@ -643,6 +644,10 @@ function ArtifactEditor({
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
+          <FieldEffect
+            kind="reference"
+            note="Shown next to the upload box so people pick the right file. The AI never reads it — the box below is the one it reads."
+          />
         </div>
       </div>
       <div className="flex flex-col gap-1">
@@ -669,8 +674,9 @@ function ArtifactEditor({
         />
         <FieldEffect
           kind="model"
-          note="Read at extraction, description, tracing and verification. Capped at 1,500 characters, and 6,000 across everything an administrator contributes to one prompt."
+          note="Read at extraction, description, tracing and verification. The counter below says what is left rather than what the limit is."
         />
+        <CapMeter value={context} />
       </div>
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-1.5 text-xs">
@@ -802,6 +808,11 @@ function SampleStrip({
                 {group.hint} {samples.length} of {MAX_SAMPLES}.
               </span>
             </div>
+            <FieldEffect
+              kind="reference"
+              className="mb-1.5"
+              note="The AI reads these example files while you set up: to work out which uploaded file is which, to fill in example values, and to suggest mappings on the Meaning screen. They are never opened when a delivery is checked. Use made-up files — never real customer data."
+            />
             <div className="flex flex-wrap items-start gap-2">
               {samples.map((sample) => (
                 <SampleCard
@@ -932,6 +943,10 @@ function SampleCard({
             placeholder="How this variant differs; what to look for in it."
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
+          />
+          <FieldEffect
+            kind="model"
+            note="Read by the model while it maps this scope's requirements onto the report — not during a validation run. Say how this variant differs from the others, which is what the model cannot see from the workbook alone."
           />
           <div className="flex gap-1">
             <Button

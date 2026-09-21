@@ -19,7 +19,7 @@
 import { BookOpen, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import * as React from "react";
 
-import { Explain } from "@/components/explain";
+import { Explain, FieldEffect } from "@/components/explain";
 import { EVERYWHERE, ScopePicker, scopeIsComplete, scopeLabel } from "@/components/scope-picker";
 import {
   Badge,
@@ -263,6 +263,11 @@ function StageSection({
                   It is checked against this stage&apos;s own schema before it is stored. An example
                   the pipeline could not parse is refused, with the field named.
                 </p>
+                <FieldEffect
+                  kind="model"
+                  className="mt-1"
+                  note="This is the most direct way you teach the model. The pair above is shown to it at this stage on every run in scope, as what a good answer looks like — so an example drawn from your own deliveries is worth more than any amount of instruction."
+                />
               </div>
               <div>
                 <Label htmlFor={`${stage.stage}-note`}>Why it is here (for the next person)</Label>
@@ -270,6 +275,11 @@ function StageSection({
                   id={`${stage.stage}-note`}
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
+                />
+                <FieldEffect
+                  kind="notes"
+                  className="mt-1"
+                  note="Kept with the example for whoever reviews the library later. It is never shown to the model."
                 />
               </div>
               <ScopePicker

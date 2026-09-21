@@ -22,6 +22,7 @@ from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.db.cache import DbCache, record_calls
 from greenlight_ai.db.session import session_scope
 from greenlight_ai.db.types import utcnow
+from greenlight_ai.worker.diagnostics import describe_failure
 from greenlight_ai.llm.cache import LLMCache
 from greenlight_ai.llm.client import CallLog
 from greenlight_ai.llm.factory import build_client
@@ -79,6 +80,7 @@ def build_guidance(session: Session, run: models.Run) -> RunGuidance:
             ).scalars()
         ),
         programme_keywords={s.code: tuple(s.keywords) for s in catalog.load_scopes(session)},
+        programme_labels={s.code: s.label for s in catalog.load_scopes(session)},
         artifact_context={
             artifact.key: artifact.ai_context
             for artifact in catalog.load_artifacts(session)
@@ -256,6 +258,7 @@ def execute_run(
         run.status = "running"
         run.started_at = run.started_at or utcnow()
         run.error = ""
+        run.error_detail = ""
         run.model_used = settings.model
         run.prompt_version = settings.prompt_version
         run.definition_versions = versions.current_versions(session)
@@ -286,6 +289,7 @@ def execute_run(
             run.status = "failed"
             run.current_stage = failure.stage
             run.error = failure.reason[:2000]
+            run.error_detail = describe_failure(failure, run_id=run.id, stage=failure.stage)
             repository.audit(session, "run.failed", run.id, failure.stage)
         status = run.status
 

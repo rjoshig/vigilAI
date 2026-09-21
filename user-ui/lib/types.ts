@@ -110,6 +110,11 @@ export interface RunSummary {
 }
 
 export interface RunDetail extends RunSummary {
+  /**
+   * The failure at length: stage, attempt and traceback. Only the run carries it —
+   * the list has the one-line `error` and nothing more.
+   */
+  error_detail: string;
   notes: string;
   /** The credit date the delivery is cut as of; the tool checks the reports carry it. */
   rules_version: number;

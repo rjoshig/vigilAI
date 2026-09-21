@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 6.14.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.19 parts A and C.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -148,6 +148,18 @@ typed word. A programme entry with the same key as a global one replaces it on t
 programme's runs. **By report cell** is the same guide editor as on Artifact types.
 Everything here reaches the model as background; code does the comparing.
 
+**Why this screen is worth an afternoon.** Without a mapping the model works out where
+every requirement lands *from scratch, on every run* — reading the OSL, then the
+configuration, then the reports, and deciding which part answers which. That is the step
+it is least certain about, and the one it can answer differently on two runs of the same
+delivery. One confirmed row does two things at once: **the AI reads it** at tracing and
+verification, so it stops deriving the answer and spends its attention on whether the
+delivery is right; and **code turns it into a check** it runs itself, with no model and
+no tokens, giving the same answer every time. What you get is fewer requirements coming
+back as *could not trace*, the same requirement resolving the same way every month, and a
+deterministic check you did not have to write. You confirm rather than the model because
+a wrong mapping is worse than none — it teaches the tool the wrong place to look.
+
 ### Correcting or removing what somebody submitted
 
 Feedback is submitted once: the author's form locks after they send it, so nothing
@@ -167,8 +179,14 @@ edit bumps the version, so the trail survives the convenience.
 ## What on each screen reaches the model
 
 Every field you can write carries a marker saying what it does to a run, in the same
-five words the user app uses. They are facts about the run rather than help, so they
+six words the user app uses. They are facts about the run rather than help, so they
 stay visible whatever **Explain each screen** is set to.
+
+One of the six can be turned off, and only one: **Settings → Appearance → Show
+setup-only markers** hides *Used for setup, not for runs*, which otherwise repeats under
+every sample workbook on the screen. The switch cannot hide the markers that say a field
+reaches the model or is checked by code — those say where your words end up, and you
+keep them whatever you set (ADR-046).
 
 | Marker | What it means for what you type |
 | --- | --- |
@@ -177,8 +195,9 @@ stay visible whatever **Explain each screen** is set to.
 | **Read by a person** | Shown to whoever reviews or signs off. Nothing automated acts on it. |
 | **Your own note** | Kept with the run. Reaches no model and no check. |
 | **Identifies the run** | How the run is found, grouped, and compared with earlier ones. |
+| **Used for setup, not for runs** | The AI reads it while you set things up. No run reads it; what you build from it is what a run uses. |
 
-Two places where the distinction is not obvious and is worth knowing:
+Three places where the distinction is not obvious and is worth knowing:
 
 - **A check is one or the other, and you choose which.** An *expression* check is a
   formula code evaluates at no token cost. A *judgment* check sends its instruction and
@@ -191,6 +210,17 @@ Two places where the distinction is not obvious and is worth knowing:
   "screens against the OFAC SDN list" — rather than only citing the policy that
   requires it. A rule described well is found under a name you never anticipated; one
   described only as a regulation reference is not.
+- **A sample workbook helps the AI, but never on a run.** This is the marker people
+  most often read as *nothing*, and that is the wrong reading. The AI and the tool use
+  your samples for four things while you set up: working out which uploaded file is
+  which, what a named value points at, the example values a validation guide shows, and
+  the suggestions on the **Meaning** screen — the one place the model reads a sample's
+  layout directly. None of it happens when a delivery is checked: the file is not
+  opened, and a better sample improves runs only through the definitions you build from
+  it. One thing does travel, so it is worth knowing: where a guide entry lands on a
+  sample, that cell's value is quoted to the model as an example on every run the guide
+  applies to. **That is why samples must be made-up files, never real customer data**
+  (ADR-003).
 
 The full register, derived from the code rather than from memory, is
 [`model-context.md`](model-context.md).
@@ -205,7 +235,31 @@ background. A programme can be switched off so users stop seeing it.
 Each programme also carries **keywords** and **rules**. The keywords are what the
 tool greps the OSL, configuration, and report headers for to confirm a run really is
 that programme; a run declared as one programme with none of its words gets a
-finding. The rules are sentences true of every delivery in the programme, each with a
+finding.
+
+**The AI is a second pass, not the first.** When none of a programme's words appear in
+a delivery, the tool reads the documents once and says which programme they sound like.
+It is never asked whether the submitter was right — code compares its reading with what
+was declared and decides what to do. If it agrees with the submitter, the finding is
+either dropped or reduced to a question, and **the words it quoted appear on the
+programme's card as suggestions**. Clicking one adds it to the word list, and from then
+on the match is made in code and the AI is not asked again for that wording. Nothing is
+added until you click.
+
+**Two things about keywords are worth knowing before you edit them.** Matching is
+forgiving of spelling but not of vocabulary: `existing accounts` finds *existing
+account*, `invitation to apply` finds *invitation-to-apply*, and `portfolio review`
+finds *ongoing review of the portfolio* — so you never need to add plurals, hyphenated
+forms, or the same two words in the other order. What it cannot do is guess a word you
+have not given it, so **add the words your customers actually use** (an abbreviation
+like *ITA*, a vendor's name for a campaign) as you meet them.
+
+**Every keyword must mean its programme and no other.** A word two programmes both list
+is ignored when the tool decides which programme a delivery *looks like*, because it
+cannot tell them apart. A word the delivery business uses generally — *snapshot*,
+*historical*, *monthly* — belongs in no list at all: it appears in every programme's
+paperwork, and putting it in one makes the tool confidently name the wrong programme.
+Two such words shipped in the Archives list until Phase 6.17a measured what they cost. The rules are sentences true of every delivery in the programme, each with a
 strictness: **must** (a breach is a high finding), **should** (medium), or
 **advisory** (low). The model reads each delivery against them and names what it
 breaks; the strictness decides how serious that is, and code applies it. Add as many
@@ -409,9 +463,73 @@ reaches the model. Add to it whenever a new layout carries personal data.
 
 ## Usage
 
-Runs per day, tokens, cache hit rate, and the per-rule statistics. The cache hit rate
-is the number to watch: identical content is never sent to the model twice, and a rate
-that drops means something is changing prompts or inputs on every run.
+Three tabs, because three different questions get asked of this screen.
+
+**Tool health** is runs per day, tokens, cache hit rate and the per-rule statistics. The
+cache hit rate is the number to watch: identical content is never sent to the model
+twice, and a rate that drops means something is changing prompts or inputs on every run.
+
+**By person** is who is using the tool and how it is going for them, over 7, 30, 90 or
+180 days. Three columns matter most and are deliberately kept apart, because they have
+different causes and different fixes:
+
+| Column | What it usually means |
+| --- | --- |
+| **Failed** | The pipeline raised. Usually the tool's problem — a layout, a parser. |
+| **Held** | What was uploaded disagreed with what was typed on the form. Usually something a person can be shown how to avoid: the wrong month's configuration, a customer name that does not match the file. |
+| **Re-runs** | The same order came back for another go. Something was wrong either way. |
+
+A rate is flagged only when it is well above **this deployment's own average**, shown in
+the line under the tab, and never for somebody with fewer than five runs — over three
+runs a rate says nothing. Click any count to open those runs in the user app. **CSV**
+downloads every person in the period, not the page on screen, with more columns than the
+table shows and the averages on the last line.
+
+This is a count of what happened to somebody's runs, not a judgment on them, and nothing
+on it reaches a model. Use it to find where the tool is letting a group of people down
+(ADR-048).
+
+**What it displaced** is the hours report, over a date range you choose.
+
+
+## Review load — what reviewers stop needing to see (Phase 6.18a)
+
+**Read this screen before you believe anything on it.** Nothing on it is being acted
+on: every reviewer still sees every finding, exactly as before. It shows what the tool
+*would* hide, so you can judge whether it should.
+
+The tool has recorded every verdict a reviewer gave since the review screen existed,
+and until now nothing read them. This screen adds them up.
+
+A **signature** is the identity of *this same finding again*: one customer, one
+delivery programme, one rule, and one thing it fired on. A blank score column and a
+blank state column are two signatures however much they share a rule — learning that
+one is harmless must never silence the other. Trust is learned per customer per
+programme, so what your teams learn about a customer's solicitation work never applies
+to that customer's archive work.
+
+A signature is listed as **would be hidden** once it has been shown to a reviewer **ten
+times and waved through every single time**. A count rather than a rate, and no
+exceptions in it: *"shown to a person ten times and never once mattered"* is a sentence
+that survives an audit, and *"nine times out of ten"* is not, because the tenth is the
+one that would have been hidden.
+
+Two things put a signature on the **blocked** list, where it stays:
+
+- **A reviewer judged the finding real** — marked it Not OK, or accepted it as a known
+  risk, which means they agreed it was true and chose to carry it. One of those
+  outranks any number of dismissals, forever, until somebody clears it deliberately.
+- **It fires at high severity.** These are never hidden at any level of evidence. The
+  goal is a reviewer who reads only the serious findings, not one who reads none.
+
+Every row carries the sentence explaining its state and the runs its evidence came
+from, so a decision can be checked against the deliveries it was learned from rather
+than taken on trust.
+
+**What to do with it.** Leave it for some weeks, then open it and ask the question the
+banner asks: *it would have hidden these — was any of them real?* If the answer is no,
+that is the evidence for letting reviewers stop seeing them. If any of them was real,
+the bar was wrong and the tool has told you so before anybody was hurt by it.
 
 
 ## What the model reads, and how much of it (Phase 6.11)

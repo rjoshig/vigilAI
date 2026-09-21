@@ -70,6 +70,10 @@ def canned_for_stage(stage: str) -> str:
         # absence is what the deterministic matcher already concluded.
         "compliance_locate": '{"verdict": "absent", "json_path": "", '
         '"reason": "mock client", "confidence": 0.0}',
+        # "unclear" rather than a programme: the mock must not contradict a submitter,
+        # and unfamiliar vocabulary is what the keyword check already concluded.
+        "programme_reading": '{"programme_code": "", "verdict": "unclear", '
+        '"phrases": [], "reason": "mock client", "confidence": 0.0}',
     }
     return shapes.get(stage, "{}")
 

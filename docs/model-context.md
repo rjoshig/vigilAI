@@ -16,10 +16,13 @@ touchpoint: a commit that changes what reaches the model, what a stage reads, or
 updates this file, the field's marker in both apps, and the training documents, in that
 commit.
 
-## The five things a field can do
+## The six things a field can do
 
-Both apps mark every field a person can write with one of these, and the marker never
-hides — it is a fact about the run, not help text. Somebody writing a note deserves to
+Both apps mark every field a person can write with one of these. A marker is a fact
+about the run rather than help text, so `ui.tooltips` never hides one. The single
+exception is the setup marker, which an administrator may switch off because it says a
+field is *not* read during a run and so cannot mislead anybody about where their words
+go (ADR-046); the four that say where words **do** go cannot be switched off at all. Somebody writing a note deserves to
 know whether they are teaching the model, feeding a comparison, leaving a message for
 the next reviewer, or writing to themselves.
 
@@ -30,6 +33,7 @@ the next reviewer, or writing to themselves.
 | **Read by a person** | Shown to whoever reviews or signs off the run. Nothing automated acts on it. |
 | **Your own note** | Kept with the run for you and anyone looking later. Reaches no model and no check. |
 | **Identifies the run** | How the run is found, grouped, and compared with earlier ones — and checked against what the uploaded files declare. |
+| **Used for setup, not for runs** | The AI reads it while somebody sets the product up; no validation run reads it. What is built from it is what reaches a run. **The one marker an administrator can switch off** (`ui.setup_markers`, on by default) — ADR-046. |
 
 ## The one rule everything here obeys
 
@@ -70,6 +74,16 @@ is compliant. Code checks the answer against the paths it offered, applies a
 confidence floor, and a located control becomes a review-severity finding for a
 person to confirm — never a pass.
 
+**Stage 7 gained a second one in Phase 6.18f, built to the same shape.** When the
+keyword check finds none of the declared programme's words, the delivery's own words
+go to the model once, and it says which of the listed programmes they read like. It is
+never asked whether the submitter was right: that is a comparison, and code makes it.
+Code checks the answer names a programme it offered, applies a confidence floor, and
+then decides — the model agreeing with the declaration **softens** a high-severity
+finding to a question and never erases it, and the words it quoted are offered to an
+administrator as keywords, never applied (ADR-045). What the model is shown is the
+delivery's own text, capped, and never a data row (ADR-003).
+
 **The whole preamble is capped at 6,000 characters** (`MAX_BLOCK_CHARS`). Past it the
 block is trimmed as a whole and the model is told what was left out — before 6.11e each
 field was capped alone, so ten configuration notes were ten times the cap.
@@ -102,9 +116,10 @@ produce a finding.
 | Field | What it is for |
 | --- | --- |
 | Artifact type **description** | Read by the person uploading the file. Reaches nothing. |
-| **Artifact samples** | Specimens other definitions resolve against: workbook type detection, named values, guide examples, and the mapping interview. **A sample's contents never enter a validation run** — `grep sample src/greenlight_ai/pipeline/` finds only ADR-003 comments. |
+| **Artifact samples** | Specimens other definitions resolve against: workbook type detection, named values, guide examples, and the mapping interview. **No sample is opened during a validation run** — `grep sample src/greenlight_ai/pipeline/` finds only ADR-003 comments, and nothing under `pipeline/` can reach `ArtifactSample`. The model reads a sample's layout in one place only: the mapping interview (`meaning/interview.py`), which is a setup activity an administrator starts by hand. **One value does travel**: where a guide entry's locator resolves on a sample, that cell's value is stored on the entry and quoted to the model as `e.g. label=value` at stages 4 and 8 (`checks/guides.py::guide_lines`). It is a single named value an administrator chose, not a row, and it is why samples must be synthetic (ADR-003). |
 | Sample **notes** | Read by the model during the mapping interview for that scope, not during a run. |
-| **Programme keywords** | Compared by code at stage 7 to confirm a run is the programme it claims. |
+| **Programme keywords** | Compared by code at stage 7 to confirm a run is the programme it claims. **They no longer only reach code:** when none of the declared programme's words match, the delivery's own words go to the model once, which says what programme they read like (Phase 6.18f). The keywords themselves are not sent — what they decide is *whether the call happens at all*. |
+| Programme **name** | Sent with the programme list in that one prompt, because a code on its own says nothing about what a programme is. |
 
 ## What never reaches a prompt, under any setting
 
@@ -123,7 +138,16 @@ grep -rn "preamble(" --include="*.py" src/greenlight_ai/pipeline/
 # Every place a sample is read (should never be under pipeline/):
 grep -rn "sample" --include="*.py" src/greenlight_ai/pipeline/
 
-# The caps:
+# The caps, and what a console can show is left of them (Phase 6.17b):
 grep -n "MAX_CONTEXT_CHARS\|MAX_BLOCK_CHARS" src/greenlight_ai/pipeline/guidance.py
+grep -n "def budget" src/greenlight_ai/pipeline/guidance.py
 grep -n "MAX_PER_STAGE" src/greenlight_ai/llm/examples.py
+
+# Every stage that makes a model call at all:
+grep -rn "\.complete(" --include="*.py" src/greenlight_ai/pipeline/
 ```
+
+**The caps count down rather than merely being stated** (Phase 6.17b).
+`GET /admin/prompt-budget` reports what a programme's and a configuration's context
+already spends of the 6,000, measured over the same lines `preamble` renders and
+counted the way the trimmer counts them, so a field can say what is *left*.

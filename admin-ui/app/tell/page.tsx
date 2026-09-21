@@ -18,6 +18,7 @@ import { ArrowRight, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
+import { FieldEffect } from "@/components/explain";
 import { EVERYWHERE, ScopePicker, scopeIsComplete } from "@/components/scope-picker";
 import {
   Badge,
@@ -122,6 +123,10 @@ export default function TellPage() {
               value={statement}
               placeholder="The account review file must never have a blank origination date."
               onChange={(event) => setStatement(event.target.value)}
+            />
+            <FieldEffect
+              kind="model"
+              note="Your sentence goes to the model, which says which of the tool's surfaces it belongs on and drafts it there. It decides nothing: you see the draft, edit it, and choose whether to keep it."
             />
           </div>
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">

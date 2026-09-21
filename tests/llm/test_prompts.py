@@ -31,6 +31,10 @@ PIPELINE_STAGES = {
     # Asked only when the deterministic matcher finds nothing, so it costs a call
     # on the exception rather than on every run (Phase 6.15, option A).
     "compliance_locate",
+    # The same shape at stage 7: asked only where the keyword check found none of the
+    # declared programme's words, so it costs one call per delivery on the exception
+    # rather than on every run (Phase 6.18f).
+    "programme_reading",
 }
 
 #: The admin flow's prompts: drafting a check (once, at authoring time) and answering a

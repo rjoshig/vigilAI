@@ -20,7 +20,7 @@
  * reaches the model nor is compared stays undecorated.
  */
 
-import { Cpu, HelpCircle, NotebookPen, Ruler, Tag, Users } from "lucide-react";
+import { BookOpen, Cpu, HelpCircle, NotebookPen, Ruler, Tag, Users } from "lucide-react";
 import * as React from "react";
 
 import { usePalette } from "@/components/palette-provider";
@@ -43,8 +43,13 @@ import { cn } from "@/lib/utils";
  * - `notes` — your own record. Nothing reads it but you.
  * - `record` — it identifies or files the run: how it is found, grouped and compared
  *   with earlier ones.
+ * - `reference` — the AI reads it while somebody sets the product up, and no run
+ *   reads it at all. It helps the AI at one remove: what is built from it is what
+ *   reaches a run. **This is the one marker an administrator can switch off**
+ *   (`ui.setup_markers`), because saying a field is *not* read during a run cannot
+ *   mislead anybody about where their words go (ADR-046).
  */
-export type FieldEffectKind = "model" | "code" | "reviewer" | "notes" | "record";
+export type FieldEffectKind = "model" | "code" | "reviewer" | "notes" | "record" | "reference";
 
 const EFFECT: Record<
   FieldEffectKind,
@@ -85,12 +90,27 @@ const EFFECT: Record<
       "How this run is found, grouped, and compared with earlier runs of the same configuration. Code checks it against what the uploaded files declare before anything is validated.",
     className: "text-muted-foreground",
   },
+  reference: {
+    icon: BookOpen,
+    label: "Used for setup, not for runs",
+    detail:
+      "The AI reads this while you set things up, to help you fill things in. It is not used when a delivery is checked — what you build from it here is what a run uses.",
+    className: "text-tertiary",
+  },
 };
 
 /**
- * Say what a field does to a run. Always shown, whatever `ui.tooltips` says.
+ * Say what a field does to a run. Never hidden by `ui.tooltips`, which is help.
  *
- * @param kind Which of the three effects this field has.
+ * One kind is optional and the rest are not. `reference` says a field is *read only
+ * while you set up* and so can be switched off with `ui.setup_markers`: hiding it
+ * cannot mislead anybody about where their words go, and on a screen full of sample
+ * files it is the same sentence over and over. The other four say a field reaches the
+ * model, is compared by code, is read by a person, or identifies the run — those are
+ * the account an administrator gets in place of seeing the prompt, and no setting
+ * takes them away (ADR-046).
+ *
+ * @param kind Which effect this field has.
  * @param note Anything specific to this field — which stages read it, which cap
  *   applies — appended after the standing wording.
  */
@@ -103,6 +123,8 @@ export function FieldEffect({
   note?: string;
   className?: string;
 }) {
+  const { setupMarkers } = usePalette();
+  if (kind === "reference" && !setupMarkers) return null;
   const effect = EFFECT[kind];
   const Icon = effect.icon;
   return (
@@ -125,6 +147,16 @@ export function FieldEffect({
  * Rendered as a button rather than a bare icon so it is reachable by keyboard, and
  * removed from the DOM rather than merely hidden when off, so a screen reader is not
  * read a page full of invisible help.
+ *
+ * **An open tip closes on the next click, wherever it lands** — the control that
+ * opened it, the tip's own body, or the far side of the page. Help you have finished
+ * reading should not need aiming at to dismiss. That is done with a transparent sheet
+ * across the viewport rather than a document listener, because a listener races the
+ * button's own handler: whichever of the two runs second decides, and the tip either
+ * survives the click or reopens on it. A sheet has no ordering to get wrong — while a
+ * tip is open every click lands on the sheet first, and the button underneath never
+ * hears it. Keyboard activation dispatches straight to the button and so still
+ * toggles, as does Escape.
  *
  * @param children The explanation: what this is for, how to use it, what belongs
  *   elsewhere.
@@ -158,12 +190,21 @@ export function Explain({
         <HelpCircle className="h-4 w-4" aria-hidden />
       </button>
       {open ? (
-        <span
-          role="note"
-          className="absolute left-5 top-0 z-50 w-72 rounded-md border border-border bg-background p-3 text-xs leading-relaxed shadow-lg"
-        >
-          {children}
-        </span>
+        <>
+          <span
+            aria-hidden
+            data-testid="explain-dismiss"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <span
+            role="note"
+            className="absolute left-5 top-0 z-50 w-72 rounded-md border border-border bg-background p-3 text-xs leading-relaxed shadow-lg"
+            onClick={() => setOpen(false)}
+          >
+            {children}
+          </span>
+        </>
       ) : null}
     </span>
   );

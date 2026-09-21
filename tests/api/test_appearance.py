@@ -21,6 +21,7 @@ def test_the_default_theme_comes_from_the_environment_then_the_built_in(
         "locked": True,
         "palettes": ["classic-teal-navy", "classic-teal", "light-blue-yellow", "default"],
         "tooltips": True,
+        "setup_markers": True,
         "tagline": "Nothing ships without a green light.",
         "maintenance": False,
         "accepting": True,

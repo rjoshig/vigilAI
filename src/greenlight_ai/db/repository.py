@@ -388,6 +388,10 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
             for entry in context.coverage.reports
         ]
     run.notices = list(context.notices)
+    if context.keyword_suggestions:
+        run.keyword_suggestions = {
+            code: list(phrases) for code, phrases in context.keyword_suggestions.items()
+        }
 
 
 def _replace_rules(session: Session, run: models.Run, rules: Sequence[Rule]) -> None:

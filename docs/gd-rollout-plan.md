@@ -3,6 +3,7 @@
 **Owner:** the product owner, named in section 2. **Referenced from:** `CLAUDE.md`.
 **Status:** plan; names and dates are filled in at the intake meeting (section 9).
 Revisit at every milestone in `docs/phase-plan.md`.
+**Last re-read against the code:** 2026-09-20, after Phase 6.18a.
 
 This is the **delivery** document, not the engineering one. It says how the tool
 reaches the Global Delivery teams and how it is owned, supported, and accepted once it
@@ -66,6 +67,17 @@ The platform team, with the administrator.
       Then **Meaning** run on the real samples: Map each programme, confirm the
       mappings, and let the compiled checks run in shadow through UAT (Phase 6.10);
       a validation guide per report type for the cells that need it (Phase 6.8).
+- [ ] **Each programme's keywords matched to the customer's vocabulary**, and every
+      keyword checked against the two rules Phase 6.17a established: it must mean that
+      programme and no other, and it must not be a word the delivery business uses
+      generally. Spelling variants are unnecessary — plurals, hyphens and reordered
+      phrases match already — so what is added here is *vocabulary*: the abbreviations
+      and the vendor names a customer actually writes. Getting this wrong is not
+      cosmetic: a generic word in one programme's list makes the tool name the wrong
+      programme at high severity.
+- [ ] **A decision on the compliance locator's model call.** It runs only where the
+      deterministic match has already failed, and it costs one call per unmatched rule.
+      It ships on, and the run statistics say what it costs (Phase 6.16b).
 - [ ] Phase 6.11 landed before UAT: the bulk-OK defect fixed, the finalize gate
       fail-closed with the attestation, coverage on the review screen and the report,
       and the benchmark harness reporting precision and recall per finding type.
@@ -83,6 +95,13 @@ The platform team, with the administrator.
       load.
 - [ ] `docs/user-training.md` and `docs/admin-training.md` re-read against the
       deployed version and corrected.
+- [ ] **The Review load screen understood before stage 3, and left alone until then.**
+      Phase 6.18a records which recurring findings reviewers have stopped needing to
+      see, and **acts on none of it**: every reviewer still sees every finding. It needs
+      real verdicts from real deliveries before it says anything, which is what stage 3
+      produces — see [`phase-7.1.md`](phase-7.1.md). Nobody should be promised a
+      reduction in review load during stages 1 or 2, because the evidence for one does
+      not exist yet.
 
 **Gate:** an administrator submits one real order end to end, reviews it, and
 generates its report, with nothing edited by hand along the way.
@@ -144,11 +163,19 @@ queue goes quiet.
       learned rules active. The difference is the value of this stage.
 - [ ] Every senior signs off that the rules for their programme reflect how they
       check, and lists what is still missing.
+- [ ] **The Review load screen read at the end of the stage, and its question answered
+      in writing.** By then the seniors have given the tool several weeks of real
+      verdicts, which is the first time it has any. The screen lists the recurring
+      findings it *would* have stopped showing; the seniors say whether any of them was
+      real. That answer, recorded, is the evidence for reducing review load — and if it
+      is unfavourable, the bar was wrong and nobody was hurt by it, which is the reason
+      it ships acting on nothing. [`phase-7.1.md`](phase-7.1.md) is how this is run.
 
 **Gate:** the queue has gone quiet, meaning a week with fewer than a handful of new
 observations; every shadow rule has either been activated or narrowed, with its
 dismissal rate looked at rather than assumed; the re-run benchmark is at or above
-stage 2 on every programme; and the seniors have signed off.
+stage 2 on every programme; the Review load question has been answered in writing; and
+the seniors have signed off.
 
 ### Stage 4 — General rollout
 

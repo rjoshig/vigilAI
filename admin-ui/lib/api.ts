@@ -18,6 +18,9 @@ import type {
   ComplianceRule,
   ConfigChange,
   CurrentUser,
+  DemotionReport,
+  KeywordSuggestions,
+  PromptBudget,
   DraftResponse,
   FrontDoorResult,
   MaskedColumn,
@@ -40,6 +43,7 @@ import type {
   TestResult,
   TrainingConfig,
   Usage,
+  UsageByUser,
   ValueReport,
   DefinitionVersion,
   GuideEntry,
@@ -415,6 +419,39 @@ export const api = {
 
   /** Read the dashboard numbers. */
   getUsage: (): Promise<Usage> => request<Usage>("/usage"),
+
+  /** Who is using the tool, and who is having a hard time with it (Phase 6.19). */
+  getUsageByUser: (days: number): Promise<UsageByUser> =>
+    request<UsageByUser>(`/usage/by-user?days=${days}`),
+
+  /** How much of a prompt's context allowance is already spent (Phase 6.17b). */
+  getPromptBudget: (scopeCode = "", configurationId = ""): Promise<PromptBudget> => {
+    const query = new URLSearchParams();
+    if (scopeCode) query.set("scope_code", scopeCode);
+    if (configurationId) query.set("configuration_id", configurationId);
+    const suffix = query.toString();
+    return request<PromptBudget>(`/prompt-budget${suffix ? `?${suffix}` : ""}`);
+  },
+
+  /** Words the model quoted that would have matched a programme (Phase 6.18f). */
+  getKeywordSuggestions: (): Promise<KeywordSuggestions> =>
+    request<KeywordSuggestions>("/keyword-suggestions"),
+
+  /** Add one suggested word to a programme's list. */
+  acceptKeyword: (scopeCode: string, phrase: string): Promise<Scope> =>
+    request<Scope>("/keyword-suggestions/accept", {
+      method: "POST",
+      body: JSON.stringify({ scope_code: scopeCode, phrase }),
+    }),
+
+  /** What demotion would do, while it still does nothing (Phase 6.18a). */
+  getDemotionReport: (customer = "", scope = ""): Promise<DemotionReport> => {
+    const query = new URLSearchParams();
+    if (customer) query.set("customer_name", customer);
+    if (scope) query.set("scope", scope);
+    const suffix = query.toString();
+    return request<DemotionReport>(`/demotion-report${suffix ? `?${suffix}` : ""}`);
+  },
 
   /** What the tool displaced between two dates, counted from the run records. */
   getValueReport: (start: string, end: string): Promise<ValueReport> =>

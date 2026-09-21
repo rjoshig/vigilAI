@@ -200,6 +200,96 @@ def test_a_failed_run_does_not_block_a_resubmission(
     assert submit().json()["run_id"] is not None
 
 
+def test_the_failure_detail_is_on_the_run_and_never_in_the_list(
+    submit: Submit, client: TestClient, api: str, factory: sessionmaker[Session]
+) -> None:
+    """Two accounts of one failure, each where it is wanted (Phase 6.19).
+
+    The list answers *what went wrong* in a line that must not stretch a row. The run
+    answers *where*, at whatever length tracing it takes.
+    """
+    run_id = submit().json()["run_id"]
+    with factory() as session:
+        run = session.get(models.Run, run_id)
+        run.status = "failed"
+        run.current_stage = "s4_trace"
+        run.error = "s4_trace: 3 requirements did not resolve"
+        run.error_detail = "Run 1\nStage: s4_trace\n\nTraceback (most recent call last):\n …"
+        session.commit()
+
+    listed = client.get(f"{api}/runs").json()[0]
+    assert listed["error"] == "s4_trace: 3 requirements did not resolve"
+    assert "error_detail" not in listed, "a traceback has no business in a list payload"
+
+    detail = client.get(f"{api}/runs/{run_id}").json()
+    assert detail["error"] == "s4_trace: 3 requirements did not resolve"
+    assert "Traceback (most recent call last)" in detail["error_detail"]
+
+
+def test_runs_can_be_filtered_to_one_person(
+    submit: Submit, client: TestClient, api: str, factory: sessionmaker[Session]
+) -> None:
+    """What an administrator opens by clicking somebody's count (Phase 6.19)."""
+    submit()
+    with factory() as session:
+        other = models.User(username="other", name="Other", email="other@example.test")
+        session.add(other)
+        session.flush()
+        session.add(
+            models.Run(
+                customer_name="Beta",
+                order_number="ORD-OTHER",
+                configuration_id="CFG-1",
+                status="finalized",
+                user_id=other.id,
+            )
+        )
+        other_id = other.id
+        session.commit()
+
+    mine = client.get(f"{api}/runs?submitted_by={other_id}").json()
+    assert [run["order_number"] for run in mine] == ["ORD-OTHER"]
+    assert len(client.get(f"{api}/runs").json()) == 2
+
+
+def test_a_search_covers_what_somebody_remembers_a_run_by(
+    submit: Submit, client: TestClient, api: str, factory: sessionmaker[Session]
+) -> None:
+    """The order number, the customer, the configuration, and who submitted it."""
+    submit()
+    with factory() as session:
+        person = models.User(username="jo", name="Jo Bloggs", email="jo@example.test")
+        session.add(person)
+        session.flush()
+        session.add(
+            models.Run(
+                customer_name="Northern Bank",
+                order_number="ORD-7788",
+                configuration_id="CFG-ONLY-HERE-42",
+                status="finalized",
+                user_id=person.id,
+            )
+        )
+        session.commit()
+
+    def found(term: str) -> list[str]:
+        return [run["order_number"] for run in client.get(f"{api}/runs?q={term}").json()]
+
+    assert found("7788") == ["ORD-7788"]
+    assert found("northern") == ["ORD-7788"], "the customer, case-insensitively"
+    assert found("ONLY-HERE-42") == ["ORD-7788"], "the configuration id"
+    assert found("Jo Bloggs") == ["ORD-7788"], "and who submitted it"
+    assert found("nothing-matches-this") == []
+
+
+def test_a_run_that_has_not_failed_carries_no_failure_detail(
+    submit: Submit, client: TestClient, api: str
+) -> None:
+    """An empty string rather than a missing key, so the UI has nothing to guard."""
+    run_id = submit().json()["run_id"]
+    assert client.get(f"{api}/runs/{run_id}").json()["error_detail"] == ""
+
+
 # --- reading runs ---------------------------------------------------------------------------
 
 
