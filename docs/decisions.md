@@ -2373,3 +2373,91 @@ This does not amend ADR-054's account of what a re-check costs. It narrows when 
 be asked for at all.
 
 ---
+
+## ADR-064 — One submission body, whichever door a delivery came through
+
+**Status:** accepted · 2026-09-21 · Phase 6.23c
+
+**Context.** `POST /runs` was 267 lines doing seven jobs: read the multipart form, check
+the per-order queue limit, check the start-rate window, check the tool is accepting
+work, store the files, fingerprint them against ADR-005, and either hold or queue the
+run. A draft being submitted has to do six of those seven — everything but reading the
+form, because its files are already stored.
+
+Writing that second path as a second copy is how the two would come to admit different
+deliveries: somebody adds a check to one, and a delivery's fate starts depending on
+which screen it was submitted from.
+
+**Decision.** Four helpers — `_read_uploads`, `_admit`, `_store_uploads`,
+`_finish_submission` — and both endpoints are assembled from them.
+
+The non-obvious part is an ordering change. `RunFile` rows are now written **before**
+the fingerprint is computed, where they used to be written after the duplicate branch.
+That is what lets everything downstream answer "what files does this run have?" by
+reading `run.files` rather than a list only the create path holds, and it is why
+`_record_mismatches`, `_capture_config_from_upload` and `_labelled_credit_date` now take
+`RunFile` rows instead of freshly stored tuples.
+
+**One deliberate divergence between the two paths**, expressed as an argument rather
+than a branch: `discard_on_duplicate`. `POST /runs` deletes the run it built seconds ago
+when the inputs match an earlier one and no reason was given — it is a throwaway. A
+draft is not: it holds fields somebody typed and files somebody uploaded, and deleting
+it would destroy that work in the act of asking a question about it. So the draft
+survives, the person supplies a reason, and they press submit again.
+
+**And the dialog now knows what it is looking at.** When the run the fingerprint matched
+*is* the draft's `cloned_from_id`, the message says so — *"this is a clone of run N and
+its files are unchanged"* — rather than "these inputs were already run", which reads as
+nonsense to somebody who believes they just uploaded them. That is the commonest way to
+reach this dialog: clone, correct a field, forget to swap the DIRT. It is also the first
+thing in the product ever to read `cloned_from_id`, which had been written and never
+looked at since Phase 3.
+
+**Consequences.** The start-rate window now excludes drafts. It counts runs by
+`created_at`, and once a draft can sit for five days an old one would otherwise consume
+a window it never used. `uploads.max_mb` is read for the first time as well, because
+every upload now goes through one helper that resolves it.
+
+---
+
+## ADR-065 — A draft expires in five days; one column, and the status picks the window
+
+**Status:** accepted · 2026-09-21 · Phase 6.23c
+
+**Context.** A cloned draft was stamped with the ordinary retention window, so an
+abandoned one sat in the runs list for ninety days having validated nothing. Drafts
+needed a shorter life, and an administrator needed to set it.
+
+`retention.days` was the obvious model to follow, and it turned out to be broken:
+`expiry_from`'s `days` parameter was never passed by either caller, so the window was
+always the import-time constant however the console was set — and the console showed a
+warning dialog when you shortened it. `uploads.max_mb` had the identical defect. Both
+appeared in `src/` only in their own registry declarations.
+
+**Decision.** `repository.expiry_for(session, run)` resolves the window at the call site
+(ADR-023), choosing `retention.draft_days` when the run is a draft and `retention.days`
+otherwise.
+
+**One column, not two.** `status == "draft"` already *is* the fact that says which
+window applies, so a second column would only give the purge two predicates and ADR-023
+two settings that can disagree.
+
+**The stamp is taken once and never recomputed.** A run is stamped at creation, and a
+draft is re-stamped from `utcnow()` when it is submitted — from now, not from when it
+was cloned, because a draft sat on for four days must still get its full retention once
+it becomes real work. Nothing else ever rewrites it. That is the whole safeguard:
+changing either setting affects only rows created afterwards, so a shortened window
+cannot delete work that already exists. It also means `retention.days`'s help text —
+*"Shortening it deletes more at the next sweep"* — was false, and has been corrected.
+
+**Consequences.** The existing 24-hour worker sweep deletes an expired draft unchanged;
+no new scheduler, no cron. It counts and audits abandoned drafts apart from runs that
+reached the end of their retention, because a draft leaving silently (the user's
+decision) is not the same as one leaving unrecorded.
+
+A draft submitted into `held` is re-stamped **before** the mismatch branch, not after.
+Found while building: taking the early return left a held run on the five-day window
+while it waited for somebody to accept the disagreement, which would have purged it out
+from under them.
+
+---

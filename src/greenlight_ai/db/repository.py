@@ -36,6 +36,7 @@ from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
 from greenlight_ai.rules.normalize import AliasTable
+from greenlight_ai.config.store import resolve
 from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, Trace
 
 __all__ = [
@@ -870,6 +871,37 @@ def expiry_from(created: dt.datetime, days: int = models.RETENTION_DAYS) -> dt.d
         When the purge job may delete the run and its files.
     """
     return created + dt.timedelta(days=days)
+
+
+def expiry_for(
+    session: Session, run: models.Run, run_from: dt.datetime | None = None
+) -> dt.datetime:
+    """When this run may be deleted, given what kind of run it is.
+
+    Two windows, one column. A draft is unfinished work nobody has submitted, and
+    keeping an abandoned one for the full retention period fills the runs list with
+    things that were never validated — so it gets the shorter window. ``status`` is
+    already the discriminator, which is why no second column is needed: a run being a
+    draft *is* the fact that says which window applies (Phase 6.23d).
+
+    The window is resolved here rather than read into a constant (ADR-023). Until this
+    existed neither setting was read at all: ``expiry_from``'s ``days`` was never
+    passed, so the retention the console offered had no effect on anything.
+
+    Args:
+        session: An open session.
+        run: The run being stamped.
+        run_from: When the clock starts. Defaults to the run's creation. A draft being
+            submitted passes ``utcnow()``, because a draft sat on for four days must
+            still get its full retention from the moment it becomes real work —
+            inheriting what was left would silently shorten a promise.
+
+    Returns:
+        The expiry to store.
+    """
+    key = "retention.draft_days" if run.status == "draft" else "retention.days"
+    days = int(resolve(session, key).value)
+    return expiry_from(run_from or run.created_at or utcnow(), days=days)
 
 
 def purge_expired(session: Session, data_dir: Path) -> int:

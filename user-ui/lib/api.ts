@@ -292,6 +292,36 @@ export const api = {
     return request<CloneResult>(`/runs/${runId}/clone`, { method: "POST" });
   },
 
+  /** Change a draft's fields. Only the keys sent are touched (Phase 6.23c). */
+  updateDraft(runId: number, changes: Record<string, unknown>): Promise<RunDetail> {
+    return request<RunDetail>(`/runs/${runId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes),
+    });
+  },
+
+  /** Attach or replace a draft's artifacts. Every kind sent replaces that whole slot. */
+  attachDraftFiles(runId: number, form: FormData): Promise<RunDetail> {
+    return request<RunDetail>(`/runs/${runId}/files`, { method: "POST", body: form });
+  },
+
+  /** Start a draft. Same admission checks and duplicate rule as a fresh submission. */
+  submitDraft(runId: number, rerunReason: string): Promise<CreateRunResult> {
+    return request<CreateRunResult>(`/runs/${runId}/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rerun_reason: rerunReason }),
+    });
+  },
+
+  /** Discard a draft and everything uploaded to it. */
+  discardDraft(runId: number, confirm: string): Promise<void> {
+    return request<void>(`/runs/${runId}?confirm=${encodeURIComponent(confirm)}`, {
+      method: "DELETE",
+    });
+  },
+
   /**
    * Render and freeze the final report.
    *
