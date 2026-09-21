@@ -1,10 +1,10 @@
 # Phase 6.14 — The artifacts belong together, and the console says why
 
-**Status:** 🟡 **all but one item complete** — 2026-09-21. Specified 2026-09-20 from a
+**Status:** ✅ **complete** — 2026-09-21. Specified 2026-09-20 from a
 review that ran the product against a deliberately mismatched submission and watched it
-pass; every acceptance criterion is met and tested. The one thing left is the live cap
-countdown in 6.14c, deferred by the user as a nice-to-have and carried into
-[`phase-6.17.md`](phase-6.17.md).
+pass; every acceptance criterion is met and tested. The live cap countdown in 6.14c was
+deferred as a nice-to-have and **built as 6.17b** ([`phase-6.17.md`](phase-6.17.md)),
+which is what closes this phase.
 
 **What the review found.** The tool validates a delivery thoroughly and says nothing
 about whether the delivery is the one the submitter claims. A run submitted with the
@@ -128,7 +128,7 @@ Tooltips explain intended use — what this surface is *for*, how it is meant to
 and what belongs somewhere else. They are a setting, on by default, and an administrator
 who knows the product can turn them off.
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.14a — The artifact match check · ✅ complete
 
@@ -202,7 +202,7 @@ who knows the product can turn them off.
       date disables the check loudly rather than silently (the smaller defect listed in
       `docs/phase-6.13.md`).
 
-### 6.14c — What every field does to a run · 🟡 in progress
+### 6.14c — What every field does to a run · ✅ complete
 
 - [x] `docs/model-context.md`: the single register of every field an administrator or a
       user can write, and for each — which prompt block it lands in, which stages read it,
@@ -216,11 +216,12 @@ who knows the product can turn them off.
       notes and every field on the new-run form carry the marker. Five effects rather
       than three, so a field says whether it helps the AI, is checked by code, is read
       by a person, is your own note, or identifies the run.
-- [ ] Where a cap applies, the field shows what is left, not just the limit — an
+- [x] Where a cap applies, the field shows what is left, not just the limit — an
       administrator writing the eleventh configuration note should see that the block is
-      full before they write it, not after (`MAX_BLOCK_CHARS`, `MAX_PER_STAGE`).
-      **Outstanding:** the caps are stated in the marker text, but not yet counted down
-      live. Needs the API to report the block's remaining budget for a given run.
+      full before they write it, not after (`MAX_BLOCK_CHARS`, `MAX_PER_STAGE`). Built as
+      6.17b: `GET /admin/prompt-budget` reports what a programme's and a configuration's
+      context already spends of the 6,000 and what is left, counted by the same function
+      that renders the preamble, and `<CapMeter>` counts down beside the field.
 - [x] Tests: every variant renders; a field whose registry entry claims a prompt block
       that `docs/model-context.md` does not list fails the test, so the register cannot
       drift from the code silently.

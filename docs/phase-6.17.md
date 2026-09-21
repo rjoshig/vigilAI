@@ -1,7 +1,8 @@
 # Phase 6.17 — What is left, gathered in one place
 
-**Status:** 🟡 **in progress** — specified 2026-09-21 as a hand-off; **6.17a is
-measured and closed** (2026-09-20), and what it found is written up below. Everything
+**Status:** ✅ **complete** — 2026-09-21. Specified 2026-09-21 as a hand-off;
+**6.17a was measured and closed** (2026-09-20), and what it found is written up below.
+6.17b and 6.17c followed, and both standing touchpoints were brought current. Everything
 still open after 6.14, 6.15 and 6.16 is collected here so the next person picks up one
 document rather than three, and so nothing survives only as a line in a session log.
 
