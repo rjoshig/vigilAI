@@ -118,6 +118,15 @@ field was capped alone, so ten configuration notes were ten times the cap.
 was actually sent (ADR-005). Editing guidance therefore refreshes exactly the calls it
 changes, and nothing else, without anyone remembering to bump a version.
 
+**One more call the model makes, and what it is shown.** Where the ladder's four
+deterministic rungs cannot say which column an attribute is, `resolve/locate.py` asks —
+and is shown **names and nothing else**: a shortlist of the handful of column headings
+that resemble the wanted name, minus any the dictionary already assigns to a different
+attribute. Never a cell, never a row, never an aggregate (ADR-003). Its answer must be
+one of the names it was offered, a confidence floor applies, and it is never a pass: the
+run carries a review record saying the name was reasoned about. The run's cap bounds how
+often it may happen at all.
+
 ## Fields code evaluates
 
 These never reach a prompt. Code compares them against the artifacts, and each can
@@ -137,6 +146,10 @@ produce a finding.
 | **Credit date** | The new-run form | `checks/artifact_match.py` before the run starts, against the cell `checks/field_labels.py` resolves; `pipeline/s7_reports.py` for whatever the pre-flight did not reach |
 | **Field labels** | Admin → Reference data | `checks/field_labels.py`, resolving what a delivery calls a checked field |
 | **Artifact type layout map** | Admin → Artifact types → Layout | `resolve/ladder.py`, as the fourth rung — an administrator's spelling resolves a name in code and costs no call (ADR-054) |
+| **Attribute dictionary** | Admin → Reference data → Attributes | `resolve/dictionary.py`, as the fourth rung for **attribute** names (ADR-062). A spelling recorded here resolves the name in code, so the next run of that configuration spends no call on it. It never picks: it hands the ladder alternates and the ladder still refuses when two candidates tie |
+| **Product codes** | Admin → Reference data → Product codes | `rules/product_codes.py`, expanded at the end of stage 2 into the attributes the code stands for (ADR-061). **Expansion is a lookup, so it is code's**; the model only reads that a requirement named a code. A code the catalogue does not define is a finding and never an empty expansion |
+| **Record layout** | The new-run form (optional) | `parsers/record_layout.py` at stage 1, then `checks/reports.py` at stage 7 alongside the DIRT — **one alarm between the two artifacts**, never two (Phase 6.22e). Its field names also feed the attribute suggestions, read in code at no model call |
+| **Attribute lookup cap** | Admin → Settings → Model | `resolve/layout.py`. A **soft** limit on how many times a run may ask the model which column an attribute is: past it the run stops asking and names what it did not look for, and nothing is refused. `runs.attribute_locate_calls` counts what was spent, so the cap is measured rather than claimed |
 | **Scheduled notices** | Admin → Settings → Notices | Nothing evaluates them; they are shown to people between their start and end (Phase 6.14g) |
 | **How long a draft is kept** | Admin → Settings → Retention | `db/repository.py::expiry_for`, resolved per run. Reaches no prompt and decides no finding: it says when an unsubmitted draft is deleted. Stamped once when the draft is made, so changing it never shortens the life of a draft that already exists (ADR-065) |
 | **Cost per million tokens** | Admin → Settings → Availability | `spend.py`, over the `llm_calls` rows already stored. Reaches no prompt and refuses nothing: the per-run token budget stays the only hard stop (Phase 6.21d) |
@@ -150,6 +163,7 @@ produce a finding.
 | Sample **notes** | Read by the model during the mapping interview for that scope, not during a run. |
 | **Programme keywords** | Compared by code at stage 7 to confirm a run is the programme it claims. **They no longer only reach code:** when none of the declared programme's words match, the delivery's own words go to the model once, which says what programme they read like (Phase 6.18f). The keywords themselves are not sent — what they decide is *whether the call happens at all*. |
 | Programme **name** | Sent with the programme list in that one prompt, because a code on its own says nothing about what a programme is. |
+| **Attribute suggestions** | What a run proposed that a delivery calls an attribute it could not locate (Phase 6.22f). Read by whoever accepts or ignores them; nothing evaluates them and nothing is in force until somebody clicks. Accepting writes a dictionary spelling, which is the row that then does the work. |
 
 ## What never reaches a prompt, under any setting
 

@@ -1,8 +1,11 @@
 # Phase 6.22 — Product codes, the record layout, and attribute resolution
 
-**Status:** 🟡 **in progress** — 6.22a, 6.22b, 6.22d, 6.22e and 6.22f complete and
-6.22c built, 2026-09-21. 6.22c leaves two items open and says why under its heading.
-6.22g is specified below and not started.
+**Status:** 🟡 **in progress** — every part built and every acceptance criterion met,
+2026-09-21. **6.22c stays 🟡 deliberately**: two of its items are not work this phase
+can finish, and both say so under its heading — a bulk master-file upload, which the
+phase's own "Out of scope" already defers for the dictionary and which has the same
+reason here, and how a product code is recognised in real OSL prose, which only
+[`phase-7.md`](phase-7.md) can tune. Nothing in the product is half-built.
 
 ## The goal, in the user's words
 
@@ -334,15 +337,40 @@ refusal now says what to do instead: record `score` as another *spelling* of
       proposes, a person accepts, the next run's lookups fall, and the remainder is
       exactly the ties the layout refused to guess at.
 
-### 6.22g — The docs describe what is true · ⬜ not started
+### 6.22g — The docs describe what is true · ✅ complete
 
-- [ ] `model-context.md`, `architecture.md`, `glossary.md`, `phase-plan.md`, the phase
-      table in `CLAUDE.md`.
-- [ ] **`design.md` and `CLAUDE.md`: "reconciles three things" becomes four.**
-- [ ] `phase-7.md` gains the two refinements named in 6.22c.
-- [ ] Both training documents and both Guides rebuilt.
+**Built 2026-09-21.** · ✅ complete
 
-## Acceptance criteria · 🟡 in progress
+**Found while building.** `architecture.md` had no `resolve/` row at all — the package
+has existed since 6.21a and the table that says what every subpackage is for never
+gained one. It has one now, and it carries the rule that explains an otherwise odd piece
+of code: `checks.reports` reaches `resolve.attributes.present` with a resolver through a
+**Protocol** rather than an import, because `resolve.layout` reaches `llm/` and importing
+it would put a model adapter into every parser.
+
+- [x] `model-context.md`, `architecture.md`, `glossary.md`, `phase-plan.md`, the phase
+      table in `CLAUDE.md`. `model-context.md` gains five rows — the dictionary, product
+      codes, the record layout, the lookup cap and the suggestion rail — and says what
+      the attribute locator is shown, which is names and a shortlist and never a value.
+- [x] **`design.md` and `CLAUDE.md`: "reconciles three things" becomes four.** And
+      `README.md`, which said it too. Each says in the same breath that the fourth is
+      optional and that a delivery without one is checked exactly as it was before.
+- [x] `phase-7.md` gains the two refinements named in 6.22c — how a product code reads
+      in real OSL prose, and what real deliveries carry beyond their code — plus a
+      per-artifact table for the record layout beside the other three, and the note that
+      the first real delivery carrying one is the cheapest the dictionary will ever be
+      filled.
+- [x] Both training documents and both Guides rebuilt. The user document explains why
+      uploading a record layout is worth it and how to read the two new findings; the
+      admin document rewrites Reference data around the dictionary and puts *accepting
+      attribute suggestions* at the top of "what improves the QC", above writing
+      anything, because it is clicking rather than writing.
+- [x] `gd-rollout-plan.md`: three readiness items and three intake questions. The intake
+      now asks the question `design.md` has carried since Phase 0 — *is there an
+      attribute data dictionary?* — which is the one this phase built the answer's home
+      for.
+
+## Acceptance criteria · ✅ complete
 
 - [x] 1. A delivery whose DIRT spells every attribute in a long form the OSL does not
       use produces **zero** `report_violates_rule` findings. Measured on
@@ -353,13 +381,23 @@ refusal now says what to do instead: record `score` as another *spelling* of
       nothing outside the module docstring that quotes the old test.
 - [x] 3. An attribute that genuinely was not delivered is still `report_violates_rule`
       at **high**. `attributes_missing_in_report` is unchanged.
-- [ ] 4. An OSL naming only product code `ABC` validates every one of ABC's attributes
+- [x] 4. An OSL naming only product code `ABC` validates every one of ABC's attributes
       against both the record layout and the DIRT; an OSL naming an attribute directly
-      validates that name. Both reach the same check.
-- [ ] 5. A delivery carrying attributes beyond the named code's list produces a **low**
-      note and no failure.
-- [ ] 6. Re-checking a finalized run after the catalogue changed uses the run's snapshot
-      and says the catalogue has since moved.
+      validates that name. Both reach the same check — literally the same function, and
+      the expansion happens once at the end of stage 2 so every later stage sees one
+      shape (ADR-061).
+- [x] 5. A delivery carrying attributes beyond the named code's list produces a **low**
+      note and no failure. It says both reasons it is worth a look: the extract may have
+      pulled more than the order asked for, and a field nobody asked for may be PII.
+- [x] 6. A re-check after the catalogue changed uses the run's snapshot and says the
+      catalogue has since moved. **The criterion said "re-checking a *finalized* run",
+      and that is no longer possible**: ADR-066, landed on `main` while this phase was
+      being built, refuses a re-check on any status but `needs_review` — a re-check
+      rewrites rules, traces and findings wholesale, and a frozen report must keep
+      matching what its reviewer was shown. So the snapshot is proved where a re-check
+      can actually happen, and the refusal is proved too
+      (`tests/api/test_product_codes.py::TestBothDoorsReachTheSameCheck`). What the
+      criterion was asking for is unchanged; only the status it can be asked on is.
 - [x] 7. With a record layout uploaded and an empty dictionary, a run makes at most the
       configured cap of attribute locate calls, counted on the run itself
       (`runs.attribute_locate_calls`) rather than inferred from `llm_calls`, because the

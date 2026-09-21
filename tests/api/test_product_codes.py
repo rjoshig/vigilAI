@@ -273,3 +273,89 @@ class TestTheSnapshot:
             # And it still expanded to what it was submitted against.
             stored = run.product_code_attributes["codes"]["ABC"]
             assert len(stored) == len(case["product_code_attributes"])
+
+
+class TestBothDoorsReachTheSameCheck:
+    """Acceptance criterion 4, and criterion 6 as ADR-066 left it."""
+
+    def test_a_named_code_is_validated_against_the_record_layout_too(
+        self,
+        client: TestClient,
+        api: str,
+        submit: Submit,
+        worker: Worker,
+        seed_aliases: None,
+        cases: dict[str, Any],
+    ) -> None:
+        """One check, two artifacts, whichever way the OSL stated the requirement.
+
+        ``product_code_named`` ships a record layout, so the expanded attributes are
+        looked for in both — and the detail says so, which is what proves the expansion
+        reached the same check an OSL listing its attributes would have reached.
+        """
+        del seed_aliases
+        case = cases[CASE]
+        _define(client, api, "ABC", list(case["product_code_attributes"]))
+        run_id = int(submit(CASE).json()["run_id"])
+        worker.run_once()
+
+        findings = client.get(f"{api}/runs/{run_id}/findings").json()
+        # Nothing claims an expanded attribute is missing from either artifact.
+        assert not [f for f in findings if "requested attribute(s)" in f["detail"]]
+
+    def test_a_directly_named_attribute_reaches_the_same_check(
+        self, client: TestClient, api: str, submit: Submit, worker: Worker, seed_aliases: None
+    ) -> None:
+        """The path every OSL took before product codes existed, unchanged."""
+        del seed_aliases
+        run_id = int(submit("baseline_match").json()["run_id"])
+        worker.run_once()
+        assert not [
+            f
+            for f in client.get(f"{api}/runs/{run_id}/findings").json()
+            if "requested attribute(s)" in f["detail"]
+        ]
+
+    def test_a_recheck_uses_the_snapshot_on_the_only_status_that_allows_one(
+        self,
+        client: TestClient,
+        api: str,
+        submit: Submit,
+        worker: Worker,
+        clear_gate: Callable[..., None],
+        factory: sessionmaker[Session],
+        seed_aliases: None,
+        cases: dict[str, Any],
+    ) -> None:
+        """Criterion 6, as ADR-066 left it.
+
+        The criterion was written as "re-checking a **finalized** run". ADR-066 then
+        refused that outright — a re-check rewrites rules, traces and findings wholesale,
+        and a frozen report must keep matching what its reviewer was shown. So
+        ``needs_review`` is the only status a re-check accepts, and it is where the
+        snapshot has to hold. What the criterion was actually asking for is unchanged:
+        the run expands from what it was submitted against, and says when the catalogue
+        has moved since.
+        """
+        del seed_aliases
+        case = cases[CASE]
+        _define(client, api, "ABC", list(case["product_code_attributes"]))
+        run_id = int(submit(CASE).json()["run_id"])
+        worker.run_once()
+
+        _define(client, api, "ABC", list(case["product_code_attributes"])[:2])
+        assert client.post(f"{api}/runs/{run_id}/recheck").status_code == 200
+        worker.run_once()
+
+        with factory() as session:
+            run = session.get(models.Run, run_id)
+            assert run is not None
+            assert any("catalogue has changed" in notice for notice in run.notices)
+            assert len(run.product_code_attributes["codes"]["ABC"]) == len(
+                case["product_code_attributes"]
+            )
+
+        # And once it is frozen, a re-check is refused rather than silently reproducing.
+        clear_gate(run_id)
+        client.post(f"{api}/runs/{run_id}/finalize")
+        assert client.post(f"{api}/runs/{run_id}/recheck").status_code == 409

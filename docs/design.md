@@ -4,11 +4,13 @@
 
 ## Summary
 
-The system reconciles three things automatically: the requirement spec (OSL, Word), the ETL configuration (JSON), and the output reports (Excel). It replaces the manual review of DIRT and distribution reports, which today can mean scanning a few thousand attributes by eye.
+The system reconciles four things automatically: the requirement spec (OSL, Word), the ETL configuration (JSON), the output reports (Excel), and the record layout — the delivered file's own schema, one row per field with its name, data type and size (ADR-060). It replaces the manual review of DIRT and distribution reports, which today can mean scanning a few thousand attributes by eye.
+
+The record layout is the only optional one of the four. It is uploaded per run and remembered per configuration, so a delivery that carries none is checked against whichever layout that order's last finalized run promoted — and a deployment that has never seen one is checked exactly as it was before the artifact existed.
 
 The core principle is **the LLM reads, code checks**. The LLM extracts requirements, judges whether a config element means the same thing as an OSL requirement, and writes the explanation. All value comparisons (sets, ranges, counts, report numbers) are deterministic Python, so results are exact, repeatable, and auditable.
 
-The OSL is the source of truth. The system checks that every OSL requirement made it into the config, and then into the results, so nothing slips between the three.
+The OSL is the source of truth. The system checks that every OSL requirement made it into the config, and then into the results, so nothing slips between them.
 
 A user fills a short web form, uploads the files, and submits. The run is queued and processed by a worker. The user then reviews the findings, marks each one OK or Not OK with comments, and generates a final one-page interactive HTML report that can be downloaded as PDF. Runs, configs, and tool stats are kept for 90 days.
 
