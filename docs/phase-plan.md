@@ -37,13 +37,16 @@ risk.
 | 6.19 | Say what helps, and teach it in the product — a marker on every field that reaches the model or decides what it is shown, what a failed run will not say, usage counted per person, and a Guide in each app's sidebar written for the person in front of it | days | 🟡 **everything built** — every field says what it does, a failure says where it happened, usage is counted per person, and each app has a Guide generated from its training document. Criterion 5 asks for the user Guide to be read by somebody new to the tool, which needs a person: it belongs to stage 2 of the rollout | [phase-6.19.md](phase-6.19.md) |
 | 6.20 | Three roles — user, reviewer and administrator — with capabilities rather than role checks, several roles per account, and each console showing a person only their own job | days | ✅ **complete** — the capability table, roles per account, the API enforcing them, both consoles, role assignment, and the single-role column dropped | [phase-6.20.md](phase-6.20.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
+| 8 | Ask the frozen report — an optional chat box on the final report page, aware of one run and nothing else: the global rules in force, the previous run of that configuration id, the findings of the last three runs, this run's findings, and an inventory of its artifacts | 1–2 weeks | ⬜ **not started** — queued behind 6.21, and behind the `v0.6.21` release that must exist first | [phase-8.md](phase-8.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of
 the original six either; it was added when it became clear that real campaigns bring
 several files per report type and that the people reviewing findings are the ones who
-know what else should be checked (ADR-021). It is numbered 6.1 rather than 8 because it
-extends the configurable-checks work of Phase 4 rather than following Phase 7, and it
-does not block Phase 6. Phase 7 is **not** part of the original six from `design.md`; it was added when it became clear the real files
+know what else should be checked (ADR-021). It is numbered 6.1 rather than as a phase of its
+own because it extends the configurable-checks work of Phase 4 rather than following
+Phase 7, and it does not block Phase 6. **Phase 8 is numbered the other way by the same
+rule**: a chat box on the frozen report extends none of the earlier phases, so it takes a
+top-level number rather than a sub-number of 6. Phase 7 is **not** part of the original six from `design.md`; it was added when it became clear the real files
 would arrive on a different machine, and it is dormant until the user asks for it
 (ADR-019).
 

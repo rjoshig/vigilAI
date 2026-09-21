@@ -1891,3 +1891,120 @@ commit both — and the gate says so when it is forgotten. The Guide can only co
 the training document contains, which is the point: a section worth showing in the product
 is a section worth having in the training document, and writing it there first means the
 people who train from the document get it too.
+
+## ADR-051 — The report chat is run-scoped, read-only, and keeps nothing
+
+**Status:** accepted · 2026-09-21 · Phase 8
+
+**Context.** A person reading a frozen report has questions the page does not answer: why
+this finding is high, whether it appeared last month, what the rule actually says, what
+nobody checked. All of it is in the database. None of it is on the page. A chat box on the
+report is the obvious answer, and the obvious implementation is the wrong one in three
+separate ways.
+
+The first is context. Asking a model to read "the run" invites sending it the uploaded
+workbooks, which ADR-003 forbids and the tripwire refuses. The second is arithmetic: a
+chat box is exactly where somebody asks a model to add two numbers, and ADR-001 says code
+does every comparison. The third is isolation — a conversation store keyed on anything
+looser than the run is a place one person's delivery reaches another's screen.
+
+**Decision.** The chat sees a **context pack** that code assembles from the database, for
+one run, on the server, on every turn. It is never accepted from the client, because a
+client that can supply context is a client that can supply facts.
+
+The pack holds the global rules in force, the previous finalized run of the same
+configuration id, the findings of the last three finalized runs with the decisions people
+made on them, this run's findings and their evidence, an **inventory** of the artifacts —
+kind, label, checksum and counts, never contents — the run's own guidance, the coverage,
+the notices, the attestation, the drift, and the frozen report's rendered text. Every one
+of those already appears in the *Allowed in a prompt* column of
+[`llm-privacy.md`](llm-privacy.md). Shadow findings are excluded, exactly as the frozen
+report excludes them: a rule nobody activated must not start answering questions either.
+
+**It is available only on a frozen run.** A conversation whose context shifts as decisions
+are made gives answers that were true when given and are not now. Freezing is what makes
+an answer reproducible.
+
+**Nothing is stored.** The transcript is state in the browser and dies with the panel.
+There is therefore no conversation table to retain, secure, or leak from, and the question
+of whose transcript an administrator may read does not arise. The cost is real and is
+accepted: a question asked last week cannot be recovered. The model call itself is
+recorded like every other — ids and counts, never text — so the usage is visible without
+the content being kept.
+
+**It acts on nothing.** No decision, no finding, no rule, no re-run, no regenerated
+report. Everything it can do is read.
+
+**Isolation is five independent things, not one.** The pack is server-built from the run
+id; the endpoint refuses anyone who may not read that run; nothing is stored; the cache is
+content-addressed with the pack hash in the key, so a hit requires the same question
+against the same run's pack; and the browser holds the transcript in component state
+rather than in `localStorage`.
+
+**Consequences.** The chat cannot answer a question about a cell value, and says so rather
+than guessing — which is the behaviour the acceptance criteria test hardest. A context
+builder now exists outside `pipeline/`, which is why the shared text-fitting helpers move
+into a neutral module: `api/` may not import `pipeline/`, and a chat package that did
+would break that rule transitively and invisibly.
+
+## ADR-052 — Report aggregates reach the chat only behind an administrator's switch
+
+**Status:** accepted · 2026-09-21 · Phase 8 · extends ADR-003
+
+**Context.** ADR-051's pack answers most questions about a report and cannot answer one
+shape of question at all: what a field's distribution looks like, where the nulls are, how
+many distinct values a column holds. Those are aggregates, and
+[`llm-privacy.md`](llm-privacy.md) has always allowed aggregates in a prompt — minimum,
+maximum, mean, count, null count, distinct keys. What it has never done is compute them
+for every column and hand them over by default.
+
+Two bad answers were available. Loosen the rule for everyone, and a deployment that never
+wanted this gains it on upgrade. Refuse outright, and the tool cannot answer a question it
+is allowed to answer.
+
+**Decision.** The pack ships **strictly derived**. An administrator may switch on a
+widened pack that adds **per-column aggregates computed by code at parse time**. Never a
+row. Never a cell that is not an aggregate. The tripwire runs on the assembled prompt
+regardless and still fails closed.
+
+The setting resolves through the three configuration layers of ADR-023, so it can be
+changed without a deploy, and it is **never** settable anywhere but the console and the
+environment.
+
+**It is labelled as strongly as masked columns are.** An administrator cannot see a
+prompt, so a marker is the only account they get of what a setting does. This one changes
+what leaves the building, and the console says exactly that rather than describing it as a
+richer answer.
+
+**Consequences.** There are two shapes of pack, so the acceptance test for "no
+non-aggregate value" runs against both. The aggregates must be computed where masking
+already happens, at parse time, rather than read back out of a report later — a value
+computed after masking is a value that was never masked.
+
+## ADR-053 — The chat is multi-turn by flattening, and does not stream
+
+**Status:** accepted · 2026-09-21 · Phase 8
+
+**Context.** The adapter has one entry point, `complete(system, user, schema)`, and every
+invariant the tool depends on lives behind it: the PII tripwire, the cache check before
+every call, the budget stop, the single schema-validated retry, and the per-call record
+(ADR-004, ADR-005). It is single-turn and it does not stream. A chat box wants both.
+
+**Decision.** Neither is added to the adapter in this phase.
+
+**Multi-turn is flattening.** Earlier turns are rendered into the user prompt inside a
+delimited block, labelled as a person's words to interpret and never as instructions to
+follow — the technique ADR-021 already uses for reviewer statements, for the same reason.
+`complete` is unchanged, so the tripwire scans the whole transcript, the cache key covers
+it, and a cache hit is therefore only ever an exact repeat of the same conversation
+against the same pack.
+
+**Streaming waits.** It would need a second network path that re-implements the tripwire,
+the cache, the budget and the recording, or bypasses them. That is a large amount of
+duplicated safety-critical code in exchange for a typing animation. The widget shows a
+working indicator, and answers to a frozen report are not read a word at a time.
+
+**Consequences.** A long conversation re-sends its own history, so the transcript is
+capped in turns and the cap is a setting rather than a constant. The first answer is shown
+whole, after a wait — which is stated here so that "why does it not type?" has a written
+answer rather than being reopened as a defect.

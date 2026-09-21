@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/next-steps-pending-jr9tne`, pushed. **Phase 6.20 is complete** — three roles, capabilities enforced by the API, both consoles gated, roles assigned as a set, and the single `role` column dropped. **6.19 part B is built**: each app has a Guide in its sidebar, generated from that audience's training document, switchable with `GREENLIGHT_AI_UI_GUIDE`. 6.14 and 6.17 were closed: both were complete and their tables said otherwise. **Next concrete action: 6.18b**, the maturity level, which waits on real verdicts ([`phase-7.1.md`](phase-7.1.md)) |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
+| Branch | `claude/next-steps-pending-jr9tne`, pushed. **Phase 6.20 is complete** — three roles, capabilities enforced by the API, both consoles gated, roles assigned as a set, and the single `role` column dropped. **6.19 part B is built**: each app has a Guide in its sidebar, generated from that audience's training document, switchable with `GREENLIGHT_AI_UI_GUIDE`. 6.14 and 6.17 were closed: both were complete and their tables said otherwise. **Phase 8 is now specified** ([`phase-8.md`](phase-8.md)): an optional chat box on the frozen report page, scoped to one run, answering from a context pack code assembles. It is documentation only — no product code — and it is queued behind 6.21. **Next concrete action: cut the `v0.6.21` release on `main` once 6.21 merges** (milestone 8a: nothing in phase 8 starts before the tag exists). After that, 6.18b, the maturity level, which waits on real verdicts ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -2735,3 +2735,65 @@ fallen behind.
 confirmed it — the nesting row in 6.15 was not the mechanism the specification claimed,
 segment matching alone would have been a regression, and option B turned out not to be
 worth building. Measuring first is cheap and it has yet to be wasted.
+
+---
+
+## Session: 2026-09-21 (phase 8 specified — a chat box on the frozen report)
+
+**Branch:** `claude/report-chatbox-context-mfn0td` · **Phase:** 8 specified, not started ·
+**Status:** documentation only; no product code written, no test suite touched.
+
+### What was asked, and what was written
+
+The user asked for an optional chat box on the final report page, bottom-right, aware of
+the global rules, the previous run of that configuration id, the findings of the last
+three runs, this run's findings, and the reports and artifacts of the current run — with
+no bleed between people's contexts. They asked for the phase to be documented now and
+built later, queued behind 6.21, and for a GitHub release to exist before any of it is
+built.
+
+[`phase-8.md`](phase-8.md) is that specification, in eight milestones. 8a is the release
+gate itself, deliberately first.
+
+### The four constraints that shaped it
+
+Each one ruled out the obvious implementation, and each is already enforced in the code.
+The tripwire fails closed on every prompt, so *"all the reports and artifacts"* cannot
+mean their contents (ADR-003). Code does every comparison, so the chat may not compute
+(ADR-001). A finalized report is never regenerated and is served as a stored file in an
+iframe, so the widget is a sibling overlay rather than a change to the document (ADR-005).
+And `api/` may not import `pipeline/`, which is why the context builder gets its own
+subpackage and the shared text-fitting helpers move down into a neutral module rather than
+being reached sideways.
+
+### Four decisions the user made
+
+Strictly derived context, with an **admin switch** that widens it to code-computed
+aggregates and never a row. Conversations **ephemeral, browser only** — nothing stored
+server-side, which removes the transcript store as a thing to secure. **Frozen reports
+only.** And **its own switch and caps, off by default**, never spending the run's token
+budget. All four are recorded in the phase doc's *Decisions taken* table so they are not
+relitigated.
+
+### Three ADRs
+
+**ADR-051** — the chat is run-scoped, read-only, and keeps nothing, with isolation stated
+as five independent mechanisms rather than one. **ADR-052** — report aggregates reach it
+only behind an administrator's switch, computed where masking already happens. **ADR-053**
+— multi-turn by flattening the transcript into one adapter call, and no streaming in this
+phase, because a second network path would re-implement the tripwire, the cache, the
+budget and the recording in exchange for a typing animation.
+
+### One repair to the tooling
+
+`scripts/update_phase_status.py` globbed `phase-[0-6]*.md`, so any phase doc numbered 7 or
+above went unchecked — `phase-8.md`'s markers would have drifted silently. Widened to
+`phase-[0-9]*.md`. Verified that both phase-7 docs were already marker-clean, so the
+change is a no-op for them and catches everything from here on.
+
+### Pending
+
+Nothing in phase 8 is built, by design. The gate is the release: `v0.6.21` on `main`,
+titled *"Before the chatbot"*, once 6.21 has merged. It would be this repository's first
+tag — there are none today and no `CHANGELOG.md` — and the release notes should say so
+rather than implying a history that is not there.
