@@ -1,0 +1,274 @@
+"""The API enforces capabilities, not roles (Phase 6.20c, ADR-049).
+
+**These are the tests that matter in this phase.** Hiding a nav item is not access
+control; a door that only looks shut is worse than one that is plainly open, because
+nobody checks it again. Everything here therefore talks to the API directly with the
+login switches **on**, which is the only configuration in which any of it applies:
+with them off there is one placeholder holding every capability and nothing is gated,
+exactly as ADR-022 promises.
+
+Two shapes, and both are needed:
+
+- For a capability a **reviewer holds**, a plain ``user`` is refused and the reviewer
+  is not — that is the reviewer role earning its existence.
+- For a capability only an **administrator holds**, the reviewer is refused and the
+  administrator is not — that is the line between judging the work and defining the
+  deployment.
+
+The refusal is asserted as **403**, never 404. The screen exists and is not theirs.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Callable, Iterator
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
+
+from greenlight_ai.api.app import API_PREFIX, create_app
+from greenlight_ai.auth.passwords import hash_password
+from greenlight_ai.auth.roles import Capability, capabilities_of
+from greenlight_ai.auth.settings import AuthSettings
+from greenlight_ai.db import models
+from greenlight_ai.db.settings import DbSettings
+
+PASSWORD = "a-long-enough-password"
+
+#: One route per capability, chosen so the request reaches the guard and nothing else:
+#: a read where reading is the gated act, and otherwise the smallest possible write.
+#: A write that would be refused *after* the guard still tells us what we are asking —
+#: the assertions below only ever say "403" or "not 403".
+ROUTES: dict[Capability, tuple[str, str, Any]] = {
+    Capability.VIEW_ADMIN: ("GET", "/admin/usage", None),
+    Capability.APPROVE_TRAINING: ("GET", "/admin/candidates", None),
+    Capability.MANAGE_RULES: ("GET", "/admin/rules", None),
+    Capability.TEACH_MODEL: (
+        "POST",
+        "/admin/examples",
+        {"stage": "s2_extract", "given": {}, "answer": {}},
+    ),
+    Capability.MANAGE_REFERENCE: (
+        "POST",
+        "/admin/aliases",
+        {"canonical_name": "state", "alias": "st"},
+    ),
+    Capability.MANAGE_PRIVACY: ("GET", "/admin/masked-columns", None),
+    Capability.MANAGE_ARTIFACTS: ("GET", "/admin/artifact-types", None),
+    Capability.MANAGE_PROGRAMMES: ("GET", "/admin/programme-rules", None),
+    Capability.MANAGE_MEANING: ("GET", "/admin/meaning", None),
+    Capability.MANAGE_USERS: ("GET", "/admin/users", None),
+    Capability.MANAGE_SETTINGS: ("GET", "/admin/settings", None),
+}
+
+
+@pytest.fixture()
+def locked_client(db_settings: DbSettings, factory: sessionmaker[Session]) -> Iterator[TestClient]:
+    """A client with **both** login switches on.
+
+    Yields:
+        The client. Nothing is signed in yet, so every admin route answers 401 until a
+        test signs somebody in.
+    """
+    app = create_app(db_settings, auth_settings=AuthSettings(admin_auth=True, user_auth=True))
+    app.state.session_factory = factory
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture()
+def sign_in(locked_client: TestClient, factory: sessionmaker[Session]) -> Callable[..., TestClient]:
+    """Sign in as a fresh account holding exactly the roles asked for.
+
+    Returns:
+        A callable taking the roles and returning the same client, now carrying that
+        account's session cookie.
+
+    The row is written directly rather than through ``POST /admin/users``, because the
+    account-creation route is itself one of the things under test here and a test that
+    needs an administrator to make a reviewer cannot check what a reviewer may do.
+    """
+    made: list[str] = []
+
+    def _sign_in(*roles: str) -> TestClient:
+        username = f"{'-'.join(roles)}-{len(made)}"
+        made.append(username)
+        with factory() as session:
+            session.add(
+                models.User(
+                    username=username,
+                    name=username,
+                    email=f"{username}@localhost",
+                    password_hash=hash_password(PASSWORD),
+                    roles=list(roles),
+                    role=roles[-1],
+                    is_active=True,
+                    must_change_password=False,
+                )
+            )
+            session.commit()
+        response = locked_client.post(
+            f"{API_PREFIX}/auth/login",
+            json={"username": username, "password": PASSWORD},
+        )
+        assert response.status_code == 200, response.text
+        return locked_client
+
+    return _sign_in
+
+
+def _call(client: TestClient, capability: Capability) -> int:
+    """Make the request that stands for one capability.
+
+    Args:
+        client: The signed-in client.
+        capability: Which route to reach for.
+
+    Returns:
+        The status code.
+    """
+    method, path, body = ROUTES[capability]
+    url = f"{API_PREFIX}{path}"
+    if method == "GET":
+        return client.get(url).status_code
+    return client.post(url, json=body).status_code
+
+
+# --- every capability, from both sides ----------------------------------------------
+
+
+@pytest.mark.parametrize("capability", sorted(Capability, key=lambda c: c.value))
+def test_an_administrator_is_never_refused(
+    sign_in: Callable[..., TestClient], capability: Capability
+) -> None:
+    """An administrator holds all eleven, so none of these routes may answer 403."""
+    client = sign_in("user", "admin")
+
+    assert _call(client, capability) != 403, capability.value
+
+
+@pytest.mark.parametrize("capability", sorted(capabilities_of(["reviewer"]), key=lambda c: c.value))
+def test_a_reviewer_reaches_what_judging_the_work_needs(
+    sign_in: Callable[..., TestClient], capability: Capability
+) -> None:
+    """The five a reviewer holds. Refusing any of them makes the role a half-job."""
+    client = sign_in("user", "reviewer")
+
+    assert _call(client, capability) != 403, capability.value
+
+
+@pytest.mark.parametrize(
+    "capability",
+    sorted(capabilities_of(["admin"]) - capabilities_of(["reviewer"]), key=lambda c: c.value),
+)
+def test_a_reviewer_is_refused_what_defines_the_deployment(
+    sign_in: Callable[..., TestClient], capability: Capability
+) -> None:
+    """The six only an administrator holds: programmes, artifacts, meaning, accounts,
+    settings and masked columns."""
+    client = sign_in("user", "reviewer")
+
+    assert _call(client, capability) == 403, capability.value
+
+
+@pytest.mark.parametrize("capability", sorted(Capability, key=lambda c: c.value))
+def test_a_plain_user_reaches_none_of_the_console(
+    sign_in: Callable[..., TestClient], capability: Capability
+) -> None:
+    """Including the dashboard. Somebody who can change nothing is not invited in."""
+    client = sign_in("user")
+
+    assert _call(client, capability) == 403, capability.value
+
+
+def test_holding_user_and_reviewer_is_exactly_a_reviewer(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """Roles add up and never subtract, which is the whole point of the union."""
+    client = sign_in("user", "reviewer")
+
+    assert client.get(f"{API_PREFIX}/auth/me").json()["roles"] == ["user", "reviewer"]
+    assert _call(client, Capability.APPROVE_TRAINING) != 403
+    assert _call(client, Capability.MANAGE_SETTINGS) == 403
+
+
+# --- the refusal says the right thing ------------------------------------------------
+
+
+def test_the_refusal_is_403_and_names_what_was_missing(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """404 would make a support conversation impossible; a bare 403 nearly as much."""
+    client = sign_in("user", "reviewer")
+
+    response = client.get(f"{API_PREFIX}/admin/settings")
+
+    assert response.status_code == 403
+    assert "settings" in response.json()["detail"]
+
+
+def test_nobody_signed_in_is_401_rather_than_403(locked_client: TestClient) -> None:
+    """The distinction a console needs to know whether to show a sign-in screen."""
+    assert locked_client.get(f"{API_PREFIX}/admin/usage").status_code == 401
+
+
+# --- the routes whose capability depends on a parameter ------------------------------
+
+
+def test_a_reviewer_may_bulk_delete_aliases_but_not_masked_columns(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """One route, five tables, and the capability is not known until it is read."""
+    client = sign_in("user", "reviewer")
+    body = {"ids": [1], "confirm": "delete"}
+
+    assert client.post(f"{API_PREFIX}/admin/aliases/bulk-delete", json=body).status_code != 403
+    assert (
+        client.post(f"{API_PREFIX}/admin/masked-columns/bulk-delete", json=body).status_code == 403
+    )
+
+
+def test_a_reviewer_may_not_revert_an_artifact_type(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """Putting a definition back is as strong an act as the edit it undoes."""
+    client = sign_in("user", "reviewer")
+
+    response = client.post(
+        f"{API_PREFIX}/admin/versions/artifact-type/dirt/1/revert",
+        json={"confirm": "revert"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_a_reviewer_reads_the_programme_list_but_cannot_write_one(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """The one deliberate exception, recorded so it can be argued with.
+
+    Four screens a reviewer works on — checks, compliance rules, examples and
+    reference data — scope what they are editing to a delivery programme, so all four
+    fetch the programme list. Reading that list is not *managing programmes*; writing
+    one is, and that is refused.
+    """
+    client = sign_in("user", "reviewer")
+
+    assert client.get(f"{API_PREFIX}/admin/scopes").status_code == 200
+    assert (
+        client.post(
+            f"{API_PREFIX}/admin/scopes",
+            json={"code": "NEW", "label": "invented by a reviewer"},
+        ).status_code
+        == 403
+    )
+
+
+# --- and with the switches off, none of it applies ----------------------------------
+
+
+@pytest.mark.parametrize("capability", sorted(Capability, key=lambda c: c.value))
+def test_with_login_off_nothing_is_gated(client: TestClient, capability: Capability) -> None:
+    """ADR-022: with both switches off the behaviour is exactly what it was before
+    login existed, and the placeholder holding `user` and `admin` is what keeps it so."""
+    assert _call(client, capability) != 403, capability.value

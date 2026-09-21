@@ -19,7 +19,7 @@ from greenlight_ai.api.deps import (
     CurrentUser,
     get_data_dir,
     get_session,
-    require_admin,
+    require_meaning,
 )
 from greenlight_ai.db import catalog, models, repository, versions
 from greenlight_ai.db.types import utcnow
@@ -33,7 +33,10 @@ __all__ = ["router"]
 
 _LOG: Final = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/meaning", tags=["admin"], dependencies=[Depends(require_admin)])
+# The mapping between a requirement, a configuration path and a report cell is what
+# every trace is measured against, so it belongs with the deployment rather than
+# with the person judging one delivery.
+router = APIRouter(prefix="/admin/meaning", tags=["admin"], dependencies=[Depends(require_meaning)])
 
 
 def _scope(session: Session, code: str) -> str:
@@ -177,7 +180,7 @@ def propose_entries(
     request: Request,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_meaning),
 ) -> wire.ProposeOut:
     """Run the mapping interview for one scope (one cached model call per OSL section).
 
@@ -227,7 +230,7 @@ def create_entry(
     payload: wire.MeaningEntryIn,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_meaning),
 ) -> wire.MeaningEntryOut:
     """Write a requirement mapping by hand; it starts confirmed and compiles at once.
 
@@ -324,7 +327,7 @@ def edit_entry(
     payload: wire.MeaningEntryPatch,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_meaning),
 ) -> wire.MeaningEntryOut:
     """Correct an entry, decide it, or both. Confirming compiles; rejecting retires.
 
@@ -367,7 +370,7 @@ def bulk(
     payload: wire.MeaningBulkIn,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_meaning),
 ) -> dict[str, Any]:
     """Confirm, reject, or delete several entries; delete needs the typed word.
 

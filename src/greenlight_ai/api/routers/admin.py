@@ -35,13 +35,22 @@ from greenlight_ai import announcements, scopes, user_usage, value_report
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
+    assert_capability,
     require_delete_word,
     CurrentUser,
     current_user,
     get_data_dir,
     get_session,
     require_admin,
+    require_artifacts,
+    require_privacy,
+    require_programmes,
+    require_reference,
+    require_rules,
+    require_settings,
+    require_teaching,
 )
+from greenlight_ai.auth.roles import Capability
 from greenlight_ai.api.uploads import UploadError, store_upload
 from greenlight_ai.checks.expressions import (
     ExpressionError,
@@ -76,9 +85,29 @@ __all__ = ["router"]
 
 _LOG: Final = logging.getLogger(__name__)
 
-# Every route here needs an administrator, the read-only ones included: a listing
-# tells a caller what the tool checks and who its customers are.
+# Opening the console at all is the floor for every route here, the read-only ones
+# included: a listing tells a caller what the tool checks and who its customers are.
+# On top of that floor each route names the capability its own act needs (ADR-049), so
+# a reviewer reads the programme list the checks screen depends on but is refused the
+# writes that define what a programme is.
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+#: Which capability a bulk delete needs, by the resource it is deleting. The route
+#: serves five tables, so the answer is not known until the parameter is read.
+_BULK_CAPABILITY: Final[dict[str, Capability]] = {
+    "checks": Capability.MANAGE_RULES,
+    "compliance-rules": Capability.MANAGE_RULES,
+    "named-values": Capability.MANAGE_RULES,
+    "aliases": Capability.MANAGE_REFERENCE,
+    "masked-columns": Capability.MANAGE_PRIVACY,
+}
+
+#: Which capability a revert needs, by the kind of definition being put back. Reverting
+#: is as strong an act as the edit it undoes, so it asks for the same capability.
+_VERSION_CAPABILITY: Final[dict[str, Capability]] = {
+    "artifact-type": Capability.MANAGE_ARTIFACTS,
+    "programme": Capability.MANAGE_PROGRAMMES,
+}
 
 #: Where uploaded sample workbooks live on the shared volume.
 TEMPLATE_DIR: Final[str] = "templates"
@@ -323,7 +352,7 @@ def _artifact_out(
 def list_artifact_types(
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    _user: CurrentUser = Depends(current_user),
+    _user: CurrentUser = Depends(require_artifacts),
 ) -> list[wire.ArtifactTypeOut]:
     """List every input the tool accepts, active or not.
 
@@ -366,7 +395,7 @@ def save_artifact_type(
     payload: wire.ArtifactTypeIn,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_artifacts),
 ) -> wire.ArtifactTypeOut:
     """Create a report type, or edit any type's description, guidance, or state.
 
@@ -383,7 +412,6 @@ def save_artifact_type(
         HTTPException: 422 when the key is malformed, or when a built-in's key or kind
             is being changed — those are referenced by the fixed report checks.
     """
-    require_admin(user)
     catalog.seed_defaults(session)
 
     key = payload.key.strip().lower()
@@ -437,7 +465,7 @@ def upload_sample(
     scope_code: Annotated[str, Form()] = "",
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_artifacts),
 ) -> wire.ArtifactTypeOut:
     """Add a sample to an artifact type, up to three per delivery programme.
 
@@ -522,7 +550,7 @@ def save_guide(
     payload: wire.GuideIn,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_artifacts),
 ) -> wire.ArtifactTypeOut:
     """Replace an artifact type's validation guide (Phase 6.8b, ADR-029).
 
@@ -578,7 +606,7 @@ def edit_sample(
     payload: wire.SamplePatch,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_artifacts),
 ) -> wire.ArtifactTypeOut:
     """Relabel a sample, write notes on it, or move it to another programme.
 
@@ -639,7 +667,7 @@ def download_sample(
     sample_id: int,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_artifacts),
 ) -> FileResponse:
     """Download a stored sample.
 
@@ -686,7 +714,7 @@ def preview_sample(
     sample_id: int,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_artifacts),
 ) -> wire.SamplePreviewOut:
     """Show what a sample contains, cell by cell.
 
@@ -733,7 +761,7 @@ def delete_sample(
     sample_id: int,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_artifacts),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Remove one sample.
@@ -768,7 +796,7 @@ def delete_sample(
 def delete_artifact_type(
     key: str,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_artifacts),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete an admin-defined report type.
@@ -784,7 +812,6 @@ def delete_artifact_type(
             referring to a type nothing can describe — disabling it is the right move,
             and it keeps the history readable.
     """
-    require_admin(user)
     row = session.execute(
         sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
     ).scalar_one_or_none()
@@ -868,7 +895,7 @@ def list_scopes(
 def save_scope(
     payload: wire.ScopeIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_programmes),
 ) -> wire.ScopeOut:
     """Create or edit a delivery programme.
 
@@ -887,7 +914,6 @@ def save_scope(
     Raises:
         HTTPException: 422 when the code is malformed.
     """
-    require_admin(user)
     catalog.seed_defaults(session)
 
     code = payload.code.strip().upper()
@@ -931,7 +957,7 @@ def save_scope(
 def delete_scope(
     code: str,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_programmes),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a delivery programme.
@@ -944,7 +970,6 @@ def delete_scope(
     Raises:
         HTTPException: 404 when it does not exist, 409 when runs already reference it.
     """
-    require_admin(user)
     row = session.execute(
         sa.select(models.RunScope).where(models.RunScope.code == code.upper())
     ).scalar_one_or_none()
@@ -1117,7 +1142,7 @@ def create_named_value(
     payload: wire.NamedValueIn,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.NamedValueOut:
     """Create or replace a named value.
 
@@ -1130,7 +1155,6 @@ def create_named_value(
     Returns:
         The stored pointer with what it resolves to.
     """
-    require_admin(user)
     row = session.execute(
         sa.select(models.NamedValueRow).where(models.NamedValueRow.name == payload.name)
     ).scalar_one_or_none()
@@ -1154,7 +1178,7 @@ def create_named_value(
 def delete_named_value(
     value_id: int,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a named value.
@@ -1169,7 +1193,6 @@ def delete_named_value(
             Deleting it anyway would turn a working check into "could not evaluate" on
             the next run, with nothing to point at.
     """
-    require_admin(user)
     row = session.get(models.NamedValueRow, value_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"named value {value_id} not found")
@@ -1234,7 +1257,7 @@ def list_checks(
 def save_check(
     payload: wire.CheckIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.CheckOut:
     """Create a check, or save a new version of an existing one.
 
@@ -1253,7 +1276,6 @@ def save_check(
         HTTPException: 422 when an expression check has no valid expression, or a
             judgment check has no instruction or names no values.
     """
-    require_admin(user)
 
     if payload.kind == "expression":
         if not payload.expression.strip():
@@ -1310,7 +1332,7 @@ def set_check_active(
     check_id: int,
     is_active: bool,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.CheckOut:
     """Enable or disable a check without touching old findings.
 
@@ -1329,7 +1351,6 @@ def set_check_active(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.CheckDefinitionRow, check_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"check {check_id} not found")
@@ -1359,7 +1380,7 @@ def draft_check(
     payload: wire.DraftRequest,
     request: Request,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.DraftResponse:
     """Propose named values and an expression from a plain-English description.
 
@@ -1380,7 +1401,6 @@ def draft_check(
         HTTPException: 502 when the model cannot be reached or its answer does not
             validate after the single retry.
     """
-    require_admin(user)
 
     available = payload.report_types or catalog.active_report_keys(session) or sorted(PARSERS)
 
@@ -1458,7 +1478,7 @@ def test_expression(
     payload: wire.TestRequest,
     session: Session = Depends(get_session),
     data_dir: Path = Depends(get_data_dir),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.TestResult:
     """Evaluate an expression against the uploaded sample workbooks.
 
@@ -1474,7 +1494,6 @@ def test_expression(
     Returns:
         The outcome, naming any value that could not be resolved.
     """
-    require_admin(user)
     documents = _load_templates(session, data_dir)
     rows = list(session.execute(sa.select(models.NamedValueRow)).scalars())
 
@@ -1558,7 +1577,7 @@ def list_compliance_rules(
 def save_compliance_rule(
     payload: wire.ComplianceRuleIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.ComplianceRuleOut:
     """Create or replace a compliance rule.
 
@@ -1570,7 +1589,6 @@ def save_compliance_rule(
     Returns:
         The stored rule.
     """
-    require_admin(user)
     row = session.execute(
         sa.select(models.ComplianceRuleRow).where(models.ComplianceRuleRow.name == payload.name)
     ).scalar_one_or_none()
@@ -1594,7 +1612,7 @@ def save_compliance_rule(
 def delete_compliance_rule(
     rule_id: int,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a compliance rule.
@@ -1607,7 +1625,6 @@ def delete_compliance_rule(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.ComplianceRuleRow, rule_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"compliance rule {rule_id} not found")
@@ -1652,7 +1669,7 @@ def list_categories(
 def save_category(
     payload: wire.CategoryIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.CategoryOut:
     """Create or replace a reverse-pass category.
 
@@ -1668,7 +1685,6 @@ def save_category(
     Returns:
         The stored category.
     """
-    require_admin(user)
     existing = list(session.execute(sa.select(models.ReversePassCategoryRow)).scalars())
     if not existing:
         from greenlight_ai.checks.definitions import DEFAULT_CATEGORIES
@@ -1727,7 +1743,7 @@ def _announcement_out(row: models.Announcement, now: Any = None) -> wire.Announc
 @router.get("/announcements", response_model=list[wire.AnnouncementOut])
 def list_announcements(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(current_user),
+    _user: CurrentUser = Depends(require_settings),
 ) -> list[wire.AnnouncementOut]:
     """Every scheduled notice, soonest first.
 
@@ -1751,7 +1767,7 @@ def list_announcements(
 def create_announcement(
     payload: wire.AnnouncementIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_settings),
 ) -> wire.AnnouncementOut:
     """Schedule a notice.
 
@@ -1766,7 +1782,6 @@ def create_announcement(
     Raises:
         HTTPException: 422 with the reason when it cannot be scheduled as written.
     """
-    require_admin(user)
     try:
         announcements.validate(
             session,
@@ -1806,7 +1821,7 @@ def set_announcement_active(
     announcement_id: int,
     active: bool = Query(...),
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_settings),
 ) -> wire.AnnouncementOut:
     """Switch a notice on or off without losing it.
 
@@ -1823,7 +1838,6 @@ def set_announcement_active(
         HTTPException: 404 when it does not exist, 422 when switching it back on
             would exceed the limit.
     """
-    require_admin(user)
     row = session.get(models.Announcement, announcement_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"notice {announcement_id} not found")
@@ -1855,7 +1869,7 @@ def set_announcement_active(
 def delete_announcement(
     announcement_id: int,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_settings),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a notice.
@@ -1868,7 +1882,6 @@ def delete_announcement(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.Announcement, announcement_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"notice {announcement_id} not found")
@@ -1937,7 +1950,7 @@ def list_field_labels(
 def create_field_label(
     payload: wire.FieldLabelIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_reference),
 ) -> wire.FieldLabelOut:
     """Add a label for a field the tool checks.
 
@@ -1953,7 +1966,6 @@ def create_field_label(
         HTTPException: 422 when the field is not one the tool checks, or the label
             duplicates one already in force for that scope.
     """
-    require_admin(user)
     if payload.canonical not in field_labels.CANONICAL_FIELDS:
         raise HTTPException(
             HTTP_422,
@@ -2009,7 +2021,7 @@ def set_field_label_active(
     label_id: int,
     active: bool = Query(...),
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_reference),
 ) -> wire.FieldLabelOut:
     """Switch a label on or off.
 
@@ -2028,7 +2040,6 @@ def set_field_label_active(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.FieldLabel, label_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"field label {label_id} not found")
@@ -2061,7 +2072,7 @@ def set_field_label_active(
 def delete_field_label(
     label_id: int,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_reference),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete a label.
@@ -2074,7 +2085,6 @@ def delete_field_label(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.FieldLabel, label_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"field label {label_id} not found")
@@ -2124,7 +2134,7 @@ def list_aliases(
 def create_alias(
     payload: wire.AliasIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_reference),
 ) -> wire.AliasOut:
     """Add an attribute alias.
 
@@ -2136,7 +2146,6 @@ def create_alias(
     Returns:
         The stored alias.
     """
-    require_admin(user)
     row = models.AttributeAlias(
         canonical_name=payload.canonical_name.strip(),
         alias=payload.alias.strip(),
@@ -2154,7 +2163,7 @@ def create_alias(
 def delete_alias(
     alias_id: int,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_reference),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Delete an attribute alias.
@@ -2167,7 +2176,6 @@ def delete_alias(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.AttributeAlias, alias_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"alias {alias_id} not found")
@@ -2178,7 +2186,7 @@ def delete_alias(
 @router.get("/masked-columns", response_model=list[wire.MaskedColumnOut])
 def list_masked_columns(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(current_user),
+    _user: CurrentUser = Depends(require_privacy),
 ) -> list[wire.MaskedColumnOut]:
     """List the masked-column patterns.
 
@@ -2213,7 +2221,7 @@ def list_masked_columns(
 def create_masked_column(
     payload: wire.MaskedColumnIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_privacy),
 ) -> wire.MaskedColumnOut:
     """Add a masked-column pattern.
 
@@ -2228,7 +2236,6 @@ def create_masked_column(
     Returns:
         The stored pattern.
     """
-    require_admin(user)
     if not session.execute(sa.select(models.MaskedColumn).limit(1)).scalar_one_or_none():
         for default in DEFAULT_MASKED_COLUMNS:
             session.add(models.MaskedColumn(pattern=default, description="Shipped default"))
@@ -2253,7 +2260,7 @@ def create_masked_column(
 def delete_masked_column(
     column_id: int,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_privacy),
     _confirmed: None = Depends(require_delete_word),
 ) -> None:
     """Remove a masked-column pattern.
@@ -2266,7 +2273,6 @@ def delete_masked_column(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.MaskedColumn, column_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"masked column {column_id} not found")
@@ -2514,7 +2520,7 @@ def _programme_rule_out(row: models.ProgrammeRule) -> wire.ProgrammeRuleOut:
 @router.get("/programme-rules", response_model=list[wire.ProgrammeRuleOut])
 def list_programme_rules(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(current_user),
+    _user: CurrentUser = Depends(require_programmes),
     scope_code: str | None = Query(default=None),
 ) -> list[wire.ProgrammeRuleOut]:
     """The rules true of every delivery in a programme (ADR-026).
@@ -2547,7 +2553,7 @@ def list_programme_rules(
 def create_programme_rule(
     payload: wire.ProgrammeRuleIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_programmes),
 ) -> wire.ProgrammeRuleOut:
     """Add a rule to a programme.
 
@@ -2565,7 +2571,6 @@ def create_programme_rule(
     Raises:
         HTTPException: 404 when the programme does not exist.
     """
-    require_admin(user)
     catalog.seed_defaults(session)
     code = payload.scope_code.strip().upper()
     if catalog.scope_for(session, code) is None:
@@ -2597,7 +2602,7 @@ def edit_programme_rule(
     rule_id: int,
     payload: wire.ProgrammeRuleIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_programmes),
 ) -> wire.ProgrammeRuleOut:
     """Reword a programme rule or change its strictness.
 
@@ -2613,7 +2618,6 @@ def edit_programme_rule(
     Raises:
         HTTPException: 404 when it does not exist.
     """
-    require_admin(user)
     row = session.get(models.ProgrammeRule, rule_id)
     if row is None or row.state == "deleted":
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no programme rule {rule_id}")
@@ -2713,14 +2717,16 @@ def revert_definition_version(
         The new version carrying the restored state.
 
     Raises:
-        HTTPException: 400 when the word was not typed, 404 when the version does not
-            exist.
+        HTTPException: 400 when the word was not typed, 403 when the caller may not
+            change this kind of definition, 404 when the version does not exist.
     """
     if payload.confirm.strip().lower() != "revert":
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "type 'revert' to confirm; this applies to every future run",
         )
+    if kind in _VERSION_CAPABILITY:
+        assert_capability(user, _VERSION_CAPABILITY[kind])
     try:
         row = versions.revert(session, _version_kind(kind), key, version, data_dir, user.name)
     except versions.VersionError as exc:
@@ -2743,7 +2749,7 @@ def edit_compliance_rule(
     rule_id: int,
     payload: wire.ComplianceRuleIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_rules),
 ) -> wire.ComplianceRuleOut:
     """Reword a compliance rule. Each edit bumps its version; old findings keep theirs.
 
@@ -2814,13 +2820,16 @@ def bulk_delete(
         How many rows went, and which ids were not found.
 
     Raises:
-        HTTPException: 400 without the word, 404 for an unknown resource.
+        HTTPException: 400 without the word, 403 when the caller may not change this
+            particular resource, 404 for an unknown resource.
     """
     if payload.confirm.strip().lower() != DELETE_WORD:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"type {DELETE_WORD!r} to confirm; a delete cannot be undone",
         )
+    if resource in _BULK_CAPABILITY:
+        assert_capability(user, _BULK_CAPABILITY[resource])
     who: dict[str, Any] = {"actor": user.name, "user_id": user.id, "note": "bulk delete"}
     missing: list[int] = []
     deleted = 0
@@ -3026,7 +3035,7 @@ def list_examples(
 def save_example(
     payload: wire.ExampleIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_teaching),
 ) -> wire.ExampleOut:
     """Add a worked example to a stage's library (ADR-038).
 
@@ -3080,7 +3089,7 @@ def edit_example(
     example_id: int,
     payload: wire.ExamplePatch,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_teaching),
 ) -> wire.ExampleOut:
     """Edit a stored example, or activate and deactivate one.
 
@@ -3235,7 +3244,7 @@ def _promote_candidate(
 def promote_example(
     payload: wire.PromoteIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_teaching),
 ) -> wire.ExampleOut:
     """Turn a decision a person already confirmed into a worked example (ADR-038).
 
@@ -3473,7 +3482,7 @@ def keyword_suggestions(
 def accept_keyword_suggestion(
     payload: wire.AcceptKeywordIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_programmes),
 ) -> wire.ScopeOut:
     """Add one suggested word to a programme's list.
 

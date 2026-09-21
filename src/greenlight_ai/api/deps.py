@@ -31,6 +31,17 @@ __all__ = [
     "current_user",
     "require_admin",
     "require_capability",
+    "assert_capability",
+    "require_training",
+    "require_rules",
+    "require_teaching",
+    "require_reference",
+    "require_privacy",
+    "require_artifacts",
+    "require_programmes",
+    "require_meaning",
+    "require_users",
+    "require_settings",
     "get_session",
     "get_db_settings",
     "get_llm_settings",
@@ -385,6 +396,44 @@ _CAPABILITY_NEEDS: Final[dict[Capability, str]] = {
     Capability.MANAGE_SETTINGS: "ability to change settings",
 }
 
+
+def assert_capability(user: CurrentUser, capability: Capability) -> None:
+    """Refuse from inside a handler, where the capability depends on a path parameter.
+
+    A few routes serve several resources — a bulk delete, a revert of any definition —
+    and which capability applies is not known until the parameter is read. They take
+    the console floor as a dependency like everything else and call this once they know
+    what is being changed.
+
+    Args:
+        user: The caller.
+        capability: What this particular request turned out to need.
+
+    Raises:
+        HTTPException: 403 when the caller does not hold it. Not 401: reaching a handler
+            at all means the floor was cleared, so somebody is signed in.
+    """
+    if capability not in user.capabilities:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"this action needs the {_CAPABILITY_NEEDS[capability]}",
+        )
+
+
 #: The floor for the admin console: opening it at all, and reading what changes
 #: nothing. Every other capability is asked for by the route that needs it.
 require_admin: Final = require_capability(Capability.VIEW_ADMIN)
+
+#: One guard per capability, so a route reads as the act it performs. Built once at
+#: import: FastAPI keys its dependency cache on the function object, and a guard built
+#: per request would resolve `current_user` again for every one of them.
+require_training: Final = require_capability(Capability.APPROVE_TRAINING)
+require_rules: Final = require_capability(Capability.MANAGE_RULES)
+require_teaching: Final = require_capability(Capability.TEACH_MODEL)
+require_reference: Final = require_capability(Capability.MANAGE_REFERENCE)
+require_privacy: Final = require_capability(Capability.MANAGE_PRIVACY)
+require_artifacts: Final = require_capability(Capability.MANAGE_ARTIFACTS)
+require_programmes: Final = require_capability(Capability.MANAGE_PROGRAMMES)
+require_meaning: Final = require_capability(Capability.MANAGE_MEANING)
+require_users: Final = require_capability(Capability.MANAGE_USERS)
+require_settings: Final = require_capability(Capability.MANAGE_SETTINGS)

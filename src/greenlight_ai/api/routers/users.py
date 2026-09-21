@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from greenlight_ai.api.deps import CurrentUser, get_auth_settings, get_session, require_admin
+from greenlight_ai.api.deps import CurrentUser, get_auth_settings, get_session, require_users
 from greenlight_ai.api.schemas_auth import ResetPasswordIn, UserIn, UserOut
 from greenlight_ai.auth import accounts
 from greenlight_ai.auth.passwords import PasswordTooShort, hash_password
@@ -31,7 +31,8 @@ _LOG: Final = logging.getLogger(__name__)
 #: Starlette deprecated its 422 constant; the number is stable and the import is not.
 HTTP_422: Final[int] = 422
 
-router = APIRouter(prefix="/admin/users", tags=["admin"], dependencies=[Depends(require_admin)])
+# Who has an account is the administrator's to decide, not a reviewer's.
+router = APIRouter(prefix="/admin/users", tags=["admin"], dependencies=[Depends(require_users)])
 
 
 def _out(row: models.User) -> UserOut:
@@ -81,7 +82,7 @@ def _get(session: Session, user_id: int) -> models.User:
 @router.get("", response_model=list[UserOut])
 def list_users(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_users),
 ) -> list[UserOut]:
     """List every account, active or not.
 
@@ -106,7 +107,7 @@ def create_user(
     payload: UserIn,
     session: Session = Depends(get_session),
     settings: AuthSettings = Depends(get_auth_settings),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_users),
 ) -> UserOut:
     """Create an account for either role.
 
@@ -153,7 +154,7 @@ def reset_password(
     payload: ResetPasswordIn,
     session: Session = Depends(get_session),
     settings: AuthSettings = Depends(get_auth_settings),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_users),
 ) -> UserOut:
     """Set someone else's password, which they must then change.
 
@@ -206,7 +207,7 @@ def set_active(
     user_id: int,
     is_active: bool,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_users),
 ) -> UserOut:
     """Deactivate or reactivate an account.
 

@@ -20,7 +20,14 @@ from sqlalchemy.orm import Session
 
 from greenlight_ai.api import provenance
 from greenlight_ai.api.schemas import FindingOut
-from greenlight_ai.api.deps import CurrentUser, current_user, get_session, require_admin
+from greenlight_ai.api.deps import (
+    CurrentUser,
+    current_user,
+    get_session,
+    require_rules,
+    require_teaching,
+    require_training,
+)
 from greenlight_ai.api.schemas_training import (
     CandidateDecision,
     CandidateOut,
@@ -339,7 +346,7 @@ def edit_observation(
             status.HTTP_409_CONFLICT,
             f"this observation is {row.status} and can no longer be edited",
         )
-    require_admin(user)
+    require_training(user)
 
     try:
         assert_clean(f"{payload.statement}\n{payload.expectation}")
@@ -392,7 +399,7 @@ def withdraw_observation(
             from it — at that point rejecting the candidate is the honest move.
     """
     _require_enabled(session)
-    require_admin(user)
+    require_training(user)
     row = session.get(models.TrainingObservation, observation_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such observation")
@@ -421,7 +428,7 @@ def reject_observation(
     observation_id: int,
     payload: ObservationDecision,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_training),
 ) -> ObservationOut:
     """Turn an observation down, with a reason the author will read.
 
@@ -678,7 +685,7 @@ def _what_exists(session: Session) -> tuple[list[str], list[str]]:
 def synthesize_candidates(
     payload: SynthesizeIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_training),
 ) -> list[CandidateOut]:
     """Have the model draft rules from a group of observations.
 
@@ -748,7 +755,7 @@ def synthesize_candidates(
 def front_door_place(
     payload: FrontDoorIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_teaching),
 ) -> FrontDoorOut:
     """Say what you want checked, in your own words, and let the tool place it.
 
@@ -821,7 +828,7 @@ def front_door_place(
 @router.get("/admin/candidates", response_model=list[CandidateOut])
 def list_candidates(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_training),
     candidate_status: str | None = Query(default=None, alias="status"),
 ) -> list[CandidateOut]:
     """The candidate rules, newest first.
@@ -846,7 +853,7 @@ def replay_candidate(
     candidate_id: int,
     request: Request,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_training),
 ) -> CandidateOut:
     """Ask for this rule to be evaluated against work already finished (Phase 6.13e).
 
@@ -886,7 +893,7 @@ def approve_candidate(
     candidate_id: int,
     payload: CandidateDecision,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_training),
 ) -> CandidateOut:
     """Approve a candidate, which creates the rule in shadow.
 
@@ -940,7 +947,7 @@ def reject_candidate(
     candidate_id: int,
     payload: ObservationDecision,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_training),
 ) -> CandidateOut:
     """Turn a candidate down, keeping it and its sources.
 
@@ -1046,7 +1053,7 @@ def _summary(rule_kind: str, row: Any) -> str:
 @router.get("/admin/rules", response_model=list[RuleOut])
 def list_rules(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_rules),
     state: str = Query(default="active"),
     search: str = Query(default=""),
 ) -> list[RuleOut]:
@@ -1147,7 +1154,7 @@ def _sources(session: Session, candidate_id: int | None) -> list[int]:
 def act_on_rules(
     payload: RulesBulkAction,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_rules),
 ) -> RulesBulkResult:
     """Apply one state change to several rules under one typed word (ADR-032).
 
@@ -1199,7 +1206,7 @@ def act_on_rule(
     rule_id: int,
     payload: RuleAction,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_rules),
 ) -> RuleOut:
     """Enable, disable, delete, restore, or activate a rule.
 
@@ -1261,7 +1268,7 @@ def shadow_findings(
     rule_kind: str,
     rule_id: int,
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_rules),
     limit: int = Query(default=25, ge=1, le=200),
 ) -> list[FindingOut]:
     """What a rule found while running in shadow (ADR-040).
@@ -1302,7 +1309,7 @@ def rule_history(
     rule_kind: str,
     rule_id: int,
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_rules),
 ) -> list[RuleStateChangeOut]:
     """Every move this rule has made, and who made it.
 
