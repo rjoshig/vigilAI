@@ -213,9 +213,17 @@ class Worker:
             if job.run_id is not None:
                 run = session.get(models.Run, job.run_id)
                 if run is not None:
-                    # A run awaiting a retry stays queued so the UI does not flash
-                    # "failed" and then recover; only a dead job marks the run failed.
-                    run.status = "queued" if will_retry else "failed"
+                    # A failed **re-check** leaves the run where it was. It rebuilds
+                    # findings from rules and traces that are already stored, so a run
+                    # awaiting review still has every finding it had before the job was
+                    # claimed — marking it `failed` would take a reviewable run away
+                    # from the person reviewing it, and no retry would give it back
+                    # (Phase 6.23b). The error is still recorded, so the failure is not
+                    # silent; only the status is left alone.
+                    if job.task != TASK_RECHECK:
+                        # A run awaiting a retry stays queued so the UI does not flash
+                        # "failed" and then recover; only a dead job marks the run failed.
+                        run.status = "queued" if will_retry else "failed"
                     run.error = message[:2000]
                     # Kept for a run awaiting a retry too: the attempt that failed is
                     # what somebody wants to see, and the next one overwrites it.
@@ -226,7 +234,7 @@ class Worker:
                         attempt=job.attempts,
                         attempts=job.max_attempts,
                     )
-                    if not will_retry:
+                    if not will_retry and job.task != TASK_RECHECK:
                         run.finished_at = utcnow()
 
     def _run_pipeline(self, job: ClaimedJob) -> None:

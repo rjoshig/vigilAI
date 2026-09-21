@@ -65,7 +65,15 @@ import {
   isOk,
 } from "@/lib/display";
 import { buildMatrix, countByStatus, ruleValues, type MatrixRow } from "@/lib/matrix";
-import type { Anchor, Finding, Requirements, ReviewStatus, RunDetail, Severity } from "@/lib/types";
+import type {
+  Anchor,
+  ConfigElementOut,
+  Finding,
+  Requirements,
+  ReviewStatus,
+  RunDetail,
+  Severity,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 3000;
@@ -128,6 +136,25 @@ export default function ReviewPage() {
     if (ready) void loadReview();
   }, [ready, loadReview]);
 
+  // A re-check rebuilds findings and leaves the status at `needs_review`, so nothing
+  // about the run changes shape while it happens. Before Phase 6.23b that made it
+  // invisible: the screen was byte-identical and the rebuilt findings appeared only on
+  // a manual reload. The queue is asked instead, and the answer drives both the banner
+  // and the polling.
+  const rechecking = run?.rechecking ?? false;
+  React.useEffect(() => {
+    if (!rechecking) return;
+    const timer = setInterval(() => void loadRun(), POLL_MS);
+    return () => clearInterval(timer);
+  }, [rechecking, loadRun]);
+
+  // The moment it finishes, what is on screen is the old set of findings.
+  const wasRechecking = React.useRef(false);
+  React.useEffect(() => {
+    if (wasRechecking.current && !rechecking) void loadReview();
+    wasRechecking.current = rechecking;
+  }, [rechecking, loadReview]);
+
   async function decide(finding: Finding, status: ReviewStatus, note: string) {
     setBusy(true);
     try {
@@ -160,14 +187,30 @@ export default function ReviewPage() {
     }
   }
 
-  async function recheck() {
+  /**
+   * Correct a trace link, which queues the re-check itself.
+   *
+   * `design.md` has promised this since Phase 2 — *"Edit a requirement or a link, then
+   * Re-check"* — and `user-training.md` told people to do it, but no screen ever
+   * offered it: `PUT /runs/{id}/requirements` had no caller in either app. Removing
+   * the standalone button without building this would have left the endpoint the only
+   * way to ask for a re-check at all (Phase 6.23b).
+   */
+  async function fixLink(ruleId: string, elementId: string | null, reason: string) {
     setBusy(true);
     setError(null);
     try {
-      await api.recheck(runId);
+      await api.editRequirements(runId, [
+        elementId === null
+          ? { rule_id: ruleId, clear_link: true, reason }
+          : { rule_id: ruleId, element_id: elementId, reason },
+      ]);
+      setNotice(
+        `${ruleId}: the link was corrected. The comparison stages are re-running by themselves.`
+      );
       await loadRun();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.detail : "Could not queue the re-check.");
+      setError(caught instanceof ApiError ? caught.detail : "Could not correct the link.");
     } finally {
       setBusy(false);
     }
@@ -218,14 +261,6 @@ export default function ReviewPage() {
                 <BarChart3 className="h-4 w-4" /> Run stats
               </Button>
             </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy || active}
-              onClick={() => void recheck()}
-            >
-              <RefreshCw className="h-4 w-4" /> Re-check
-            </Button>
             {trainingEnabled ? (
               <Button
                 variant="outline"
@@ -378,6 +413,20 @@ export default function ReviewPage() {
             evidenced needs acknowledging, before the report can be frozen. Low-severity findings
             can be decided in bulk. Review decisions never call the model.
           </div>
+          {rechecking ? (
+            <div
+              role="status"
+              data-testid="rechecking-banner"
+              className="mb-4 flex items-start gap-2 rounded-md border border-info/40 bg-info/5 p-3 text-xs"
+            >
+              <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+              <span>
+                <b>Re-checking.</b> The comparison stages are re-running by themselves against the
+                correction you made. No model is called and nothing you have already decided is
+                lost. The findings below refresh when it finishes.
+              </span>
+            </div>
+          ) : null}
           {notice ? (
             <p role="status" className="mb-4 text-xs text-success" data-testid="run-notice">
               {notice}
@@ -452,6 +501,10 @@ export default function ReviewPage() {
           {tab === "matrix" ? (
             <MatrixTab
               rows={rows}
+              elements={requirements?.elements ?? []}
+              busy={busy || rechecking}
+              editable={!run.finalized && run.status === "needs_review"}
+              onFixLink={fixLink}
               onOpen={setOpenFinding}
               onObserve={trainingEnabled ? setObserving : null}
             />
@@ -496,15 +549,26 @@ export default function ReviewPage() {
 
 function MatrixTab({
   rows,
+  elements,
+  busy,
+  editable,
+  onFixLink,
   onOpen,
   onObserve,
 }: {
   rows: MatrixRow[];
+  /** Every configuration element this run extracted, to pick a correct link from. */
+  elements: ConfigElementOut[];
+  busy: boolean;
+  /** Only a run still awaiting review can be corrected; a frozen one never (ADR-066). */
+  editable: boolean;
+  onFixLink: (ruleId: string, elementId: string | null, reason: string) => void;
   onOpen: (f: Finding) => void;
   /** Record what should be checked for a requirement, from its row (Phase 6.13b). */
   onObserve: ((target: ObservationTarget) => void) | null;
 }) {
   const [filter, setFilter] = React.useState<string>("all");
+  const [fixing, setFixing] = React.useState<string | null>(null);
   const counts = countByStatus(rows);
   const visible = filter === "all" ? rows : rows.filter((row) => row.status === filter);
 
@@ -555,17 +619,45 @@ function MatrixTab({
                 </TD>
                 <TD className="text-xs">{ruleValues(row.rule)}</TD>
                 <TD className="text-xs">
-                  {row.element ? (
+                  {fixing === row.rule.rule_id ? (
+                    <LinkFixer
+                      elements={elements}
+                      current={row.element?.element_id ?? null}
+                      busy={busy}
+                      onCancel={() => setFixing(null)}
+                      onSave={(elementId, reason) => {
+                        setFixing(null);
+                        onFixLink(row.rule.rule_id, elementId, reason);
+                      }}
+                    />
+                  ) : (
                     <>
-                      <span className="mono text-muted-foreground">{row.element.json_path}</span>
-                      {row.trace?.by_code ? (
-                        <span className="ml-1 text-[0.65rem] text-muted-foreground">
-                          (linked by code)
-                        </span>
+                      {row.element ? (
+                        <>
+                          <span className="mono text-muted-foreground">
+                            {row.element.json_path}
+                          </span>
+                          {row.trace?.by_code ? (
+                            <span className="ml-1 text-[0.65rem] text-muted-foreground">
+                              (linked by code)
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-destructive">No matching config rule</span>
+                      )}
+                      {editable ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          data-testid="matrix-fix-link"
+                          className="ml-1.5 rounded text-[0.65rem] text-primary hover:underline disabled:opacity-50"
+                          onClick={() => setFixing(row.rule.rule_id)}
+                        >
+                          Fix link
+                        </button>
                       ) : null}
                     </>
-                  ) : (
-                    <span className="text-destructive">No matching config rule</span>
                   )}
                 </TD>
                 <TD>
@@ -619,6 +711,70 @@ function MatrixTab({
         </Table>
       </Card>
     </>
+  );
+}
+
+/**
+ * Correct which configuration element a requirement traces to (Phase 6.23b).
+ *
+ * Two things a reviewer can say, and the second is not a lesser version of the first:
+ * *it is this element instead*, and *it is linked to nothing* — the latter being what
+ * a wrong link needs when the configuration genuinely does not implement the
+ * requirement, and the state that makes the requirement show as uncovered rather than
+ * as satisfied by the wrong rule.
+ *
+ * The reason is required. A correction with no reason is indistinguishable months
+ * later from a misclick, and the trace stores who made it.
+ */
+function LinkFixer({
+  elements,
+  current,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  elements: ConfigElementOut[];
+  current: string | null;
+  busy: boolean;
+  onSave: (elementId: string | null, reason: string) => void;
+  onCancel: () => void;
+}) {
+  const [choice, setChoice] = React.useState<string>(current ?? "");
+  const [reason, setReason] = React.useState("");
+
+  return (
+    <div className="grid gap-1.5" data-testid="link-fixer">
+      <Select
+        aria-label="Configuration element"
+        value={choice}
+        onChange={(event) => setChoice(event.target.value)}
+      >
+        <option value="">Linked to nothing</option>
+        {elements.map((element) => (
+          <option key={element.element_id} value={element.element_id}>
+            {element.json_path}
+          </option>
+        ))}
+      </Select>
+      <Input
+        aria-label="Why this is the right link"
+        placeholder="Why — e.g. the state list is in the exclusions block"
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+      />
+      <div className="flex gap-1.5">
+        <Button
+          size="xs"
+          disabled={busy || !reason.trim()}
+          onClick={() => onSave(choice || null, reason.trim())}
+        >
+          Save and re-check
+        </Button>
+        <Button size="xs" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
   );
 }
 

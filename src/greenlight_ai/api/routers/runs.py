@@ -127,8 +127,35 @@ def _can_finalize(session: Session, run: models.Run, user_auth: bool = False) ->
     return state.can_finalize, state.reason
 
 
+def _report_verdicts(session: Session, run_ids: Sequence[int]) -> dict[int, str]:
+    """The frozen verdict of each run that has one (Phase 6.23e).
+
+    Read for the whole page in one statement rather than per row: the list is the
+    busiest read in the product and a join per row for a column most rows leave empty
+    is how a history screen gets slow as it fills up.
+
+    Args:
+        session: An open session.
+        run_ids: The runs on this page.
+
+    Returns:
+        Run id to verdict, with no entry for a run that was never finalized.
+    """
+    if not run_ids:
+        return {}
+    rows = session.execute(
+        sa.select(models.FinalReport.run_id, models.FinalReport.verdict).where(
+            models.FinalReport.run_id.in_(list(run_ids))
+        )
+    ).all()
+    return {int(run_id): str(verdict) for run_id, verdict in rows}
+
+
 def _summary(
-    session: Session, run: models.Run, queue: JobQueue | None = None
+    session: Session,
+    run: models.Run,
+    queue: JobQueue | None = None,
+    report_verdict: str = "",
 ) -> schemas.RunSummary:
     """Build the list view of a run.
 
@@ -136,6 +163,9 @@ def _summary(
         session: An open session.
         run: The run row.
         queue: The queue, when a position should be reported.
+        report_verdict: The frozen report's verdict, when the caller has already read
+            it. Passed in rather than looked up here so the list can read the whole
+            page at once (Phase 6.23e).
 
     Returns:
         The summary.
@@ -158,6 +188,7 @@ def _summary(
         credit_date=run.credit_date,
         expires_at=run.expires_at,
         cloned_from=run.cloned_from_id,
+        report_verdict=report_verdict,
         **counts,
     )
 
@@ -209,16 +240,12 @@ def _detail(
     Returns:
         The detail payload.
     """
-    base = _summary(session, run, queue)
+    verdict = _report_verdicts(session, [run.id]).get(run.id, "")
+    base = _summary(session, run, queue, verdict)
     can_finalize, blocked_by = _can_finalize(session, run, user_auth)
-    finalized = (
-        session.execute(
-            sa.select(sa.func.count())
-            .select_from(models.FinalReport)
-            .where(models.FinalReport.run_id == run.id)
-        ).scalar_one()
-        > 0
-    )
+    # A verdict is only ever written when a report is frozen, so its presence is the
+    # same fact the count used to establish, read once instead of twice.
+    finalized = bool(verdict)
     stages = [
         schemas.StageInfo.model_validate(row)
         for row in session.execute(
@@ -254,6 +281,7 @@ def _detail(
             for f in sorted(run.files, key=lambda f: (f.kind, f.part))
         ],
         mismatches=[_mismatch_out(row) for row in _mismatches_for(session, run.id)],
+        rechecking=queue.pending_for(run.id, TASK_RECHECK),
     )
 
 
@@ -1183,7 +1211,9 @@ def list_runs(
         statement = statement.where(sa.or_(*wanted))
 
     queue = _queue(request, session)
-    return [_summary(session, run, queue) for run in session.execute(statement).scalars()]
+    runs = list(session.execute(statement).scalars())
+    verdicts = _report_verdicts(session, [run.id for run in runs])
+    return [_summary(session, run, queue, verdicts.get(run.id, "")) for run in runs]
 
 
 def _get_run(session: Session, run_id: int) -> models.Run:

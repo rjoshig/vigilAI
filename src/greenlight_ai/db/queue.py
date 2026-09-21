@@ -335,6 +335,35 @@ class JobQueue:
         ).scalar_one()
         return int(ahead) + 1
 
+    def pending_for(self, run_id: int, task: str) -> bool:
+        """Whether a job of one kind is waiting or already running for a run.
+
+        A re-check changes no status — it rebuilds findings and leaves the run in
+        ``needs_review`` — so the only honest way for a screen to say *this is
+        happening now* is to ask the queue. Adding a ninth run status would have said
+        the same thing in a vocabulary every filter, label and tone map would then have
+        to learn, for a job that takes seconds (Phase 6.23b).
+
+        Args:
+            run_id: The run.
+            task: The task name, e.g. :data:`~greenlight_ai.worker.app.TASK_RECHECK`.
+
+        Returns:
+            ``True`` while such a job is queued or claimed.
+        """
+        return (
+            self._session.execute(
+                sa.select(sa.func.count())
+                .select_from(Job)
+                .where(
+                    Job.run_id == run_id,
+                    Job.task == task,
+                    Job.status.in_(("queued", "running")),
+                )
+            ).scalar_one()
+            > 0
+        )
+
     def queued_count(self, task: str | None = None) -> int:
         """Count jobs waiting to run.
 

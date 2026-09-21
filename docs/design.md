@@ -333,8 +333,8 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | App | Screen | What it does |
 | --- | --- | --- |
 | user-ui | New run | Form: customer name, order number, configuration ID, date, delivery programme (AM / AS / Archives / other), whether suppressions were applied (defaults to no), additional notes. Drag-and-drop for OSL, config JSON, and reports. Copy from a previous run. If the same inputs were already run, shows that report and asks for a reason before re-running |
-| user-ui | Runs | History with filters. Queue position and live stage progress |
-| user-ui | Review | Traceability matrix, coverage, and findings. Three decisions and a comment per finding. Edit a requirement or a link, then Re-check. Generate final report |
+| user-ui | Runs | History with filters. Queue position and live stage progress. A **Report** column carrying the frozen verdict, which opens the report in one click. Drafts are kept out of the history and reached by their own toggle |
+| user-ui | Review | Traceability matrix, coverage, and findings. Three decisions and a comment per finding. **Fix a wrong trace link from its row, with a reason; the re-check is queued by the correction itself and the screen says it is happening.** Generate final report |
 | user-ui | Final report | The frozen one-page HTML report. Download PDF. Clone run |
 | user-ui | Explore a sample | The stored example of any artifact the tool accepts, read-only: a workbook cell by cell with its label, an OSL by section, a configuration by JSON path. With Train AI mode on, any of them can be pointed at to start an observation |
 | user-ui | Observations | What this person has recorded in Train AI mode and what became of it. Only when the mode is on (ADR-021) |
@@ -378,8 +378,8 @@ A small REST API under `/api/v1`. FastAPI generates the OpenAPI spec and docs pa
 | --- | --- |
 | POST /runs | Create run (multipart: form fields + files). If the input fingerprint matches, returns the existing run unless a rerun\_reason is supplied |
 | GET /runs, GET /runs/{id} | List, status, current stage, queue position |
-| GET /runs/{id}/requirements, PUT /runs/{id}/requirements | Read and edit requirements and trace links |
-| POST /runs/{id}/recheck | Rerun the code stages only |
+| GET /runs/{id}/requirements, PUT /runs/{id}/requirements | Read and edit requirements and trace links. The edit queues the re-check itself, which is how every re-check is asked for |
+| POST /runs/{id}/recheck | Rerun the code stages only. Kept on the API; no screen calls it, because a re-check with no edit behind it re-compares inputs nobody changed (Phase 6.23b) |
 | GET /runs/{id}/findings, PATCH /findings/{id} | List findings. Set false positive / accepted risk / Not OK and a comment |
 | GET /runs/{id}/coverage, POST /runs/{id}/coverage/acknowledge | What was checked and what was not; record that a person has seen a gap |
 | POST /runs/{id}/finalize | Generate and freeze the final report |
