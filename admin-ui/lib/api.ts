@@ -43,6 +43,7 @@ import type {
   TestResult,
   TrainingConfig,
   Usage,
+  UsageByUser,
   ValueReport,
   DefinitionVersion,
   GuideEntry,
@@ -418,6 +419,10 @@ export const api = {
 
   /** Read the dashboard numbers. */
   getUsage: (): Promise<Usage> => request<Usage>("/usage"),
+
+  /** Who is using the tool, and who is having a hard time with it (Phase 6.19). */
+  getUsageByUser: (days: number): Promise<UsageByUser> =>
+    request<UsageByUser>(`/usage/by-user?days=${days}`),
 
   /** How much of a prompt's context allowance is already spent (Phase 6.17b). */
   getPromptBudget: (scopeCode = "", configurationId = ""): Promise<PromptBudget> => {

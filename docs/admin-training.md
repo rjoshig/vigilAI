@@ -463,9 +463,33 @@ reaches the model. Add to it whenever a new layout carries personal data.
 
 ## Usage
 
-Runs per day, tokens, cache hit rate, and the per-rule statistics. The cache hit rate
-is the number to watch: identical content is never sent to the model twice, and a rate
-that drops means something is changing prompts or inputs on every run.
+Three tabs, because three different questions get asked of this screen.
+
+**Tool health** is runs per day, tokens, cache hit rate and the per-rule statistics. The
+cache hit rate is the number to watch: identical content is never sent to the model
+twice, and a rate that drops means something is changing prompts or inputs on every run.
+
+**By person** is who is using the tool and how it is going for them, over 7, 30, 90 or
+180 days. Three columns matter most and are deliberately kept apart, because they have
+different causes and different fixes:
+
+| Column | What it usually means |
+| --- | --- |
+| **Failed** | The pipeline raised. Usually the tool's problem — a layout, a parser. |
+| **Held** | What was uploaded disagreed with what was typed on the form. Usually something a person can be shown how to avoid: the wrong month's configuration, a customer name that does not match the file. |
+| **Re-runs** | The same order came back for another go. Something was wrong either way. |
+
+A rate is flagged only when it is well above **this deployment's own average**, shown in
+the line under the tab, and never for somebody with fewer than five runs — over three
+runs a rate says nothing. Click any count to open those runs in the user app. **CSV**
+downloads every person in the period, not the page on screen, with more columns than the
+table shows and the averages on the last line.
+
+This is a count of what happened to somebody's runs, not a judgment on them, and nothing
+on it reaches a model. Use it to find where the tool is letting a group of people down
+(ADR-048).
+
+**What it displaced** is the hours report, over a date range you choose.
 
 
 ## Review load — what reviewers stop needing to see (Phase 6.18a)

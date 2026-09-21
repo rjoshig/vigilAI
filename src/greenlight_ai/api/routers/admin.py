@@ -31,7 +31,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from greenlight_ai import announcements, scopes, value_report
+from greenlight_ai import announcements, scopes, user_usage, value_report
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
@@ -2334,6 +2334,79 @@ def value_report_for(
         hours_per_order=report.hours_per_order,
         hours_saved=report.hours_saved,
         working_weeks=report.working_weeks,
+    )
+
+
+@router.get("/usage/by-user", response_model=wire.UsageByUserOut)
+def usage_by_user(
+    days: int = Query(default=user_usage.DEFAULT_DAYS),
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.UsageByUserOut:
+    """Report who is using the tool, and who is having a hard time with it.
+
+    Args:
+        days: The period, which must be one the console offers.
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        One row per person who submitted something, busiest first, with the
+        deployment's own averages beside them.
+
+    Raises:
+        HTTPException: 422 when the period is not one of `user_usage.PERIODS`. The
+            list is closed rather than a range, so the report cannot be asked for ten
+            years of days by editing a URL.
+    """
+    if days not in user_usage.PERIODS:
+        offered = ", ".join(str(period) for period in user_usage.PERIODS)
+        raise HTTPException(HTTP_422, f"period must be one of {offered} days")
+
+    period = user_usage.build(session, days)
+    return wire.UsageByUserOut(
+        start=period.start,
+        end=period.end,
+        days=period.days,
+        runs=period.runs,
+        failure_rate=period.failure_rate,
+        held_rate=period.held_rate,
+        repeat_rate=period.repeat_rate,
+        periods=list(user_usage.PERIODS),
+        users=[
+            wire.UserUsageOut(
+                user_id=row.user_id,
+                name=row.name,
+                username=row.username,
+                role=row.role,
+                is_active=row.is_active,
+                runs=row.runs,
+                finalized=row.finalized,
+                needs_review=row.needs_review,
+                failed=row.failed,
+                held=row.held,
+                cancelled=row.cancelled,
+                in_flight=row.in_flight,
+                orders=row.orders,
+                customers=row.customers,
+                configurations=row.configurations,
+                repeat_runs=row.repeat_runs,
+                mismatch_runs=row.mismatch_runs,
+                high_findings=row.high_findings,
+                completed_runs=row.completed_runs,
+                failure_rate=row.failure_rate,
+                held_rate=row.held_rate,
+                repeat_rate=row.repeat_rate,
+                high_per_run=row.high_per_run,
+                first_run_at=row.first_run_at,
+                last_run_at=row.last_run_at,
+                per_day=[
+                    wire.DayCount(day=entry.day.isoformat(), count=entry.count)
+                    for entry in row.per_day
+                ],
+            )
+            for row in period.users
+        ],
     )
 
 

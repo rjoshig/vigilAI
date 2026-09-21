@@ -1708,3 +1708,47 @@ are tested against a deliberately vast message.
 
 The detail is written for a run awaiting a retry too, not only a dead one: the attempt
 that failed is what somebody wants to see, and the next attempt overwrites it.
+
+## ADR-048 — Usage is counted per person, and the three ways a run goes wrong are counted apart
+
+**Status:** accepted · 2026-09-20 · Phase 6.19
+
+**Context.** The usage dashboard counted the deployment, which answers *is anybody using
+this* and nothing else. The question an administrator arrives with is narrower: **is this
+going badly for a particular group of people?** A team whose runs fail twice as often as
+everyone else's is either meeting a report layout the parsers do not handle or has been
+taught the product wrong. Both are fixable and neither is visible in one average.
+
+**Decision.** `user_usage.build` counts per account over a closed set of periods — 7, 30,
+90 and 180 days, defaulting to 30 — and **keeps the three failure modes apart**, because
+they have different causes and different fixes:
+
+- **Failed** — the pipeline raised. Usually the tool's problem.
+- **Held** — the artifacts disagreed with the form (ADR-041). Usually a person's, and
+  the most teachable of the three.
+- **Re-run** — the same order submitted again. Something was wrong either way.
+
+A single "problems" count would hide the only thing worth knowing, which is which of the
+three an administrator can act on.
+
+**Rates are reported against the deployment's own average**, not a threshold. *Twice
+everyone else* is a fact somebody can act on; *a score of 68* is not, and nobody can
+argue with it. A row under five runs is never flagged, because a rate over three runs is
+noise whatever it says.
+
+**Consequences.** The period list is closed rather than a range, so the report cannot be
+asked for ten years of days by editing a URL; an unknown period is a 422 naming the four.
+The per-day series is **sparse** — a day with no runs is absent rather than zero —
+because a 180-day period is mostly zeroes. Days are UTC days, the frame run timestamps
+are stored in; taking "today" from a local clock counts the wrong day for anybody west of
+Greenwich in the evening, which is a bug this phase found in the value report's tests.
+
+A count links to that person's runs, which needed `GET /runs?submitted_by=` — an account
+id rather than a name, because two people can share a display name and a link that
+quietly widened to both would be worse than one that found nobody. The user app gained
+the matching filter and a search that covers the submitter, so somebody can answer the
+same question about themselves.
+
+**This is a count, not a judgment.** Deactivated accounts still appear: what somebody did
+does not stop having happened (ADR-022). Nothing here reaches a model, and the console
+says so on the card.

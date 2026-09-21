@@ -315,6 +315,51 @@ export interface DayCount {
   count: number;
 }
 
+/** One person's use of the tool over a period (Phase 6.19). */
+export interface UserUsage {
+  user_id: number;
+  name: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  runs: number;
+  finalized: number;
+  needs_review: number;
+  failed: number;
+  /** The artifacts disagreed with the form and nobody has accepted it (ADR-041). */
+  held: number;
+  cancelled: number;
+  in_flight: number;
+  orders: number;
+  customers: number;
+  configurations: number;
+  repeat_runs: number;
+  mismatch_runs: number;
+  high_findings: number;
+  completed_runs: number;
+  failure_rate: number;
+  held_rate: number;
+  repeat_rate: number;
+  high_per_run: number;
+  first_run_at: string | null;
+  last_run_at: string | null;
+  /** Sparse: a day they submitted nothing is absent rather than zero. */
+  per_day: DayCount[];
+}
+
+/** Everyone's use of the tool over one period, with the deployment's own averages. */
+export interface UsageByUser {
+  start: string;
+  end: string;
+  days: number;
+  users: UserUsage[];
+  runs: number;
+  failure_rate: number;
+  held_rate: number;
+  repeat_rate: number;
+  periods: number[];
+}
+
 export interface Usage {
   runs_total: number;
   runs_per_day: DayCount[];

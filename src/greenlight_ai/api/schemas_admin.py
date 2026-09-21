@@ -427,6 +427,68 @@ class ValueReportOut(BaseModel):
     working_weeks: float = 0.0
 
 
+class UserUsageOut(BaseModel):
+    """One person's use of the tool over a period (Phase 6.19)."""
+
+    user_id: int
+    #: Their name, or their username where they have none.
+    name: str = ""
+    username: str = ""
+    role: str = ""
+    #: Deactivated accounts still appear: what they did does not stop having happened.
+    is_active: bool = True
+
+    runs: int = 0
+    finalized: int = 0
+    needs_review: int = 0
+    failed: int = 0
+    #: The artifacts disagreed with the form and nobody has accepted it (ADR-041).
+    held: int = 0
+    cancelled: int = 0
+    #: Queued or running when the report was built.
+    in_flight: int = 0
+
+    #: Distinct order numbers: how much work, rather than how many attempts.
+    orders: int = 0
+    customers: int = 0
+    configurations: int = 0
+    repeat_runs: int = 0
+    #: Runs that recorded an artifact disagreement, accepted or not.
+    mismatch_runs: int = 0
+    high_findings: int = 0
+    completed_runs: int = 0
+
+    #: The three ways a run goes wrong, as rates, to compare against the deployment's
+    #: own averages on `UsageByUserOut` rather than against an invented threshold.
+    failure_rate: float = 0.0
+    held_rate: float = 0.0
+    repeat_rate: float = 0.0
+    high_per_run: float = 0.0
+
+    first_run_at: Optional[dt.datetime] = None
+    last_run_at: Optional[dt.datetime] = None
+    #: Sparse: a day they submitted nothing is absent rather than zero.
+    per_day: list[DayCount] = Field(default_factory=list)
+
+
+class UsageByUserOut(BaseModel):
+    """Everyone's use of the tool over one period (Phase 6.19)."""
+
+    start: dt.date
+    end: dt.date
+    days: int = 0
+    #: Busiest first.
+    users: list[UserUsageOut] = Field(default_factory=list)
+    runs: int = 0
+    #: The deployment's own averages. A person's rate means something next to these
+    #: and nothing on its own.
+    failure_rate: float = 0.0
+    held_rate: float = 0.0
+    repeat_rate: float = 0.0
+    #: The periods the console may ask for, so the picker cannot drift from the API.
+    periods: list[int] = Field(default_factory=list)
+
+
 class UsageOut(BaseModel):
     """The admin dashboard numbers, all plain SQL over the run tables."""
 
