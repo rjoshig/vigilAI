@@ -421,7 +421,7 @@ export interface DetectedSheet {
  * How sure the detector is. "I am not sure" has to be representable, because a wrong
  * silent assignment is worse than a question.
  */
-export type DetectionVerdict = "confident" | "ambiguous" | "unknown";
+export type DetectionVerdict = "confident" | "reasoned" | "ambiguous" | "unknown";
 
 /** What `POST /runs/detect-type` returns. It stores nothing. */
 export interface TypeDetection {

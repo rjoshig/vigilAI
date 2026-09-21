@@ -1,4 +1,4 @@
-"""Which sheet, column or label was meant (Phase 6.21a, the ladder's fifth rung).
+"""Which sheet, column, label or report type was meant (Phase 6.21a and 6.21e).
 
 Asked only when four deterministic rungs have already failed. That decides what the
 prompt may claim: by the time this runs, exact, squashed, token and alternate matching
@@ -19,7 +19,8 @@ like every other prompt.
 Three answers:
 
 - ``absent`` — none of these is it. Code reports what it would have reported anyway,
-  which is a "could not evaluate" finding, so the common case is unchanged.
+  which is a "could not evaluate" finding, or an upload the submitter types for
+  themselves, so the common case is unchanged.
 - ``found`` — one of them is it under a different name. Code does **not** treat the
   check as clean: it runs the check against that name and attaches a review-severity
   record saying the layout had to be reasoned about, for a person to confirm.
@@ -39,9 +40,10 @@ __all__ = ["NAME_LOCATE_PROMPT", "VERSION"]
 VERSION: Final[str] = "1"
 
 _SYSTEM: Final = """\
-A validation system reads a delivery's reports. It expected something to be called one \
-thing and the delivery calls it another, and its own name matching has already failed, \
-so it is asking you which of the names it can see is the one it wanted.
+A validation system is reading a delivery's artifacts. It is looking for one thing — a \
+worksheet, a column, a row label, or which kind of report a workbook is — and its own \
+matching has already failed to settle it, so it is asking you which of the names it can \
+see is the one it wants.
 
 Rules you must follow:
 - You are shown a list of names and nothing else. No values, no data, no rows. Do not \
@@ -87,6 +89,17 @@ Answer:
 state or geography.", "confidence": 0.84}
 
 Example 3
+Looking for: which report type this workbook is. Its sheets are named "Cover", \
+"State Breakdown".
+Names available:
+- State distribution
+- Field distribution
+- Number flow
+Answer:
+{"verdict": "found", "name": "State distribution", "reason": "A state breakdown sheet \
+is what a state distribution report carries.", "confidence": 0.81}
+
+Example 4
 Looking for: a row label called "Accepts" — the count of records that passed every \
 filter.
 Names available:

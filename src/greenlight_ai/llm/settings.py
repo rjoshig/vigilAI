@@ -16,6 +16,10 @@ __all__ = ["Provider", "LLMSettings", "ConfigError", "resolved_llm_settings"]
 
 Provider = Literal["openai", "anthropic", "mock"]
 
+#: Whether the answer's schema is sent with the request (Phase 6.21e).
+GuidedJson = Literal["off", "auto", "on"]
+GUIDED_JSON: Final[tuple[GuidedJson, ...]] = ("off", "auto", "on")
+
 #: Defaults mirror ``.env.example``. Temperature is 0 because extraction must be
 #: reproducible: the cache key does not include it, so a varying temperature would make
 #: cached and fresh results disagree.
@@ -29,6 +33,7 @@ _DEFAULTS: Final[Mapping[str, str]] = {
     "LLM_TIMEOUT_S": "120",
     "LLM_MAX_CONCURRENCY": "4",
     "LLM_MAX_TOKENS_PER_RUN": "400000",
+    "LLM_GUIDED_JSON": "auto",
     "LLM_LOG_PROMPTS": "false",
     "LLM_PII_TRIPWIRE": "true",
     "LLM_PROMPT_VERSION": "1",
@@ -60,6 +65,9 @@ class LLMSettings(BaseModel):
         timeout_s: Per-call timeout.
         max_concurrency: Calls in flight per worker.
         max_tokens_per_run: The run budget; exceeding it stops the run.
+        guided_json: Whether to send the answer's schema with the request so the
+            endpoint decodes against it (Phase 6.21e). ``auto`` degrades silently
+            on an endpoint that refuses it.
         log_prompts: Whether prompt text may be logged. False except for synthetic data
             on a developer machine (ADR-003).
         pii_tripwire: Whether to scan every assembled prompt for personal data and
@@ -88,6 +96,7 @@ class LLMSettings(BaseModel):
     max_tokens_per_run: int = Field(default=400_000, gt=0)
     log_prompts: bool = False
     pii_tripwire: bool = True
+    guided_json: GuidedJson = "auto"
     prompt_version: str = "1"
     verify_lenses: tuple[str, ...] = ("single",)
     max_lens_calls_per_run: int = Field(default=150, ge=0)
@@ -166,6 +175,12 @@ class LLMSettings(BaseModel):
         def lenses(key: str) -> tuple[str, ...]:
             return parse_lenses(get(key), key)
 
+        def guided(key: str) -> GuidedJson:
+            raw = get(key).lower()
+            if raw not in GUIDED_JSON:
+                raise ConfigError(f"{key} must be one of {', '.join(GUIDED_JSON)}; got {raw!r}")
+            return raw
+
         provider = get("LLM_PROVIDER").lower()
         if provider not in ("openai", "anthropic", "mock"):
             raise ConfigError(
@@ -185,6 +200,7 @@ class LLMSettings(BaseModel):
                 max_tokens_per_run=integer("LLM_MAX_TOKENS_PER_RUN"),
                 log_prompts=boolean("LLM_LOG_PROMPTS"),
                 pii_tripwire=boolean("LLM_PII_TRIPWIRE"),
+                guided_json=guided("LLM_GUIDED_JSON"),
                 prompt_version=get("LLM_PROMPT_VERSION"),
                 verify_lenses=lenses("LLM_VERIFY_LENSES"),
                 max_lens_calls_per_run=integer("LLM_MAX_LENS_CALLS_PER_RUN"),
@@ -196,6 +212,20 @@ class LLMSettings(BaseModel):
 #: The lenses a deployment may switch on (Phase 6.11e). ``single`` is the one-prompt
 #: second opinion and stands alone.
 LENS_NAMES: Final[frozenset[str]] = frozenset({"single", "delivery", "compliance", "requirements"})
+
+
+def _guided(value: object) -> GuidedJson:
+    """Read the console's setting, falling back rather than failing.
+
+    Args:
+        value: Whatever the settings store holds for ``llm.guided_json``.
+
+    Returns:
+        The mode. An unrecognised value reads as ``"auto"``: a setting nobody can spell
+        is not a reason to stop a run, and ``auto`` degrades on its own.
+    """
+    raw = str(value).strip().lower()
+    return raw if raw in GUIDED_JSON else "auto"
 
 
 def parse_lenses(raw: str, key: str = "LLM_VERIFY_LENSES") -> tuple[str, ...]:
@@ -262,6 +292,7 @@ def resolved_llm_settings(session: Any, environ: Mapping[str, str] | None = None
         max_tokens_per_run=int(value("llm.max_tokens_per_run")),
         log_prompts=bool(value("llm.log_prompts")),
         pii_tripwire=bool(value("llm.pii_tripwire")),
+        guided_json=_guided(value("llm.guided_json")),
         prompt_version=LLMSettings.from_env(environ).prompt_version,
         # Both were built in 6.11e and dropped here, so a deployment with the database
         # reachable ran with the lenses pinned to ``single`` whatever ``.env`` said.

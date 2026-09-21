@@ -192,6 +192,21 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "remaining findings are left unverified and the run says so.",
     ),
     SettingSpec(
+        key="llm.guided_json",
+        env="LLM_GUIDED_JSON",
+        label="Ask the endpoint for JSON",
+        group="Model",
+        kind="enum",
+        default="auto",
+        choices=("off", "auto", "on"),
+        help="Whether to send the answer's schema with the request, so a serving stack "
+        "that supports guided decoding (vLLM does) cannot return anything that is not "
+        "that shape. `auto` sends it and, if the endpoint refuses the request, retries "
+        "once without it and stops trying until the next restart — so a gateway that "
+        "has never heard of it is not a broken deployment. `on` never stops trying; "
+        "`off` is the behaviour before this setting existed.",
+    ),
+    SettingSpec(
         key="llm.pii_tripwire",
         env="LLM_PII_TRIPWIRE",
         label="PII tripwire",

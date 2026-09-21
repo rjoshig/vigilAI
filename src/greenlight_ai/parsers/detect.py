@@ -10,10 +10,14 @@ Detection never assigns silently. The result carries a verdict of ``confident``,
 ``ambiguous``, or ``unknown``, so the caller can pre-select a type the user may correct
 rather than pretend to know.
 
-The phase doc allows a model to break a tie on sheet and column *names* only. That is
-deliberately not implemented here: the tiebreak would attach in :func:`detect`, after
-the candidates are sorted and the verdict comes out ``ambiguous``, and it would choose
-between the shortlist code already produced. What ships is the deterministic pass.
+The phase doc allowed a model to break a tie on sheet and column *names* only, and
+Phase 6.21e built it. It attaches in :func:`detect`, after the candidates are sorted
+and only when the verdict came out ``ambiguous``, and it chooses **between the
+shortlist code already produced** — it cannot introduce a type that scored below the
+floor. It is shown the workbook's sheet names and the shortlist's labels, never a cell
+(ADR-003), and the answer is checked against the shortlist and a confidence floor
+before it counts. A broken tie is still not silent: the verdict becomes ``reasoned``,
+which the upload form pre-selects and says was read rather than measured.
 """
 
 from __future__ import annotations
@@ -27,6 +31,8 @@ from typing import Final, Iterable, Sequence
 from sqlalchemy.orm import Session
 
 from greenlight_ai.db import catalog, models
+from greenlight_ai.llm.client import LLMClient
+from greenlight_ai.resolve.locate import locate
 from greenlight_ai.parsers.base import ParseError, ReportSheet
 from greenlight_ai.parsers.reports.xlsx import GenericReportParser
 
@@ -37,6 +43,7 @@ __all__ = [
     "CONFIDENT_SCORE",
     "CONFIDENT_MARGIN",
     "SCORE_FLOOR",
+    "break_tie",
     "fingerprint_workbook",
     "fingerprint_sheet",
     "fingerprint_samples",
@@ -165,7 +172,9 @@ class DetectionResult:
     """What detection concluded, and why.
 
     Attributes:
-        verdict: ``confident``, ``ambiguous``, or ``unknown``.
+        verdict: ``confident``, ``reasoned``, ``ambiguous``, or ``unknown``. ``reasoned``
+            is a tie the model broke (Phase 6.21e): a pre-selection a person should
+            glance at, never a silent assignment.
         candidates: Every scored type, best first.
         reason: One sentence a person can read on the upload form.
     """
@@ -347,6 +356,58 @@ def score(candidate: Fingerprint, reference: Fingerprint) -> float:
     return len(left & right) / len(left | right)
 
 
+def break_tie(
+    result: DetectionResult,
+    sheet_names: Sequence[str],
+    client: LLMClient | None,
+) -> DetectionResult:
+    """Let the model choose between candidates code scored equally (Phase 6.21e).
+
+    Only ever a *narrowing*: the model picks from the shortlist code already produced,
+    so a type that did not score above the floor cannot appear here however the answer
+    reads. What it is shown is sheet names and type labels — no cell, no row (ADR-003).
+
+    Args:
+        result: The deterministic result. Anything but ``ambiguous`` with two or more
+            candidates is returned unchanged.
+        sheet_names: The workbook's sheet names, which are what the model reads the
+            workbook by.
+        client: The adapter, or ``None`` when no call may be made.
+
+    Returns:
+        A ``reasoned`` result with the chosen type first, or ``result`` unchanged when
+        the model could not be asked, did not answer, or was not confident enough.
+    """
+    if client is None or result.verdict != "ambiguous" or len(result.candidates) < 2:
+        return result
+
+    labels = [c.label for c in result.candidates]
+    shown = ", ".join(repr(name) for name in sheet_names) or "nothing"
+    said = locate(
+        client,
+        labels[0],
+        f"which report type this workbook is. Its sheets are named {shown}",
+        labels,
+    )
+    if said is None:
+        return result
+
+    chosen = next((c for c in result.candidates if c.label == said.value), None)
+    if chosen is None:  # pragma: no cover - locate already checked the list
+        return result
+
+    _LOG.info("tie broken: %s (%.2f)", chosen.key, said.confidence)
+    return DetectionResult(
+        verdict="reasoned",
+        candidates=(chosen,) + tuple(c for c in result.candidates if c is not chosen),
+        reason=(
+            f"Code scored {labels[0]} and {labels[1]} about equally, so the model was "
+            f"shown the sheet names and asked which this is. It read {chosen.label}: "
+            f"{said.reason} Check that before you submit."
+        ),
+    )
+
+
 def _verdict(candidates: Sequence[Candidate], subject: str) -> DetectionResult:
     """Turn scored candidates into a verdict with a reason.
 
@@ -423,7 +484,12 @@ def _scored(
     return results
 
 
-def detect(session: Session, path: Path, data_dir: Path) -> DetectionResult:
+def detect(
+    session: Session,
+    path: Path,
+    data_dir: Path,
+    client: LLMClient | None = None,
+) -> DetectionResult:
     """Work out which artifact type a workbook is.
 
     Args:
@@ -448,6 +514,7 @@ def detect(session: Session, path: Path, data_dir: Path) -> DetectionResult:
 
     fingerprint = fingerprint_workbook(path)
     result = _verdict(_scored(fingerprint, references, per_sheet=False), "this workbook")
+    result = break_tie(result, sorted(fingerprint.sheets), client)
     _LOG.info(
         "detected %s for %s (best %s)",
         result.verdict,

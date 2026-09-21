@@ -43,6 +43,8 @@ from greenlight_ai.config.store import resolve
 from greenlight_ai.db import catalog, models, repository, drift
 from greenlight_ai.db.queue import JobQueue
 from greenlight_ai.db.types import utcnow
+from greenlight_ai.llm.factory import build_client
+from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.parsers import detect
 from greenlight_ai.parsers.base import ParseError
 from greenlight_ai.parsers.reports import parser_for
@@ -1502,7 +1504,11 @@ def detect_type(
         with scratch.open("wb") as handle:
             shutil.copyfileobj(file.file, handle)
         try:
-            result = detect.detect(session, scratch, data_dir)
+            # A model may break a tie code could not, choosing only from the shortlist
+            # code produced (Phase 6.21e). Built here rather than held open, because
+            # this route is called once per upload and most uploads never tie.
+            client = build_client(resolved_llm_settings(session))
+            result = detect.detect(session, scratch, data_dir, client)
             per_sheet = detect.detect_sheets(session, scratch, data_dir)
         except ParseError as exc:
             raise HTTPException(

@@ -232,29 +232,42 @@ No new refusal. The per-run token ceiling stays the only hard stop, as decided.
       showing tokens and no currency; cache hits excluded from spend; per-person totals
       reconciling with the deployment total.
 
-### 6.21e — The model call itself · ⬜ not started
+### 6.21e — The model call itself · ✅ complete
+
+**Built 2026-09-21**, ADR-052. Guided decoding ships on `auto`: the schema goes with
+the request, and an endpoint that refuses it costs one wasted call per process rather
+than one per stage. The detection tiebreak reuses the ladder's fifth rung and can only
+*narrow* the shortlist code already produced — it gets its own verdict, `reasoned`, so
+the upload form says the AI read it rather than measured it and still makes somebody
+press the button.
+
+**The re-check guard was stale in a way worth recording.** It counted rows in the call
+log, and a cache hit is a row. Stages 6 and 7 both gained model calls after it was
+written, every one of them cached on a re-check — so the guard would have fired on a
+re-check that behaved perfectly. It counts tokens now, which is what "the re-check is
+free" has always meant (ADR-051).
 
 The cheapest reliability work in the phase, and the most valuable before Phase 7.
 
-- [ ] **Send a JSON schema where the provider supports it.** `llm/openai_compat.py` posts
+- [x] **Send a JSON schema where the provider supports it.** `llm/openai_compat.py` posts
       only `model`, `messages`, `max_tokens` and `temperature`; `llm/anthropic.py` the
       same. [`design.md`](design.md) has recommended guided decoding since Phase 2 and it
       was never wired up. Behind a setting, degrading silently where the endpoint does not
       understand the field, so an in-house gateway that rejects it is not a broken
       deployment.
-- [ ] Record whether a call used guided decoding, so the golden set can measure what it
+- [x] Record whether a call used guided decoding, so the golden set can measure what it
       bought rather than assume.
-- [ ] **The model tiebreak for ambiguous artifact detection.** `parsers/detect.py`'s own
+- [x] **The model tiebreak for ambiguous artifact detection.** `parsers/detect.py`'s own
       docstring says the tiebreak the phase doc allowed was deliberately not implemented.
       It attaches after the deterministic pass returns `ambiguous`, chooses only between
       the shortlist code already produced, and runs on 6.21a's ladder.
-- [ ] **PDF OSL tables survive as tables.** `parsers/osl_pdf.py` flattens them into
+- [x] **PDF OSL tables survive as tables.** `parsers/osl_pdf.py` flattens them into
       paragraphs today. Scanned PDFs keep raising a clean `ParseError` — no OCR, which
       stays out of an air-gapped image.
-- [ ] Fix the stale re-check guard: `pipeline/run.py:181` warns that a re-check must make
+- [x] Fix the stale re-check guard: `pipeline/run.py:181` warns that a re-check must make
       no model calls, but stages 6 and 7 are both in `RECHECK_STAGES` and both can now
       call the model. Either the guard or the stage set is wrong; decide which, in an ADR.
-- [ ] Tests: a provider that rejects the schema field falling back rather than failing;
+- [x] Tests: a provider that rejects the schema field falling back rather than failing;
       the tiebreak choosing only from the shortlist; a PDF OSL with a criteria table
       yielding the same requirements as the Word original; the re-check guard agreeing
       with reality.

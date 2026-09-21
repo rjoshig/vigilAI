@@ -19,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 
 from greenlight_ai.llm.cache import LLMCache, MemoryCache
 from greenlight_ai.llm.client import (
+    Sent,
     CallLog,
     CallRecord,
     LLMBudgetExceeded,
@@ -108,19 +109,52 @@ class BaseClient(ABC):
             prompt_version=settings.prompt_version,
         )
         self.call_log = call_log or CallLog()
+        # Latched off by a provider whose endpoint refused a guided request, so a
+        # gateway that has never heard of the field costs one wasted call rather than
+        # one per stage (Phase 6.21e).
+        self._guided_refused = False
+
+    def _guided_wanted(self, schema: type[BaseModel] | None) -> bool:
+        """Whether this request should carry the answer's schema.
+
+        Args:
+            schema: The answer's shape, when the caller wants one.
+
+        Returns:
+            True when there is a schema to send, the setting asks for it, and the
+            endpoint has not already refused one this process.
+        """
+        if schema is None or self.settings.guided_json == "off":
+            return False
+        return self.settings.guided_json == "on" or not self._guided_refused
+
+    def _guided_refusal(self) -> None:
+        """Note that the endpoint refused a guided request.
+
+        Under ``auto`` this stops the client trying again until the next restart; under
+        ``on`` an administrator has said they want it, so nothing is latched and the
+        refusal surfaces as the error it is.
+        """
+        if self.settings.guided_json == "auto":
+            self._guided_refused = True
+            _LOG.info("endpoint refused a schema-guided request; falling back for this process")
 
     # -- provider hook -------------------------------------------------------------
 
     @abstractmethod
-    def _send(self, system: str, user: str) -> tuple[str, int, int]:
+    def _send(self, system: str, user: str, schema: type[BaseModel] | None = None) -> Sent:
         """Perform one provider-specific request.
 
         Args:
             system: The system prompt.
             user: The user prompt.
+            schema: The answer's shape, when the caller wants one. A provider that can
+                ask its endpoint to decode against a schema does so here and says it
+                did; one that cannot ignores it and the answer is validated after the
+                fact exactly as before (Phase 6.21e).
 
         Returns:
-            A ``(text, prompt_tokens, completion_tokens)`` triple.
+            What came back, and whether the endpoint was given the schema.
 
         Raises:
             LLMError: When the request fails.
@@ -261,7 +295,10 @@ class BaseClient(ABC):
         for attempt in range(MAX_RETRIES + 1):
             started = time.monotonic()
             try:
-                text, prompt_tokens, completion_tokens = self._send(system, attempt_user)
+                sent = self._send(system, attempt_user, schema)
+                text = sent.text
+                prompt_tokens = sent.prompt_tokens
+                completion_tokens = sent.completion_tokens
             except Exception as exc:
                 self.call_log.add(
                     CallRecord(
@@ -323,6 +360,7 @@ class BaseClient(ABC):
                     latency_ms=latency_ms,
                     retries=attempt,
                     ok=True,
+                    guided=sent.guided,
                 )
             )
             return LLMResult(

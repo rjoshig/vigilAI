@@ -687,9 +687,11 @@ function UnsureControl({
           <p>
             <b>
               {fileName}:{" "}
-              {detection.verdict === "ambiguous"
-                ? "this could be more than one thing."
-                : "this did not match any known report type."}
+              {detection.verdict === "reasoned"
+                ? "code could not tell these apart, so the AI read the sheet names."
+                : detection.verdict === "ambiguous"
+                  ? "this could be more than one thing."
+                  : "this did not match any known report type."}
             </b>{" "}
             {detection.reason}
           </p>
