@@ -176,6 +176,7 @@ A finding is one potential issue with a type, a severity, and links to its evide
 | Raised by a lens | One reader saw something in the same evidence the finding does not mention | Review |
 | Coverage gap | A requirement no report evidenced that reads like an obligation | Review |
 | Could not resolve attribute name | The OSL asks for `AT01`; the DIRT carries `debsc_burs_atyrt_at01_1` and nothing proves they are the same field | Review |
+| Attributes beyond the product code | The OSL asks for all attributes from `ABC`; the delivery carries fields `ABC` does not list. Never a failure — but the extract may have pulled more than the order asked for, and a field nobody asked for may be personal data | Low |
 
 **Three-way findings.** A finding names which leg of the reconciliation broke: OSL vs config, config vs reports, or OSL vs reports. For set types it lists the exact members, for example "TX in config, not in OSL" and "NV in state distribution, not in OSL or config".
 

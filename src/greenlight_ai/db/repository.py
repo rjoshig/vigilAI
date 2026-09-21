@@ -36,11 +36,15 @@ from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
 from greenlight_ai.rules.normalize import AliasTable
+from greenlight_ai.rules.product_codes import ProductCatalogue, ProductCodeEntry, ProductMember
 from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, Trace
 
 __all__ = [
     "load_admin_config",
     "load_aliases",
+    "load_product_codes",
+    "product_code_snapshot",
+    "catalogue_from_snapshot",
     "load_masked_columns",
     "load_prompt_examples",
     "save_context",
@@ -370,6 +374,135 @@ def load_aliases(session: Session, customer: str = "") -> AliasTable:
     for row in rows:
         mapping.setdefault(row.canonical_name, []).append(row.alias)
     return AliasTable.from_mapping(mapping)
+
+
+def load_product_codes(
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
+) -> ProductCatalogue:
+    """Build the product-code catalogue in force for one run (Phase 6.22c).
+
+    Args:
+        session: An open session.
+        customer: The run's customer, so a customer-scoped code applies.
+        configuration_id: The run's ETL configuration.
+        programme_code: The run's delivery programme.
+
+    Returns:
+        The catalogue, narrowest scope first so a configuration's own definition of
+        ``ABC`` wins over a customer's and a customer's over a global one. Empty on a
+        deployment that defines no codes, which checks exactly as it did before they
+        existed.
+    """
+    rows = list(
+        session.execute(
+            sa.select(models.ProductCode)
+            .where(models.ProductCode.is_active.is_(True))
+            .order_by(models.ProductCode.sort_order, models.ProductCode.id)
+        ).scalars()
+    )
+
+    #: Narrowest first, so ``ProductCatalogue.from_entries`` — which keeps the first
+    #: definition of a code — resolves the collision the way every other scoped
+    #: definition in the product resolves it (ADR-037).
+    rank = {"configuration": 0, "customer": 1, "programme": 2, "everywhere": 3}
+    in_scope = [
+        row
+        for row in rows
+        if scopes.parse(row.scope).covers(
+            customer=customer,
+            programme_code=programme_code,
+            configuration_id=configuration_id,
+        )
+    ]
+    in_scope.sort(key=lambda row: rank.get(scopes.parse(row.scope).kind, 9))
+
+    return ProductCatalogue.from_entries(
+        ProductCodeEntry(
+            code=row.code,
+            label=row.label,
+            description=row.description,
+            scope=scopes.token(row.scope),
+            members=tuple(
+                ProductMember(
+                    attribute=member.attribute_name,
+                    output_name=member.output_name,
+                    sort_order=member.sort_order,
+                )
+                for member in row.members
+            ),
+        )
+        for row in in_scope
+    )
+
+
+def product_code_snapshot(catalogue: ProductCatalogue) -> dict[str, Any]:
+    """The catalogue as a run stores it (Phase 6.22c).
+
+    The catalogue keeps no history, so this snapshot is what makes a finalized report
+    reproduce: a re-check next year expands the codes exactly as this run did, and says
+    so where the live catalogue has since moved.
+
+    Args:
+        catalogue: The catalogue in force at submission.
+
+    Returns:
+        ``{"codes": {code: [{"attribute": …, "output": …}]}}``, empty when no codes
+        are defined.
+    """
+    if not catalogue.entries:
+        return {}
+    return {
+        "codes": {
+            entry.code: [
+                {"attribute": member.attribute, "output": member.output_name}
+                for member in entry.members
+            ]
+            for entry in catalogue.entries.values()
+        }
+    }
+
+
+def catalogue_from_snapshot(stored: object) -> ProductCatalogue:
+    """Rebuild the catalogue a run was checked against.
+
+    Tolerant on purpose, the same as the record layout's snapshot: a stored value that
+    has gone strange gives an empty catalogue, which is the ordinary state and changes
+    no check's answer.
+
+    Args:
+        stored: What :func:`product_code_snapshot` wrote, as read back from JSON.
+
+    Returns:
+        The catalogue.
+    """
+    if not isinstance(stored, dict):
+        return ProductCatalogue()
+    codes = stored.get("codes")
+    if not isinstance(codes, dict):
+        return ProductCatalogue()
+
+    entries: list[ProductCodeEntry] = []
+    for code, members in codes.items():
+        if not isinstance(members, list):
+            continue
+        read: list[ProductMember] = []
+        for index, member in enumerate(members, start=1):
+            if not isinstance(member, dict):
+                continue
+            attribute = str(member.get("attribute") or "").strip()
+            if attribute:
+                read.append(
+                    ProductMember(
+                        attribute=attribute,
+                        output_name=str(member.get("output") or "").strip(),
+                        sort_order=index,
+                    )
+                )
+        entries.append(ProductCodeEntry(code=str(code), members=tuple(read)))
+    return ProductCatalogue.from_entries(entries)
 
 
 def load_prompt_examples(

@@ -448,6 +448,13 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     session.add(run)
     session.flush()
     run.expires_at = repository.expiry_from(run.created_at or utcnow())
+    # The product-code catalogue as it stands right now (Phase 6.22c). The catalogue
+    # keeps no history, so this is what makes a finalized report reproduce: a re-check
+    # next year expands the codes exactly as this run did, whatever an administrator
+    # has since changed. Empty on a deployment that defines no codes.
+    run.product_code_attributes = repository.product_code_snapshot(
+        repository.load_product_codes(session, run.customer_name, run.configuration_id, run.scope)
+    )
 
     stored: list[tuple[Any, int, str]] = []
     try:

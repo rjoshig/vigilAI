@@ -37,7 +37,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "geography_extra_state",
@@ -82,7 +85,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "score_value_mismatch",
@@ -124,7 +130,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "rule_missing_in_config",
@@ -165,7 +174,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "attributes_missing_in_report",
@@ -206,7 +218,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "attribute_renamed",
@@ -247,7 +262,10 @@
         "unevidenced": 5
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "record_layout_supplied",
@@ -286,7 +304,65 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
+    },
+    {
+      "name": "product_code_named",
+      "description": "An OSL that names a product code instead of listing the attributes, plus one code the catalogue does not define. The delivery also carries two fields the code never listed.",
+      "customer": "Acme Card Services",
+      "order_number": "ORD-10019",
+      "configuration_id": "CFG-SYNTH-PRODUCT-19",
+      "osl": "cases/product_code_named/osl.docx",
+      "config": "cases/product_code_named/config.json",
+      "reports": {
+        "dirt": "cases/product_code_named/reports/dirt.xlsx",
+        "state_distribution": "cases/product_code_named/reports/state_distribution.xlsx",
+        "field_distribution": "cases/product_code_named/reports/field_distribution.xlsx",
+        "counts": "cases/product_code_named/reports/counts.xlsx",
+        "billing": "cases/product_code_named/reports/billing.xlsx"
+      },
+      "record_layout": "cases/product_code_named/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "report_violates_rule"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": "",
+      "product_code": "ABC",
+      "unknown_product_codes": [
+        "DEF"
+      ],
+      "product_code_attributes": [
+        "SCORE_V3",
+        "AGE",
+        "ST",
+        "REV_UTIL",
+        "OPEN_TRADES",
+        "INQ_6M",
+        "TOT_BAL",
+        "DELQ_30"
+      ]
     },
     {
       "name": "counts_do_not_reconcile",
@@ -327,7 +403,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "operator_boundary_drift",
@@ -368,7 +447,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "extra_config_filter",
@@ -409,7 +491,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "report_violates_state_rule",
@@ -451,7 +536,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "missing_waterfall_step",
@@ -492,7 +580,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "reordered_waterfall",
@@ -533,7 +624,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "missing_state_in_config",
@@ -572,7 +666,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "unevidenced_requirement",
@@ -611,7 +708,10 @@
         "unevidenced": 1
       },
       "programme": "AS",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "report_nothing_checks",
@@ -651,7 +751,10 @@
         "unevidenced": 0
       },
       "programme": "AM",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "credit_date_not_in_reports",
@@ -692,7 +795,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": "2026-07-15"
+      "credit_date": "2026-07-15",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "layout_drift",
@@ -731,7 +837,10 @@
         "unevidenced": 1
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     }
   ]
 }

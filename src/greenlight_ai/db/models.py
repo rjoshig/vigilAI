@@ -214,6 +214,12 @@ class Run(Base):
     #: looked up, so a finding still reads correctly after the source run is purged —
     #: the same reasoning as ``configs.created_by`` being kept beside its user id.
     record_layout_source_date: Mapped[str] = mapped_column(sa.String(10), default="")
+    #: The product-code catalogue this run was checked against, snapshotted at
+    #: submission (Phase 6.22c): ``{"codes": {"ABC": [{"attribute": …}]}, "used": [...]}``.
+    #: The catalogue itself keeps no history, so this snapshot is what makes a
+    #: finalized report reproduce — and what lets a re-check say that the catalogue has
+    #: moved since. Empty is the ordinary state on a deployment that defines no codes.
+    product_code_attributes: Mapped[Any] = mapped_column(Json, default=dict)
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
@@ -487,6 +493,73 @@ class AttributeAlias(Base):
     canonical_name: Mapped[str] = mapped_column(sa.String(200), index=True)
     alias: Mapped[str] = mapped_column(sa.String(200), index=True)
     customer_name: Mapped[Optional[str]] = mapped_column(sa.String(200), nullable=True)
+
+
+class ProductCode(Base):
+    """A product code: a name for a set of attributes delivered together (6.22c).
+
+    An OSL says either *"deliver AT01, AT02, ST"* or *"deliver all attributes from
+    ABC"*. This is what makes the second mean the first. Expansion is code and never
+    the model (ADR-061): the model's only job is reading that a requirement names a
+    code, and this table is what decides whether that string names anything.
+
+    Scoped with the ADR-037 vocabulary, because one customer's ``ABC`` is not
+    another's.
+    """
+
+    __tablename__ = "product_codes"
+    __table_args__ = (sa.UniqueConstraint("code", "scope", name="uq_product_code_scope"),)
+
+    id: Mapped[int] = _pk()
+    code: Mapped[str] = mapped_column(sa.String(60), index=True)
+    label: Mapped[str] = mapped_column(sa.String(200), default="")
+    description: Mapped[str] = mapped_column(sa.Text, default="")
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: Mapped[str] = mapped_column(sa.String(200), default="everywhere", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+    notes: Mapped[str] = mapped_column(sa.Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+
+    members: Mapped[list["ProductCodeMember"]] = relationship(
+        back_populates="product_code",
+        cascade="all, delete-orphan",
+        order_by="ProductCodeMember.sort_order, ProductCodeMember.id",
+    )
+
+
+class ProductCodeMember(Base):
+    """One attribute a product code contains (Phase 6.22c).
+
+    An attribute two codes share is **one** term with one output name. The catalogue
+    does not enforce that with a constraint — the two rows are legitimately separate —
+    but :meth:`greenlight_ai.rules.product_codes.ProductCatalogue.conflicts` names any
+    disagreement rather than picking a winner, and the console refuses a save that
+    would create one.
+    """
+
+    __tablename__ = "product_code_members"
+    __table_args__ = (
+        sa.UniqueConstraint("product_code_id", "attribute_name", name="uq_product_member"),
+    )
+
+    id: Mapped[int] = _pk()
+    product_code_id: Mapped[int] = mapped_column(
+        sa.ForeignKey("product_codes.id", ondelete="CASCADE"), index=True
+    )
+    #: The attribute as the catalogue names it, which is what the OSL is expected to
+    #: say and what the checks ask for.
+    attribute_name: Mapped[str] = mapped_column(sa.String(200), index=True)
+    #: What the delivered file calls it, when that differs. Empty means it is
+    #: delivered under its own name, which is the ordinary case.
+    output_name: Mapped[str] = mapped_column(sa.String(200), default="")
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+
+    product_code: Mapped[ProductCode] = relationship(back_populates="members")
 
 
 class RecordLayoutRow(Base):

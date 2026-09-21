@@ -1,7 +1,8 @@
 # Phase 6.22 — Product codes, the record layout, and attribute resolution
 
-**Status:** 🟡 **in progress** — 6.22a and 6.22b complete 2026-09-21. The remaining
-parts are specified below and not started.
+**Status:** 🟡 **in progress** — 6.22a and 6.22b complete and 6.22c built, 2026-09-21.
+6.22c leaves two items open and says why under its heading. The remaining parts are
+specified below and not started.
 
 ## The goal, in the user's words
 
@@ -173,24 +174,50 @@ limit against the wall clock while its tests seeded notices around a frozen `NOW
 and red that afternoon — which is how it came to be failing on clean `dev`. The moment
 is an argument now, as `showing_now` has always taken one.
 
-### 6.22c — Product codes · ⬜ not started
+### 6.22c — Product codes · 🟡 in progress
 
-The OSL may say *"all attributes from ABC"* or name attributes directly. Both must
-reach the same check, against the record layout **and** the DIRT.
+**Built 2026-09-21**, ADR-061. The OSL may say *"all attributes from ABC"* or name
+attributes directly. Both must reach the same check, against the record layout **and**
+the DIRT.
 
-- [ ] `product_codes` and `product_code_members`. An attribute shared by two codes is
-      **one** term with one output name.
-- [ ] **Expansion is code, never the model.** The model's only job is reading that a
+**Found while building.** Expanding at the check was the obvious place and the wrong
+one. The golden set caught it: `product_code_named` raised `extra_rule_in_config`,
+because stage 6 was asking "does any OSL requirement cover this config element" against
+a rule whose `values` were still empty. A requirement that names a code and one that
+lists the same attributes state the same thing, so the expansion has to happen **once**,
+at the end of stage 2, where every later stage sees the result.
+
+- [x] `product_codes` and `product_code_members`. An attribute shared by two codes is
+      **one** term with one output name: the console refuses the save that would create
+      a disagreement, and `ProductCatalogue.conflicts` names any that exist rather than
+      picking a winner.
+- [x] **Expansion is code, never the model.** The model's only job is reading that a
       requirement names a product code; code looks up the members and code validates
-      that the code it was given is one that exists.
-- [ ] The `attributes` requirement gains `product_codes` beside `values`.
-- [ ] `Run.product_code_attributes`: the expanded list this run used, snapshotted at
+      that the code it was given is one that exists. An undefined code becomes an
+      `unknown_product_code` check that **fails** — never an empty expansion, which
+      would turn "check everything in ABC" into "check nothing" and pass the delivery.
+- [x] The `attributes` requirement gains `product_codes` beside `values`, and is the
+      one set type that may carry codes instead of values. The extraction prompt goes
+      to version 4.
+- [x] `Run.product_code_attributes`: the catalogue this run used, snapshotted at
       submission. The catalogue keeps **no history** — a run's snapshot is what makes a
       finalized report reproduce, and a re-check that disagrees with the current
-      catalogue says so.
-- [ ] An attribute delivered beyond the named code's list is a **low**-severity note,
-      never a failure. It is also a privacy signal: a field nobody asked for may be PII.
-- [ ] Upload as a master file or one file per product code.
+      catalogue says so in a run notice.
+- [x] An attribute delivered beyond the named code's list is a **low**-severity note,
+      never a failure. It is also a privacy signal: a field nobody asked for may be PII,
+      and the note says so. Silent unless a requirement actually names a code.
+- [ ] Upload as a master file or one file per product code. **Outstanding.** The
+      console creates and edits a code one at a time, which is what a person maintaining
+      a handful does. A bulk upload has the same problem the dictionary's does — no
+      import precedent exists anywhere in the product — and it belongs with that one,
+      after real files have shown what a master file actually looks like (Phase 7).
+- [x] The `product_code_named` fixture: an OSL naming `ABC` instead of listing, plus an
+      undefined `DEF`, plus two delivered fields the code never listed. The golden set
+      seeds `ABC` from the manifest and leaves `DEF` undefined, because an undefined
+      code producing a finding is part of the oracle.
+- [x] ADR-061.
+- [x] Tests: `tests/rules/test_product_codes.py`, `tests/api/test_product_codes.py`, and
+      the product-code class in `tests/rules/test_derive.py`.
 - [ ] **Phase 7 refines this**: how a product code is recognised in real OSL prose, and
       what real deliveries carry beyond their code, can only be tuned against real files.
 

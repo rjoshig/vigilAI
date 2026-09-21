@@ -23,6 +23,7 @@ from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from greenlight_ai.parsers.record_layout import RecordLayoutDocument
 from greenlight_ai.rules.normalize import AliasTable
+from greenlight_ai.rules.product_codes import ProductCatalogue
 from greenlight_ai.rules.schema import ConfigElement, Finding, Rule, Trace
 
 if TYPE_CHECKING:  # pragma: no cover - the import exists for the annotation only
@@ -196,6 +197,7 @@ class RunContext:
             delivery programme, its standing instructions, and per-artifact guidance
             (ADR-020). Empty by default, in which case prompts are unchanged.
         aliases: The attribute alias table, from the admin-ui in later phases.
+        product_codes: The product-code catalogue this run expands against.
         credit_date_labels: What this delivery calls its credit date, resolved from
             the scoped label table (Phase 6.14b).
         examples: The administrator's worked examples, by stage, already scoped to
@@ -229,6 +231,12 @@ class RunContext:
     admin: AdminConfig = field(default_factory=AdminConfig)
     guidance: RunGuidance = field(default_factory=RunGuidance)
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
+    #: The product codes in force for this run, as they stood at submission
+    #: (Phase 6.22c). A requirement that names a code is expanded against this, in
+    #: code and never by the model (ADR-061). Empty is the ordinary state on a
+    #: deployment that defines no codes, and checks exactly as it did before they
+    #: existed.
+    product_codes: ProductCatalogue = field(default_factory=ProductCatalogue)
     examples: Mapping[str, tuple[LibraryExample, ...]] = field(default_factory=dict)
     masked_columns: tuple[str, ...] = ()
     #: What this delivery calls its credit date, most specific scope first

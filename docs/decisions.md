@@ -2368,3 +2368,77 @@ morning it was written and red that afternoon; the moment is an argument now, as
 `showing_now` has always taken one.
 
 ---
+
+## ADR-061 — A product code is expanded by code; the model only reads that one was named
+
+**Status:** accepted · 2026-09-21 · Phase 6.22c
+
+**Context.** An OSL states the same requirement two ways. It either lists the fields —
+*"deliver AT01, AT02, ST"* — or names a product code that stands for them — *"deliver
+all attributes from ABC"*. The second form is how real orders are written, and the tool
+had no account of it at all: the extraction had nowhere to put a code, so a requirement
+stated that way either vanished or became an `attributes` requirement with an empty
+value list, which is a requirement that asks for nothing.
+
+**Decision.** A **product code** is reference data an administrator enters — a code, a
+set of member attributes, and a scope — and the expansion from one to the other happens
+in **code**.
+
+**The model's only job is reading that a requirement names a code.** That is reading
+meaning, which is exactly what ADR-001 gives it. Looking the code up, deciding which
+attributes it contains, and checking that the code exists at all are lookups and
+comparisons, which ADR-001 keeps in code. A model asked *"what is in ABC?"* answers
+plausibly and is believed, and a delivery is then validated against a list nobody wrote.
+So `ExtractedRequirement.product_codes` carries strings the model quoted, and
+`ProductCatalogue` is what decides whether those strings name anything.
+
+**An unknown code is a finding, never an empty expansion.** This is the decision the
+whole part turns on. Expanding a code the catalogue does not define to an empty
+attribute list turns *"check everything in ABC"* into *"check nothing"*, and the
+delivery passes — for the worst possible reason, that the tool could not say what was
+asked for. `unknown_product_code` is its own derived check, and it **fails** rather than
+degrading to "could not evaluate": the tool knows exactly what is wrong and exactly who
+fixes it. An administrator adds the code.
+
+**Expansion happens once, at the end of stage 2, into `rule.values`.** Not at each
+check. A requirement that names a code and one that lists the same attributes state the
+same thing, so every stage after extraction must see the same rule for both — stage 5
+comparing it with the config, stage 6 deciding whether a config element is covered,
+stage 7 checking the reports. Expanding only where a check happens left the reverse pass
+calling a correctly implemented config element *extra*, which is how this was found. The
+codes stay on the rule after expansion, because they are what the unknown-code check
+reports on and what the "beyond the code" note measures against.
+
+**An attribute two codes share is one term with one output name.** If ABC and DEF both
+carry `SCORE_V3` they carry the same one, delivered under one name. A catalogue where
+they disagree is a defect, not two opinions: the console refuses the save that would
+create one, and `ProductCatalogue.conflicts` names any that exist rather than picking a
+winner — the same rule the ladder follows when two candidates tie.
+
+**Carrying more than the code lists is a low-severity note and never a failure.** A
+delivery may legitimately carry a technical field, and a tool that failed a correct
+delivery over one teaches people to stop reading its findings. It is raised for two
+reasons rather than one, and says both: the extract may have pulled more than the order
+asked for, and **a field nobody asked for may be personal data that should not have
+left** (ADR-003). It is silent unless a requirement actually names a code, because
+without one there is no authoritative list of what was asked for and every unlisted
+column would be "extra" on every run.
+
+**The catalogue keeps no history; the run keeps a snapshot.** `Run.product_code_attributes`
+holds the catalogue as it stood at submission, which is what makes a finalized report
+reproduce — the same reasoning as ADR-024 for configuration notes and Phase 6.22b for the
+record layout. A re-check expands from the snapshot, and when the live catalogue has
+since moved it says so in a run notice: the catalogue cannot show *what* changed, but the
+run must not quietly reproduce an answer an administrator has moved on from.
+
+**Consequences.** `Rule.product_codes` sits beside `values`, and the `attributes`
+requirement is the one set type that may carry codes instead of values — every other
+still requires its values, because only attributes have a catalogue to be expanded from.
+The extraction prompt goes to version 4. Codes are scoped with the ADR-037 vocabulary,
+narrowest first, because one customer's `ABC` is not another's.
+
+**Phase 7 refines this**, and only Phase 7 can: how a product code is recognised in real
+OSL prose, and what real deliveries carry beyond their code, can be tuned against real
+files and nothing else.
+
+---

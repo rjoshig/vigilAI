@@ -23,6 +23,7 @@ from greenlight_ai.checks.reports import (
     DIRT_ATTRIBUTE_SHEET,
     REPORT_CHECKED_KINDS,
     CheckOutcome,
+    attribute_stats,
     run_derived_check,
     waterfall_rows,
 )
@@ -48,6 +49,11 @@ _VIOLATION_SEVERITY: Final[Severity] = "high"
 #: a prompt that is mostly a list stops being a prompt.
 _MAX_SHAPE_ATTRIBUTES: Final[int] = 60
 
+#: How many extra attributes a note quotes. Enough for a reviewer to recognise what is
+#: being talked about, few enough that the detail stays a sentence rather than a column
+#: dump — the same reasoning as ``resolve.attributes.MAX_NEAR``.
+_MAX_EXTRA_ATTRIBUTES: Final[int] = 10
+
 #: Below this the model was guessing, and a guess about a number it cannot check is
 #: not worth a reviewer's time. The same floor every other reading in the product
 #: uses.
@@ -70,7 +76,7 @@ def run(context: RunContext) -> None:
     resolver = _resolver(context)
 
     for rule in context.rules:
-        for check in derive_checks(rule):
+        for check in derive_checks(rule, context.product_codes):
             if check.kind not in REPORT_CHECKED_KINDS:
                 # Settled elsewhere: waterfall order is an OSL-against-config question
                 # and stage 5 answers it.
@@ -139,6 +145,7 @@ def run(context: RunContext) -> None:
                     )
                 )
 
+    _check_beyond_the_product_codes(context, resolver)
     _check_programme(context)
     _check_credit_date(context)
     _check_deliverable_count(context)
@@ -707,6 +714,81 @@ def _ask_what_it_reads_like(
         return None
     _ = declared
     return answer
+
+
+def _check_beyond_the_product_codes(context: RunContext, resolver: LayoutResolver) -> None:
+    """Note attributes the delivery carries that the named codes never asked for (6.22c).
+
+    A **low**-severity note and never a failure. A delivery may legitimately carry a
+    technical field, and a tool that failed a correct delivery for carrying one would
+    teach people to stop reading its findings.
+
+    It is worth a note for two reasons rather than one. The order may be wrong — the
+    extract pulled more than the OSL asked for. And **a field nobody asked for may be
+    PII**: the one case where carrying extra is not a harmless surplus but a disclosure
+    (ADR-003). The note says both, because a reviewer deciding which it is needs to
+    know that the second is possible.
+
+    Silent unless a requirement actually names a product code. Without a code there is
+    no authoritative list of what was asked for, and calling every unlisted column
+    "extra" against a hand-written attribute list would be noise on every run.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to.
+        resolver: The run's layout resolver, for reading the DIRT's attribute sheet.
+    """
+    named = tuple(
+        dict.fromkeys(code for rule in context.rules for code in rule.product_codes if code.strip())
+    )
+    if not named:
+        return
+
+    stats = attribute_stats(context.reports, context.aliases, resolver)
+    delivered = tuple(stat.name for stat in stats.values())
+    if not delivered:
+        return
+
+    extra = context.product_codes.beyond(named, delivered)
+    if not extra:
+        return
+
+    shown = ", ".join(extra[:_MAX_EXTRA_ATTRIBUTES])
+    more = (
+        f" and {len(extra) - _MAX_EXTRA_ATTRIBUTES} more"
+        if len(extra) > _MAX_EXTRA_ATTRIBUTES
+        else ""
+    )
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="attributes_beyond_product_code",
+            severity="low",
+            title=(
+                f"The delivery carries {len(extra)} attribute(s) "
+                f"{', '.join(named)} does not list"
+            ),
+            detail=(
+                f"Product code {', '.join(named)} lists what this order asked for, and "
+                f"the DIRT also carries {shown}{more}. This is not a failure — a "
+                "delivery may legitimately carry a technical field — but it is worth "
+                "two looks: the extract may have pulled more than the order asked "
+                "for, and a field nobody asked for may be personal data that should "
+                "not have left."
+            ),
+            leg="osl_reports",
+            evidence=Evidence(
+                report_name="dirt",
+                report_sheet=DIRT_ATTRIBUTE_SHEET,
+                report_value=f"{len(delivered)} attributes delivered",
+            ),
+        )
+    )
+    _LOG.info(
+        "run %s: %d attribute(s) beyond product code(s) %s",
+        context.run_id,
+        len(extra),
+        ", ".join(named),
+    )
 
 
 def _check_programme(context: RunContext) -> None:

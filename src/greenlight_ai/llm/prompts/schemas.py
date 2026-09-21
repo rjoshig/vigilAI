@@ -53,6 +53,11 @@ class ExtractedRequirement(BaseModel):
     req_type: ReqType
     conditions: list[ExtractedCondition] = Field(default_factory=list)
     values: list[str] = Field(default_factory=list)
+    #: Product codes the requirement names rather than listing attributes, e.g.
+    #: ``["ABC"]`` for "deliver all attributes from ABC" (Phase 6.22c). Reading that a
+    #: requirement names a code is reading meaning, which is the model's job; looking
+    #: up what the code contains and checking that it exists is code's (ADR-061).
+    product_codes: list[str] = Field(default_factory=list)
     mode: Mode | None = None
     steps: list[str] = Field(default_factory=list)
     quantity: float | None = None

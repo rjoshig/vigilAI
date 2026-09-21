@@ -38,6 +38,11 @@ from greenlight_ai.llm.settings import LLMSettings  # noqa: E402
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext  # noqa: E402
 from greenlight_ai.pipeline.guidance import RunGuidance  # noqa: E402
 from greenlight_ai.pipeline.run import PipelineError, run_pipeline  # noqa: E402
+from greenlight_ai.rules.product_codes import (  # noqa: E402
+    ProductCatalogue,
+    ProductCodeEntry,
+    ProductMember,
+)
 
 _LOG: Final = logging.getLogger("golden_set")
 
@@ -104,6 +109,32 @@ ADVISORY_TYPES: Final[frozenset[str]] = frozenset(
 )
 
 
+def _catalogue_for(case: Mapping[str, object]) -> ProductCatalogue:
+    """The product codes a case assumes an administrator has defined (Phase 6.22c).
+
+    Built from the manifest rather than from a fixture file, because a product code is
+    reference data an administrator enters, not something that arrives with a delivery.
+    A case that names no code gets an empty catalogue, which is every case but one and
+    is the state the product ships in.
+
+    Args:
+        case: The manifest entry.
+
+    Returns:
+        The catalogue. Codes the case lists as unknown are deliberately left out: an
+        undefined code producing a finding is part of the oracle, not a gap in it.
+    """
+    code = str(case.get("product_code") or "")
+    if not code:
+        return ProductCatalogue()
+    attributes = case.get("product_code_attributes")
+    members = tuple(
+        ProductMember(str(name), "", index)
+        for index, name in enumerate(attributes if isinstance(attributes, list) else [], start=1)
+    )
+    return ProductCatalogue.from_entries([ProductCodeEntry(code=code, members=members)])
+
+
 def score_case(
     case: Mapping[str, object],
     root: Path,
@@ -147,6 +178,11 @@ def score_case(
         client=client,
         customer=str(case["customer"]),
         aliases=FIXTURE_ALIASES,
+        # The catalogue this case assumes (Phase 6.22c). A case that names a product
+        # code carries what an administrator would have defined for it; the codes it
+        # lists under ``unknown_product_codes`` are deliberately absent, because an
+        # undefined code producing a finding is part of the oracle.
+        product_codes=_catalogue_for(case),
         guidance=RunGuidance(scope_code=programme, credit_date=str(case.get("credit_date", ""))),
         verify_lenses=lenses,
     )

@@ -45,6 +45,9 @@ __all__ = [
     "AliasOut",
     "MaskedColumnIn",
     "MaskedColumnOut",
+    "ProductCodeIn",
+    "ProductCodeMemberIn",
+    "ProductCodeOut",
     "UsageOut",
 ]
 
@@ -357,6 +360,59 @@ class AnnouncementOut(AnnouncementIn):
     #: Whether it is showing at this moment, so the console can say so rather than
     #: leaving an administrator to compare dates in their head.
     showing_now: bool = False
+
+
+class ProductCodeMemberIn(BaseModel):
+    """One attribute a product code contains (Phase 6.22c)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The attribute as the catalogue names it, which is what the OSL is expected to
+    #: say and what the checks ask for.
+    attribute: str = Field(min_length=1, max_length=200)
+    #: What the delivered file calls it, when that differs. Empty means it is
+    #: delivered under its own name, which is the ordinary case.
+    output_name: str = Field(default="", max_length=200)
+
+
+class ProductCodeIn(BaseModel):
+    """A product code, as the admin-ui submits it (Phase 6.22c).
+
+    An OSL says either *"deliver AT01, AT02, ST"* or *"deliver all attributes from
+    ABC"*, and this is what makes the second mean the first. The model reads that a
+    requirement names a code; **code** looks up what the code contains and checks that
+    it exists at all (ADR-061).
+
+    Scoped with the one scope vocabulary (ADR-029, ADR-037), because one customer's
+    ``ABC`` is not another's.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=60)
+    label: str = Field(default="", max_length=200)
+    description: str = ""
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    members: list[ProductCodeMemberIn] = Field(default_factory=list)
+    is_active: bool = True
+    sort_order: int = 100
+    notes: str = ""
+
+
+class ProductCodeOut(ProductCodeIn):
+    """A stored product code."""
+
+    id: int
+    scope_label: str = ""
+    created_by: str = ""
+    #: How many attributes it contains, so a list does not have to count them.
+    member_count: int = 0
+    #: Attributes this code shares with another under a **different** delivered name.
+    #: A shared attribute is one term with one output name, so a disagreement is a
+    #: defect in the catalogue rather than two opinions to choose between; naming it is
+    #: what lets an administrator fix it.
+    conflicts: list[str] = Field(default_factory=list)
 
 
 class FieldLabelIn(BaseModel):

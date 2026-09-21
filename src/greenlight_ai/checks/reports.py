@@ -57,6 +57,7 @@ REPORT_CHECKED_KINDS: Final[frozenset[str]] = frozenset(
         "value_set_subset",
         "value_set_excludes",
         "fields_present",
+        "unknown_product_code",
         "counts_reconcile",
         "count_equals",
     }
@@ -383,6 +384,8 @@ def run_derived_check(
         return _check_value_set(check, reports, resolver)
     if check.kind == "fields_present":
         return _check_fields_present(check, reports, aliases, resolver)
+    if check.kind == "unknown_product_code":
+        return _check_unknown_product_code(check)
     if check.kind == "counts_reconcile":
         return _check_counts_reconcile(reports, resolver)
     if check.kind == "count_equals":
@@ -598,6 +601,39 @@ def _check_fields_present(
         sheet=DIRT_ATTRIBUTE_SHEET,
         observed=f"{len(stats)} attributes present",
         unresolved=tuple(unresolved),
+    )
+
+
+def _check_unknown_product_code(check: DerivedCheck) -> CheckOutcome:
+    """Report that a requirement names a product code nobody defined (Phase 6.22c).
+
+    This never reads a report. It exists because the alternative — expanding an unknown
+    code to an empty attribute list — turns "check everything in ABC" into "check
+    nothing", and a delivery then passes for the worst possible reason: the tool could
+    not say what was asked for.
+
+    It fails rather than degrading to "could not evaluate", and the difference is
+    deliberate. The tool knows exactly what is wrong and exactly who fixes it: the
+    catalogue is missing a code the OSL names, and an administrator adds it. That is a
+    defect in the setup, not an unanswered question about the delivery.
+
+    Args:
+        check: The derived check, whose ``field_name`` carries the code.
+
+    Returns:
+        The outcome, always failed, naming the code.
+    """
+    code = check.field_name
+    return CheckOutcome(
+        passed=False,
+        detail=(
+            f"The OSL asks for the attributes of product code {code!r}, and the "
+            "catalogue does not define it. Nothing was checked against that code: an "
+            "undefined code expands to no attributes, which would let the delivery "
+            "pass without any of them being looked for. Add the code in the admin "
+            "console, then re-check."
+        ),
+        observed=f"product code {code} is not defined",
     )
 
 

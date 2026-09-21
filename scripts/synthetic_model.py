@@ -95,6 +95,23 @@ def extract_responder(_system: str, user: str) -> str:
             }
         )
 
+    # A section that names a product code instead of listing fields (Phase 6.22c).
+    # The stand-in reads the code and nothing else, which is the model's whole job
+    # here: what the code contains is looked up by code (ADR-061).
+    codes = re.search(r"Deliver all attributes from product code ([^.]+?) for", section)
+    if codes and "Output attributes" in section:
+        requirements.append(
+            {
+                "req_type": "attributes",
+                "product_codes": [c.strip() for c in codes.group(1).split(",") if c.strip()],
+                "mode": "include",
+                "action": "accept",
+                "applies_to": "accepts",
+                "source_text": "Deliver all attributes from the named product code(s).",
+                "confidence": 0.93,
+            }
+        )
+
     attributes = re.findall(r"^\d+\. ([A-Z_0-9]+)$", section, re.MULTILINE)
     if attributes and "Output attributes" in section:
         requirements.append(

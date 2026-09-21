@@ -1962,6 +1962,231 @@ def delete_announcement(
     )
 
 
+def _product_code_out(
+    row: models.ProductCode, conflicts: Mapping[str, list[str]] | None = None
+) -> wire.ProductCodeOut:
+    """Render one product code for the console.
+
+    Args:
+        row: The stored code, with its members loaded.
+        conflicts: Attribute to the lines describing its disagreements, when the caller
+            has computed them for the whole catalogue. Passed in rather than computed
+            per row, because a conflict is by definition between two codes.
+
+    Returns:
+        The wire model.
+    """
+    found = conflicts or {}
+    return wire.ProductCodeOut(
+        id=row.id,
+        code=row.code,
+        label=row.label,
+        description=row.description,
+        scope=scopes.token(row.scope),
+        scope_label=scopes.label(row.scope),
+        members=[
+            wire.ProductCodeMemberIn(attribute=m.attribute_name, output_name=m.output_name)
+            for m in row.members
+        ],
+        is_active=row.is_active,
+        sort_order=row.sort_order,
+        notes=row.notes,
+        created_by=row.created_by,
+        member_count=len(row.members),
+        conflicts=sorted(
+            {line for m in row.members for line in found.get(squashed(m.attribute_name), [])}
+        ),
+    )
+
+
+def _conflicts_by_attribute(session: Session) -> dict[str, list[str]]:
+    """Which attributes two codes deliver under different names (Phase 6.22c).
+
+    A shared attribute is **one** term with one output name, so a disagreement is a
+    defect in the catalogue rather than two opinions to choose between. This names it;
+    choosing between them would be the comparison ADR-001 keeps out of a guess's hands.
+
+    Args:
+        session: The request's session.
+
+    Returns:
+        The squashed attribute name to the lines describing its disagreements.
+    """
+    catalogue = repository.load_product_codes(session)
+    out: dict[str, list[str]] = {}
+    for line in catalogue.conflicts():
+        attribute = line.split(":", 1)[0]
+        out.setdefault(squashed(attribute), []).append(line)
+    return out
+
+
+@router.get("/product-codes", response_model=list[wire.ProductCodeOut])
+def list_product_codes(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.ProductCodeOut]:
+    """List the product codes (Phase 6.22c).
+
+    A product code names a set of attributes delivered together, so an OSL saying
+    *"deliver all attributes from ABC"* states as much as one that lists them. What a
+    code contains is looked up by code and never read by the model (ADR-061), which is
+    what makes this table worth keeping accurate.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The codes in display order, each carrying any disagreement it has with another
+        code about what a shared attribute is delivered as.
+    """
+    conflicts = _conflicts_by_attribute(session)
+    rows = session.execute(
+        sa.select(models.ProductCode).order_by(
+            models.ProductCode.sort_order, models.ProductCode.code
+        )
+    ).scalars()
+    return [_product_code_out(row, conflicts) for row in rows]
+
+
+@router.post(
+    "/product-codes", response_model=wire.ProductCodeOut, status_code=status.HTTP_201_CREATED
+)
+def save_product_code(
+    payload: wire.ProductCodeIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.ProductCodeOut:
+    """Create or update a product code and everything it contains.
+
+    Upserted on ``(code, scope)``: saving the same code for the same scope replaces its
+    members wholesale, because a code is its member list and keeping stale rows would
+    make a delivery be checked against attributes nobody asks for any more.
+
+    Args:
+        payload: The code and its attributes.
+        session: The request's session.
+        user: The caller, recorded against the row.
+
+    Returns:
+        The stored code.
+
+    Raises:
+        HTTPException: 422 when the code names the same attribute twice, or when it
+            would deliver a shared attribute under a different name from another code.
+    """
+    scope = scopes.token(payload.scope)
+    seen: dict[str, str] = {}
+    for member in payload.members:
+        key = squashed(member.attribute)
+        if not key:
+            continue
+        if key in seen:
+            raise HTTPException(
+                HTTP_422,
+                f"{payload.code} names {member.attribute!r} twice; an attribute appears "
+                "once in a code",
+            )
+        seen[key] = member.output_name or member.attribute
+
+    # A shared attribute is one term with one output name (ADR-061). Refused here, at
+    # the one moment a person can still fix it, rather than reported later as a
+    # catalogue defect that produces findings nobody can act on.
+    for other in session.execute(
+        sa.select(models.ProductCode).where(models.ProductCode.is_active.is_(True))
+    ).scalars():
+        if other.code == payload.code and other.scope == scope:
+            continue
+        for stored in other.members:
+            key = squashed(stored.attribute_name)
+            delivered = stored.output_name or stored.attribute_name
+            if key in seen and squashed(seen[key]) != squashed(delivered):
+                raise HTTPException(
+                    HTTP_422,
+                    f"{other.code} already delivers {stored.attribute_name!r} as "
+                    f"{delivered!r}; an attribute two codes share is one term with one "
+                    "output name. Change one of them, or give this code its own "
+                    "attribute.",
+                )
+
+    row = session.execute(
+        sa.select(models.ProductCode).where(
+            models.ProductCode.code == payload.code, models.ProductCode.scope == scope
+        )
+    ).scalar_one_or_none()
+    created = row is None
+    if row is None:
+        row = models.ProductCode(
+            code=payload.code.strip(),
+            scope=scope,
+            created_by=user.name,
+            created_by_user_id=user.id,
+        )
+        session.add(row)
+
+    row.label = payload.label.strip()
+    row.description = payload.description
+    row.is_active = payload.is_active
+    row.sort_order = payload.sort_order
+    row.notes = payload.notes
+    row.members.clear()
+    session.flush()
+    for order, member in enumerate(payload.members, start=1):
+        if not member.attribute.strip():
+            continue
+        row.members.append(
+            models.ProductCodeMember(
+                attribute_name=member.attribute.strip(),
+                output_name=member.output_name.strip(),
+                sort_order=order,
+            )
+        )
+    session.flush()
+
+    repository.audit(
+        session,
+        "admin.product_code_created" if created else "admin.product_code_saved",
+        detail=f"{row.code} @ {scope} ({len(row.members)} attribute(s))",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _product_code_out(row, _conflicts_by_attribute(session))
+
+
+@router.delete("/product-codes/{code_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_product_code(
+    code_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+    _confirmed: None = Depends(require_delete_word),
+) -> None:
+    """Delete a product code and its members.
+
+    Runs that already used it are unaffected: each snapshotted the catalogue at
+    submission, which is what makes a finalized report reproduce (Phase 6.22c).
+
+    Args:
+        code_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.ProductCode, code_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"product code {code_id} not found")
+    code, scope = row.code, row.scope
+    session.delete(row)
+    repository.audit(
+        session,
+        "admin.product_code_deleted",
+        detail=f"{code} @ {scope}",
+        user_id=user.id,
+        actor=user.name,
+    )
+
+
 @router.get("/field-labels", response_model=list[wire.FieldLabelOut])
 def list_field_labels(
     session: Session = Depends(get_session),

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Final, Literal, Sequence
 
 from greenlight_ai.rules.normalize import Interval, interval_from_condition
+from greenlight_ai.rules.product_codes import ProductCatalogue
 from greenlight_ai.rules.schema import Rule
 
 __all__ = ["CheckKind", "DerivedCheck", "derive_checks", "INVERSE_OPERATOR"]
@@ -27,6 +28,10 @@ CheckKind = Literal[
     "value_set_superset",
     "value_set_excludes",
     "fields_present",
+    #: A requirement names a product code the catalogue does not define (Phase 6.22c).
+    #: Its own check rather than a silent empty expansion, because "check everything in
+    #: ABC" must never quietly become "check nothing".
+    "unknown_product_code",
     "step_order",
     "count_equals",
     "counts_reconcile",
@@ -57,6 +62,8 @@ class DerivedCheck:
         value: The number the check compares against, when it has one.
         values: The set the check compares against, when it has one.
         steps: The expected step order, for ``step_order``.
+        values_from: The product codes ``values`` was expanded from, when it was
+            (Phase 6.22c). Empty for a requirement that listed its attributes.
         rule_id: The rule this came from, so a failure names its requirement.
         description: The check in words, shown as the reason on a finding.
     """
@@ -67,15 +74,22 @@ class DerivedCheck:
     value: float | None = None
     values: tuple[str, ...] = ()
     steps: tuple[str, ...] = ()
+    values_from: tuple[str, ...] = ()
     rule_id: str = ""
     description: str = ""
 
 
-def derive_checks(rule: Rule) -> tuple[DerivedCheck, ...]:
+def derive_checks(
+    rule: Rule, catalogue: ProductCatalogue | None = None
+) -> tuple[DerivedCheck, ...]:
     """Derive every report expectation implied by a rule.
 
     Args:
         rule: The canonical rule, from the OSL or from the config.
+        catalogue: The product codes in force, when the caller has them (Phase 6.22c).
+            ``None`` is the state every caller was in before product codes existed: a
+            requirement that names one then derives no check and says why, rather than
+            quietly expanding to nothing.
 
     Returns:
         The checks, empty when the rule implies nothing checkable in a report (a free-text
@@ -89,15 +103,7 @@ def derive_checks(rule: Rule) -> tuple[DerivedCheck, ...]:
         field_name = rule.conditions[0].field_name if rule.conditions else ""
         return _set_checks(rule, field_name=field_name)
     if rule.req_type == "attributes":
-        return (
-            DerivedCheck(
-                kind="fields_present",
-                population=_population(rule),
-                values=rule.values,
-                rule_id=rule.rule_id,
-                description=f"{len(rule.values)} requested attributes must be present",
-            ),
-        )
+        return _attribute_checks(rule, catalogue)
     if rule.req_type == "waterfall":
         return (
             DerivedCheck(
@@ -125,6 +131,69 @@ def derive_checks(rule: Rule) -> tuple[DerivedCheck, ...]:
             ),
         )
     return ()
+
+
+def _attribute_checks(rule: Rule, catalogue: ProductCatalogue | None) -> tuple[DerivedCheck, ...]:
+    """The checks an ``attributes`` requirement implies, product codes expanded.
+
+    Expansion is a lookup, which is why it happens here in code and not in the model
+    (ADR-061). A code the catalogue does not define becomes an ``unknown_product_code``
+    check rather than nothing at all: expanding it to an empty attribute list would
+    turn "check everything in ABC" into "check nothing", and the delivery would pass
+    for the worst possible reason.
+
+    Args:
+        rule: The requirement.
+        catalogue: The codes in force, or ``None``.
+
+    Returns:
+        A ``fields_present`` check over the named attributes and everything the named
+        codes expand to, plus one ``unknown_product_code`` check per code nobody
+        defined.
+    """
+    named = tuple(rule.values)
+    if not rule.product_codes:
+        return (
+            DerivedCheck(
+                kind="fields_present",
+                population=_population(rule),
+                values=named,
+                rule_id=rule.rule_id,
+                description=f"{len(named)} requested attributes must be present",
+            ),
+        )
+
+    expansion = (catalogue or ProductCatalogue()).expand(rule.product_codes)
+    # De-duplicated with the names the requirement also listed, keeping the order the
+    # requirement stated them in: "AT01 plus everything in ABC" asks for AT01 once.
+    wanted = tuple(dict.fromkeys(named + expansion.attributes))
+
+    checks: list[DerivedCheck] = []
+    if wanted:
+        codes = ", ".join(expansion.by_code) or ", ".join(rule.product_codes)
+        checks.append(
+            DerivedCheck(
+                kind="fields_present",
+                population=_population(rule),
+                values=wanted,
+                values_from=tuple(expansion.by_code),
+                rule_id=rule.rule_id,
+                description=(
+                    f"{len(wanted)} requested attributes must be present " f"(product code {codes})"
+                ),
+            )
+        )
+    for code in expansion.unknown:
+        checks.append(
+            DerivedCheck(
+                kind="unknown_product_code",
+                population=_population(rule),
+                field_name=code,
+                rule_id=rule.rule_id,
+                description=f"product code {code!r} must be defined in the catalogue",
+            )
+        )
+    return tuple(checks)
 
 
 def _population(rule: Rule) -> str:

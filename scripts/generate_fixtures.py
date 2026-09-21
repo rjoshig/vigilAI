@@ -173,6 +173,14 @@ class Case:
     #: Fields the layout declares that the OSL never asked for. A delivery carrying
     #: more than the order named is a low-severity note, never a failure (6.22c).
     record_layout_extra: tuple[str, ...] = ()
+    #: A product code the OSL names instead of listing the attributes (Phase 6.22c).
+    #: The OSL then says "deliver all attributes from ABC" and the attributes
+    #: themselves are looked up in the catalogue — by code, never by the model.
+    product_code: str = ""
+    #: Codes the OSL names that the catalogue is not expected to define, so the case
+    #: exercises the answer that matters most: an undefined code must never expand to
+    #: nothing and let the delivery pass.
+    unknown_product_codes: tuple[str, ...] = ()
 
     def delivered(self, name: str) -> str:
         """What the DIRT calls one attribute.
@@ -387,6 +395,39 @@ CASES: Final[tuple[Case, ...]] = (
         notes=(
             "The record layout case: it parses through the ladder, it is promoted on "
             "finalize, and the next delivery of this configuration borrows it."
+        ),
+    ),
+    Case(
+        name="product_code_named",
+        description=(
+            "An OSL that names a product code instead of listing the attributes, plus "
+            "one code the catalogue does not define. The delivery also carries two "
+            "fields the code never listed."
+        ),
+        customer=CUSTOMERS[0],
+        order_number="ORD-10019",
+        configuration_id="CFG-SYNTH-PRODUCT-19",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:8],
+        config_attributes=ATTRIBUTES[:8],
+        report_attributes=ATTRIBUTES[:8],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        product_code="ABC",
+        # A code nobody defined must never expand to nothing. "Check everything in
+        # DEF" silently becoming "check nothing" would pass the delivery for the worst
+        # possible reason: the tool could not say what was asked for.
+        unknown_product_codes=("DEF",),
+        record_layout=True,
+        record_layout_extra=("INTERNAL_SEQ", "LOAD_TIMESTAMP"),
+        expected_findings=("report_violates_rule",),
+        notes=(
+            "The product-code case. Seed ABC with this case's attributes and the "
+            "fields_present check passes; leave DEF undefined and it is reported."
         ),
     ),
     Case(
@@ -718,11 +759,21 @@ def write_osl(case: Case, path: Path) -> None:
         row[2].text = _format_number(criterion.osl_value)
 
     document.add_heading("5 Output attributes", level=1)
-    document.add_paragraph(
-        f"Deliver the following {len(case.osl_attributes)} attributes for every accepted record."
-    )
-    for index, attribute in enumerate(case.osl_attributes, start=1):
-        document.add_paragraph(f"{index}. {attribute}", style="List Number")
+    if case.product_code:
+        # The OSL names a code rather than listing fields (Phase 6.22c). What the code
+        # contains is looked up in the catalogue; the document does not say, which is
+        # exactly the case the expansion exists for.
+        named = ", ".join((case.product_code,) + case.unknown_product_codes)
+        document.add_paragraph(
+            f"Deliver all attributes from product code {named} for every accepted record."
+        )
+    else:
+        document.add_paragraph(
+            f"Deliver the following {len(case.osl_attributes)} attributes for every "
+            "accepted record."
+        )
+        for index, attribute in enumerate(case.osl_attributes, start=1):
+            document.add_paragraph(f"{index}. {attribute}", style="List Number")
 
     document.add_heading("6 Processing order", level=1)
     steps = ", then ".join(case.waterfall[1:])
@@ -1110,6 +1161,11 @@ def generate(case: Case, root: Path) -> dict[str, object]:
         },
         "programme": case.programme,
         "credit_date": case.credit_date,
+        # The product codes the OSL names, and what the catalogue must define for
+        # them, so a test can seed the catalogue this case assumes (Phase 6.22c).
+        "product_code": case.product_code,
+        "unknown_product_codes": list(case.unknown_product_codes),
+        "product_code_attributes": list(case.osl_attributes) if case.product_code else [],
     }
 
 
