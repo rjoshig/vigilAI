@@ -113,6 +113,13 @@ FindingType = Literal[
     #: check it unblocked ran and reported separately, and this says the layout had to
     #: be reasoned about so a reviewer can disagree with the reading itself.
     "layout_reasoned",
+    #: An attribute the OSL asked for that the tool could not locate in the report,
+    #: although the report carries names resembling it (Phase 6.22a). Always ``review``
+    #: severity, and deliberately **not** ``report_violates_rule``: a delivery whose
+    #: DIRT spells ``AT01`` as ``debsc_burs_atyrt_at01_1`` is correct, and calling that
+    #: a missing attribute at high severity was a false positive asserted as fact.
+    #: An attribute nothing in the report resembles is still a violation.
+    "attribute_not_resolved",
 ]
 
 #: A reviewer's decision on a finding.

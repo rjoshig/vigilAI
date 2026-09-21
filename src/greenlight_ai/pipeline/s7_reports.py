@@ -85,9 +85,29 @@ def run(context: RunContext) -> None:
                     context.coverage_record.unevaluated(rule.rule_id)
                 else:
                     context.coverage_record.checked(rule.rule_id, outcome.report_kind or "")
+                suffix = f" ({part_name})" if part_name else ""
+                # An attribute the report probably carries under another spelling is
+                # its own record, raised whether or not the check itself failed
+                # (Phase 6.22a). It is never a violation: the delivery may be perfect
+                # and the tool merely unable to prove which column is which.
+                if outcome.unresolved:
+                    context.add_finding(
+                        Finding(
+                            finding_id=context.next_finding_id(),
+                            type="attribute_not_resolved",
+                            severity="review",
+                            title=(
+                                f"Could not tell what the report calls "
+                                f"{', '.join(outcome.unresolved)}{suffix}"
+                            ),
+                            detail=outcome.detail,
+                            leg="osl_reports",
+                            rule_id=rule.rule_id,
+                            evidence=_evidence(rule, outcome),
+                        )
+                    )
                 if outcome.passed is True:
                     continue
-                suffix = f" ({part_name})" if part_name else ""
                 if outcome.passed is None:
                     context.add_finding(
                         Finding(

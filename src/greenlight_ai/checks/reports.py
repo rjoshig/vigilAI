@@ -17,6 +17,7 @@ from typing import Final, Mapping, Sequence
 
 from greenlight_ai.checks.named_values import to_number
 from greenlight_ai.parsers.base import ReportCell, ReportDocument, ReportKind, ReportSheet
+from greenlight_ai.resolve import attributes as attribute_match
 from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.rules.derive import DerivedCheck
 from greenlight_ai.rules.normalize import AliasTable, normalize_field_name
@@ -196,6 +197,10 @@ class CheckOutcome:
         sheet: Which sheet.
         cell: The cell address, when a single cell carried the value.
         observed: What the report showed.
+        unresolved: Attributes the check could not locate in the report although
+            something there resembles them (Phase 6.22a). Typed rather than folded into
+            ``detail``, because stage 7 raises a review record from it and a caller
+            reading it out of a sentence is how the two states got conflated before.
     """
 
     passed: bool | None
@@ -204,6 +209,7 @@ class CheckOutcome:
     sheet: str = ""
     cell: str = ""
     observed: str = ""
+    unresolved: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -396,6 +402,7 @@ def _check_bound(
         check: The derived check.
         reports: The parsed reports.
         aliases: The attribute alias table.
+        resolver: The layout resolver, for the sheet and column names.
 
     Returns:
         The outcome.
@@ -404,14 +411,20 @@ def _check_bound(
     if not stats:
         return CheckOutcome(passed=None, detail="The DIRT attribute sheet was not available.")
 
-    resolve = aliases.resolve if aliases is not None else normalize_field_name
-    stat = stats.get(resolve(check.field_name))
+    canonical = aliases.resolve if aliases is not None else normalize_field_name
+    by_spelling = {stat.name: stat for stat in stats.values()}
+    match = attribute_match.present(check.field_name, tuple(by_spelling), canonical=canonical)
+    stat = by_spelling.get(match.found or "")
     if stat is None:
+        # Unchanged behaviour — this path was always honest about not knowing. It goes
+        # through the shared helper so that tolerance added here reaches the other two
+        # callers, which is how the three copies drifted apart in the first place.
         return CheckOutcome(
             passed=None,
             detail=f"{check.field_name} does not appear in the DIRT attribute sheet.",
             report_kind="dirt",
             sheet=DIRT_ATTRIBUTE_SHEET,
+            unresolved=(check.field_name,) if match.plausible else (),
         )
 
     wants_min = check.kind.startswith("min")
@@ -527,30 +540,64 @@ def _check_fields_present(
 ) -> CheckOutcome:
     """Assert every requested attribute was delivered.
 
+    Two states used to share one answer here: an attribute the delivery does not carry,
+    and an attribute whose name in the DIRT we could not work out. Both produced
+    ``passed=False`` and a high-severity violation, so a correct delivery that spells
+    ``AT01`` as ``debsc_burs_atyrt_at01_1`` was reported as missing an attribute it had
+    in fact delivered (Phase 6.22a). They are told apart by evidence now, and an
+    attribute that is genuinely absent is still a violation.
+
     Args:
         check: The derived check.
         reports: The parsed reports.
         aliases: The attribute alias table.
+        resolver: The layout resolver, for the sheet and column names.
 
     Returns:
-        The outcome, naming the missing attributes.
+        The outcome, naming the missing attributes and carrying the unresolved ones
+        separately.
     """
     stats = attribute_stats(reports, aliases, resolver)
     if not stats:
         return CheckOutcome(passed=None, detail="The DIRT attribute sheet was not available.")
 
-    resolve = aliases.resolve if aliases is not None else normalize_field_name
-    missing = sorted(name for name in check.values if resolve(name) not in stats)
+    canonical = aliases.resolve if aliases is not None else normalize_field_name
+    spellings = tuple(stat.name for stat in stats.values())
+
+    missing: list[str] = []
+    unresolved: list[str] = []
+    for name in check.values:
+        match = attribute_match.present(name, spellings, canonical=canonical)
+        if match.resolved:
+            continue
+        (unresolved if match.plausible else missing).append(name)
+
+    missing.sort()
+    unresolved.sort()
+    parts: list[str] = []
+    if missing:
+        parts.append(
+            f"The reports are missing {len(missing)} requested attribute(s): "
+            f"{', '.join(missing)}."
+        )
+    if unresolved:
+        parts.append(
+            f"Could not tell what the DIRT calls {len(unresolved)} requested "
+            f"attribute(s): {', '.join(unresolved)}. The delivery may well carry them "
+            "under another spelling, so this is not counted as missing."
+        )
+    if not parts:
+        parts.append(f"All {len(check.values)} requested attributes are present.")
+
     return CheckOutcome(
-        passed=not missing,
-        detail=(
-            f"The reports are missing {len(missing)} requested attribute(s): {', '.join(missing)}."
-            if missing
-            else f"All {len(check.values)} requested attributes are present."
-        ),
+        # A name nobody could resolve is not a failure. It is only a pass once every
+        # requested attribute has actually been found.
+        passed=False if missing else (None if unresolved else True),
+        detail=" ".join(parts),
         report_kind="dirt",
         sheet=DIRT_ATTRIBUTE_SHEET,
         observed=f"{len(stats)} attributes present",
+        unresolved=tuple(unresolved),
     )
 
 
