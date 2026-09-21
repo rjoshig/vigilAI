@@ -1,7 +1,8 @@
 # Phase 6.19 — Say what helps, and teach it in the product
 
 **Status:** 🟡 **everything built; one criterion needs a person** — parts A and C on
-2026-09-20, **part B on 2026-09-21**. Criterion 5 asks for the user Guide to be tested on
+2026-09-20, **part B on 2026-09-21**, **part D on 2026-09-21** (the setup checklist, which
+was built after Part A's audit and so was never held against it). Criterion 5 asks for the user Guide to be tested on
 somebody who has never seen the tool, which is a person's job and not a session's, so it
 stays **outstanding** rather than ticked. It is carried in
 [`session-log.md`](session-log.md) and belongs to stage 2 of
@@ -286,6 +287,45 @@ The audit's finding applies here too: people do not need more words, they need t
 - [x] **Honest about limits**, everywhere. This is the tone the rest of the product is
       already written in and the Guide should not be the place it slips.
 
+## Part D — The one surface the audit could not have caught
+
+### Why it was missed, and why that matters
+
+Part A's audit was taken on 2026-09-20 and was complete for the product as it stood.
+The **Setting up a new delivery** checklist did not exist then: it was built in 6.21f,
+two phases later, and so was never held against the register. That is the ordinary way a
+marker sweep decays — not by anybody removing a marker, but by a new surface arriving
+after the sweep. It is worth writing down because the answer is a standing habit, not a
+one-off fix: a surface that tells somebody *what to go and do* inherits the obligation
+to say what the doing will reach.
+
+### What was true of it, and what is true now · ✅ complete
+
+- [x] **The card itself carries no marker, and says so in words.** It is navigation: it
+      reads what already exists to work out which steps are done, and it reaches no
+      prompt, feeds no comparison, and is stored nowhere. `<FieldEffect>` is defined for
+      *a field a person can write*, and the checklist has none — so decorating the card
+      with one would be the first false marker in the product. The intro paragraph states
+      the fact instead, which is the honest form of the same answer.
+- [x] **Each of the seven steps carries the marker of the thing it sets up**, quoted from
+      the screen it links to rather than invented here: **Helps the AI** on the validation
+      guide, the meaning entries, and the programme instructions and rules; **Checked by
+      code** on the report types, the layout map, and the expression checks; **Used for
+      setup, not for runs** on the samples.
+- [x] **Which makes the card answer the question people actually bring to it** — *which
+      of these afternoons changes what the AI finds?* Three of the seven do. Three change
+      what the tool can measure without spending a token. One is read only while you are
+      setting up. That ranking was previously available only by opening seven screens.
+- [x] **The samples' marker is the switchable one** (ADR-046), and switching it off takes
+      nothing else with it. A test pins that: with `ui.setup_markers` off, the setup-only
+      marker is gone and all six of the others remain.
+- [x] **The register and the training document say the same thing.**
+      [`model-context.md`](model-context.md) gains a row for the card in the
+      reference-only table, and [`admin-training.md`](admin-training.md)'s *Setting up a
+      new delivery* section gains the step-by-step table and the paragraph saying the card
+      does nothing to a run. That section is now **in the admin Guide**, at position 3, so
+      the answer is in the product and not only in a file.
+
 ## Acceptance criteria · 🟡 in progress
 
 1. [x] Every field in Part A's tables carries a marker that says what that field does.
@@ -304,6 +344,9 @@ The audit's finding applies here too: people do not need more words, they need t
        quoting.
 7. [x] The rollout plan's training item points at the Guide rather than at a repository
        file nobody will open.
+8. [x] The **Setting up a new delivery** checklist says what each of its steps does to a
+       run, and says of itself that it does nothing. A surface built after Part A's audit
+       is held to Part A's rule.
 
 ## Why this is worth a phase
 
