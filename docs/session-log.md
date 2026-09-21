@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `feature/phase-6.21`, pushed. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)): the ladder, the layout map, anomalies, spend, guided decoding and the dress rehearsal. **Phase 8 is specified** ([`phase-8.md`](phase-8.md)) and queued behind 6.21 — documentation only, and the `v0.6.20` release gate is satisfied, so it may begin now that 6.21 has landed. **Next concrete action: nothing in 6.21 needs a session.** Its one open criterion — what guided decoding buys — can only be measured against a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After that, **phase 8**, or **6.18b** (the maturity level) once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Branch | `feature/phase-6.21`, pushed. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)): the ladder, the layout map, anomalies, spend, guided decoding and the dress rehearsal. **Phase 8 is specified** ([`phase-8.md`](phase-8.md)) and queued behind 6.21 — documentation only, and the `v0.6.20` release gate is satisfied, so it may begin now that 6.21 has landed. **Next concrete action: nothing in 6.21 needs a session.** Its one open criterion — what guided decoding buys — can only be measured against a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After that, **phase 8**, or **6.18b** (the maturity level) once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)). **In flight:** `fix/seed-demo-grace-window` repairs `scripts/seed_demo.py`, which crashed on the `role` column phase 6.20 dropped and then reported outcomes it had not reached; nothing in `tests/` covers that script, and `test_announcements.py::...::test_a_sixth_notice_is_refused_with_the_reason` fails on clean `dev` and needs its own look |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -156,6 +156,46 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (the demo seed told the truth about seven runs it never ran)
+
+**Branch:** `fix/seed-demo-grace-window`, pushed · **Phase:** none — a defect in a
+development script · **Status:** `black`, `flake8` clean; the seed verified end to end
+against a scratch database.
+
+Brought both UIs up against an empty database and seeded it to have something to look
+at. `scripts/seed_demo.py` crashed, and once it stopped crashing it lied.
+
+**It was stale.** `models.User(role=...)`: phase 6.20 replaced the single column with
+`roles`, and the script passed both. It died on the first account it created. The
+`roles` list beside it was already right, so the dropped keyword was all that had to go.
+
+**It ignored the submission grace window.** A run is enqueued with
+`run_after = now + queue.grace_seconds` (`api/routers/runs.py`), thirty seconds in which
+a person can notice a wrong file before any tokens are spent. The seed drives the worker
+by hand and called `run_once()` immediately, so nothing was ever due and nothing was
+claimed — and then it recorded **the outcome it had asked for rather than the one it
+got**. Seven runs sat queued while the summary announced them finalized and reviewed.
+The `failed` scenario was the only honest line, and only because its retry loop happened
+to bring its own job forward.
+
+Two functions fix it. `make_due` brings a run's jobs forward before the worker turn, and
+the failed path now uses it instead of the inline `__import__` block that was doing the
+same thing by hand. `actual_status` reads the row back and prints
+`queued (expected finalized)` when the scenario did not land, so the next person sees a
+broken seed in the summary rather than in the UI an hour later.
+
+**Not covered by a test**, which is how it rotted past a dropped column: nothing in
+`tests/` references `seed_demo`. A real test drives eight pipelines and is too slow for
+the suite; a fast one would assert only that a fresh run's job is not claimable until the
+grace clears. Left for the user to call.
+
+**Pre-existing and untouched:**
+`tests/test_announcements.py::TestTheRules::test_a_sixth_notice_is_refused_with_the_reason`
+fails on clean `dev` as well — a sixth notice is accepted where the test expects a
+refusal. Not this branch's doing; it needs its own look.
 
 ---
 
