@@ -12,8 +12,15 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/pending-items-review-f35uek`, pushed; **no PR yet, by request**. Phase 6.17 complete; 6.18a and 6.18f built; **6.19 part A complete** — every field that reaches the model, or decides what it is shown, now says so, and a test fails if a marker is removed. **Next concrete action: 6.19 part B**, the Guide in each app's sidebar, which the user has deferred. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
+| Branch | `claude/pending-items-review-f35uek`, **not pushed — this session's work is uncommitted**. Phase 6.17 complete; 6.18a and 6.18f built; **6.19 parts A and C complete** — every field says what it does (now six markers, the sixth switchable per ADR-046), a failed run says *where* it failed (ADR-047), and usage is counted per person (ADR-048). **Next concrete action: commit and push this session's work**, then 6.19 part B — the Guide in each app's sidebar, which the user has deferred. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
 | Last updated | 2026-09-20 |
+
+**Before starting the demo, migrate the demo database.** `scripts/seed_demo.py` builds
+its schema with `create_all`, which creates missing *tables* and never alters an
+existing one — so a `data/demo.db` carried across a branch that added a column keeps the
+old shape, and the failure surfaces as a 500 on the runs and usage screens rather than
+at seed time. `alembic upgrade head` against the demo database fixes it and is now
+part of the block below.
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
 reports; the worker runs the nine stages; a reviewer decides each finding; the frozen
@@ -28,6 +35,9 @@ set -a && . ./.env && set +a   # nothing in src/ loads .env; without this the
                                # "building mock client (model=gemma3:27b)"
 export DATABASE_URL="sqlite+pysqlite:///$PWD/data/demo.db" GREENLIGHT_AI_DATA_DIR="$PWD/data"
 python scripts/seed_demo.py          # 8 runs in every lifecycle state + admin data
+alembic upgrade head                 # create_all never ALTERs an existing table, so a
+                                     # demo db carried across branches needs this or the
+                                     # runs and usage screens answer 500
 uvicorn greenlight_ai.api.app:get_app --factory --reload   # :8000
 python -m greenlight_ai.worker.app                          # another terminal
 cd user-ui && npm run dev                             # :3000
@@ -105,6 +115,112 @@ validates, a replay tests, and a person approves into shadow.
 - Whether a data dictionary exists to seed the alias table from.
 
 ---
+
+## Session: 2026-09-20 (the demo database, the sixth marker, failure detail, usage per person)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Phase:** 6.19 parts A and C ·
+**Status:** built and verified in a browser; **uncommitted at the time of writing.**
+
+### The 500s were the demo database, not the code
+
+Both apps answered *internal server error* on the home and usage screens while 1,514
+tests passed. The cause: `scripts/seed_demo.py` builds its schema with
+`Base.metadata.create_all`, which creates **missing tables** and never alters an existing
+one. The mobile branch's migrations added `runs.keyword_suggestions` and
+`findings.engine`; the new tables appeared and those two columns did not, and the
+database had no `alembic_version` row at all, so nothing would have caught up later.
+
+Fixed by applying exactly what the two migrations apply and stamping the database at
+head — a stamp rather than an upgrade, because the intervening revision creates
+`finding_signatures`, which `create_all` had already made. The "See it running" block now
+carries `alembic upgrade head`, and that stamp is what let this session's own migration
+apply cleanly an hour later.
+
+### A sixth marker, and the one that may be switched off
+
+`reference` — **"Used for setup, not for runs"** — for what the AI reads while somebody
+sets the product up and no run ever reads: the sample workbooks, an artifact type's
+description, the workbooks the mapping interview reads. The concept was already in the
+register and in the component's own docstring; there was no marker, so those fields
+carried nothing, and silence is the wrong answer when the honest one is *yes, but never
+during a run*.
+
+**The register was wrong and is corrected.** It claimed a sample's contents never enter a
+validation run. Where a guide entry's locator lands on a sample, that cell's value is
+quoted to the model as a worked example at stages 4 and 8 — one named value an
+administrator chose rather than a row, and exactly why samples must be synthetic.
+
+**Only this marker is switchable** (`ui.setup_markers`, ADR-046). It says a field is
+*not* read in a run, so hiding it cannot mislead anybody; the four that say where words
+**do** go cannot be switched off, and a test asserts the shape of that guard so widening
+the condition fails even though every rendering test would pass.
+
+### Help tips close on any click
+
+They closed only on a second click of the same 16-pixel target. Now the next click
+anywhere closes one — the control, the tip's body, the far side of the page — done with a
+transparent sheet rather than a document listener, because a listener races the button's
+own handler and the tip either survives the click or reopens on it. Playwright proves it
+by refusing to click the button: it reports the sheet *intercepts pointer events*, which
+is the behaviour under test.
+
+### A failed run says where (ADR-047)
+
+`Run.error_detail`: the stage, the attempt and the traceback, behind a closed disclosure
+on the run with a copy button, and **never in the list payload**. Bounded at both ends —
+the whole text at 8,000 characters dropping the oldest frames, and the header's copy of
+the exception message at 500, because a parser that quotes what it choked on would
+otherwise leave a detail with no frames in it. Writing the test found that second cap was
+missing.
+
+### Usage per person (ADR-048)
+
+`user_usage.build`, its own sub-tab with 7/30/90/180-day periods, CSV and pagination. The
+three ways a run goes wrong are counted **apart** — failed, held, re-run — because they
+have different causes; rates are read against the deployment's own average and never
+flagged under five runs. A count opens that person's runs through
+`GET /runs?submitted_by=`, and the user app gained the matching filter and a search that
+covers the submitter.
+
+### Two things the product could not explain about itself
+
+The **Meaning** screen said what a mapping is and not why anybody would spend an
+afternoon on one — that the model otherwise re-derives where every requirement lands on
+every run, and that one confirmed row both reaches the prompt and compiles into a
+token-free code check. And *"Missing before Map can run: osl, config"* named artifact
+keys; it now says what Map needs, in words, with a link to the screen that fixes it.
+
+### The user document redrawn, and five gaps in it closed
+
+The end-to-end journey was ASCII art. It is Mermaid now, in the presentation brief's
+style, and it carries the held branch and the cancel window the prose never did. Two
+more diagrams: where what you type actually goes — which is the thing associates most
+often have backwards — and the observation's life in the same words the **My
+observations** screen uses. All three were rendered with `mermaid-cli` and looked at;
+the second had a subgraph with no edge, which only showed up in the picture.
+
+Five things an associate can meet on any day and the document never mentioned: a held
+run and the two ways out, the thirty-second cancel window, the notice bar, the
+maintenance page and paused submissions, and the **?** help. Two sections that are about
+the app rather than about a run were moved up beside the sidebar, which is where the
+reader is when they meet them.
+
+### A real bug found by the clock
+
+The value report's tests took "today" from the local clock while runs are stamped in UTC,
+so they failed once the evening crossed UTC midnight — and the same mistake would
+under-count a real report for anybody west of Greenwich. Both now count UTC days, and
+`user_usage` was written that way from the start.
+
+### Gates
+
+1,559 Python tests, both UI suites, `black`/`flake8`/`mypy`/`check_docs.sh`, and both
+`npm run build`s. Verified in Chromium: the tabs, the CSV (filename, header, the averages
+footer), the markers, the tip dismissal, and the user-app filter.
+
+**Pending:** commit and push — nothing here is committed. 6.19 part B (the in-app Guide)
+remains deferred. The branch name still contains an agent name, which `CLAUDE.md`
+forbids, and must be renamed before its first push.
 
 ## Session: 2026-09-20 (the markers, fixed)
 

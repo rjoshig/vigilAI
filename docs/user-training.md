@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.18.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.19 parts A and C.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -23,40 +23,64 @@ OK, and generate a frozen one-page report with a PDF.
 Before the screen-by-screen detail, here is the whole thing in order. Nothing in the
 middle needs you: the only two moments that do are the beginning and the end.
 
-```
-you fill the form and drop the files
-        │
-        ▼
-  do these artifacts match what you typed?          ← code, no AI, instant
-        │                        │
-     they agree            they disagree
-        │                        │
-        │                 the run is HELD and shows you both values.
-        │                 Say in one line why they belong together and it
-        │                 continues — or cancel and correct the form.
-        │                 Nothing has been spent either way.
-        ▼
-     QUEUED — and for about thirty seconds you can still cancel for free
-        │
-        ▼
-     RUNNING — nine stages, unattended, about half a minute
-        │      the AI reads and judges meaning; code makes every comparison
-        ▼
-   NEEDS REVIEW — it is ready for you
-        │
-        ▼
-     you decide each finding: OK or Not OK, with a comment
-        │
-        ▼
-     the gate: every high-severity finding decided, every gap acknowledged
-        │
-        ▼
-     FINALIZED — one page, frozen, with a PDF. Never regenerated.
+```mermaid
+flowchart TD
+    FORM[You fill the form<br/>and drop the files] --> MATCH{Do these artifacts match<br/>what you typed?<br/>code only, no AI, instant}
+    MATCH -->|they agree| QUEUED[QUEUED<br/>about thirty seconds<br/>to change your mind]
+    MATCH -->|they disagree| HELD[HELD<br/>both values shown side by side.<br/>Nothing has been spent]
+    HELD -->|one line saying why<br/>they belong together| QUEUED
+    HELD -->|cancel and correct the form| FORM
+    QUEUED -->|you cancel| GONE([Cancelled<br/>nothing was sent to the model])
+    QUEUED --> RUNNING[RUNNING<br/>nine stages, unattended, about half a minute<br/>the AI reads and judges meaning<br/>code makes every comparison]
+    RUNNING --> REVIEW[NEEDS REVIEW<br/>it is ready for you]
+    REVIEW --> DECIDE[You decide each finding<br/>OK or Not OK, with a comment]
+    DECIDE --> GATE{Every high-severity finding decided?<br/>Every gap acknowledged?}
+    GATE -->|not yet| DECIDE
+    GATE -->|yes| DONE([FINALIZED<br/>one page, frozen, with a PDF<br/>never regenerated])
 ```
 
 **Who does what.** You describe the delivery and you judge the findings. The tool reads
 three documents you would otherwise hold in your head, and tells you where they
 disagree. It never decides whether a delivery is acceptable — that has your name on it.
+
+## Where what you type actually goes
+
+Every box on the form carries a small marker under it saying what it does. They are not
+tips — they do not disappear when somebody switches help off — because what a field does
+to a run is a fact you are entitled to before you decide how much care to take over it.
+
+```mermaid
+flowchart LR
+    subgraph HELPS["Helps the AI — read as background"]
+        P[Delivery programme]
+        SUP[Suppressions applied]
+        DN[Delivery notes]
+        CN[Configuration notes]
+    end
+    subgraph RECORD["Identifies the run — never sent to the model"]
+        CUST[Customer name]
+        ORD[Order number]
+        CID[Configuration id]
+    end
+    subgraph MINE["Your own note — never sent, never checked"]
+        AN[Additional notes]
+    end
+    HELPS --> MODEL[The model reads these before it<br/>judges anything. Better context<br/>here means better findings]
+    RECORD --> MATCH[Code checks these against what<br/>the uploaded files declare, before<br/>the model is asked anything]
+    MINE --> PEOPLE([Kept with the run for<br/>whoever reads it later])
+    MODEL --> FIND[Every finding is produced by code<br/>comparing values, counts and ranges.<br/>Nothing you type can make a delivery<br/>pass or fail on its own]
+    MATCH --> FIND
+```
+
+Two things follow from this, and they are the whole reason the markers exist:
+
+- **A field marked *Helps the AI* is worth writing carefully.** It is background the
+  model reads before it forms an opinion. A sentence like "the score column is the V3
+  score, not the bureau score" changes what it pays attention to. A wrong one misleads
+  it just as effectively.
+- **Nothing you write can make a delivery pass or fail.** Findings come from code
+  comparing the three documents. Your notes change what the model *understands*, never
+  what the tool *decides*.
 
 ## Three different things are called "review"
 
@@ -106,6 +130,29 @@ control is recorded and reviewed by an administrator before it changes anything.
 
 The **Admin console** link opens the administrator app in a new tab. If you are not an
 administrator you can still open it, but nothing in it will let you change anything.
+
+## Messages, and when the tool is away
+
+- **A coloured bar at the top of the page** is a message an administrator scheduled —
+  blue for information, amber for a warning, red for something urgent. It is not
+  dismissible: a notice somebody scheduled is one they wanted seen. It takes itself
+  down when its end date passes, and it appears in a tab you left open all afternoon
+  without you refreshing.
+- **A maintenance page instead of the app** means an administrator has taken something
+  down deliberately — the model endpoint or the database. The page says so and checks
+  for itself, so the app comes back on its own and nobody has to tell you to refresh.
+- **"Greenlight AI is not accepting submissions at the moment"** on the new-run form
+  means submissions are paused but the rest of the app works: you can still read and
+  review runs that already exist.
+- **A queue that is not moving** while everything else works means an administrator has
+  held the release queue. Your run is safe and queued; it starts when they let it.
+
+## Help on a screen
+
+The small **?** beside a heading or a field opens a short note on what that surface is
+for and how it is meant to be used. **Click anywhere to close it** — the ? itself, the
+note, or anywhere else on the page. An administrator can switch these off once a team
+knows the product; the markers under the form fields are not help and never disappear.
 
 ## Submitting a run
 
@@ -158,11 +205,54 @@ Some limits are set by an administrator and apply at once: how many runs may be
 queued for one order number, and how many runs may start in a five-minute window. If
 you hit one, the message says so and asks you to try again shortly.
 
+## When a run is held
+
+Before a single question is put to the model, code compares what you typed with what
+the files themselves declare. An ETL configuration carries its own configuration number
+and the customer it was built for; the reports carry the credit date. If any of those
+disagree with the form, the run **stops and waits** instead of validating thoroughly
+against the wrong premise.
+
+The run page shows both values side by side — what you typed, what the file says. You
+have two ways out, and neither costs a re-upload:
+
+- **They do belong together.** Say so in one line and press continue. Four common
+  reasons are a single click. The run carries on from there, and the waiver stays on
+  the page and is printed on the final report, so whoever signs it can see the question
+  was asked and who answered it.
+- **The form was wrong.** Cancel and correct it.
+
+Anyone who can submit a run can clear a hold. Who ought to be asked first is a question
+for your delivery process, not something the tool decides.
+
+**Nothing has been spent at this point.** The files are stored, no model call has been
+made, and a held run that is cancelled costs nothing.
+
+## Changing your mind
+
+A submitted run waits about thirty seconds in the queue before the worker may pick it
+up, and during that window the run page offers **Cancel this run**. Nothing has been
+sent to the model yet, so cancelling is free and keeps your place in nobody's way. The
+exact length is set by your administrator.
+
+After that window the run is under way and the button is gone.
+
 ## Watching a run
 
 **Runs** lists every run with its status, who submitted it, and its queue position
 while it waits. A run moves through nine stages; the run page shows which stage it is
 on and refreshes itself. **Needs review** means it is ready for you.
+
+**Finding one run among many.** The search box matches the order number, the customer,
+the configuration id and **who submitted it**, and the box beside it filters to one
+person. If you arrived from a link in the admin console the list is already showing one
+person's runs and says so — *Show everyone* clears it.
+
+**When a run fails.** The list gives you the first few words, because a whole message
+would stretch the row. Open the run for the rest, and for **Technical detail** — the
+stage it failed at, which attempt it was, and the traceback. That block exists to be
+copied: if you are reporting the failure, send it, and whoever picks it up will not have
+to ask you to reproduce it.
 
 ## Explore a sample
 
@@ -262,6 +352,21 @@ runs: an administrator reads it, has the model draft a rule from it, and approve
 rule, which then runs silently against real deliveries for a while before it starts
 producing findings anyone sees. You will hear back either way.
 
+```mermaid
+flowchart TD
+    W[You write one sentence,<br/>anchored to the cell, clause or finding<br/>you were looking at] --> S[Submit observation<br/>— sent once, then locked]
+    S --> WAIT[Waiting<br/>in the administrator's queue]
+    WAIT --> DRAFT[Drafted<br/>the model turns your words<br/>into a rule code can run]
+    DRAFT --> AP{Administrator approves?}
+    AP -->|no| NO([Not taken forward<br/>with their reason, shown to you])
+    AP -->|yes| SH[In shadow<br/>runs silently on real deliveries,<br/>findings counted, shown to nobody]
+    SH --> LIVE([Live<br/>produces findings marked<br/>'Learned from an observation'])
+    LIVE -.->|if it turns out wrong| OFF([Switched off])
+```
+
+**My observations** shows exactly which of those boxes yours is in. The chain is read
+from the rule itself each time, so it is never out of date.
+
 - **What should this check?** is wherever you form the opinion: on every finding card,
   in the evidence drawer, on every row of the traceability matrix, beside **I have seen
   this** on every coverage gap, and on the run as a whole. Use it when you know something
@@ -311,6 +416,9 @@ producing findings anyone sees. You will hear back either way.
 | "… runs have started in the last 5 minutes" | The start-rate limit an administrator set. Try again shortly. |
 | "this looks like it contains personal data" | An observation or note carried something like an account number. Remove it and save again. |
 | "set a new password before continuing" | Your first sign-in. Change the password you were given. |
+| "Greenlight AI is not accepting submissions at the moment" | An administrator has paused submissions. Reading and reviewing existing runs still works. |
+| The maintenance page instead of the app | Something the tool depends on is deliberately down. The page checks for itself and the app returns on its own. |
+| "its artifacts disagree with what was submitted" | The run is held: what you typed and what the files declare do not match. See **When a run is held**. |
 
 ## Getting help
 

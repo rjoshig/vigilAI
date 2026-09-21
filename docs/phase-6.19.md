@@ -1,9 +1,9 @@
 # Phase 6.19 — Say what helps, and teach it in the product
 
-**Status:** 🟡 **Part A complete** (2026-09-20), Part B not started. Specified from an
-audit the user asked for. Two things that belong together because they answer the same
-question from two distances: *what does what I type actually do, and how do I use this
-well?*
+**Status:** 🟡 **Parts A and C complete** (2026-09-20), Part B not started. Specified
+from an audit the user asked for, and extended with what a session of use turned up.
+The parts belong together because they answer the same question from different
+distances: *what does what I type actually do, and how do I use this well?*
 
 **Nothing here is a defect in the engine.** Everything the tool computes, it computes
 correctly. This is about whether the people using it can tell.
@@ -98,6 +98,86 @@ dialog, programme rules, keywords, and masked columns.
       stops saying it once somebody ticks a box lies to its experienced users. Verified
       by breaking a marker and watching it fail.
 - [x] `user-training.md` restored to the stronger sentence, in the commit that earned it.
+
+### What a session of use added · ✅ complete
+
+The marker set grew a sixth kind, and one screen's worth of that came from somebody
+reading the console and asking a question the console should have answered.
+
+- [x] **A `reference` marker — *"Used for setup, not for runs"*.** The register and the
+      component docstring both used the idea of reference material; there was no marker
+      for it, so a sample workbook and an artifact type's description carried nothing at
+      all. Silence is the wrong answer there: the AI *does* read the samples, just never
+      during a validation run. It reads them for workbook-type detection, named values, a
+      guide's worked examples, and the mapping interview — the one place it sees a
+      sample's layout directly.
+- [x] **The register's claim about samples was wrong, and is corrected.** It said *a
+      sample's contents never enter a validation run*. Where a guide entry's locator
+      lands on a sample, that cell's value is stored on the entry and quoted to the model
+      as `e.g. label=value` at stages 4 and 8. It is one named value an administrator
+      chose rather than a row, and it is exactly why samples must be synthetic (ADR-003).
+- [x] **That one marker is switchable, and the other five are not** (ADR-046). It says a
+      field is *not* read in a run, so hiding it cannot mislead anybody about where their
+      words go; on a screen of sample files it is the same sentence repeated. The switch
+      is `ui.setup_markers`, in **Settings → Appearance**, on by default, and its help
+      says plainly which markers it cannot touch.
+      `test_only_the_setup_marker_may_be_switched_off` asserts the *shape* of the guard,
+      so widening it fails even though every rendering test would still pass.
+- [x] **Help tips close on the next click, wherever it lands** — the control that opened
+      one, the tip's own body, or the far side of the page. Previously only a second
+      click on the same 16-pixel target closed it. Done with a transparent sheet rather
+      than a document listener, because a listener races the button's own handler and the
+      tip either survives the click or reopens on it.
+- [x] **The Meaning screen says what a mapping is for.** It had *what* a mapping is and
+      not *why anybody would spend an afternoon on one*: that without it the model
+      re-derives where every requirement lands on every run, which is the step it is
+      least certain about; that a confirmed row both reaches the prompt and compiles into
+      a code check at no token cost; and that a wrong mapping is worse than none, which
+      is why a person confirms.
+- [x] **[`user-training.md`](user-training.md) redrawn and brought current.** The
+      end-to-end journey was ASCII art; it is now a Mermaid flowchart in the same style
+      as [`presentation-brief.md`](presentation-brief.md), carrying the held branch and
+      the cancel window that the prose never covered. Two diagrams were added: **where
+      what you type actually goes** — the three groups of form fields and what reads
+      each — and the observation's life from *Waiting* to *Live*, in the same words the
+      **My observations** screen uses. All three were rendered to check they parse and
+      read, rather than assumed.
+- [x] **Five things the user document never mentioned**, each a screen an associate can
+      meet on any given day: a **held** run and the two ways out of one, the **thirty
+      seconds** in which a submission can be cancelled for nothing, the **notice bar**,
+      the **maintenance page** and paused submissions, and the **?** help — which now
+      closes on any click. The refusal table gained the three messages that go with them.
+- [x] **"Missing before Map can run: osl, config" is now a sentence somebody can act
+      on.** It named artifact keys — a correct answer to a question nobody asked. It now
+      says Map reads one example of each artifact, names which is missing in words, links
+      to the screen that fixes it, and says a made-up file is enough.
+
+## Part C — What the runs and the usage screen would not tell anybody · ✅ complete
+
+Three things a session of use asked for, each of them a question the product could not
+answer about itself.
+
+- [x] **A failed run says where it failed, not only that it did** (ADR-047). The list
+      keeps its one line; the run gains the stage, the attempt and the traceback behind a
+      closed disclosure with a copy button, because what happens next is that somebody
+      pastes it into a ticket. Bounded at both ends and never in the list payload, both
+      asserted.
+- [x] **Usage is counted per person** (ADR-048), over 7, 30, 90 or 180 days, defaulting
+      to 30, in its own sub-tab with a CSV download and pagination. The three ways a run
+      goes wrong are counted **apart** — failed, held, re-run — because they have
+      different causes and different fixes, and a single "problems" number would hide the
+      only thing worth knowing.
+- [x] **Rates are read against the deployment's own average**, and a row under five runs
+      is never flagged. *Twice everyone else* is actionable; a score out of a hundred is
+      not.
+- [x] **A count opens the runs behind it.** `GET /runs?submitted_by=` takes an account id
+      rather than a name, because two people can share a display name. The user app gained
+      the matching filter, a chip saying whose runs it is showing, and a search that
+      covers the submitter.
+- [x] **A timezone bug found on the way.** The value report's tests took "today" from the
+      local clock while runs are stamped in UTC, so they failed for anybody west of
+      Greenwich after their evening crossed UTC midnight — and the same mistake would
+      have under-counted a real report. Both now count UTC days.
 
 ## Part B — A Guide in the product, one for each audience
 
