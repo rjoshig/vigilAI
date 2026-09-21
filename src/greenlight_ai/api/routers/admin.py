@@ -610,7 +610,7 @@ def save_layout(
     data_dir: Path = Depends(get_data_dir),
     user: CurrentUser = Depends(require_artifacts),
 ) -> wire.ArtifactTypeOut:
-    """Replace an artifact type's layout map (Phase 6.21b, ADR-051).
+    """Replace an artifact type's layout map (Phase 6.21b, ADR-054).
 
     What this delivery calls each sheet, column and row label the fixed checks look
     for. The ladder reads it as its fourth rung, so an entry never overrules the name
@@ -3614,7 +3614,7 @@ def layout_suggestions(
     Each one comes from a run where a check went looking for a sheet, a column or a
     row label, the ladder's four deterministic rungs all missed, and the model — shown
     the names that artifact carries and nothing else — said which one was meant
-    (ADR-051). The check then ran, and the run carries a review-severity record saying
+    (ADR-054). The check then ran, and the run carries a review-severity record saying
     so.
 
     That is a gap in what the tool has been told about a customer's layout rather than
@@ -3695,7 +3695,7 @@ def accept_layout_suggestion(
     """Record one read name on its artifact type.
 
     The act that closes the loop: from here the ladder's fourth rung resolves this
-    name in code and the model is not asked again (ADR-051).
+    name in code and the model is not asked again (ADR-054).
 
     Args:
         payload: Which artifact, kind, wanted name and spelling, and the scope.

@@ -1024,7 +1024,7 @@ export interface LayoutEntry {
   added_by: string;
 }
 
-/** A name the AI read for a run, offered to an administrator (ADR-051). */
+/** A name the AI read for a run, offered to an administrator (ADR-054). */
 export interface LayoutSuggestion {
   artifact: string;
   kind: LayoutKind;

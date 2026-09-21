@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * What this delivery calls each name the fixed checks look for (Phase 6.21b, ADR-051).
+ * What this delivery calls each name the fixed checks look for (Phase 6.21b, ADR-054).
  *
  * The checks ask for `Attributes`, `States`, `Accepts`. Until Phase 6.21 those were
  * Python constants matched exactly, so a customer who names their sheets differently

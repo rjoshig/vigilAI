@@ -11,7 +11,7 @@ checks ask for is spelled some other way here:
 
     scope ``programme:AM`` · sheet ``Attributes`` → ``Attribute Summary``
 
-The ladder reads them as its **fourth rung** (ADR-051), which is the one a person
+The ladder reads them as its **fourth rung** (ADR-054), which is the one a person
 writes. That placement is the whole design: an entry never overrules the name actually
 asked for, it is reached only after normalising and token matching have failed, and it
 costs no model call — so recording one turns a delivery the model had to reason about
@@ -79,7 +79,7 @@ class LayoutEntry(BaseModel):
 
 
 class LayoutSuggestion(BaseModel):
-    """A name the model read, offered to an administrator (ADR-051).
+    """A name the model read, offered to an administrator (ADR-054).
 
     Attributes:
         artifact: Which artifact type it was read from.

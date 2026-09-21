@@ -172,6 +172,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and
   the one thing this repository cannot manufacture — real verdicts from real reviewers,
   gathered during the rollout's stage 3, which is what 6.18b waits on
+- [`docs/phase-8.md`](docs/phase-8.md) — **ask the frozen report**: an optional chat box
+  on the final report page that can see one run and nothing else, answers from a context
+  pack code assembles, cites what it answered from, and says so when it cannot
 - [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
 - [`docs/llm-privacy.md`](docs/llm-privacy.md) — what may and may not reach the LLM, the cache, fixture policy

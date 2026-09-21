@@ -38,13 +38,16 @@ risk.
 | 6.20 | Three roles — user, reviewer and administrator — with capabilities rather than role checks, several roles per account, and each console showing a person only their own job | days | ✅ **complete** — the capability table, roles per account, the API enforcing them, both consoles, role assignment, and the single-role column dropped | [phase-6.20.md](phase-6.20.md) |
 | 6.21 | When the shape is wrong, keep going — one resolver that widens the match in code and then asks the model which sheet, column or label was meant, with code checking the answer; the report layout as admin data rather than Python constants; anomalies no rule covers; what a run cost, made visible without a new refusal; and the guided decoding the design has recommended since Phase 2 | 2–3 weeks | 🟡 **all six parts built** — one resolver, the layout as admin data, anomalies measured at 92.3% precision, spend made visible, guided decoding, and the dress rehearsal. Criterion 5 asks what guided decoding buys, which only a real endpoint can say: it belongs to phase 7's bootstrap | [phase-6.21.md](phase-6.21.md) |
 | 7 | Real-world fit — ingest the real OSL, config, and reports; adapt the parsers, prompts, and reference data; correct the docs | on demand | ⬜ **dormant** — runs only when the user asks, on the machine holding the real files | [phase-7.md](phase-7.md) |
+| 8 | Ask the frozen report — an optional chat box on the final report page, aware of one run and nothing else: the global rules in force, the previous run of that configuration id, the findings of the last three runs, this run's findings, and an inventory of its artifacts. The prose streams; the citations are checked before they are shown; an administrator turns it on and tunes it from a Chat section in the console | 2–3 weeks | ⬜ **not started** — queued behind 6.21, and behind the `v0.6.20` release, which exists | [phase-8.md](phase-8.md) |
 
 Effort assumes 1–2 developers and is a starting estimate. Phase 6.1 is **not** part of
 the original six either; it was added when it became clear that real campaigns bring
 several files per report type and that the people reviewing findings are the ones who
-know what else should be checked (ADR-021). It is numbered 6.1 rather than 8 because it
-extends the configurable-checks work of Phase 4 rather than following Phase 7, and it
-does not block Phase 6. Phase 7 is **not** part of the original six from `design.md`; it was added when it became clear the real files
+know what else should be checked (ADR-021). It is numbered 6.1 rather than as a phase of its
+own because it extends the configurable-checks work of Phase 4 rather than following
+Phase 7, and it does not block Phase 6. **Phase 8 is numbered the other way by the same
+rule**: a chat box on the frozen report extends none of the earlier phases, so it takes a
+top-level number rather than a sub-number of 6. Phase 7 is **not** part of the original six from `design.md`; it was added when it became clear the real files
 would arrive on a different machine, and it is dormant until the user asks for it
 (ADR-019).
 

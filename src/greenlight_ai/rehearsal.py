@@ -10,7 +10,7 @@ happened. Three questions, which are the three ways a setup is wrong:
 
 1. **Can the tool read these files at all?** Which sheets each sample carries, and
    which of the names the fixed checks look for resolve on it — deterministically,
-   because that is the state a real run wants to be in (ADR-051).
+   because that is the state a real run wants to be in (ADR-054).
 2. **Do the pointers point at anything?** Every named value an administrator defined,
    resolved against the samples, with the value it found.
 3. **Would the checks run?** Every active expression check evaluated over those values.
@@ -188,7 +188,7 @@ def rehearse(session: Session, data_dir: Path, scope: str = "") -> Rehearsal:
     # Deterministic rungs only, through the document's own lookups. A rehearsal that
     # spent a model call every time somebody pressed the button would be one nobody
     # presses, and the state worth reporting is the one a real run wants to be in
-    # anyway: resolved in code (ADR-051).
+    # anyway: resolved in code (ADR-054).
     artifacts: list[ArtifactReading] = []
     for key, samples in sorted(in_scope.items()):
         document = parsed.get(key)

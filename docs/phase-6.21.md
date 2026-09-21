@@ -196,7 +196,7 @@ is derived from it, never the other way round. The test that caught it is
 
 ### 6.21c — Anomalies, both ways · ✅ complete
 
-**Built 2026-09-21**, ADR-053. `profile_anomaly` is produced by a real code path at
+**Built 2026-09-21**, ADR-056. `profile_anomaly` is produced by a real code path at
 last. Measured before shipping: **92.3% precision, 100% recall**
 ([`benchmarks/phase-6.21-anomaly.md`](benchmarks/phase-6.21-anomaly.md)).
 
@@ -271,7 +271,7 @@ No new refusal. The per-run token ceiling stays the only hard stop, as decided.
 
 ### 6.21e — The model call itself · ✅ complete
 
-**Built 2026-09-21**, ADR-052. Guided decoding ships on `auto`: the schema goes with
+**Built 2026-09-21**, ADR-055. Guided decoding ships on `auto`: the schema goes with
 the request, and an endpoint that refuses it costs one wasted call per process rather
 than one per stage. The detection tiebreak reuses the ladder's fifth rung and can only
 *narrow* the shortlist code already produced — it gets its own verdict, `reasoned`, so
@@ -282,7 +282,7 @@ press the button.
 log, and a cache hit is a row. Stages 6 and 7 both gained model calls after it was
 written, every one of them cached on a re-check — so the guard would have fired on a
 re-check that behaved perfectly. It counts tokens now, which is what "the re-check is
-free" has always meant (ADR-051).
+free" has always meant (ADR-054).
 
 The cheapest reliability work in the phase, and the most valuable before Phase 7.
 

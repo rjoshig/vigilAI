@@ -159,7 +159,7 @@ def recheck(context: RunContext) -> RunContext:
     the model read, so stages 5 to 7 rerun and the re-check is free
     (``docs/design.md`` "Re-check path").
 
-    **What "free" means, precisely** (ADR-051). Stages 6 and 7 each grew a model call
+    **What "free" means, precisely** (ADR-054). Stages 6 and 7 each grew a model call
     after this function was written: the compliance locator (6.15), the programme
     reading (6.18f), a judgment check, and the name locator (6.21a). Every one of them
     is asked only where code failed, and every one is keyed on the artifacts, which a

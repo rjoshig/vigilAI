@@ -96,7 +96,7 @@ whether anything is correct. Code checks the answer was one of the names it offe
 applies a confidence floor, and the check then runs against that name **and** raises a
 `layout_reasoned` review finding, so a reviewer can disagree with the reading rather
 than only with the finding. Accepting the reading onto the artifact type's layout map
-removes the call from every later run (ADR-051). The same call breaks a tie in artifact
+removes the call from every later run (ADR-054). The same call breaks a tie in artifact
 type detection, where it can only choose between candidates code already shortlisted
 (Phase 6.21e).
 
@@ -136,7 +136,7 @@ produce a finding.
 | **Submitted identity** | The new-run form | `checks/artifact_match.py`, before any model call (ADR-041) |
 | **Credit date** | The new-run form | `checks/artifact_match.py` before the run starts, against the cell `checks/field_labels.py` resolves; `pipeline/s7_reports.py` for whatever the pre-flight did not reach |
 | **Field labels** | Admin → Reference data | `checks/field_labels.py`, resolving what a delivery calls a checked field |
-| **Artifact type layout map** | Admin → Artifact types → Layout | `resolve/ladder.py`, as the fourth rung — an administrator's spelling resolves a name in code and costs no call (ADR-051) |
+| **Artifact type layout map** | Admin → Artifact types → Layout | `resolve/ladder.py`, as the fourth rung — an administrator's spelling resolves a name in code and costs no call (ADR-054) |
 | **Scheduled notices** | Admin → Settings → Notices | Nothing evaluates them; they are shown to people between their start and end (Phase 6.14g) |
 | **Cost per million tokens** | Admin → Settings → Availability | `spend.py`, over the `llm_calls` rows already stored. Reaches no prompt and refuses nothing: the per-run token budget stays the only hard stop (Phase 6.21d) |
 

@@ -2,7 +2,7 @@
 
 The fixed report checks named their sheets as Python constants, so adapting to a
 customer's DIRT was an engineering deploy — the one thing this product was designed to
-avoid. This is the other half of ADR-051: the ladder's fifth rung reads a name the
+avoid. This is the other half of ADR-054: the ladder's fifth rung reads a name the
 first four could not, the run says so, and an administrator accepting that reading
 turns every later delivery from that customer into one code resolves.
 

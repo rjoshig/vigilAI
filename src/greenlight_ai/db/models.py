@@ -192,7 +192,7 @@ class Run(Base):
     #: a finding no rule covers.
     attribute_profile: Mapped[Any] = mapped_column(Json, default=dict)
     #: Names the model read for this run because four deterministic rungs could not
-    #: (Phase 6.21b, ADR-051): one entry per artifact, kind, wanted name and what was
+    #: (Phase 6.21b, ADR-054): one entry per artifact, kind, wanted name and what was
     #: used. A suggestion, never an application — an administrator records it on the
     #: artifact type, or does not. Kept on the run, like the keyword suggestions
     #: above, because that is where the evidence for it is.
@@ -535,7 +535,7 @@ class ArtifactType(Base):
     #: for (Phase 6.21b). Ordered entries, each naming a scope, a kind, the name the
     #: checks ask for, and the spellings that also mean it. Empty is the ordinary
     #: state on a new deployment and stays empty for a delivery whose layout the
-    #: ladder resolves in code (ADR-051); it fills as administrators accept what the
+    #: ladder resolves in code (ADR-054); it fills as administrators accept what the
     #: ladder had to reason about, and every entry it gains removes a model call from
     #: every later run.
     layout_entries: Mapped[Any] = mapped_column(Json, default=list)

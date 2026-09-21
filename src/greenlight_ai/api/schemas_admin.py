@@ -628,7 +628,7 @@ class LayoutIn(BaseModel):
 
 
 class LayoutSuggestionOut(BaseModel):
-    """A name the model read for a run, offered to an administrator (ADR-051)."""
+    """A name the model read for a run, offered to an administrator (ADR-054)."""
 
     artifact: str = ""
     kind: str = "sheet"
