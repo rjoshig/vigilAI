@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Final
+from typing import Any, Final, Iterator
 
 import httpx
 
@@ -138,6 +138,48 @@ class AnthropicClient(BaseClient):
             guided=guided,
         )
 
+    def _send_stream(self, system: str, user: str) -> Iterator[str]:
+        """Stream one message over server-sent events (Phase 8c).
+
+        The Messages API carries its text in ``content_block_delta`` events rather
+        than in ``choices[0].delta``, which is the one shape difference from the
+        OpenAI-compatible path — the same difference as the system field.
+
+        No tool is offered: this path is for prose, and a forced tool call would
+        answer in ``input`` rather than in a text block.
+
+        Args:
+            system: The system prompt.
+            user: The user prompt.
+
+        Yields:
+            Each text delta, in order.
+
+        Raises:
+            LLMTimeoutError: When the endpoint does not answer in time.
+            LLMResponseError: When the status is not 2xx.
+        """
+        payload: dict[str, object] = {
+            "model": self.settings.model,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+            "max_tokens": self.settings.max_tokens,
+            "temperature": self.settings.temperature,
+            "stream": True,
+        }
+        try:
+            with self._client.stream("POST", "/v1/messages", json=payload) as response:
+                if response.status_code >= 400:
+                    raise LLMResponseError(f"endpoint returned HTTP {response.status_code}")
+                for line in response.iter_lines():
+                    piece = _text_delta_of(line)
+                    if piece:
+                        yield piece
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(f"endpoint did not answer in {self.settings.timeout_s}s") from exc
+        except httpx.HTTPError as exc:
+            raise LLMResponseError(f"transport failed: {type(exc).__name__}") from exc
+
     def _post(self, payload: dict[str, object]) -> httpx.Response:
         """Send one request, turning transport failures into :class:`LLMError`.
 
@@ -162,3 +204,29 @@ class AnthropicClient(BaseClient):
     def close(self) -> None:
         """Close the underlying HTTP connection pool."""
         self._client.close()
+
+
+def _text_delta_of(line: str) -> str:
+    """Read one text delta out of a Messages server-sent-event line.
+
+    Args:
+        line: One line of the stream, with or without its ``data:`` prefix.
+
+    Returns:
+        The text of a ``content_block_delta``, or an empty string for any other event
+        — a ping, a start, a stop, or a frame that does not parse, all of which are
+        skipped rather than raised.
+    """
+    text = line.strip()
+    if not text.startswith("data:"):
+        return ""
+    body = text[len("data:") :].strip()
+    if not body:
+        return ""
+    try:
+        event: Any = json.loads(body)
+        if event.get("type") != "content_block_delta":
+            return ""
+        return str(event["delta"].get("text") or "")
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return ""

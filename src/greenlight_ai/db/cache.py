@@ -106,13 +106,17 @@ class DbCache:
             _LOG.warning("could not write the cache entry (%s); continuing", type(exc).__name__)
 
 
-def record_calls(session: Session, call_log: CallLog, run_id: int | None) -> int:
+def record_calls(
+    session: Session, call_log: CallLog, run_id: int | None, user_id: int | None = None
+) -> int:
     """Persist a run's call statistics into ``llm_calls``.
 
     Args:
         session: An open session.
         call_log: The in-memory log the adapter filled.
         run_id: The run these calls belong to.
+        user_id: Who asked, when a person did (Phase 8f). Left null for pipeline
+            calls, where the run already says whose they were.
 
     Returns:
         How many rows were written. Ids and counts only; no prompt text (ADR-003).
@@ -121,6 +125,7 @@ def record_calls(session: Session, call_log: CallLog, run_id: int | None) -> int
         session.add(
             LlmCall(
                 run_id=run_id,
+                user_id=user_id,
                 stage=record.stage,
                 provider=record.provider,
                 model=record.model,

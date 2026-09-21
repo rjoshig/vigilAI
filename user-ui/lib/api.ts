@@ -24,6 +24,8 @@ import type {
   NewRunOptions,
   Observation,
   ObservationInput,
+  ChatCitation,
+  ChatOpening,
   RecheckResult,
   Requirements,
   ReviewStatus,
@@ -287,6 +289,76 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ edits }),
     });
+  },
+
+  /** What the chat panel shows before anybody asks anything (Phase 8e). */
+  chatOpening(runId: number): Promise<ChatOpening> {
+    return request<ChatOpening>(`/runs/${runId}/chat`);
+  },
+
+  /**
+   * Ask one question about a frozen report, reading the answer as it arrives.
+   *
+   * Not `request`, because the point is to show the prose before it is finished.
+   * The body is newline-delimited JSON: `delta` events carry prose and the single
+   * `done` carries the citations the server checked against its own context. A
+   * fabricated identifier never appears in either, because it was discarded before
+   * the `done` was written.
+   *
+   * @param runId The run. The chat can see this one and no other.
+   * @param question What was asked.
+   * @param transcript Earlier turns, which live in the browser and nowhere else.
+   * @param onDelta Called with each piece of prose, in order.
+   * @returns The citations and whether they could be verified.
+   */
+  async askReport(
+    runId: number,
+    question: string,
+    transcript: { who: string; text: string }[],
+    onDelta: (text: string) => void
+  ): Promise<{ citations: ChatCitation[]; unverified: boolean }> {
+    const response = await fetch(`${BASE}/runs/${runId}/chat`, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, transcript }),
+    });
+    if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+    if (!response.body) throw new ApiError(500, "The answer could not be read.");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = "";
+    let result = { citations: [] as ChatCitation[], unverified: false };
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value, { stream: true });
+      // A chunk can split a line, so only whole lines are parsed and the remainder
+      // is carried forward — a half-parsed event would drop an answer's tail.
+      const lines = buffered.split("\n");
+      buffered = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line) as {
+          type: string;
+          text?: string;
+          citations?: ChatCitation[];
+          unverified?: boolean;
+          message?: string;
+        };
+        if (event.type === "delta" && event.text) onDelta(event.text);
+        if (event.type === "error") throw new ApiError(502, event.message ?? "The answer failed.");
+        if (event.type === "done") {
+          result = {
+            citations: event.citations ?? [],
+            unverified: Boolean(event.unverified),
+          };
+        }
+      }
+    }
+    return result;
   },
 
   /** Create a draft run prefilled from an existing one. */

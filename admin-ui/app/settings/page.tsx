@@ -28,6 +28,7 @@ import {
   Table,
 } from "@/components/ui/primitives";
 import { AnnouncementsCard } from "@/components/announcements-card";
+import { FieldEffect, type FieldEffectKind } from "@/components/explain";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type {
@@ -86,11 +87,39 @@ function warningFor(setting: Setting, next: unknown): string | null {
   if (setting.key === "retention.days" && typeof next === "number") {
     const current = typeof setting.value === "number" ? setting.value : null;
     if (current !== null && next < current) {
-      return `The next retention sweep deletes anything already older than ${next} days.`;
+      // ADR-065: a run is stamped with its expiry when it is created and nothing ever
+      // recomputes it, so this cannot shorten the life of anything that already
+      // exists. The warning used to say it could, which was the opposite of true.
+      return `Runs created from now on will be kept for ${next} days. Runs that already exist keep the expiry they were given.`;
     }
+  }
+  if (setting.key === "chat.report_aggregates" && next === true) {
+    return "This widens what leaves the building. The chat will also be shown per-column figures code computed — minimum, maximum, mean, count, nulls, distinct — for the run being asked about. Never a row and never a cell that is not an aggregate.";
+  }
+  if (setting.key === "chat.enabled" && next === true) {
+    return "This turns on an outbound model surface that people use directly. It reads one frozen run, changes nothing, and stores no conversation — and every question is counted in the usage figures.";
   }
   return null;
 }
+
+/**
+ * What a setting does to a run, in the same six-marker vocabulary every field uses.
+ *
+ * Only a few settings are fields in that sense. Two of the Chat rows are (Phase 8f):
+ * one decides **what** the model is shown and the other decides **which** model is
+ * shown it, and an administrator cannot see a prompt, so the marker is the only
+ * account they get. `docs/model-context.md` is the register these quote.
+ */
+const SETTING_EFFECT: Record<string, { kind: FieldEffectKind; note: string }> = {
+  "chat.report_aggregates": {
+    kind: "model",
+    note: "Decides what the report chat is shown. On, the context also carries per-column figures code computed for the run being asked about — never a row, never a cell that is not an aggregate. The tripwire still fails closed on every prompt.",
+  },
+  "chat.model": {
+    kind: "model",
+    note: "Decides which model answers a question about a report. It is part of every cache key, so this model and the pipeline's can never serve each other's answers.",
+  },
+};
 
 interface SettingRowProps {
   setting: Setting;
@@ -176,6 +205,13 @@ function SettingRow({ setting, onChanged }: SettingRowProps) {
         </div>
         <div className="mono mt-0.5 text-[0.7rem] text-muted-foreground">{setting.key}</div>
         <p className="mt-1 text-xs text-muted-foreground">{setting.help}</p>
+        {SETTING_EFFECT[setting.key] ? (
+          <FieldEffect
+            className="mt-1"
+            kind={SETTING_EFFECT[setting.key].kind}
+            note={SETTING_EFFECT[setting.key].note}
+          />
+        ) : null}
       </div>
 
       <div className="min-w-0">
@@ -491,6 +527,14 @@ export default function SettingsPage() {
                         this console keeps working, so you can always switch it back off. Work
                         already running always finishes, because stopping a run halfway leaves a
                         half-validated delivery nobody can tell from a whole one.
+                      </p>
+                    ) : null}
+                    {group.note ? (
+                      <p
+                        className="border-b py-3 text-xs text-muted-foreground"
+                        data-testid="settings-group-note"
+                      >
+                        {group.note}
                       </p>
                     ) : null}
                     {group.settings.map((setting) => (

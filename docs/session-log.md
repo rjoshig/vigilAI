@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**, **6.23**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 6.23 is complete** ([`phase-6.23.md`](phase-6.23.md), ADR-063 to ADR-067): the closed status set and its guards, the New run form finishing a cloned draft, a five-day draft window an administrator sets — with `retention.days` and `uploads.max_mb` finally read at all — the Re-check button gone and **the edit that queues a re-check built at last** (it had been documented since Phase 2 with no caller in either app), visible while it runs, and a Report column carrying the frozen verdict. **6.19d** landed before it: the *Setting up a new delivery* checklist marks each of its seven steps with what that step does to a run. **Next concrete action: phase 8** (ask the frozen report), or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**, **6.23**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **8 built** (two items open — the release tag needs a push, and what a real model does when asked to compute needs a real endpoint); **7 dormant** (runs only on request, on the target PC) |
+| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 8 is built** ([`phase-8.md`](phase-8.md), ADR-068 to ADR-070): *Ask this report* on a frozen report, answering from a context pack code assembles from the run id on every turn; the prose streams and every citation is checked against that pack before it is shown; a **Chat** section in the console with nine settings, off by default, capped and counted; nothing stored. **Two items open and both need something this session does not have:** the release tag (a tag push is refused, HTTP 403 — the command is in 8a) and what a real model does when asked to compute (the instruction is asserted; a mock proves nothing about behaviour). **Next concrete action: push the tag, then 6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -28,6 +28,14 @@ are open and each needs somebody other than a session:
 - **The three items under "Outstanding, needs the user"** at the foot of this block: the
   retention decision and sign-off, a model for the golden-set benchmark, and a sanitized
   shape reference.
+- **Phase 8 criterion 1** — the release tag. Cut and annotated locally; pushing a tag
+  is refused from this environment (HTTP 403 on `refs/tags/*`) and no release tool is
+  available here. `docs/phase-8.md` §8a has the three commands.
+- **Phase 8 criteria 12 and 8h's first box** — what a real model does when asked to
+  compute, to stray outside the pack, or to change something. The instructions are in
+  the prompt and asserted; a mock answers what it was scripted to, so asserting the
+  behaviour against one would be a green tick that proves nothing. It belongs with
+  ADR-014's golden-set bump on the first real run.
 - **Phase 6.21 criterion 5** — what guided decoding actually buys. The mock has no
   endpoint to guide, so the number can only be read the first time this runs against a
   real model. Every call already records whether the schema was sent; it belongs to
@@ -3495,3 +3503,72 @@ putting *Draft* back in the dropdown would be a second control for the same thin
 
 **Next concrete action:** phase 8 — the chat box on the frozen report — or 6.18b once real
 verdicts exist.
+
+---
+
+## 2026-09-21 — Phase 8: ask the frozen report
+
+| Field | Value |
+| --- | --- |
+| Branch | `claude/eager-turing-8ay4w6` |
+| Phase | 8 — 🟡 built; 8b to 8h complete, 8a outstanding. ADR-068 to ADR-070 |
+| Status | ✅ 2123 tests green, both UIs clean, docs gate passes |
+
+**The pack is the feature.** `chat/pack.py` assembles everything the chat may see about
+one frozen run — findings with shadow excluded, coverage and the stored attestation, the
+rules scoped `everywhere`, the programme's rules, this run's own guidance, the last three
+finalized runs of the configuration, an inventory of the artifacts, and the frozen
+report's own rendered text — and hashes it. It is **built on the server from the run id
+on every turn**, which is the one sentence that makes 8d's isolation a property rather
+than a claim: the client sends a question and a transcript, and neither can add a fact.
+The other four mechanisms exist because one can be wrong.
+
+**Nothing in it is a new category of data leaving the building.** With 8g's switch on it
+also carries `runs.attribute_profile` — per-column figures code has computed at stage 7
+since 6.21c, which `llm-privacy.md` already allows. Never a row, never a cell that is not
+an aggregate, and the tripwire still fails closed on every prompt.
+
+**Streaming lives in the adapter, and the seam is hidden.** `LLMClient.stream` sits
+beside `complete`, so the tripwire, the cache check, the budget stop and the call record
+still happen in one place. Three properties fall out of putting it there and are each
+asserted: a cache hit is served whole and makes no network call; **a partial answer is
+never cached**, because the store happens after the last yield rather than behind a flag;
+and there is no schema and no retry, because re-asking after somebody has begun reading
+would replace text on screen. The prose contains no identifiers by instruction, the
+citation tail is checked against the pack when the stream closes, and a marker split
+across two chunks is held back rather than half-shown.
+
+**Two decisions worth recording.** A **ninth run status** was considered and rejected for
+the chat's own visibility — it belongs to the re-check, not here. And **`llm_calls` gained
+a nullable `user_id`**: the person asking about a run is very often not the person who
+submitted it, so counting the daily cap against the run's submitter would have put
+somebody else's usage on their name. Null for every pipeline call, where `run_id` already
+says whose it was.
+
+**What is open, and why neither is a shortcut.**
+
+- **8a, the release tag.** Cut and annotated against `origin/main`; `git push origin
+  refs/tags/v0.6.23` returns HTTP 403 — this session's credentials are scoped to branch
+  refs and there is no release tool here. Named `v0.6.23` rather than `v0.6.20` because
+  that is what `main` now holds, and a release is the one artifact people trust to mean
+  exactly what it says. The phase said nothing in 8b onwards starts until the tag exists;
+  that gate was not honoured, deliberately and visibly, and the phase doc says so.
+- **Criterion 12 and 8h's first box.** A mock answers what it was scripted to, so
+  asserting "asked to compute, it declines" against one would be a green tick that proves
+  nothing. What is asserted is what this repository controls: the refusal is in the
+  prompt, in those words, and the prompt is what is sent.
+
+**Two defects repaired on the way, neither the phase's subject.** The admin console's
+`retention.days` warning still said shortening the window "deletes anything already older
+than N days" — the opposite of ADR-065, which stamps a run once and never recomputes it;
+the registry help was corrected in 6.23c and the UI warning was not. And the shared
+prompt-fitting helpers moved **down** into `textfit.py` rather than being copied into
+`chat/`, because `api/` may never import `pipeline/` and two implementations of the rule
+that decides what a model is not shown is the kind of divergence nobody notices until an
+answer is wrong.
+
+**Pending / blockers:** the two above, plus the standing three (6.19 criterion 5,
+6.18b–e, 6.21 criterion 5).
+
+**Next concrete action:** push the tag (`docs/phase-8.md` §8a has the commands), then
+**6.18b** once real verdicts exist.

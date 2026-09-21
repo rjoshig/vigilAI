@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 6.22.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 8.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -557,8 +557,54 @@ has learned is usually given the reviewer role as well, which does show the link
 | "Greenlight AI is not accepting submissions at the moment" | An administrator has paused submissions. Reading and reviewing existing runs still works. |
 | The maintenance page instead of the app | Something the tool depends on is deliberately down. The page checks for itself and the app returns on its own. |
 | "its artifacts disagree with what was submitted" | The run is held: what you typed and what the files declare do not match. See **When a run is held**. |
+| "the report chat is switched off" | An administrator has not turned it on for this deployment. |
+| "this run has no frozen report yet" | The chat answers about finished reports only. Freeze the report first. |
+| "you have asked … questions today" | The per-person daily limit an administrator set. |
+| "this conversation has reached … questions" | The per-conversation limit. Close the panel and open it again to start a new one. |
 
-<!-- guide 9: Getting help -->
+<!-- guide 9: Asking the frozen report -->
+## Asking the frozen report
+
+When an administrator has turned it on, a frozen report carries an **Ask this report**
+button in the bottom-right corner. It opens a panel that answers questions about *that
+run* — why a finding is high, what changed since the last delivery of that configuration,
+what nobody checked, which global rules applied, what the report itself concluded.
+
+**What it can see.** What the tool derived from your files: the findings and the
+decisions people made on them, what was checked and what was not, the rules in force, the
+list of artifacts that arrived, and the text of the report you are looking at. With one
+setting on, it can also see per-column figures the tool computed — a minimum, a maximum,
+a mean, a count of nulls.
+
+**What it cannot see, ever.** The rows in your files, and the cell values in them. Not
+the OSL document, not the workbooks. It reads what the pipeline already derived from
+them, and the same check that guards every other prompt guards this one.
+
+**What it will not do**, and you should expect it to say so rather than oblige:
+
+- **It will not work anything out.** Every figure it quotes was computed by the tool
+  before you asked. Ask it to add two numbers and it will tell you it reports figures
+  rather than deriving them.
+- **It will not answer about another run, another customer or another configuration.**
+  It can see this one.
+- **It will not change anything.** No decision, no finding, no re-opening the report, no
+  re-run. If you ask, it says where in the product you do that yourself.
+- **It will not guess.** When the answer is not in what it can see, it says so and says
+  what it would need. That is the answer, not a failure — a confident wrong answer about
+  a QC report is worse than no answer at all.
+
+**Every claim is checked before you see it.** The answer arrives as you read it; the
+little chips underneath — `F-003`, `R-012` — appear only once the tool has checked that
+each one is really in what it was shown. An identifier it made up is discarded and never
+shown. If it did not say what its answer rests on, the panel tells you the citations
+could not be verified, and you should check the answer against the report before relying
+on it.
+
+**The conversation is not saved.** Not by the tool, not in your browser. Close the panel
+and it is gone — which is why there is a **Copy** button: keeping a conversation, and
+deciding where it ends up, is yours.
+
+<!-- guide 10: Getting help -->
 ## Getting help
 
 Your administrator can see every setting, every rule, and every observation in the

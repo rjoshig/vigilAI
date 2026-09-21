@@ -510,6 +510,12 @@ class LlmCall(Base):
         sa.ForeignKey("runs.id", ondelete="CASCADE"), nullable=True, index=True
     )
     stage: Mapped[str] = mapped_column(sa.String(30), index=True)
+    #: Who asked, when a person did (Phase 8f). Null for every pipeline call, where
+    #: ``run_id`` already says whose it was. The report chat is the first call a
+    #: person makes directly, and the asker is very often not the run's submitter —
+    #: so the daily cap would be meaningless without this. No foreign key: these rows
+    #: outlive their runs so aggregated usage survives a purge.
+    user_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True, index=True)
     provider: Mapped[str] = mapped_column(sa.String(30))
     model: Mapped[str] = mapped_column(sa.String(200))
     prompt_tokens: Mapped[int] = mapped_column(sa.Integer, default=0)

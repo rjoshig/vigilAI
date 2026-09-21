@@ -16,6 +16,7 @@ model yet, and ADR-014 expects a bump after the first Gemma run.
 """
 
 from greenlight_ai.llm.prompts.admin_classify import CLASSIFY_PROMPT
+from greenlight_ai.llm.prompts.chat_answer import CHAT_ANSWER_PROMPT, CITATION_MARKER
 from greenlight_ai.llm.prompts.admin_draft import DRAFT_CHECK_PROMPT
 from greenlight_ai.llm.prompts.admin_map import MAP_PROMPT
 from greenlight_ai.llm.prompts.compliance_locate import COMPLIANCE_LOCATE_PROMPT
@@ -36,6 +37,8 @@ from greenlight_ai.llm.prompts.s9_summarize import SUMMARIZE_PROMPT
 from greenlight_ai.llm.prompts.synthesize import SYNTHESIZE_PROMPT
 
 __all__ = [
+    "CHAT_ANSWER_PROMPT",
+    "CITATION_MARKER",
     "CLASSIFY_PROMPT",
     "DESCRIBE_PROMPT",
     "DRAFT_CHECK_PROMPT",

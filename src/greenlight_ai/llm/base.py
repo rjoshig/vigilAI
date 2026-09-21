@@ -13,7 +13,7 @@ import logging
 import re
 import time
 from abc import ABC, abstractmethod
-from typing import Final
+from typing import Final, Iterator
 
 from pydantic import BaseModel, ValidationError
 
@@ -36,6 +36,28 @@ _LOG: Final = logging.getLogger(__name__)
 #: Only one retry is permitted, with the validation error appended
 #: (``docs/llm-privacy.md`` "The adapter contract").
 MAX_RETRIES: Final[int] = 1
+
+#: Roughly four characters to a token, which is what every provider's own counter
+#: approximates for English prose. Used only on the streaming path, where a chunked
+#: response carries no usage block: a spend figure that is approximately right is worth
+#: more than a zero that is precisely wrong (Phase 8c).
+_CHARS_PER_TOKEN: Final[int] = 4
+
+
+def _estimate_tokens(text: str) -> int:
+    """Approximate a token count for text a provider did not count for us.
+
+    Args:
+        text: The prompt or the answer.
+
+    Returns:
+        The estimate, at least one for any non-empty text so a call never records zero
+        tokens and reads as a cache hit in the usage figures.
+    """
+    if not text:
+        return 0
+    return max(1, len(text) // _CHARS_PER_TOKEN)
+
 
 #: Matches a ```json fenced block, which mid-size models emit even when told not to.
 _FENCE_RE: Final = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
@@ -160,6 +182,26 @@ class BaseClient(ABC):
             LLMError: When the request fails.
         """
 
+    def _send_stream(self, system: str, user: str) -> Iterator[str]:
+        """Perform one provider-specific request, yielding the answer as it arrives.
+
+        The default sends the ordinary request and yields the whole answer once. That
+        is a correct stream of one chunk: every caller sees the same text in the same
+        order, and a provider that has no streaming transport is not made to pretend.
+        A provider that can stream overrides this.
+
+        Args:
+            system: The system prompt.
+            user: The user prompt.
+
+        Yields:
+            Pieces of the answer, in order.
+
+        Raises:
+            LLMError: When the request fails.
+        """
+        yield self._send(system, user, None).text
+
     # -- the one public entry point -------------------------------------------------
 
     def complete(
@@ -220,6 +262,95 @@ class BaseClient(ABC):
         result = self._send_with_retry(system, user, schema, stage, version)
         self.cache.store(content, stage, result.text, result.data, version)
         return result
+
+    def stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        stage: str = "",
+        prompt_version: str = "",
+    ) -> Iterator[str]:
+        """Send one prose task, yielding the answer as it arrives (Phase 8c).
+
+        **Beside `complete`, not beside the adapter.** The tripwire, the cache check,
+        the budget stop and the per-call record are the four things that must happen
+        for every call in the product (ADR-004, ADR-005, ADR-018); a second network
+        path in `api/` or `chat/` would put all four somewhere they can be forgotten.
+        So the only difference between this and :meth:`complete` is that the answer
+        arrives in pieces.
+
+        Three consequences worth stating, because each one is a decision:
+
+        - **A cache hit is served whole and immediately.** The cache is checked before
+          the stream opens, as it is before every call. A hit yields the stored answer
+          in one piece and makes no network call.
+        - **A partial answer is never cached.** The result is stored only when the
+          generator runs to completion; a caller that stops reading, or a stream that
+          raises, leaves nothing behind to be served to the next person.
+        - **No schema, and no retry.** This path is for prose. Guided decoding would
+          force JSON, and the single-retry contract exists to fix a *validation*
+          failure — there is nothing to re-validate here, and re-asking after the
+          person has begun reading would replace text on screen.
+
+        Args:
+            system: The system prompt.
+            user: The user prompt.
+            stage: The stage, recorded on the call row.
+            prompt_version: The prompt template's version, part of the cache key.
+
+        Yields:
+            Pieces of the answer, in order. Concatenated, they are the whole answer.
+
+        Raises:
+            LLMBudgetExceeded: When the token budget is already spent.
+            LLMError: When the transport fails.
+        """
+        version = prompt_version or self.settings.prompt_version
+
+        if self.settings.pii_tripwire:
+            assert_clean(f"{system}\n{user}", stage=stage)
+
+        content = self._canonical(system, user, None)
+
+        cached = self.cache.lookup(content, version)
+        if cached is not None:
+            self.call_log.add(
+                CallRecord(
+                    stage=stage,
+                    provider=self.provider_name,
+                    model=self.model,
+                    cached=True,
+                    ok=True,
+                )
+            )
+            yield cached.text
+            return
+
+        self._check_budget(stage)
+        started = time.time()
+        pieces: list[str] = []
+        for piece in self._send_stream(system, user):
+            pieces.append(piece)
+            yield piece
+
+        text = "".join(pieces)
+        # Reached only when the generator ran to completion, which is what makes
+        # "a partial answer is never cached" a property of the control flow rather
+        # than of a flag somebody has to remember to set.
+        self.call_log.add(
+            CallRecord(
+                stage=stage,
+                provider=self.provider_name,
+                model=self.model,
+                prompt_tokens=_estimate_tokens(system) + _estimate_tokens(user),
+                completion_tokens=_estimate_tokens(text),
+                latency_ms=int((time.time() - started) * 1000),
+                cached=False,
+                ok=True,
+            )
+        )
+        self.cache.store(content, stage, text, None, version)
 
     # -- internals -------------------------------------------------------------------
 

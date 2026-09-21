@@ -7,6 +7,7 @@ following the environment, and a secret only ever travels inward.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import time
 from typing import Final
@@ -23,10 +24,12 @@ from greenlight_ai.api.schemas_config import (
     SettingIn,
     SettingOut,
 )
+from greenlight_ai.chat.answer import STAGE as CHAT_STAGE
 from greenlight_ai.config import registry, secrets
 from greenlight_ai.config.registry import GROUPS, SETTINGS_BY_KEY
 from greenlight_ai.config.store import Resolved, clear_setting, fallback, resolve, write_setting
 from greenlight_ai.db import models, repository
+from greenlight_ai.db.types import utcnow
 from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.settings import resolved_llm_settings
 
@@ -97,9 +100,52 @@ def list_settings(
             settings=[
                 _out(session, resolve(session, spec.key)) for spec in registry.group_of(group)
             ],
+            note=_group_note(session, group),
         )
         for group in GROUPS
     ]
+
+
+def _group_note(session: Session, group: str) -> str:
+    """One line a section says about itself, when it has one.
+
+    Only **Chat** does. A feature whose cost is invisible is a feature nobody can
+    decide to keep, and the caps above this line mean little without the number that
+    is running towards them (Phase 8f).
+
+    Args:
+        session: The request's session.
+        group: The section being rendered.
+
+    Returns:
+        The line, or empty for every other section.
+    """
+    if group != "Chat":
+        return ""
+    since = utcnow() - dt.timedelta(days=30)
+    asked = int(
+        session.execute(
+            sa.select(sa.func.count())
+            .select_from(models.LlmCall)
+            .where(models.LlmCall.stage == CHAT_STAGE, models.LlmCall.created_at >= since)
+        ).scalar_one()
+    )
+    people = int(
+        session.execute(
+            sa.select(sa.func.count(sa.distinct(models.LlmCall.user_id))).where(
+                models.LlmCall.stage == CHAT_STAGE,
+                models.LlmCall.created_at >= since,
+                models.LlmCall.user_id.is_not(None),
+            )
+        ).scalar_one()
+    )
+    if asked == 0:
+        return "No questions have been asked in the last 30 days."
+    return (
+        f"{asked} question{'s' if asked != 1 else ''} asked in the last 30 days, "
+        f"by {people} {'person' if people == 1 else 'people'}. Every one is counted in "
+        "the usage figures like any other model call."
+    )
 
 
 @router.post("", response_model=SettingOut)
