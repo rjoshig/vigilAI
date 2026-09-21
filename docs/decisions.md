@@ -1891,3 +1891,165 @@ commit both — and the gate says so when it is forgotten. The Guide can only co
 the training document contains, which is the point: a section worth showing in the product
 is a section worth having in the training document, and writing it there first means the
 people who train from the document get it too.
+
+## ADR-051 — The report chat is run-scoped, read-only, and keeps nothing
+
+**Status:** accepted · 2026-09-21 · Phase 8
+
+**Context.** A person reading a frozen report has questions the page does not answer: why
+this finding is high, whether it appeared last month, what the rule actually says, what
+nobody checked. All of it is in the database. None of it is on the page. A chat box on the
+report is the obvious answer, and the obvious implementation is the wrong one in three
+separate ways.
+
+The first is context. Asking a model to read "the run" invites sending it the uploaded
+workbooks, which ADR-003 forbids and the tripwire refuses. The second is arithmetic: a
+chat box is exactly where somebody asks a model to add two numbers, and ADR-001 says code
+does every comparison. The third is isolation — a conversation store keyed on anything
+looser than the run is a place one person's delivery reaches another's screen.
+
+**Decision.** The chat sees a **context pack** that code assembles from the database, for
+one run, on the server, on every turn. It is never accepted from the client, because a
+client that can supply context is a client that can supply facts.
+
+The pack holds the global rules in force, the previous finalized run of the same
+configuration id, the findings of the last three finalized runs with the decisions people
+made on them, this run's findings and their evidence, an **inventory** of the artifacts —
+kind, label, checksum and counts, never contents — the run's own guidance, the coverage,
+the notices, the attestation, the drift, and the frozen report's rendered text. Every one
+of those already appears in the *Allowed in a prompt* column of
+[`llm-privacy.md`](llm-privacy.md). Shadow findings are excluded, exactly as the frozen
+report excludes them: a rule nobody activated must not start answering questions either.
+
+**It is available only on a frozen run.** A conversation whose context shifts as decisions
+are made gives answers that were true when given and are not now. Freezing is what makes
+an answer reproducible.
+
+**Nothing is stored.** The transcript is state in the browser and dies with the panel.
+There is therefore no conversation table to retain, secure, or leak from, and the question
+of whose transcript an administrator may read does not arise. The cost is real and is
+accepted: a question asked last week cannot be recovered. The model call itself is
+recorded like every other — ids and counts, never text — so the usage is visible without
+the content being kept.
+
+**A person may copy their own conversation to the clipboard**, which is the one
+concession and is deliberately not a feature of the tool's storage. Somebody who wants to
+keep an answer pastes it into their own notes or a ticket, and the responsibility for
+where masked-but-real delivery detail ends up moves to the person who chose to move it.
+That is the right place for it, and it is honest about what would otherwise happen anyway
+by selecting text.
+
+**It acts on nothing.** No decision, no finding, no rule, no re-run, no regenerated
+report. Everything it can do is read.
+
+**Isolation is five independent things, not one.** The pack is server-built from the run
+id; the endpoint refuses anyone who may not read that run; nothing is stored; the cache is
+content-addressed with the pack hash in the key, so a hit requires the same question
+against the same run's pack; and the browser holds the transcript in component state
+rather than in `localStorage`.
+
+**Consequences.** The chat cannot answer a question about a cell value, and says so rather
+than guessing — which is the behaviour the acceptance criteria test hardest. A context
+builder now exists outside `pipeline/`, which is why the shared text-fitting helpers move
+into a neutral module: `api/` may not import `pipeline/`, and a chat package that did
+would break that rule transitively and invisibly.
+
+## ADR-052 — Report aggregates reach the chat only behind an administrator's switch
+
+**Status:** accepted · 2026-09-21 · Phase 8 · extends ADR-003
+
+**Context.** ADR-051's pack answers most questions about a report and cannot answer one
+shape of question at all: what a field's distribution looks like, where the nulls are, how
+many distinct values a column holds. Those are aggregates, and
+[`llm-privacy.md`](llm-privacy.md) has always allowed aggregates in a prompt — minimum,
+maximum, mean, count, null count, distinct keys. What it has never done is compute them
+for every column and hand them over by default.
+
+Two bad answers were available. Loosen the rule for everyone, and a deployment that never
+wanted this gains it on upgrade. Refuse outright, and the tool cannot answer a question it
+is allowed to answer.
+
+**Decision.** The pack ships **strictly derived**. An administrator may switch on a
+widened pack that adds **per-column aggregates computed by code at parse time**. Never a
+row. Never a cell that is not an aggregate. The tripwire runs on the assembled prompt
+regardless and still fails closed.
+
+The setting resolves through the three configuration layers of ADR-023, so it can be
+changed without a deploy, and it is **never** settable anywhere but the console and the
+environment.
+
+**It is labelled as strongly as masked columns are.** An administrator cannot see a
+prompt, so a marker is the only account they get of what a setting does. This one changes
+what leaves the building, and the console says exactly that rather than describing it as a
+richer answer.
+
+**Consequences.** There are two shapes of pack, so the acceptance test for "no
+non-aggregate value" runs against both. The aggregates must be computed where masking
+already happens, at parse time, rather than read back out of a report later — a value
+computed after masking is a value that was never masked.
+
+## ADR-053 — The chat streams its prose, and shows a citation only after code has checked it
+
+**Status:** accepted · 2026-09-21 · Phase 8
+
+**Context.** The adapter has one entry point, `complete(system, user, schema)`, and every
+invariant the tool depends on sits behind it: the PII tripwire, the cache check before
+every call, the budget stop, the single schema-validated retry, and the per-call record
+(ADR-004, ADR-005). It is single-turn and it does not stream. A chat box wants both, and
+an answer that appears whole after a silent wait is the difference between a feature
+people use and one they try once.
+
+One objection to streaming can be dismissed immediately, because getting it wrong would
+distort the whole design: **streaming does not weaken the tripwire.** The prompt is
+assembled and scanned in full before a single byte is sent; only the response streams
+back. Nothing about personal data leaving the building changes.
+
+The real conflict is narrower and cannot be dismissed. The answer is schema-constrained,
+and code checks that every citation resolves to an id that is actually in the pack before
+showing it — a fabricated finding reference is the failure that would most damage trust in
+a QC tool. **Code cannot check what has already been displayed.** The single retry has the
+same shape of problem: once prose is on screen, re-asking silently is not available.
+
+**Decision.** The chat streams, and the structure it is judged on does not.
+
+**The prose streams; the citations do not.** The model writes the answer as plain prose
+containing **no finding ids**, then emits a structured tail naming what it answered from.
+The prose reaches the panel token by token. The tail is validated against the pack when
+the stream closes, and only the citations that resolve are rendered. A fabricated id is
+therefore never shown as a citation — not briefly, not dimmed, not at all.
+
+**Streaming lives in the adapter.** `llm/` gains a streaming entry point beside
+`complete`, rather than a second network path in `api/` or `chat/`. The tripwire, the
+cache check, the budget stop and the per-call record continue to happen in exactly one
+place. This amends ADR-004's "one entry point" to "one module", which was always the rule
+that mattered: what must not spread is the network call, not the method count.
+
+**A malformed tail keeps the answer.** The panel says the citations could not be verified
+rather than showing chips, and nothing is re-asked. Pulling text somebody is part-way
+through reading looks like a malfunction even when it is correct behaviour, and the prose
+answers the question on its own. This is the one place the single-retry contract does not
+apply, and it is written here so that it is a decision rather than a later surprise.
+
+**A cache hit is served whole.** The cache is checked before the stream opens, as before
+every call. A hit replays the stored answer and its stored citations with no network call;
+a miss streams, and the answer is stored only when the stream closes. **A partial answer is
+never cached**, so an interrupted conversation cannot poison the next one.
+
+**Multi-turn is flattening.** Earlier turns are rendered into the user prompt inside a
+delimited block, labelled as a person's words to interpret and never as instructions to
+follow — the technique ADR-021 already uses for reviewer statements, for the same reason.
+The cache key therefore covers the whole transcript, so a hit is only ever an exact repeat
+of the same conversation against the same pack.
+
+**The chat resolves its own model**, through the three layers of ADR-023, defaulting to
+the pipeline's when unset. Conversation and schema-constrained extraction are different
+jobs and may deserve different models or different costs; because the model name is
+already part of every cache key, the two can never serve each other's answers.
+
+**Consequences.** There is now a streaming path to test as carefully as the answer itself:
+an interrupted stream must store nothing, and a fabricated citation must not reach the
+panel. Both are acceptance criteria rather than hopes. A long conversation re-sends its own
+history, so the transcript is capped in turns and the cap is a setting rather than a
+constant. And the prompt must hold the model to prose without ids, which is a real
+instruction-following burden — the citation check is what makes a lapse harmless rather
+than embarrassing.
