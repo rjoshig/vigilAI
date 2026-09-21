@@ -431,7 +431,10 @@ def recheck_run(
         if run is None:  # pragma: no cover
             raise ValueError(f"run {run_id} disappeared during re-check")
         run.rules_version = context.rules_version
-        repository.save_context(session, run, context)
+        # Stage 9 did not run, so the context carries no summary. Writing it would
+        # erase the one the full run produced, which is what every re-check did until
+        # Phase 6.23a.
+        repository.save_context(session, run, context, narrative=False)
         repository.audit(session, "run.rechecked", run.id, f"v{context.rules_version}")
         count = len(context.findings)
     return count

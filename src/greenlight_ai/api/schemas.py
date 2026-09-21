@@ -35,6 +35,9 @@ __all__ = [
     "ConfigSummary",
     "ConfigDetail",
     "DuplicateRun",
+    "RunFileOut",
+    "DraftUpdate",
+    "SubmitDraft",
     "CreateRunResult",
     "CloneResult",
     "RecheckResult",
@@ -103,6 +106,61 @@ class RunSummary(BaseModel):
     #: The credit date the delivery is cut as of, shown with the configuration id so a
     #: repeated configuration reads as "which month" (ADR-027).
     credit_date: Optional[dt.date] = None
+    #: When the purge may delete this run. On the wire since Phase 6.23c so a draft can
+    #: show how long is left; a draft's window is much shorter than a run's.
+    expires_at: Optional[dt.datetime] = None
+    #: The run this was cloned from, when it was. Stored since Phase 3 and read by
+    #: nothing until 6.23c: a draft could not say where it came from.
+    cloned_from: Optional[int] = None
+
+
+class RunFileOut(BaseModel):
+    """One artifact stored against a run.
+
+    ``RunDetail.files`` is a ``{kind: filename}`` map, which cannot describe a slot
+    carrying three field distributions. The draft editor has to render each part with
+    its label so a person can replace one, so it needs the rows themselves.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: str
+    part: int = 1
+    part_label: str = ""
+    filename: str = ""
+    size_bytes: int = 0
+
+
+class DraftUpdate(BaseModel):
+    """Fields of a draft to change.
+
+    Every field is optional and partial semantics are by ``exclude_unset``, never by
+    testing falsiness: ``""`` means *clear this note* and ``0`` means *the submitter
+    did not say*, so a falsy check would make "unstated" impossible to express.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer_name: Optional[str] = None
+    order_number: Optional[str] = None
+    configuration_id: Optional[str] = None
+    notes: Optional[str] = None
+    credit_date: Optional[str] = None
+    scope: Optional[str] = None
+    has_suppressions: Optional[bool] = None
+    deliverable_count: Optional[int] = None
+    outputs_validated: Optional[int] = None
+    delivery_notes: Optional[str] = None
+
+
+class SubmitDraft(BaseModel):
+    """Starting a draft."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Required only when the inputs match an earlier run (ADR-005).
+    rerun_reason: str = ""
 
 
 class RunDetail(RunSummary):
@@ -133,6 +191,9 @@ class RunDetail(RunSummary):
     pdf_available: bool = False
     stages: list[StageInfo] = Field(default_factory=list)
     files: dict[str, str] = Field(default_factory=dict)
+    #: The same artifacts as rows, with their parts and labels (Phase 6.23c). ``files``
+    #: stays for every caller that only wants to know what kinds arrived.
+    files_detail: list["RunFileOut"] = Field(default_factory=list)
     #: Where the artifacts disagreed with what was submitted, accepted or not
     #: (ADR-041). Shown above the findings, because a mismatch says the findings may
     #: have been computed against the wrong premise.
@@ -402,6 +463,11 @@ class DuplicateRun(BaseModel):
     status: str
     created_at: dt.datetime
     message: str
+    #: Whether the match is the very run this draft was cloned from, which means the
+    #: files were never replaced. The commonest way to reach this dialog, and the one
+    #: where "these inputs were already run" reads as nonsense to somebody who believes
+    #: they just uploaded them (Phase 6.23c).
+    is_source: bool = False
 
 
 class ArtifactMismatchOut(BaseModel):

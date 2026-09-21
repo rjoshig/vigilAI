@@ -177,7 +177,7 @@ export default function ReviewPage() {
     setError(null);
     try {
       const result = await api.cloneRun(runId);
-      router.push(`/runs/${result.run_id}`);
+      router.push(`/runs/new?draft=${result.run_id}`);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not clone the run.");
     }

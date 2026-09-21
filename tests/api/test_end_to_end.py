@@ -222,6 +222,29 @@ def test_recheck_rebuilds_findings_without_calling_the_model(
     assert client.get(f"{api}/runs/{run_id}/findings").json()
 
 
+def test_a_recheck_keeps_the_run_summary(
+    completed_run: dict[str, Any],
+    worker: Worker,
+    client: TestClient,
+    api: str,
+) -> None:
+    """A re-check rebuilds findings; it does not erase the account of the run.
+
+    Stage 9 writes the plain-English summary and a re-check skips it, but
+    ``save_context`` wrote ``context.summary`` unconditionally — so every re-check
+    replaced the summary with the empty string the context was built with. The
+    reviewer lost the narrative in the act of correcting one rule (Phase 6.23a).
+    """
+    run_id = completed_run["id"]
+    before = client.get(f"{api}/runs/{run_id}").json()["summary"]
+    assert before, "the fixture run should have a summary to lose"
+
+    assert client.post(f"{api}/runs/{run_id}/recheck").json()["queued"] is True
+    _run_to_completion(worker)
+
+    assert client.get(f"{api}/runs/{run_id}").json()["summary"] == before
+
+
 def test_editing_a_requirement_bumps_the_version_and_queues_a_recheck(
     completed_run: dict[str, Any], worker: Worker, client: TestClient, api: str
 ) -> None:

@@ -488,7 +488,23 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         minimum=1,
         maximum=3650,
         help="Runs, their files, and their findings are deleted after this. Aggregated "
-        "usage survives. Shortening it deletes more at the next sweep.",
+        "usage survives. A run is stamped with its expiry when it is created, so a "
+        "change here applies to runs made from now on and never shortens the life of "
+        "one that already exists.",
+    ),
+    SettingSpec(
+        key="retention.draft_days",
+        env="GREENLIGHT_AI_DRAFT_DAYS",
+        label="Keep unsubmitted drafts for (days)",
+        group="Retention",
+        kind="int",
+        default=5,
+        minimum=1,
+        maximum=90,
+        help="A cloned run nobody submitted is deleted after this, with anything "
+        "uploaded to it. The countdown is shown on the draft itself. Like the setting "
+        "above, it applies to drafts made from now on; one that already exists keeps "
+        "the date it was given.",
     ),
     # --- appearance (Phase 6.6) --------------------------------------------------------
     SettingSpec(

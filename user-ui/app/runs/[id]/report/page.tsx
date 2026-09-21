@@ -59,6 +59,25 @@ export default function ReportPage() {
 
   const [run, setRun] = React.useState<RunDetail | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [cloning, setCloning] = React.useState(false);
+
+  /**
+   * Clone this run and go straight to the form that finishes it.
+   *
+   * The inline version had no catch, so a failure was an unhandled rejection and a
+   * button that visibly did nothing (Phase 6.23c).
+   */
+  async function clone() {
+    setCloning(true);
+    setError(null);
+    try {
+      const result = await api.cloneRun(runId);
+      router.push(`/runs/new?draft=${result.run_id}`);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not clone the run.");
+      setCloning(false);
+    }
+  }
   const [busy, setBusy] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
   const [confirming, setConfirming] = React.useState(false);
@@ -165,12 +184,11 @@ export default function ReportPage() {
               </a>
               <Button
                 size="sm"
-                onClick={async () => {
-                  const result = await api.cloneRun(runId);
-                  router.push(`/runs/${result.run_id}`);
-                }}
+                disabled={cloning}
+                title="Opens the new-run form with everything this run was submitted with, ready to change. The files are not copied."
+                onClick={() => void clone()}
               >
-                <Copy className="h-4 w-4" /> Clone run
+                <Copy className="h-4 w-4" /> {cloning ? "Opening…" : "Clone run"}
               </Button>
             </>
           ) : null
