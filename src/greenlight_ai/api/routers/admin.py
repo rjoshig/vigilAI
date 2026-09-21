@@ -31,7 +31,8 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from greenlight_ai import announcements, scopes, spend, user_usage, value_report
+from greenlight_ai import announcements, rehearsal as rehearsal_module, scopes, spend
+from greenlight_ai import user_usage, value_report
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
@@ -3535,6 +3536,71 @@ def demotion_report(
             if row.state == demotion.BLOCKED
         ],
         shadow=True,
+    )
+
+
+@router.get("/rehearsal", response_model=wire.RehearsalOut)
+def rehearsal(
+    scope: str = Query(default=""),
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    _user: CurrentUser = Depends(require_artifacts),
+) -> wire.RehearsalOut:
+    """Try this setup against the stored samples (Phase 6.21f).
+
+    An administrator can define an artifact type, write a guide, confirm meaning
+    entries and author checks, and until a real delivery arrives there is no way to
+    find out whether any of it fires. The only feedback loop in the product ran through
+    somebody else's working day.
+
+    **Nothing is stored and no model is called**, which is what makes this safe to
+    press repeatedly while editing. It answers "is this wired up" — not "does it ask
+    the right question", which only a person reading the findings can answer.
+
+    Args:
+        scope: The programme whose samples to use, or empty for the global ones.
+        session: The request's session.
+        data_dir: The shared volume the samples live under.
+        _user: The caller.
+
+    Returns:
+        What the tool read, what resolved, and what would have run.
+    """
+    result = rehearsal_module.rehearse(session, data_dir, scopes.parse(scope).value)
+    return wire.RehearsalOut(
+        scope=result.scope,
+        artifacts=[
+            wire.ArtifactReadingOut(
+                key=entry.key,
+                label=entry.label,
+                sample_count=entry.sample_count,
+                sheets=list(entry.sheets),
+                resolved=dict(entry.resolved),
+                unresolved=list(entry.unresolved),
+                error=entry.error,
+            )
+            for entry in result.artifacts
+        ],
+        named_values=[
+            wire.NamedValueReadingOut(
+                name=entry.name,
+                description=entry.description,
+                found=entry.found,
+                value=entry.value,
+            )
+            for entry in result.named_values
+        ],
+        checks=[
+            wire.CheckReadingOut(
+                name=entry.name,
+                expression=entry.expression,
+                passed=entry.passed,
+                detail=entry.detail,
+                shadow=entry.shadow,
+            )
+            for entry in result.checks
+        ],
+        notes=list(result.notes),
     )
 
 

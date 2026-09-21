@@ -1,8 +1,12 @@
 # Phase 6.21 — When the shape is wrong, keep going
 
-**Status:** ⬜ **not started** — specified 2026-09-21 from an assessment the user asked
-for: *look at the goal objectively, and say where the tool would slip when the real files
-arrive.* This is the phase that makes [`phase-7.md`](phase-7.md) survivable.
+**Status:** 🟡 **built** — 2026-09-21. All six parts are built and every gate is clean.
+**One acceptance criterion is outstanding and cannot be met here:** what guided decoding
+buys can only be measured against a real endpoint, so criterion 5 belongs to
+[`phase-7.md`](phase-7.md)'s bootstrap, where the baseline is taken. Specified the same
+day from an assessment the user asked for: *look at the goal objectively, and say where
+the tool would slip when the real files arrive.* This is the phase that makes Phase 7
+survivable.
 
 ## The goal, in the user's words
 
@@ -101,7 +105,7 @@ Asked of the user during the assessment, answered 2026-09-21:
 
 ---
 
-## Scope · 🟡 in progress
+## Scope · ✅ complete
 
 ### 6.21a — One resolver, deterministic first, model second · ✅ complete
 
@@ -305,58 +309,74 @@ The cheapest reliability work in the phase, and the most valuable before Phase 7
       yielding the same requirements as the Word original; the re-check guard agreeing
       with reality.
 
-### 6.21f — Show it, and lead somebody through it · ⬜ not started
+### 6.21f — Show it, and lead somebody through it · ✅ complete
 
-- [ ] **A dress rehearsal.** "Try this setup against the stored samples" runs the pipeline
+**Built 2026-09-21.** The dress rehearsal is the piece that matters: until it, the only
+way to find out whether a definition fired was for somebody else to submit a real
+delivery, so the feedback loop ran through another person's working day. It calls no
+model and stores nothing, which is what makes it safe to press while editing.
+
+**Two things turned out to be more than cosmetic.** The waterfall could not be filled
+at render time at all — by then the workbooks are parsed and gone — so it is read at
+stage 7 and stored with the run, which is why it had sat empty since Phase 5. And
+writing the rehearsal found that reporting every sheet name against every report type
+lists the state sheet as missing from the DIRT: true, useless, and a screen full of
+true-and-useless is one nobody reads. It reports only the names that type's own checks
+look for.
+
+- [x] **A dress rehearsal.** "Try this setup against the stored samples" runs the pipeline
       over the artifact type's own samples and shows what it *would* have found, what it
       could not read, and what the guide and meaning entries actually did. Today the only
       way to learn whether a definition works is to run a real delivery. This is also what
       makes 6.21b safe to edit.
-- [ ] **A coverage picture** on the review screen and in the frozen report: one bar per
+- [x] **A coverage picture** on the review screen and in the frozen report: one bar per
       requirement state — checked, traced but unchecked, manual, untraced. Hand-drawn SVG
       following `admin-ui/components/sparkline.tsx`, which exists precisely so no charting
       library has to. Coverage is badge counts today, on a tool whose pitch is that nobody
       should scan thousands of attributes by eye.
-- [ ] **Revive the waterfall.** `report/render.py` passes `waterfall=[]`, so the section in
+- [x] **Revive the waterfall.** `report/render.py` passes `waterfall=[]`, so the section in
       the frozen report has always been empty.
-- [ ] **A setup path in the admin console.** A "Set up a new delivery" checklist on the
+- [x] **A setup path in the admin console.** A "Set up a new delivery" checklist on the
       admin home that walks artifact type → sample → layout map → guide → meaning → check
       → programme, showing what is done and linking to the screen that does it. **Not a
       wizard that hides the screens** — the screens are good; what is missing is an order
       through them.
-- [ ] **`<Explain>` in the user app.** Thirteen usages in the admin console, none in the
+- [x] **`<Explain>` in the user app.** Thirteen usages in the admin console, none in the
       user one: a user sees the markers and no help text. Start with the new-run form and
       the review screen's coverage and drift cards.
-- [ ] **Confidence on a finding.** `Finding` has no confidence field; the model's own
+- [x] **Confidence on a finding.** `Finding` has no confidence field; the model's own
       number is consumed at a floor and discarded. Carry it so a reviewer can sort by
       least-sure — which is the order a reviewer with forty findings actually wants.
-- [ ] Both training documents and both Guides rebuilt (`python scripts/build_guides.py`),
+- [x] Both training documents and both Guides rebuilt (`python scripts/build_guides.py`),
       and `docs/model-context.md` updated, in the commits that change what they describe.
 
 ---
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · 🟡 in progress
 
-1. [ ] A report set whose sheet names and column headers are deliberately renamed runs end
+1. [x] A report set whose sheet names and column headers are deliberately renamed runs end
    to end and **produces real findings**, not a page of "could not evaluate". The fixture
    proving it lives in `tests/fixtures/` and the before-and-after is stated in this doc.
-2. [ ] Every name the model resolved is visible to the reviewer as a review-severity
+2. [x] Every name the model resolved is visible to the reviewer as a review-severity
    record naming what was expected, what was found, and the confidence — and is offered to
    an administrator as a one-click layout-map entry, so the second run of that delivery
    needs no model call. Demonstrated, not asserted.
-3. [ ] `profile_anomaly` is produced by a real code path, and its precision and recall on
+3. [x] `profile_anomaly` is produced by a real code path, and its precision and recall on
    synthetic history are recorded under [`benchmarks/`](benchmarks). A detector without a
    measurement does not count as met.
-4. [ ] An administrator can see what a run cost, what a person spent, and what the
+4. [x] An administrator can see what a run cost, what a person spent, and what the
    deployment spent this month — and nothing new refuses a submission.
-5. [ ] Golden-set accuracy with `LLM_PROVIDER=mock` is no worse than before the phase, and
-   the effect of guided decoding is recorded rather than assumed.
-6. [ ] One resolver. `grep` finds no second implementation of "lower, strip separators"
+5. [~] Golden-set accuracy with `LLM_PROVIDER=mock` is unchanged and green throughout the
+   phase. The **effect of guided decoding** cannot be measured on the mock, which has no
+   endpoint to guide: every call records whether the schema was sent, and the number is
+   there to be read the first time this runs against a real model. **Outstanding**, and it
+   belongs to [`phase-7.md`](phase-7.md)'s bootstrap, where the baseline is taken.
+6. [x] One resolver. `grep` finds no second implementation of "lower, strip separators"
    outside `resolve/`.
-7. [ ] Nothing in this phase can make a delivery pass. Every model-reached answer is a
+7. [x] Nothing in this phase can make a delivery pass. Every model-reached answer is a
    review item a person confirms, and code sets every severity — ADR-001 holds, verified
    by reading the call sites, not the intent.
-8. [ ] The docs describe what is true at the commit: this file's boxes ticked,
+8. [x] The docs describe what is true at the commit: this file's boxes ticked,
    `docs/model-context.md` naming every new field that reaches the model and its cap, both
    training documents and both Guides current, and
    `python scripts/update_phase_status.py` clean.

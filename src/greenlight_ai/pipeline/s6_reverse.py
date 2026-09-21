@@ -231,6 +231,7 @@ def _report_located(
             rule_ref=ref,
             shadow=shadow,
             engine="model",
+            confidence=located.confidence,
             evidence=Evidence(config_path=located.json_path),
         )
     )

@@ -38,6 +38,8 @@ import { Explain, FieldEffect } from "@/components/explain";
 import { DeleteButton } from "@/components/confirm-delete";
 import { GuideEditor } from "@/components/guide-editor";
 import { LayoutEditor } from "@/components/layout-editor";
+import { RehearsalCard } from "@/components/rehearsal-card";
+import { SetupChecklist } from "@/components/setup-checklist";
 import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -171,6 +173,14 @@ export default function ArtifactsPage() {
           <ErrorState message={error} onRetry={() => void load()} />
         </div>
       ) : null}
+
+      {/* The path through the screens, and the way to try it without waiting for
+          somebody else's delivery (Phase 6.21f). This is the console's home, so it is
+          where somebody arriving for the first time lands. */}
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+        <SetupChecklist types={types ?? []} />
+        <RehearsalCard onError={setError} />
+      </div>
 
       <div className="mb-4 flex gap-1 border-b" role="tablist" aria-label="Input types">
         {INPUT_GROUPS.map((one) => (

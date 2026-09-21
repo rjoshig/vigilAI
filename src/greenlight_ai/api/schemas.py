@@ -264,6 +264,11 @@ class FindingOut(BaseModel):
     review_note: str = ""
     verified: bool = False
     verify_agreed: Optional[bool] = None
+    #: How sure the tool is, 0–1, or absent where the question does not arise
+    #: (Phase 6.21f). **Not a severity**: a comparison code is certain about can be
+    #: trivial, and a reading the model was unsure of can be the thing that matters.
+    #: It is there so a reviewer with forty findings can read the least-sure first.
+    confidence: Optional[float] = None
     #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
     #: the single second opinion.
     lens_opinions: list[dict[str, Any]] = Field(default_factory=list)

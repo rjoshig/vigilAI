@@ -3,6 +3,7 @@
  */
 
 import type {
+  Rehearsal,
   LayoutEntry,
   LayoutKind,
   LayoutSuggestions,
@@ -462,6 +463,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ scope_code: scopeCode, phrase }),
     }),
+
+  /** Try this setup against the stored samples (Phase 6.21f). Stores nothing. */
+  rehearse: (scope = ""): Promise<Rehearsal> =>
+    request<Rehearsal>(`/rehearsal${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`),
 
   /** Names the AI read because four deterministic rungs could not (Phase 6.21b). */
   getLayoutSuggestions: (): Promise<LayoutSuggestions> =>

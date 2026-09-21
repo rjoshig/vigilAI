@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 specified, not started**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/llm-validation-gaps-assessment-4qpv7y`, pushed. **Phase 6.21 is specified and not started** ([`phase-6.21.md`](phase-6.21.md)): a gap assessment against the real-file goal found the tool stops validating when a report's layout drifts, and that the drift-rescue pattern 6.15 proved is applied in two places, neither of them the one that matters. **Next concrete action: 6.21a**, one resolver under `src/greenlight_ai/resolve/`. Previous branch `claude/next-steps-pending-jr9tne`. |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC) |
+| Branch | `claude/llm-validation-gaps-assessment-4qpv7y`, pushed. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)): the ladder, the layout map, anomalies, spend, guided decoding and the dress rehearsal. **Next concrete action: nothing in 6.21 needs a session.** Its one open criterion — what guided decoding buys — can only be measured against a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -27,9 +27,10 @@ are open and each needs somebody other than a session:
 - **The three items under "Outstanding, needs the user"** at the foot of this block: the
   retention decision and sign-off, a model for the golden-set benchmark, and a sanitized
   shape reference.
-- **Phase 6.21** — specified 2026-09-21 and not started. This one needs no-one but a
-  session: it is ordinary build work, and it is what makes [`phase-7.md`](phase-7.md)
-  survivable. Start at 6.21a.
+- **Phase 6.21 criterion 5** — what guided decoding actually buys. The mock has no
+  endpoint to guide, so the number can only be read the first time this runs against a
+  real model. Every call already records whether the schema was sent; it belongs to
+  [`phase-7.md`](phase-7.md)'s bootstrap, where the baseline is taken anyway.
 
 **A branch note.** `CLAUDE.md` says a branch never carries an agent or model name and a
 tool-assigned `claude/*` name is renamed before its first push. This branch was named and
@@ -155,6 +156,119 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (phase 6.21 built, all six parts)
+
+**Branch:** `claude/llm-validation-gaps-assessment-4qpv7y`, pushed · **Phase:** 6.21
+built · **Status:** 1,821 Python tests, 141 admin-ui, 123 user-ui; every gate clean.
+
+Built in the order the phase doc set: a and e first, because they are what Phase 7 hits
+on its first afternoon, then b, c, d, f.
+
+### 6.21a — one ladder for every name
+
+`src/greenlight_ai/resolve/`. Exact, then separators-as-noise, then the same words
+singular-or-plural in order, then an administrator's alternates, then the model shown
+names and nothing else. Two rules make it defensible and both are tested: **a rung that
+ties is a rung that failed**, and **a later rung never overrules an earlier one** — which
+is what guarantees nothing that matched before stops matching.
+
+The fifth rung follows 6.15 exactly and produces a `layout_reasoned` review finding, so
+a reviewer can disagree with the *reading* rather than only with the finding. Four
+normalisers became one.
+
+The `layout_drift` fixture is `baseline_match` delivered by a customer who names
+everything differently. Nine of its eleven renamed names resolve in code; two need the
+fifth rung, which is what the rung is for.
+
+**Found while building:** the counts report carries a waterfall step called `input` and
+a total called `Input`. Different rows, and the old lookup took whichever openpyxl
+returned first. Rung 1 settles it by spelling now.
+
+### 6.21e — the model call itself
+
+Guided decoding, which `design.md` has recommended since Phase 2 and nothing sent.
+`llm.guided_json` defaults to `auto`; a refusal is handled **without reading the body**
+(ADR-003), so any 400 on a guided request means drop the field, retry once, and stop
+offering it this process. One wasted call per process, not one per stage.
+
+Also the artifact-detection tiebreak `detect.py`'s own docstring said was deliberately
+unbuilt — it can only *narrow* the shortlist code produced, and gets its own verdict,
+`reasoned` — and PDF OSL tables, which were being flattened into paragraphs. That one
+mattered more than it looks: most `criteria` requirements live in a table, so the same
+specification delivered as a PDF yielded fewer requirements than as Word, and fewer
+requirements reads downstream as nothing wrong.
+
+**The re-check guard was stale in a way worth recording.** It counted rows in the call
+log and a cache hit is a row; stages 6 and 7 both gained model calls after it was
+written, every one cached on a re-check. It would have fired on a re-check that behaved
+perfectly. It counts tokens now, which is what "the re-check is free" has always meant.
+
+### 6.21b — the layout as admin data
+
+Entries on the artifact type, read by the ladder's fourth rung, with the suggestions on
+the same screen: what the AI read, how sure, why, how many runs met it, one button.
+
+Two things the tests caught rather than the author. The migration adds both columns
+nullable, backfills, then makes them NOT NULL — `test_migration_chain.py` refused the
+first version, which is exactly the defect it was written for. And the editor's
+spellings box derived its value from the parsed list, so every keystroke re-joined the
+list and ate the space just typed: "Accepted total" became "Acceptedtotal".
+
+### 6.21c — the tool may report what no rule covers
+
+`profile_anomaly` has been declared since Phase 2, labelled in the UI, used in a prompt
+example, and constructed nowhere. Now it is produced by code: the median and median
+absolute deviation of the configuration's previous finalized deliveries, not the mean
+and standard deviation, because one odd delivery drags a mean far enough to hide the
+next one — and there is a test for that.
+
+Three things make it safe: it says nothing below three deliveries of history, code
+grades it **low** because code cannot know what matters here, and it was measured before
+shipping — 92.3% precision, 100% recall, with a floor asserted in the suite.
+
+**The benchmark corrected an assumption while it was being written.** A scenario
+asserted a null rate up 40% should not fire. It fired every time and was right: on a
+measure that has sat at 4.0% ± 0.2% for eight deliveries, 5.6% is eight deviations out.
+
+### 6.21d — spend, visible everywhere
+
+Arithmetic over the `llm_calls` rows already stored. **No rate means no money** — the
+figures stay in tokens and no currency appears, because a zero with a currency on it
+reads as "this cost nothing", which is a different and wrong claim. **Nothing new
+refuses anything**, asserted by reading the module's own source for a `raise`.
+
+### 6.21f — show it, and lead somebody through it
+
+The dress rehearsal is the piece that matters: until it, the only way to learn whether a
+definition fired was for somebody else to submit a real delivery, so the feedback loop
+ran through another person's working day.
+
+**The waterfall turned out not to be cosmetic.** It could not be filled at render time
+at all — by then the workbooks are parsed and gone — which is why it had sat empty since
+Phase 5. It is read at stage 7 and stored with the run.
+
+And writing the rehearsal found that reporting every sheet name against every report
+type lists the state sheet as missing from the DIRT: true, useless, and a screen full of
+true-and-useless is one nobody reads.
+
+Plus the coverage bar, confidence on a finding, the setup checklist, and `<Explain>` in
+the user app, which had none.
+
+### What is open, and why
+
+**One acceptance criterion**, and it is not work a session can do: what guided decoding
+buys can only be measured against a real endpoint. Every call records whether the schema
+was sent; the number waits for [`phase-7.md`](phase-7.md)'s bootstrap, where the baseline
+is taken anyway.
+
+### Next concrete action
+
+Nothing in 6.21. The branch still carries a `claude/*` name the harness assigned before
+`CLAUDE.md`'s rule could apply — rename it or merge through a `feature/*` branch before
+it reaches `main`.
 
 ---
 

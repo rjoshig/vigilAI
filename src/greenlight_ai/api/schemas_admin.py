@@ -668,6 +668,54 @@ class LayoutAcceptIn(BaseModel):
     scope: str = ""
 
 
+class ArtifactReadingOut(BaseModel):
+    """What the tool made of one artifact type's samples (Phase 6.21f)."""
+
+    key: str = ""
+    label: str = ""
+    sample_count: int = 0
+    sheets: list[str] = Field(default_factory=list)
+    #: The names the fixed checks look for that code found, as wanted → what it is here.
+    resolved: dict[str, str] = Field(default_factory=dict)
+    #: Names it looked for and code could not settle. Not an error: most do not apply
+    #: to most report types, which the screen says rather than listing them as faults.
+    unresolved: list[str] = Field(default_factory=list)
+    error: str = ""
+
+
+class NamedValueReadingOut(BaseModel):
+    """One pointer, resolved against the samples."""
+
+    name: str = ""
+    description: str = ""
+    found: bool = False
+    value: str = ""
+
+
+class CheckReadingOut(BaseModel):
+    """One check, evaluated over the samples."""
+
+    name: str = ""
+    expression: str = ""
+    #: ``null`` when a value it needs was not found, which on a real run is a "could
+    #: not evaluate" finding rather than a silent skip.
+    passed: Optional[bool] = None
+    detail: str = ""
+    shadow: bool = False
+
+
+class RehearsalOut(BaseModel):
+    """What a setup would do, as far as the samples can say (Phase 6.21f)."""
+
+    scope: str = ""
+    artifacts: list[ArtifactReadingOut] = Field(default_factory=list)
+    named_values: list[NamedValueReadingOut] = Field(default_factory=list)
+    checks: list[CheckReadingOut] = Field(default_factory=list)
+    #: What the rehearsal could not tell anybody, said plainly rather than implied by
+    #: an empty list.
+    notes: list[str] = Field(default_factory=list)
+
+
 class GuideIn(BaseModel):
     """A validation guide, as the admin-ui submits it (Phase 6.8b)."""
 

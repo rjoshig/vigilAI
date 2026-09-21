@@ -24,6 +24,7 @@ from greenlight_ai.checks.reports import (
     REPORT_CHECKED_KINDS,
     CheckOutcome,
     run_derived_check,
+    waterfall_rows,
 )
 from greenlight_ai.llm.client import LLMError
 from greenlight_ai.llm.prompts import JUDGMENT_PROMPT, PROGRAMME_READING_PROMPT, SHAPE_PROMPT
@@ -128,6 +129,9 @@ def run(context: RunContext) -> None:
     # every check that needed the same sheet (Phase 6.21a).
     _report_reasoned_names(context, resolver)
     _check_anomalies(context, resolver)
+    # Read here rather than at render time, because by then the workbooks are long
+    # parsed and gone (Phase 6.21f).
+    context.waterfall = waterfall_rows(context.reports, resolver)
 
     # Coverage is settled here, where every check that was going to run has run. It
     # is not a stage of its own: it computes nothing new, it reports what the stage
@@ -195,6 +199,7 @@ def _report_reasoned_names(context: RunContext, resolver: LayoutResolver) -> Non
                 ),
                 leg="config_reports",
                 engine="model",
+                confidence=reasoned.confidence,
                 evidence=Evidence(
                     report_name=reasoned.artifact,
                     report_sheet=reasoned.found if reasoned.kind == "sheet" else "",
@@ -324,6 +329,7 @@ def _read_shape(context: RunContext) -> None:
                 ),
                 leg="config_reports",
                 engine="model",
+                confidence=unusual.confidence,
                 evidence=Evidence(report_name="dirt", report_sheet=DIRT_ATTRIBUTE_SHEET),
             )
         )

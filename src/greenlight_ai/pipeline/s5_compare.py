@@ -46,6 +46,10 @@ def run(context: RunContext) -> None:
                     ),
                     leg="osl_config",
                     rule_id=rule.rule_id,
+                    # The extraction's own number is the whole subject of this
+                    # finding, so carrying it lets a reviewer sort the least-sure
+                    # readings to the top (Phase 6.21f).
+                    confidence=rule.confidence,
                     evidence=Evidence(osl_ref=rule.source_ref, osl_text=rule.source_text),
                 )
             )

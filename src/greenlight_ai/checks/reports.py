@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Final, Mapping
+from typing import Final, Mapping, Sequence
 
 from greenlight_ai.checks.named_values import to_number
-from greenlight_ai.parsers.base import ReportDocument, ReportKind, ReportSheet
+from greenlight_ai.parsers.base import ReportCell, ReportDocument, ReportKind, ReportSheet
 from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.rules.derive import DerivedCheck
 from greenlight_ai.rules.normalize import AliasTable, normalize_field_name
@@ -31,6 +31,7 @@ __all__ = [
     "sheet_for",
     "column_for",
     "label_for",
+    "waterfall_rows",
 ]
 
 _LOG: Final = logging.getLogger(__name__)
@@ -274,6 +275,79 @@ def attribute_stats(
             address=row[name_index].address,
         )
     return stats
+
+
+def waterfall_rows(
+    reports: Mapping[ReportKind, ReportDocument],
+    resolver: LayoutResolver | None = None,
+) -> list[dict[str, object]]:
+    """Read the counts report's step-by-step flow (Phase 6.21f).
+
+    The frozen report has had a Waterfall section since Phase 5 and
+    ``report/render.py`` passed it an empty list, so it has never once been drawn. It
+    could not be filled there: by the time a report is rendered the workbooks are long
+    parsed and gone, so the flow has to be read while they are open and stored with the
+    run, which is what this is for.
+
+    Args:
+        reports: The parsed reports.
+        resolver: The run's layout resolver, so a drifted sheet is still read.
+
+    Returns:
+        One entry per step, in the order the report lists them, each with the step's
+        name, the three counts, and whether the arithmetic holds. Empty when the counts
+        report is absent or its flow sheet cannot be found — the checks that care say
+        so in their own findings, and this does not duplicate them.
+    """
+    document = reports.get("counts")
+    if document is None:
+        return []
+    sheet = sheet_for(document, FLOW_SHEET, resolver)
+    if sheet is None:
+        return []
+
+    step_at = column_for(sheet, "Step", resolver, "counts")
+    into = column_for(sheet, "Records in", resolver, "counts")
+    removed_at = column_for(sheet, "Removed", resolver, "counts")
+    out_at = column_for(sheet, "Records out", resolver, "counts")
+    if step_at is None or out_at is None:
+        return []
+
+    def number(row: Sequence[ReportCell], index: int | None) -> float | None:
+        if index is None or index >= len(row):
+            return None
+        return to_number(row[index].value)
+
+    rows: list[dict[str, object]] = []
+    for row in sheet.rows:
+        if step_at >= len(row) or row[step_at].value is None:
+            continue
+        name = str(row[step_at].value).strip()
+        records_in = number(row, into)
+        removed = number(row, removed_at)
+        records_out = number(row, out_at)
+        if not name or records_out is None:
+            continue
+        # A step is broken when its own arithmetic does not hold: what went in, less
+        # what it removed, is not what came out. The total rows at the foot of a flow
+        # sheet carry no "in" figure and so are never broken by this test — the counts
+        # reconciliation check owns those, and two findings for one fact is worse than
+        # one (ADR-001: code decides, and it decides once).
+        broken = (
+            records_in is not None
+            and removed is not None
+            and abs((records_in - removed) - records_out) > 0.5
+        )
+        rows.append(
+            {
+                "step": name,
+                "records_in": f"{records_in:,.0f}" if records_in is not None else "—",
+                "removed": f"{removed:,.0f}" if removed is not None else "—",
+                "records_out": f"{records_out:,.0f}",
+                "broken": broken,
+            }
+        )
+    return rows
 
 
 def run_derived_check(

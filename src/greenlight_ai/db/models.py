@@ -180,6 +180,11 @@ class Run(Base):
     #: application: an administrator adds them to the word list, or does not. Kept on
     #: the run because that is where the evidence for them is.
     keyword_suggestions: Mapped[Any] = mapped_column(Json, default=dict)
+    #: The counts report's step-by-step flow, read while the workbooks were open
+    #: (Phase 6.21f). The frozen report has had a Waterfall section since Phase 5 and
+    #: was passed an empty list, so it has never been drawn: by render time the
+    #: workbooks are parsed and gone, and the flow has to be stored with the run.
+    waterfall: Mapped[Any] = mapped_column(Json, default=list)
     #: The shape of what this delivery carried, per attribute: a null rate, a
     #: minimum, a maximum and a mean (Phase 6.21c). **Aggregates only** — never a row,
     #: never which record held the minimum (ADR-003). A later run of the same
@@ -390,6 +395,10 @@ class Finding(Base):
     reviewed_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     verified: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     verify_agreed: Mapped[Optional[bool]] = mapped_column(sa.Boolean, nullable=True)
+    #: How sure the tool is, 0–1, or NULL where the question does not arise
+    #: (Phase 6.21f). Not a severity: a comparison code is certain about can be
+    #: trivial, and a reading the model was unsure of can be the thing that matters.
+    confidence: Mapped[Optional[float]] = mapped_column(sa.Float, nullable=True)
     #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
     #: the single second opinion.
     lens_opinions: Mapped[Any] = mapped_column(Json, default=list)

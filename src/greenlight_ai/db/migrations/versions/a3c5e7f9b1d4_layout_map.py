@@ -38,18 +38,26 @@ def upgrade() -> None:
     op.add_column("artifact_types", sa.Column("layout_entries", sa.JSON(), nullable=True))
     op.add_column("runs", sa.Column("layout_suggestions", sa.JSON(), nullable=True))
     op.add_column("runs", sa.Column("attribute_profile", sa.JSON(), nullable=True))
+    op.add_column("runs", sa.Column("waterfall", sa.JSON(), nullable=True))
+    # Nullable on purpose and NOT backfilled: NULL means "the question does not
+    # arise for this finding", which is different from "we were not sure".
+    op.add_column("findings", sa.Column("confidence", sa.Float(), nullable=True))
     op.execute("UPDATE artifact_types SET layout_entries = '[]' WHERE layout_entries IS NULL")
     op.execute("UPDATE runs SET layout_suggestions = '[]' WHERE layout_suggestions IS NULL")
     op.execute("UPDATE runs SET attribute_profile = '{}' WHERE attribute_profile IS NULL")
+    op.execute("UPDATE runs SET waterfall = '[]' WHERE waterfall IS NULL")
     with op.batch_alter_table("artifact_types") as batch:
         batch.alter_column("layout_entries", existing_type=sa.JSON(), nullable=False)
     with op.batch_alter_table("runs") as batch:
         batch.alter_column("layout_suggestions", existing_type=sa.JSON(), nullable=False)
         batch.alter_column("attribute_profile", existing_type=sa.JSON(), nullable=False)
+        batch.alter_column("waterfall", existing_type=sa.JSON(), nullable=False)
 
 
 def downgrade() -> None:
     """Undo the change."""
+    op.drop_column("findings", "confidence")
+    op.drop_column("runs", "waterfall")
     op.drop_column("runs", "attribute_profile")
     op.drop_column("runs", "layout_suggestions")
     op.drop_column("artifact_types", "layout_entries")

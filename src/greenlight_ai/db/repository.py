@@ -468,6 +468,8 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
         run.keyword_suggestions = {
             code: list(phrases) for code, phrases in context.keyword_suggestions.items()
         }
+    if context.waterfall:
+        run.waterfall = list(context.waterfall)
     if context.profile:
         run.attribute_profile = {
             name: entry.model_dump() for name, entry in context.profile.items()
@@ -603,6 +605,7 @@ def _replace_findings(session: Session, run: models.Run, findings: Sequence[Find
                 engine=finding.engine,
                 verified=finding.verified,
                 verify_agreed=finding.verify_agreed,
+                confidence=finding.confidence,
                 lens_opinions=list(finding.lens_opinions),
             )
         )
@@ -672,6 +675,7 @@ def load_findings(session: Session, run_id: int) -> list[Finding]:
             review_note=row.review_note,
             verified=row.verified,
             verify_agreed=row.verify_agreed,
+            confidence=row.confidence,
             lens_opinions=tuple(row.lens_opinions or []),
         )
         for row in rows

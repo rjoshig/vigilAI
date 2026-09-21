@@ -1074,3 +1074,50 @@ export interface Spend {
   calls: number;
   per_day: DayCost[];
 }
+
+/** What the tool made of one artifact type's samples (Phase 6.21f). */
+export interface ArtifactReading {
+  key: string;
+  label: string;
+  sample_count: number;
+  sheets: string[];
+  /** Names the fixed checks look for that code found, as wanted → what it is here. */
+  resolved: Record<string, string>;
+  /** Names it looked for and code could not settle. */
+  unresolved: string[];
+  error: string;
+}
+
+/** One pointer, resolved against the samples. */
+export interface NamedValueReading {
+  name: string;
+  description: string;
+  found: boolean;
+  value: string;
+}
+
+/** One check, evaluated over the samples. */
+export interface CheckReading {
+  name: string;
+  expression: string;
+  /** `null` when a value it needs was not found, which on a real run is a "could not
+   * evaluate" finding rather than a silent skip. */
+  passed: boolean | null;
+  detail: string;
+  shadow: boolean;
+}
+
+/**
+ * What a setup would do, as far as the samples can say (Phase 6.21f).
+ *
+ * A rehearsal, not a run: no model is called and nothing is stored, which is what
+ * makes it safe to press repeatedly while editing. It answers "is this wired up", not
+ * "does it ask the right question".
+ */
+export interface Rehearsal {
+  scope: string;
+  artifacts: ArtifactReading[];
+  named_values: NamedValueReading[];
+  checks: CheckReading[];
+  notes: string[];
+}

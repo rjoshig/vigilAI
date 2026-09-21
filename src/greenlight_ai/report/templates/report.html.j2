@@ -150,6 +150,21 @@
       dl.kv dd { margin: 0; }
       .flow-break td { background: hsl(var(--destructive) / 0.08); }
 
+      /* Coverage, as one bar (Phase 6.21f). `print-color-adjust` because a filed copy
+         that drops the colour drops the whole point of it; the counts are beside it
+         either way, so the page is still complete in black and white. */
+      .cover-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+                   background: hsl(var(--muted)); margin: 0.6rem 0 0.9rem; }
+      .cover-bar span { display: block; print-color-adjust: exact;
+                        -webkit-print-color-adjust: exact; }
+      .cover-key { display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+                   margin-right: 0.45rem; print-color-adjust: exact;
+                   -webkit-print-color-adjust: exact; }
+      .cover-checked { background: hsl(var(--success)); }
+      .cover-traced_unchecked { background: hsl(var(--warn)); }
+      .cover-manual { background: hsl(var(--info)); }
+      .cover-untraced { background: hsl(var(--destructive)); }
+
       @media print {
         .no-print { display: none !important; }
         /* Provenance a reader needs on screen and not on the filed copy: when it was
@@ -337,13 +352,22 @@
         A finding says what disagreed. This says what was compared, and what was not:
         the absence of a finding is not on its own a pass. Counts produced by code.
       </p>
+      {% if attestation.requirements_total %}
+      {# One bar rather than four numbers (Phase 6.21f). Inline styles and a table of
+         divs, because this file opens offline from a shared drive with no stylesheet
+         and no script, and it must print. It adds no information: every figure is in
+         the table below it, so it is aria-hidden. #}
+      <div class="cover-bar" aria-hidden="true">
+        {% for slice in coverage_bar %}<span class="cover-{{ slice.state }}" style="width: {{ slice.percent }}%"></span>{% endfor %}
+      </div>
+      {% endif %}
       <table>
         <thead><tr><th>Requirements</th><th>Count</th></tr></thead>
         <tbody>
-          <tr><td class="small">Checked against a report</td><td class="mono">{{ attestation.coverage.checked }}</td></tr>
-          <tr><td class="small">Traced to the configuration, evidenced by no report</td><td class="mono">{{ attestation.coverage.traced_unchecked }}</td></tr>
-          <tr><td class="small">Not traced to any configuration element</td><td class="mono">{{ attestation.coverage.untraced }}</td></tr>
-          <tr><td class="small">Verified by hand</td><td class="mono">{{ attestation.coverage.manual }}</td></tr>
+          <tr><td class="small"><span class="cover-key cover-checked"></span>Checked against a report</td><td class="mono">{{ attestation.coverage.checked }}</td></tr>
+          <tr><td class="small"><span class="cover-key cover-traced_unchecked"></span>Traced to the configuration, evidenced by no report</td><td class="mono">{{ attestation.coverage.traced_unchecked }}</td></tr>
+          <tr><td class="small"><span class="cover-key cover-untraced"></span>Not traced to any configuration element</td><td class="mono">{{ attestation.coverage.untraced }}</td></tr>
+          <tr><td class="small"><span class="cover-key cover-manual"></span>Verified by hand</td><td class="mono">{{ attestation.coverage.manual }}</td></tr>
           <tr><td class="small"><b>Total</b></td><td class="mono"><b>{{ attestation.requirements_total }}</b></td></tr>
         </tbody>
       </table>

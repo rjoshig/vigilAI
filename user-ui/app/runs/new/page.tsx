@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import { ConfigNotes } from "@/components/config-notes";
-import { FieldEffect } from "@/components/explain";
+import { Explain, FieldEffect } from "@/components/explain";
 import { FileDrop } from "@/components/file-drop";
 import { ReportSlotField, emptyPart, type ReportPart } from "@/components/report-slot";
 import {
@@ -315,7 +315,21 @@ export default function NewRunPage() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="configuration">Configuration ID *</Label>
+                <Label htmlFor="configuration">
+                  Configuration ID *
+                  <Explain label="Why does the configuration ID matter?">
+                    <p>
+                      It is how this delivery is compared with the ones before it. The tool checks
+                      the ID you type against what the configuration file itself declares and holds
+                      the run if they disagree, because the commonest way a validation goes quietly
+                      wrong is the right check run against the wrong month.
+                    </p>
+                    <p className="mt-2">
+                      It is also what the drift panel and the anomaly check group by — so a mistyped
+                      ID does not fail, it just compares this delivery against nothing.
+                    </p>
+                  </Explain>
+                </Label>
                 <Input
                   id="configuration"
                   className="mono"
@@ -338,7 +352,20 @@ export default function NewRunPage() {
                 </div>
               ) : null}
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="credit-date">Credit date</Label>
+                <Label htmlFor="credit-date">
+                  Credit date
+                  <Explain label="What is the credit date used for?">
+                    <p>
+                      The date the data was cut. Code looks for it in the reports — by the labels an
+                      administrator configured, and failing that by searching for the date itself —
+                      and says so if it cannot find it or finds a different one.
+                    </p>
+                    <p className="mt-2">
+                      Leave it empty if you do not know: an empty field is checked against nothing,
+                      which is honest. A wrong one produces a finding somebody has to read.
+                    </p>
+                  </Explain>
+                </Label>
                 <Input
                   id="credit-date"
                   type="date"

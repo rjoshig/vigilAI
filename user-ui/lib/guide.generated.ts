@@ -272,6 +272,32 @@ export const GUIDE: GuideSection[] = [
           ],
           [
             {
+              "text": "Two kinds are worth recognising because they read differently from the rest. "
+            },
+            {
+              "text": "\"The layout was read as…\"",
+              "bold": true
+            },
+            {
+              "text": " means the tool could not find a sheet, a column or a row label by name, so the AI was shown the names this delivery carries and asked which was meant. The check then ran against its answer. Confirm the reading is right; if it is, your administrator can record it so the next delivery needs no asking. And an "
+            },
+            {
+              "text": "anomaly",
+              "bold": true
+            },
+            {
+              "text": " — \"the null rate for X is unlike this configuration's previous deliveries\" — is the one finding no rule covers. It is a comparison against this delivery's own history, reported because it is unusual, "
+            },
+            {
+              "text": "which is not the same as being wrong",
+              "bold": true
+            },
+            {
+              "text": ". Confirm it is expected, or say what it should have been."
+            }
+          ],
+          [
+            {
               "text": "Generate final report asks once",
               "bold": true
             },
@@ -305,6 +331,18 @@ export const GUIDE: GuideSection[] = [
       {
         "kind": "list",
         "items": [
+          [
+            {
+              "text": "A "
+            },
+            {
+              "text": "bar across the top",
+              "bold": true
+            },
+            {
+              "text": " shows the four states in proportion, so it is possible to see whether this delivery was mostly checked before reading a single number. The counts beside it are the same information in words."
+            }
+          ],
           [
             {
               "text": "Every requirement is in one of four states. "

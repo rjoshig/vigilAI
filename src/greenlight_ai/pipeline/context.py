@@ -277,6 +277,9 @@ class RunContext:
     #: client, so a report whose layout drifted is still checked; what the model had to
     #: reason about is read back off it afterwards and reported.
     resolver: "LayoutResolver | None" = None
+    #: The counts report's step-by-step flow, read at stage 7 and stored with the
+    #: run so the frozen report can draw it (Phase 6.21f).
+    waterfall: list[dict[str, object]] = field(default_factory=list)
     #: The shape of what this delivery carried, per attribute (Phase 6.21c). Filled by
     #: stage 7 and stored on the run, so a later delivery of the same configuration has
     #: something to be compared against. Aggregates only, never a row (ADR-003).

@@ -8,6 +8,7 @@
  * from last time", has an answer before the findings are read.
  */
 
+import { Explain } from "@/components/explain";
 import { GitCompareArrows } from "lucide-react";
 import * as React from "react";
 
@@ -87,6 +88,18 @@ export function DriftCard({ runId }: DriftCardProps) {
       <CardHeader className="border-b">
         <CardTitle className="flex items-center gap-2">
           <GitCompareArrows className="h-4 w-4" /> Since the previous run
+          <Explain label="What is this compared against?">
+            <p>
+              The previous <b>finalized</b> run of the same configuration for the same customer. Not
+              the last run you submitted: a run somebody abandoned, or one still waiting for a
+              reviewer, has not been agreed to be a normal delivery, and comparing against one would
+              make whatever went wrong in it the new normal.
+            </p>
+            <p className="mt-2">
+              Everything here is a comparison in code. No AI was involved, and nothing here is a
+              finding on its own — it is context for the findings above.
+            </p>
+          </Explain>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-3 text-xs">
