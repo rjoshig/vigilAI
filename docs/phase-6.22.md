@@ -191,7 +191,7 @@ lists the same attributes state the same thing, so the expansion has to happen *
 at the end of stage 2, where every later stage sees the result.
 
 - [x] `product_codes` and `product_code_members`. An attribute shared by two codes is
-      **one** term with one output name: the console refuses the save that would create
+      **one** term with one output name: the API refuses the save that would create
       a disagreement, and `ProductCatalogue.conflicts` names any that exist rather than
       picking a winner.
 - [x] **Expansion is code, never the model.** The model's only job is reading that a
@@ -209,8 +209,8 @@ at the end of stage 2, where every later stage sees the result.
 - [x] An attribute delivered beyond the named code's list is a **low**-severity note,
       never a failure. It is also a privacy signal: a field nobody asked for may be PII,
       and the note says so. Silent unless a requirement actually names a code.
-- [ ] Upload as a master file or one file per product code. **Outstanding.** The
-      console creates and edits a code one at a time, which is what a person maintaining
+- [ ] Upload as a master file or one file per product code. **Outstanding.** The API
+      creates and edits a code one at a time, which is what a person maintaining
       a handful does. A bulk upload has the same problem the dictionary's does — no
       import precedent exists anywhere in the product — and it belongs with that one,
       after real files have shown what a master file actually looks like (Phase 7).
@@ -223,10 +223,25 @@ at the end of stage 2, where every later stage sees the result.
       the product-code class in `tests/rules/test_derive.py`.
 - [ ] **Phase 7 refines this**: how a product code is recognised in real OSL prose, and
       what real deliveries carry beyond their code, can only be tuned against real files.
+- [ ] **No screen in the admin console.** Found by an audit on 2026-09-21, and the most
+      consequential of the three open items: `/product-codes`, `/attribute-terms` and
+      `/attribute-suggestions` are seven working endpoints with **no client anywhere in
+      `admin-ui/`**. The engine reads all of it on every run; an administrator has no way
+      to maintain any of it. Worse, `docs/admin-training.md` described all three as
+      screens — *"the screen refuses"*, *"nothing is in force until you click"* — and the
+      shipped in-app Guide's **number-one recommended action** was to accept attribute
+      suggestions, which cannot be done. Those documents now say what is true; the
+      screens are still to build, and until they are, 6.22c and 6.22d are not finished
+      from an administrator's side however complete the engine is.
 
 ### 6.22d — The dictionary and one resolution path · ✅ complete
 
-**Built 2026-09-21**, ADR-062. The answer to the question `design.md` has carried since
+**Built 2026-09-21**, ADR-062. **The engine is complete and there is no screen for it**
+(see the last item under 6.22c): `/attribute-terms` has no client in `admin-ui/`, so the
+dictionary is real on every run and unmaintainable from the console. Marked amber on
+2026-09-21 for that reason, having been ticked complete on the engine alone.
+
+The answer to the question `design.md` has carried since
 Phase 0: *"Is there an attribute data dictionary to seed the alias table?"* This is
 where one lives when somebody has one, and where the tool writes down what it learned
 when nobody does.

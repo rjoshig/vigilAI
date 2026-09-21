@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**, **6.23**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **8 built** (two items open — the release tag needs a push, and what a real model does when asked to compute needs a real endpoint); **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/kind-sagan-g0liu3`, pushed. **A review of the whole tree closed fifteen defects** (ADR-071 to ADR-073) — see the entry below; every gate green at 2,151 Python tests. Before that: **Phase 8 is built** ([`phase-8.md`](phase-8.md), ADR-068 to ADR-070): *Ask this report* on a frozen report, answering from a context pack code assembles from the run id on every turn; the prose streams and every citation is checked against that pack before it is shown; a **Chat** section in the console with nine settings, off by default, capped and counted; nothing stored. **The release tag is cut**: `v0.6.23` on `c392f6c` (before the chat) and `v0.8.0` on `31c6fae` (with it), both pushed. **One item open**: what a real model does when asked to compute, to stray outside the pack, or to change something — the instruction is asserted, and a mock proves nothing about behaviour. **Next concrete action: 6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Branch | `claude/kind-sagan-g0liu3`, pushed. **Phase 6.22 has no administrator screen** — seven endpoints, no client in `admin-ui/`, and until 2026-09-21 three documents described it as though it had one; 6.22c and 6.22d are amber for that reason and the screens are the next real piece of work in that area. Before that, **a review of the whole tree closed fifteen defects** (ADR-071 to ADR-073) — see the entry below; every gate green at 2,151 Python tests. Before that: **Phase 8 is built** ([`phase-8.md`](phase-8.md), ADR-068 to ADR-070): *Ask this report* on a frozen report, answering from a context pack code assembles from the run id on every turn; the prose streams and every citation is checked against that pack before it is shown; a **Chat** section in the console with nine settings, off by default, capped and counted; nothing stored. **The release tag is cut**: `v0.6.23` on `c392f6c` (before the chat) and `v0.8.0` on `31c6fae` (with it), both pushed. **One item open**: what a real model does when asked to compute, to stray outside the pack, or to change something — the instruction is asserted, and a mock proves nothing about behaviour. **Next concrete action: 6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **The review of 2026-09-21 closed fifteen defects, and two of them were silent.**
@@ -223,6 +223,65 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (the documents, audited against the code)
+
+**Branch:** `claude/kind-sagan-g0liu3`, pushed · **Status:** the three prose documents
+and both in-app Guides brought back into line with the code; one deployment bug and one
+dead end fixed on the way; **6.22c and 6.22d moved to amber**.
+
+**The finding that matters most: phase 6.22 has no administrator-facing screen.**
+`/product-codes`, `/attribute-terms` and `/attribute-suggestions` are seven working
+endpoints with **no client anywhere in `admin-ui/`** — `grep` returns zero hits for any
+of them. The engine reads the dictionary and the catalogue on every run; nobody can
+maintain either from the console. `docs/admin-training.md` described all three as
+screens, in detail, down to *"the screen refuses the save"* and *"nothing is in force
+until you click"* — and the **shipped in-app Guide's number-one recommended action** was
+to accept attribute suggestions, which cannot be done in the product. The documents now
+say what is true, 6.22d is amber rather than ✅, and the gap is written into
+[`phase-6.22.md`](phase-6.22.md) as its own unticked item. **The screens are still to
+build.**
+
+**A held run had one exit, and it was the dishonest one.** The artifact-match card
+offered only *accept*, which asserts the artifacts belong to the delivery on the form,
+with a reason recorded under the submitter's name and printed on the frozen report.
+Somebody who had simply mistyped a configuration id had one button, and pressing it put
+a sentence they did not mean onto a signed document. `POST /runs/{id}/cancel` has
+accepted a held run since holds existed — its guard is `("queued", "held")` — and
+nothing in the product called it. There are two buttons now, and four tests.
+
+**A deployment bug, found by reviewing a document against the code.**
+`docs/deployment.md` documented `GREENLIGHT_AI_CORS_ORIGINS`; `api/app.py` built the
+allow-list from a string literal it then split on commas. Any deployment on a real
+hostname set the variable, restarted, and had the API refuse its own two UIs, with
+nothing failing loudly. Fixed in `48c524a`.
+
+**What was stale, by document.** `presentation-brief.md` was the worst: dated 2026-09-20,
+"built through phase 6.18a", 1,514 tests, and still describing a tool that reconciles
+*three* artifacts — six phases and the whole of phase 8 had landed since. `user-training.md`
+claimed a copy control on Config history that is on the run page, told people to cancel a
+held run when they could not, quoted a refusal string that does not exist, keyed the
+record-layout fallback on the configuration id when it is customer **and** id, said the
+OSL is a Word document when the parser takes PDF, never mentioned drafts at all, and told
+reviewers their comment on a finding might become a rule — it does not; an observation
+does. `admin-training.md` said four settings are never editable (three), that Tool health
+carries per-rule statistics (it does not), and that there are three artifact kinds (four).
+
+**Two habits worth keeping.** First: when a document and the code disagree here, check
+which one is wrong — three of the review's earlier fixes were the *code* catching up with
+`model-context.md`. Second: `scripts/check_docs.sh` catches Guide drift the moment a
+training document changes, which is how every edit in this session stayed in step.
+
+**Still open.** The user Guide has no section on submitting a run, on what to do when one
+is held, or on freezing the report — gaps in coverage rather than untruths, and worth a
+pass of their own. `admin-training.md` does not mention the Notices tab, the Availability
+group, reverse-pass categories, guided decoding, or that the PII tripwire is a switch.
+
+**Next concrete action:** unchanged — 6.18b once real verdicts exist
+([`phase-7.1.md`](phase-7.1.md)) — with the 6.22 console screens now ahead of it in
+anything that touches attribute resolution.
 
 ---
 

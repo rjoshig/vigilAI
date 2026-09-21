@@ -11,7 +11,7 @@ here, the document is wrong and should be fixed in the same change as the screen
 <!-- guide 1: What the tool is doing for you -->
 ## What the tool does, in one paragraph
 
-You upload the order's requirement spec (the **OSL**, a Word document), the ETL
+You upload the order's requirement spec (the **OSL**, a Word or PDF document), the ETL
 configuration (JSON), and the output reports (Excel). You may also upload the
 **record layout** — the delivered file's own schema, one row per field with its name,
 data type and size — and it is worth doing, for reasons below. The tool reads the OSL,
@@ -235,9 +235,9 @@ knows the product; the markers under the form fields are not help and never disa
      Its column headings do not have to match anything: `Field name` / `Data type` /
      `Size`, `Column Name` / `Type` / `Length` and several other spellings all read
      the same. A cover sheet before the layout is skipped.
-     If you upload none, the tool uses whichever layout the last finalized run of the
-     same Configuration ID supplied, and every finding that rests on it says which run
-     and which date it came from. If there has never been one, nothing changes: the
+     If you upload none, the tool uses whichever layout the last finalized run for the
+     same customer *and* Configuration ID supplied, and every finding that rests on it
+     says which run and which date it came from. If there has never been one, nothing changes: the
      run is checked exactly as it was before the slot existed.
    - **Several files for one report type.** Some campaigns deliver one field
      distribution per segment. Use **Add another file** on the slot and give each
@@ -270,13 +270,48 @@ have two ways out, and neither costs a re-upload:
   reasons are a single click. The run carries on from there, and the waiver stays on
   the page and is printed on the final report, so whoever signs it can see the question
   was asked and who answered it.
-- **The form was wrong.** Cancel and correct it.
+- **The form was wrong.** Press **The form was wrong — cancel**. No reason is asked
+  for, because nothing is being waived: the run is discarded rather than validated
+  against a premise nobody stands behind. Submit it again with the right values. This
+  button is what makes the other one mean something — a hold offering only *accept*
+  teaches people to write a sentence they do not mean onto a document they sign.
 
 Anyone who can submit a run can clear a hold. Who ought to be asked first is a question
 for your delivery process, not something the tool decides.
 
 **Nothing has been spent at this point.** The files are stored, no model call has been
 made, and a held run that is cancelled costs nothing.
+
+## Drafts: starting from a delivery you already did
+
+Most orders are not new. They are last month's order for the same customer with a new
+credit date, and typing all of it again is both slow and the commonest way a wrong value
+reaches the form.
+
+**Clone** on any run makes a **draft**: a New run form already filled in with that run's
+customer, order number, configuration id, delivery programme, suppressions answer and
+notes. Nothing is submitted and nothing is checked yet. You change what differs — usually
+the credit date — attach this month's files, and press **Submit**.
+
+A few things worth knowing, because each one is a question people ask:
+
+- **A draft saves itself.** Every field is stored as you leave it, so a closed tab, a
+  meeting, or a laptop that sleeps loses nothing. Come back and carry on.
+- **Drafts are not in the runs list.** They are unfinished work, not deliveries, and
+  mixing them in would make the list lie about how much has been submitted. The **Drafts**
+  button above the list shows them, with a count.
+- **Files replace by slot.** Attaching a DIRT to a draft that already has one replaces
+  it; the old file is removed rather than left on the volume. Slots you do not touch keep
+  what they had.
+- **A draft expires sooner than a run.** Five days by default, set by your administrator,
+  and the draft tells you how long it has left. Submitting it restarts the clock on the
+  ordinary retention window — a delivery is kept for as long as any other.
+- **Discard** throws it away. It asks you to type the word, because there is no undo.
+
+**Cloning does not copy the files**, only what you typed. That is deliberate: the files
+are the one part of a delivery that is never the same twice, and a form that arrived
+pre-loaded with last month's workbooks would be the easiest possible way to validate the
+wrong delivery and never notice.
 
 ## Changing your mind
 
@@ -411,13 +446,16 @@ the others.
   shown so you can judge a finding knowing the context behind it.
 - **Since the previous run** appears when an earlier run of the same configuration
   id was finalized for this customer. It lists Not OK items from last time that are
-  back (read these first), findings that are new and findings that went away, and
+  back (read these first), findings that are new, findings that went away, changes to
+  the shape of the delivered file itself where a record layout was supplied, and
   what changed in the requirements and the configuration. Compared by code; the
   model is not involved. The same section is frozen into the report.
 
 ## Generating the report
 
-**Generate report** is enabled once every high-severity finding is decided. The
+**Generate report** is enabled once every **high**-severity finding *and* every
+**review** finding is decided — a review item is one the tool could not settle by itself,
+so leaving it undecided is the one gap the gate will not let past. The
 report is one page: the header, the summary, the Not OK findings with your comments,
 and expandable detail. It is **frozen**: generated once, stored, and never regenerated,
 so what you signed off is what stays on record. **Download PDF** gives you the same
@@ -431,8 +469,9 @@ it and not the ones already filed. An old PDF looks the way it looked when it wa
 ## Config history
 
 **Config history** lists every captured configuration by configuration id and
-version, with who ran it and when. From here you can copy a configuration into a new
-run, and you can read, add, edit, or switch off the **notes** on a configuration.
+version, with who ran it and when. Each row offers **Notes** and **View**; copying a
+past delivery into a new one is **Clone**, on the run itself, not here. From the notes
+you can read, add, edit, or switch off the **notes** on a configuration.
 Editing a note keeps the earlier wording; switching one off stops it applying from the
 next run and keeps the text.
 
@@ -507,8 +546,9 @@ A tool whose limits are written down is trusted correctly rather than uniformly,
 reviewer who believes it catches everything is the exact failure this product exists to
 prevent. So, plainly:
 
-- **It compares three documents. It does not check the world.** If the OSL itself asks
-  for the wrong thing, every artifact can agree with it and nothing will be raised.
+- **It compares the documents you gave it. It does not check the world.** Four of them
+  when a record layout is uploaded and three when it is not. If the OSL itself asks for
+  the wrong thing, every artifact can agree with it and nothing will be raised.
 - **It cannot see what nobody wrote down.** A verbal agreement with the customer, a
   decision in an email, a convention everyone in the team knows — none of it reaches the
   tool unless it is in the OSL, the configuration, or your delivery notes.
@@ -525,16 +565,23 @@ prevent. So, plainly:
 <!-- guide 7: Why your disagreement is worth recording -->
 ## Why recording your disagreement matters
 
-When you mark a finding a false positive, or say in your own words what the tool should
-have expected, that sentence does not stop at your screen. An administrator reads it,
-and where it can become a rule the tool drafts one — which then runs **silently** beside
-the real checks until there are enough results to know whether it is any good. Only then
-can it start producing findings anybody sees.
+Two different things you can write are easy to confuse, and only one of them travels.
 
-Two things follow that are worth knowing. Your sentence is worth writing carefully,
-because a person will read it and it may end up as a rule. And you find out what happened
-to it: your observations screen says whether it became a rule, is still being measured,
-or was not taken forward, with the reason.
+**A comment on a finding** — the note you add when you mark something a false positive —
+stays with that finding. It is stored, it is shown to whoever reads the run, and it is
+printed on the frozen report so the person signing can see why you decided as you did.
+It does not become a rule.
+
+**An observation**, recorded through Train AI mode, is the one that travels. It does not
+stop at your screen: an administrator reads it, and where it can become a rule the tool
+drafts one — which then runs **silently** beside the real checks until there are enough
+results to know whether it is any good. Only then can it start producing findings anybody
+sees.
+
+So an observation is worth writing carefully, because a person will read it and it may
+end up as a rule. And you find out what happened to it: your observations screen says
+whether it became a rule, is still being measured, or was not taken forward, with the
+reason.
 
 <!-- guide 8: Why the Admin console link may not be there -->
 ## Why the Admin console link may not be there
@@ -558,7 +605,7 @@ has learned is usually given the reviewer role as well, which does show the link
 | The maintenance page instead of the app | Something the tool depends on is deliberately down. The page checks for itself and the app returns on its own. |
 | "its artifacts disagree with what was submitted" | The run is held: what you typed and what the files declare do not match. See **When a run is held**. |
 | "the report chat is switched off" | An administrator has not turned it on for this deployment. |
-| "this run has no frozen report yet" | The chat answers about finished reports only. Freeze the report first. |
+| "run … has no frozen report" | The chat answers about finished reports only. Freeze the report first. |
 | "you have asked … questions today" | The per-person daily limit an administrator set. |
 | "you have asked … questions about this report" | The per-report limit an administrator set. Reopening the panel does not reset it; the report and the run screens show everything the answers were built from. |
 
@@ -571,10 +618,22 @@ run* — why a finding is high, what changed since the last delivery of that con
 what nobody checked, which global rules applied, what the report itself concluded.
 
 **What it can see.** What the tool derived from your files: the findings and the
-decisions people made on them, what was checked and what was not, the rules in force, the
-list of artifacts that arrived, and the text of the report you are looking at. With one
-setting on, it can also see per-column figures the tool computed — a minimum, a maximum,
-a mean, a count of nulls.
+decisions people made on them, what was checked and what was not, the rules in force —
+both the global ones and your delivery programme's — the list of artifacts that arrived,
+what this run was told, and the text of the report you are looking at. It also sees **the
+last three finalized runs of this configuration** and what they found, which is what lets
+it answer *"is this normal for this customer?"*. With one setting on, it can also see
+per-column figures the tool computed — a minimum, a maximum, a mean, a count of nulls.
+
+**Before you ask anything**, the panel says which run it is looking at and how many
+findings it has, and offers four questions built from what this particular report
+contains. If the context had to be shortened to fit, it says so in the panel rather than
+answering from a trimmed picture without telling you.
+
+**How many questions you get.** An administrator sets two limits: how many you may ask
+about one report, and how many you may ask in a day. The per-report one is counted
+against the report, so closing the panel and opening it again does not start it over.
+The panel tells you when you have reached either.
 
 **What it cannot see, ever.** The rows in your files, and the cell values in them. Not
 the OSL document, not the workbooks. It reads what the pipeline already derived from

@@ -23,7 +23,7 @@ export const GUIDE: GuideSection[] = [
             "bold": true
           },
           {
-            "text": ", a Word document), the ETL configuration (JSON), and the output reports (Excel). You may also upload the "
+            "text": ", a Word or PDF document), the ETL configuration (JSON), and the output reports (Excel). You may also upload the "
           },
           {
             "text": "record layout",
@@ -521,7 +521,7 @@ export const GUIDE: GuideSection[] = [
               "bold": true
             },
             {
-              "text": " appears when an earlier run of the same configuration id was finalized for this customer. It lists Not OK items from last time that are back (read these first), findings that are new and findings that went away, and what changed in the requirements and the configuration. Compared by code; the model is not involved. The same section is frozen into the report."
+              "text": " appears when an earlier run of the same configuration id was finalized for this customer. It lists Not OK items from last time that are back (read these first), findings that are new, findings that went away, changes to the shape of the delivered file itself where a record layout was supplied, and what changed in the requirements and the configuration. Compared by code; the model is not involved. The same section is frozen into the report."
             }
           ]
         ]
@@ -545,11 +545,11 @@ export const GUIDE: GuideSection[] = [
         "items": [
           [
             {
-              "text": "It compares three documents. It does not check the world.",
+              "text": "It compares the documents you gave it. It does not check the world.",
               "bold": true
             },
             {
-              "text": " If the OSL itself asks for the wrong thing, every artifact can agree with it and nothing will be raised."
+              "text": " Four of them when a record layout is uploaded and three when it is not. If the OSL itself asks for the wrong thing, every artifact can agree with it and nothing will be raised."
             }
           ],
           [
@@ -623,7 +623,31 @@ export const GUIDE: GuideSection[] = [
         "kind": "text",
         "spans": [
           {
-            "text": "When you mark a finding a false positive, or say in your own words what the tool should have expected, that sentence does not stop at your screen. An administrator reads it, and where it can become a rule the tool drafts one — which then runs "
+            "text": "Two different things you can write are easy to confuse, and only one of them travels."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "A comment on a finding",
+            "bold": true
+          },
+          {
+            "text": " — the note you add when you mark something a false positive — stays with that finding. It is stored, it is shown to whoever reads the run, and it is printed on the frozen report so the person signing can see why you decided as you did. It does not become a rule."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "An observation",
+            "bold": true
+          },
+          {
+            "text": ", recorded through Train AI mode, is the one that travels. It does not stop at your screen: an administrator reads it, and where it can become a rule the tool drafts one — which then runs "
           },
           {
             "text": "silently",
@@ -638,7 +662,7 @@ export const GUIDE: GuideSection[] = [
         "kind": "text",
         "spans": [
           {
-            "text": "Two things follow that are worth knowing. Your sentence is worth writing carefully, because a person will read it and it may end up as a rule. And you find out what happened to it: your observations screen says whether it became a rule, is still being measured, or was not taken forward, with the reason."
+            "text": "So an observation is worth writing carefully, because a person will read it and it may end up as a rule. And you find out what happened to it: your observations screen says whether it became a rule, is still being measured, or was not taken forward, with the reason."
           }
         ]
       }
@@ -699,7 +723,45 @@ export const GUIDE: GuideSection[] = [
             "bold": true
           },
           {
-            "text": " What the tool derived from your files: the findings and the decisions people made on them, what was checked and what was not, the rules in force, the list of artifacts that arrived, and the text of the report you are looking at. With one setting on, it can also see per-column figures the tool computed — a minimum, a maximum, a mean, a count of nulls."
+            "text": " What the tool derived from your files: the findings and the decisions people made on them, what was checked and what was not, the rules in force — both the global ones and your delivery programme's — the list of artifacts that arrived, what this run was told, and the text of the report you are looking at. It also sees "
+          },
+          {
+            "text": "the last three finalized runs of this configuration",
+            "bold": true
+          },
+          {
+            "text": " and what they found, which is what lets it answer "
+          },
+          {
+            "text": "\"is this normal for this customer?\"",
+            "italic": true
+          },
+          {
+            "text": ". With one setting on, it can also see per-column figures the tool computed — a minimum, a maximum, a mean, a count of nulls."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "Before you ask anything",
+            "bold": true
+          },
+          {
+            "text": ", the panel says which run it is looking at and how many findings it has, and offers four questions built from what this particular report contains. If the context had to be shortened to fit, it says so in the panel rather than answering from a trimmed picture without telling you."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "How many questions you get.",
+            "bold": true
+          },
+          {
+            "text": " An administrator sets two limits: how many you may ask about one report, and how many you may ask in a day. The per-report one is counted against the report, so closing the panel and opening it again does not start it over. The panel tells you when you have reached either."
           }
         ]
       },
