@@ -67,8 +67,9 @@ nothing. It is off until an administrator turns it on.
 ### 8a — The release that comes first · ⬜ not started
 
 - [ ] **A GitHub release on `main`, before any code in this phase is written.** Tagged
-      `v0.6.21` once 6.21 has merged, titled **"Before the chatbot"**, with notes covering
-      phases 0 through 6.21.
+      `v0.6.20`, titled **"Before the chatbot"**, with notes covering phases 0 through
+      6.20. It is named for what `main` actually holds: 6.21 is still on its own branch,
+      and a release is the one artifact people trust to mean exactly what it says.
 - [ ] **It is the repository's first release.** There are no tags and no `CHANGELOG.md`
       today, and the release notes say so rather than implying a history that is not
       there. The phase table and [`phase-plan.md`](phase-plan.md) have been the release
@@ -298,7 +299,7 @@ That gap is closed with a switch rather than by loosening the rule for everyone.
 
 ## Acceptance criteria · ⬜ not started
 
-1. [ ] The `v0.6.21` release exists on `main` before any other criterion is started.
+1. [ ] The `v0.6.20` release exists on `main` before any other criterion is started.
 2. [ ] The chat appears only on a finalized run's report page, only when the switch is on,
        and answers only about that run.
 3. [ ] A **Chat** section exists in the admin console with every setting in 8f, each

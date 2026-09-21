@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `claude/next-steps-pending-jr9tne`, pushed. **Phase 6.20 is complete** — three roles, capabilities enforced by the API, both consoles gated, roles assigned as a set, and the single `role` column dropped. **6.19 part B is built**: each app has a Guide in its sidebar, generated from that audience's training document, switchable with `GREENLIGHT_AI_UI_GUIDE`. 6.14 and 6.17 were closed: both were complete and their tables said otherwise. **Phase 8 is now specified** ([`phase-8.md`](phase-8.md)): an optional chat box on the frozen report page, scoped to one run, answering from a context pack code assembles. It is documentation only — no product code — and it is queued behind 6.21. **Next concrete action: cut the `v0.6.21` release on `main` once 6.21 merges** (milestone 8a: nothing in phase 8 starts before the tag exists). After that, 6.18b, the maturity level, which waits on real verdicts ([`phase-7.1.md`](phase-7.1.md)) |
+| Branch | `claude/next-steps-pending-jr9tne`, pushed. **Phase 6.20 is complete** — three roles, capabilities enforced by the API, both consoles gated, roles assigned as a set, and the single `role` column dropped. **6.19 part B is built**: each app has a Guide in its sidebar, generated from that audience's training document, switchable with `GREENLIGHT_AI_UI_GUIDE`. 6.14 and 6.17 were closed: both were complete and their tables said otherwise. **Phase 8 is now specified** ([`phase-8.md`](phase-8.md)): an optional chat box on the frozen report page, scoped to one run, answering from a context pack code assembles. It is documentation only — no product code — and it is queued behind 6.21. Phase 8 is merged to `main` and the **`v0.6.20` release is cut** (milestone 8a), so the gate is satisfied and phase 8 may begin once 6.21 lands. **Next concrete action: 6.18b**, the maturity level, which waits on real verdicts ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -2845,7 +2845,7 @@ change is a no-op for them and catches everything from here on.
 
 ### Pending
 
-Nothing in phase 8 is built, by design. The gate is the release: `v0.6.21` on `main`,
+Nothing in phase 8 is built, by design. The gate is the release: `v0.6.20` on `main`,
 titled *"Before the chatbot"*, once 6.21 has merged. It would be this repository's first
 tag — there are none today and no `CHANGELOG.md` — and the release notes should say so
 rather than implying a history that is not there.
