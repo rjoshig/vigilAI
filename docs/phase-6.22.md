@@ -1,8 +1,8 @@
 # Phase 6.22 — Product codes, the record layout, and attribute resolution
 
-**Status:** 🟡 **in progress** — 6.22a, 6.22b and 6.22d complete and 6.22c built,
-2026-09-21. 6.22c leaves two items open and says why under its heading. 6.22e, f and g
-are specified below and not started.
+**Status:** 🟡 **in progress** — 6.22a, 6.22b, 6.22d and 6.22e complete and 6.22c
+built, 2026-09-21. 6.22c leaves two items open and says why under its heading. 6.22f
+and g are specified below and not started.
 
 ## The goal, in the user's words
 
@@ -259,14 +259,39 @@ makes `attribute_locate_calls` reach the database at all.
 - [x] Tests: `tests/resolve/test_dictionary.py`, `tests/resolve/test_attribute_cap.py`,
       `tests/api/test_attribute_dictionary.py`.
 
-### 6.22e — What the layout lets us check · ⬜ not started
+### 6.22e — What the layout lets us check · ✅ complete
 
-- [ ] Every attribute the OSL requires — named directly or expanded from a product
+**Built 2026-09-21.** No ADR: this applies ADR-060 and ADR-061 rather than deciding
+anything new.
+
+**Found while building.** The `layout_declares_more_than_the_dirt` fixture first used
+`MORT_BAL` as the unmeasured attribute, and the golden set failed: `MORT_BAL` shares the
+word `BAL` with the delivered `TOT_BAL`, so 6.22a reads it as a near miss and answers
+*could not tell*. That is the correct answer, and it is not the case the fixture is for.
+The fixture uses `DOB_YEAR`, which nothing in the DIRT resembles — so the layout's
+answer is the only one there is, which is the point.
+
+- [x] Every attribute the OSL requires — named directly or expanded from a product
       code — appears in the uploaded record layout, using 6.22a's three-state rule.
-- [ ] That check and `fields_present` produce **one** alarm between them, with the
-      explanation attached.
-- [ ] **Out of scope:** type agreement, size and precision, nullability, enum domains,
-      regex formats. Those belong on `field_constraints`, which already exists.
+      "Could not tell" in **either** artifact beats "is not there": one of them
+      plausibly carrying it is enough to withhold the accusation.
+- [x] That check and `fields_present` produce **one** alarm between them, with the
+      explanation attached. They are the same function: `_check_fields_present` reads
+      both artifacts and the detail says what each one showed.
+- [x] The case the DIRT alone cannot show: an attribute the layout **declares** and the
+      DIRT does not report on. The delivered file ships a field nothing measured, and
+      that fails. The reverse — the DIRT reports on it and the layout omits it — does
+      **not** fail: the delivery is right and the document is behind it, so it is said
+      and not counted against the delivery.
+- [x] A finding resting on a borrowed layout names the run and the date it came from.
+- [x] The `layout_declares_more_than_the_dirt` fixture, and the golden set reads each
+      case's record layout.
+- [x] **Out of scope:** type agreement, size and precision, nullability, enum domains,
+      regex formats. Those belong on `field_constraints`, which already exists — and
+      the check's own docstring says so, because the next person to read it will want
+      to add them here.
+- [x] Tests: `tests/checks/test_record_layout_checks.py` and the 6.22e class in
+      `tests/api/test_record_layout.py`.
 
 ### 6.22f — It learns, and a person decides · ⬜ not started
 
@@ -310,7 +335,9 @@ makes `attribute_locate_calls` reach the database at all.
 - [x] 8. The second run of the same configuration, after the spellings are recorded,
       makes **zero** attribute locate calls — asserted by counting calls, not claimed in
       prose (`tests/api/test_attribute_dictionary.py`).
-- [ ] 9. An OSL attribute absent from the record layout produces **one** finding, not two.
+- [x] 9. An OSL attribute absent from the record layout produces **one** finding, not
+      two. Asserted end to end on `layout_declares_more_than_the_dirt`: exactly one
+      finding names the attribute, and its detail says which artifact carried it.
 - [ ] 10. A user without admin capability can propose a mapping when Train AI mode is on
       and cannot activate one.
 - [x] 11. Nothing in 6.22a can make a delivery pass: the widened test only ever moves a

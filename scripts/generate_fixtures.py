@@ -173,6 +173,10 @@ class Case:
     #: Fields the layout declares that the OSL never asked for. A delivery carrying
     #: more than the order named is a low-severity note, never a failure (6.22c).
     record_layout_extra: tuple[str, ...] = ()
+    #: Attributes the record layout declares that the DIRT never reports on
+    #: (Phase 6.22e). The delivered file ships the field and nothing measured it,
+    #: which is the one case the DIRT alone cannot show.
+    record_layout_unmeasured: tuple[str, ...] = ()
     #: A product code the OSL names instead of listing the attributes (Phase 6.22c).
     #: The OSL then says "deliver all attributes from ABC" and the attributes
     #: themselves are looked up in the catalogue — by code, never by the model.
@@ -428,6 +432,42 @@ CASES: Final[tuple[Case, ...]] = (
         notes=(
             "The product-code case. Seed ABC with this case's attributes and the "
             "fields_present check passes; leave DEF undefined and it is reported."
+        ),
+    ),
+    Case(
+        name="layout_declares_more_than_the_dirt",
+        description=(
+            "The record layout declares an attribute the OSL asks for and the DIRT "
+            "never reports on. The delivered file ships the field and nothing "
+            "measured it — the one case the DIRT alone cannot show."
+        ),
+        customer=CUSTOMERS[2],
+        order_number="ORD-10020",
+        configuration_id="CFG-SYNTH-UNMEASURED-20",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        # The OSL asks for nine; the reports carry eight. Before the record layout the
+        # ninth was simply "missing", and it still would be without one.
+        #
+        # ``DOB_YEAR`` rather than the next name in the list, and deliberately.
+        # ``MORT_BAL`` shares the word ``BAL`` with the delivered ``TOT_BAL``, so 6.22a
+        # reads it as a near miss and answers "could not tell" — which is correct, and
+        # is not the case this fixture is for. A name nothing in the DIRT resembles is
+        # what makes the layout's answer the only one there is.
+        osl_attributes=ATTRIBUTES[:8] + ("DOB_YEAR",),
+        config_attributes=ATTRIBUTES[:8] + ("DOB_YEAR",),
+        report_attributes=ATTRIBUTES[:8],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        record_layout=True,
+        record_layout_unmeasured=("DOB_YEAR",),
+        expected_findings=("report_violates_rule",),
+        notes=(
+            "Phase 6.22e: one alarm between the two artifacts, and the detail says "
+            "which of them carried the attribute and which did not."
         ),
     ),
     Case(
@@ -1101,6 +1141,8 @@ def write_record_layout(case: Case, path: Path) -> None:
     sheet.append(list(case.record_layout_headers))
     for name in case.report_attributes:
         sheet.append([case.delivered(name), "DECIMAL" if name in numeric else "CHAR", 10])
+    for name in case.record_layout_unmeasured:
+        sheet.append([name, "CHAR", 15])
     for name in case.record_layout_extra:
         sheet.append([name, "CHAR", 20])
     workbook.save(path)

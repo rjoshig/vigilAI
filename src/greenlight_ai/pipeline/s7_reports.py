@@ -92,7 +92,9 @@ def run(context: RunContext) -> None:
             # (ADR-021). "The field distribution is wrong" is useless when five were
             # uploaded.
             for documents, part_name in _views(context):
-                outcome = run_derived_check(check, documents, context.aliases, resolver)
+                outcome = run_derived_check(
+                    check, documents, context.aliases, resolver, context.record_layout
+                )
                 if outcome.passed is None:
                     context.coverage_record.unevaluated(rule.rule_id)
                 else:

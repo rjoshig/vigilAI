@@ -365,6 +365,50 @@
       ]
     },
     {
+      "name": "layout_declares_more_than_the_dirt",
+      "description": "The record layout declares an attribute the OSL asks for and the DIRT never reports on. The delivered file ships the field and nothing measured it \u2014 the one case the DIRT alone cannot show.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10020",
+      "configuration_id": "CFG-SYNTH-UNMEASURED-20",
+      "osl": "cases/layout_declares_more_than_the_dirt/osl.docx",
+      "config": "cases/layout_declares_more_than_the_dirt/config.json",
+      "reports": {
+        "dirt": "cases/layout_declares_more_than_the_dirt/reports/dirt.xlsx",
+        "state_distribution": "cases/layout_declares_more_than_the_dirt/reports/state_distribution.xlsx",
+        "field_distribution": "cases/layout_declares_more_than_the_dirt/reports/field_distribution.xlsx",
+        "counts": "cases/layout_declares_more_than_the_dirt/reports/counts.xlsx",
+        "billing": "cases/layout_declares_more_than_the_dirt/reports/billing.xlsx"
+      },
+      "record_layout": "cases/layout_declares_more_than_the_dirt/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "report_violates_rule"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
+    },
+    {
       "name": "counts_do_not_reconcile",
       "description": "588 records vanish between exclusions and dedupe; accepts + rejects < input.",
       "customer": "Acme Card Services",

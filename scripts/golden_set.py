@@ -183,6 +183,11 @@ def score_case(
         # lists under ``unknown_product_codes`` are deliberately absent, because an
         # undefined code producing a finding is part of the oracle.
         product_codes=_catalogue_for(case),
+        # The fourth artifact, when the case ships one (Phase 6.22b/e). Most cases do
+        # not, which is the ordinary delivery and the path that must not change.
+        record_layout_path=(
+            root / str(case["record_layout"]) if case.get("record_layout") else None
+        ),
         guidance=RunGuidance(scope_code=programme, credit_date=str(case.get("credit_date", ""))),
         verify_lenses=lenses,
     )

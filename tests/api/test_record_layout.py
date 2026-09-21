@@ -196,3 +196,40 @@ class TestPromotingAndBorrowing:
             assert borrowed.borrowed
             assert borrowed.provenance.startswith(f"from run {first} finalized ")
             assert "SCORE_V3" in borrowed.names
+
+
+class TestWhatTheLayoutLetsUsCheck:
+    """Phase 6.22e, end to end: one alarm between the two artifacts."""
+
+    def test_an_attribute_the_layout_declares_and_the_dirt_omits_is_one_finding(
+        self, submit: Submit, worker: Worker, client: TestClient, api: str, seed_aliases: None
+    ) -> None:
+        """Acceptance criterion 9.
+
+        ``layout_declares_more_than_the_dirt`` asks for nine attributes, the reports
+        carry eight, and the record layout declares the ninth. The delivered file ships
+        a field nothing measured — and the reviewer is told once.
+        """
+        del seed_aliases
+        run_id = int(submit("layout_declares_more_than_the_dirt").json()["run_id"])
+        worker.run_once()
+
+        findings = client.get(f"{api}/runs/{run_id}/findings").json()
+        about = [f for f in findings if "DOB_YEAR" in f["detail"]]
+        assert len(about) == 1
+        assert about[0]["type"] == "report_violates_rule"
+        assert "does not report on" in about[0]["detail"]
+
+    def test_a_delivery_whose_layout_and_dirt_agree_raises_nothing_about_attributes(
+        self, submit: Submit, worker: Worker, client: TestClient, api: str, seed_aliases: None
+    ) -> None:
+        del seed_aliases
+        run_id = int(submit(CASE).json()["run_id"])
+        worker.run_once()
+
+        attributes = [
+            f
+            for f in client.get(f"{api}/runs/{run_id}/findings").json()
+            if "requested attribute" in f["detail"]
+        ]
+        assert attributes == []

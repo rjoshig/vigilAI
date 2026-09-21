@@ -16,7 +16,14 @@ from dataclasses import dataclass
 from typing import Final, Mapping, Sequence
 
 from greenlight_ai.checks.named_values import to_number
-from greenlight_ai.parsers.base import ReportCell, ReportDocument, ReportKind, ReportSheet
+from greenlight_ai.parsers.base import (
+    RECORD_LAYOUT_KIND,
+    ReportCell,
+    ReportDocument,
+    ReportKind,
+    ReportSheet,
+)
+from greenlight_ai.parsers.record_layout import RecordLayoutDocument
 from greenlight_ai.resolve import attributes as attribute_match
 from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.rules.derive import DerivedCheck
@@ -373,6 +380,7 @@ def run_derived_check(
     reports: Mapping[ReportKind, ReportDocument],
     aliases: AliasTable | None = None,
     resolver: LayoutResolver | None = None,
+    record_layout: RecordLayoutDocument | None = None,
 ) -> CheckOutcome:
     """Run one derived check against the reports.
 
@@ -383,6 +391,10 @@ def run_derived_check(
             report's column names.
         resolver: The run's layout resolver (Phase 6.21a). ``None`` stops at the
             deterministic rungs, which is what every caller did before it existed.
+        record_layout: The delivered file's schema, when the delivery carried one
+            (Phase 6.22e). Checked alongside the DIRT and reported as **one** alarm
+            with both readings in it: an attribute the order asked for and neither
+            artifact carries is one problem, not two.
 
     Returns:
         The outcome. ``passed`` is ``None`` when the report the check needs is absent,
@@ -394,7 +406,7 @@ def run_derived_check(
     if check.kind in ("value_set_subset", "value_set_excludes"):
         return _check_value_set(check, reports, resolver)
     if check.kind == "fields_present":
-        return _check_fields_present(check, reports, aliases, resolver)
+        return _check_fields_present(check, reports, aliases, resolver, record_layout)
     if check.kind == "unknown_product_code":
         return _check_unknown_product_code(check)
     if check.kind == "counts_reconcile":
@@ -557,8 +569,9 @@ def _check_fields_present(
     reports: Mapping[ReportKind, ReportDocument],
     aliases: AliasTable | None = None,
     resolver: LayoutResolver | None = None,
+    record_layout: RecordLayoutDocument | None = None,
 ) -> CheckOutcome:
-    """Assert every requested attribute was delivered.
+    """Assert every requested attribute was delivered, in both artifacts that say so.
 
     Two states used to share one answer here: an attribute the delivery does not carry,
     and an attribute whose name in the DIRT we could not work out. Both produced
@@ -567,18 +580,33 @@ def _check_fields_present(
     in fact delivered (Phase 6.22a). They are told apart by evidence now, and an
     attribute that is genuinely absent is still a violation.
 
+    From Phase 6.22e there are **two** artifacts that say what was delivered: the DIRT
+    reports on it, and the record layout declares it. They are read here together and
+    reported as **one** alarm, with both readings in the detail. An attribute the order
+    asked for and neither artifact carries is one problem, not two, and a reviewer told
+    it twice learns to read neither line.
+
+    What the layout adds is the case the DIRT cannot show: an attribute the layout
+    declares and the DIRT does not report on. The file ships a field nothing measured.
+
+    **Out of scope here**, deliberately: type agreement, size, precision, nullability,
+    enum domains and regex formats. Those are per-attribute rules about *values*, and
+    `field_constraints` already owns them (ADR-021). This check is about presence.
+
     Args:
         check: The derived check.
         reports: The parsed reports.
         aliases: The attribute alias table.
         resolver: The layout resolver, for the sheet and column names.
+        record_layout: The delivered file's schema, when the delivery carried one.
 
     Returns:
         The outcome, naming the missing attributes and carrying the unresolved ones
         separately.
     """
     stats = attribute_stats(reports, aliases, resolver)
-    if not stats:
+    layout = record_layout if record_layout is not None and record_layout.fields else None
+    if not stats and layout is None:
         return CheckOutcome(passed=None, detail="The DIRT attribute sheet was not available.")
 
     canonical = aliases.resolve if aliases is not None else normalize_field_name
@@ -586,39 +614,110 @@ def _check_fields_present(
 
     missing: list[str] = []
     unresolved: list[str] = []
-    for name in check.values:
-        match = attribute_match.present(
-            name, spellings, canonical=canonical, resolver=resolver, artifact="dirt"
-        )
-        if match.resolved:
-            continue
-        (unresolved if match.plausible else missing).append(name)
+    #: Declared by the record layout and not reported on by the DIRT. The delivered
+    #: file ships the field; nothing measured it.
+    unmeasured: list[str] = []
+    #: Reported on by the DIRT and not declared by the record layout. The delivery is
+    #: right and the layout is behind it, which is a defect in the document rather
+    #: than in the delivery — so it is said, and it does not fail the check.
+    undeclared: list[str] = []
 
-    missing.sort()
-    unresolved.sort()
+    for name in check.values:
+        in_dirt = (
+            attribute_match.present(
+                name, spellings, canonical=canonical, resolver=resolver, artifact="dirt"
+            )
+            if spellings
+            else None
+        )
+        in_layout = (
+            attribute_match.present(
+                name,
+                layout.names,
+                canonical=canonical,
+                resolver=resolver,
+                artifact=RECORD_LAYOUT_KIND,
+            )
+            if layout is not None
+            else None
+        )
+
+        found_dirt = in_dirt is not None and in_dirt.resolved
+        found_layout = in_layout is not None and in_layout.resolved
+        if found_dirt and (found_layout or layout is None):
+            continue
+        if found_layout and not found_dirt and in_dirt is None:
+            # No DIRT to disagree with: the layout alone answered, which is a pass.
+            continue
+
+        # "Could not tell" beats "is not there", in either artifact. An attribute one
+        # of them plausibly carries under another spelling is not a delivery defect,
+        # and calling it one is the false positive 6.22a was written to undo.
+        plausible = (in_dirt is not None and in_dirt.plausible) or (
+            in_layout is not None and in_layout.plausible
+        )
+        if plausible:
+            unresolved.append(name)
+        elif found_layout and not found_dirt:
+            unmeasured.append(name)
+        elif found_dirt and not found_layout:
+            undeclared.append(name)
+        else:
+            missing.append(name)
+
+    for bucket in (missing, unresolved, unmeasured, undeclared):
+        bucket.sort()
+
     parts: list[str] = []
     if missing:
         parts.append(
             f"The reports are missing {len(missing)} requested attribute(s): "
             f"{', '.join(missing)}."
+            + (" The record layout does not declare them either." if layout else "")
+        )
+    if unmeasured:
+        parts.append(
+            f"The record layout declares {len(unmeasured)} requested attribute(s) the "
+            f"DIRT does not report on: {', '.join(unmeasured)}. The delivered file "
+            "ships the field and nothing measured it."
+        )
+    if undeclared:
+        parts.append(
+            f"The DIRT reports on {len(undeclared)} requested attribute(s) the record "
+            f"layout does not declare: {', '.join(undeclared)}. The delivery carries "
+            "them, so this is the layout being behind rather than the delivery being "
+            "wrong."
         )
     if unresolved:
         parts.append(
-            f"Could not tell what the DIRT calls {len(unresolved)} requested "
-            f"attribute(s): {', '.join(unresolved)}. The delivery may well carry them "
-            "under another spelling, so this is not counted as missing."
+            f"Could not tell what this delivery calls {len(unresolved)} requested "
+            f"attribute(s): {', '.join(unresolved)}. It may well carry them under "
+            "another spelling, so this is not counted as missing."
         )
     if not parts:
-        parts.append(f"All {len(check.values)} requested attributes are present.")
+        parts.append(
+            f"All {len(check.values)} requested attributes are present"
+            + (" in the reports and the record layout." if layout is not None else ".")
+        )
+    if layout is not None and layout.borrowed:
+        parts.append(
+            f"No record layout was uploaded with this delivery, so the one "
+            f"{layout.provenance} was used."
+        )
+
+    observed = f"{len(stats)} attributes in the DIRT"
+    if layout is not None:
+        observed += f", {len(layout.fields)} in the record layout"
 
     return CheckOutcome(
-        # A name nobody could resolve is not a failure. It is only a pass once every
-        # requested attribute has actually been found.
-        passed=False if missing else (None if unresolved else True),
+        # A name nobody could resolve is not a failure, and a layout that is merely
+        # behind the delivery is not one either. It is a failure only when an attribute
+        # the order asked for is nowhere, or ships unmeasured.
+        passed=(False if (missing or unmeasured) else (None if unresolved else True)),
         detail=" ".join(parts),
         report_kind="dirt",
         sheet=DIRT_ATTRIBUTE_SHEET,
-        observed=f"{len(stats)} attributes present",
+        observed=observed,
         unresolved=tuple(unresolved),
     )
 
