@@ -211,24 +211,56 @@ mechanism can be wrong; five that fail independently is a property.
       theme tokens.** A floating panel that cannot be closed from the keyboard is a defect
       in a tool people use all day.
 
-### 8f — Off by default, capped, and counted · ⬜ not started
+### 8f — A Chat section in the admin console: off by default, capped, and counted · ⬜ not started
 
-- [ ] **A feature switch, default off**, like login. A deployment that upgrades does not
-      silently gain an outbound model surface.
-- [ ] **Its own caps** — questions per run, questions per person per day, tokens per
-      answer, turns of transcript — resolved through the three configuration layers
-      (ADR-023) so an administrator can change them without a deploy.
+Every switch this feature needs is an administrator's decision, not a deployment's, so
+they all live in the console. `config/registry.py` already declares settings as
+`SettingSpec` rows grouped into console sections; this adds a **Chat** group to `GROUPS`
+and the rows below. Nothing bespoke is built: the console renders the group, the three
+layers of ADR-023 resolve it, and the existing screen gains a section.
+
+- [ ] **A `Chat` group in the settings registry**, placed after `Model`, since every row
+      in it qualifies something in that section.
+- [ ] **Nine settings, each with a help line saying what changing it costs** — the
+      registry's `help` field is the only account an administrator gets of a value they
+      cannot otherwise observe:
+
+| Label | Key | Kind | Default | What changing it costs |
+| --- | --- | --- | --- | --- |
+| **Report chat** | `chat.enabled` | bool | **false** | The whole feature. Off means no launcher on the report, and the endpoint refuses. A deployment that upgrades does not silently gain an outbound model surface |
+| **Model** | `chat.model` | str | *empty* | Which model answers. Empty follows the **Model** section, so nothing changes on upgrade. A cheaper model here never touches validation accuracy, because the model name is part of every cache key |
+| **Max tokens per answer** | `chat.max_tokens` | int | 800 (256–4000) | The ceiling on one answer. Too low truncates mid-sentence, which on a streamed answer is visible and alarming; too high only costs money |
+| **Temperature (%)** | `chat.temperature_pct` | int | 0 (0–100) | Zero repeats itself exactly and caches well. Raising it reads more naturally and makes the same question answerable two ways, which on a QC report is a worse trade than it looks. It is part of the cache key, so raising it re-asks everything |
+| **Questions per run** | `chat.max_questions_per_run` | int | 20 (1–200) | How long one conversation may go. Reached, the panel says so rather than failing |
+| **Questions per person per day** | `chat.max_questions_per_day` | int | 50 (1–500) | The per-person ceiling, and **the lever for a staged rollout**: set it to zero for people who should not have the feature yet |
+| **Transcript turns kept** | `chat.max_turns` | int | 8 (1–30) | How much history is re-sent with each question. **The main cost lever**, because every turn re-sends the ones before it. Lower it and the chat forgets sooner; raise it and each answer costs more than the last |
+| **Timeout (seconds)** | `chat.timeout_s` | int | 60 (10–300) | How long a stream may stay open before it is abandoned. An abandoned stream stores nothing |
+| **Include report aggregates** | `chat.report_aggregates` | bool | **false** | 8g. **This one changes what leaves the building** and is labelled accordingly |
+
+- [ ] **Two of the nine are marked as reaching the model.** `chat.report_aggregates`
+      decides what the model is shown and `chat.model` decides which model is shown it;
+      both take a marker and a row in [`model-context.md`](model-context.md), in the
+      commit that builds them. A person's typed question reaches the model too, and the
+      register says so — it is the first field in the product that does, without an
+      administrator having written it.
+- [ ] **The section shows what it has cost**, as a live count of questions asked in the
+      last thirty days beside the caps, in the same spirit as the cap countdown. A number
+      next to the limit it is approaching is worth more than either alone.
 - [ ] **It never spends the run's token budget.** A finalized run's remaining budget is a
       meaningless denominator, and a long conversation must not be able to starve
       anything.
 - [ ] **Every call is recorded like every other**, so the usage screens and the per-person
       counts include it. A feature whose cost is invisible is a feature nobody can decide
       to keep.
-- [ ] **No new capability.** Anyone who can read the run can ask about it, because the
-      chat shows nothing the report and the run screens do not already show that person.
-      A capability that guards no data is a row in the table nobody can explain later,
-      and ADR-049 exists to stop the table growing one per feature. The per-person daily
-      cap remains the lever for a staged rollout.
+- [ ] **No new capability to use it; the existing one to configure it.** Anyone who can
+      read the run can ask about it, because the chat shows nothing the report and the run
+      screens do not already show that person. Changing any row above needs
+      `MANAGE_SETTINGS`, which is where every other setting already sits. A capability
+      that guards no data is a row in the table nobody can explain later, and ADR-049
+      exists to stop the table growing one per feature.
+- [ ] **Turning it off mid-conversation is safe.** The panel disappears on the next load
+      and the endpoint refuses; nothing is stored, so there is nothing left behind to
+      clean up.
 
 ### 8g — The switch that widens what it may see · ⬜ not started
 
@@ -269,28 +301,34 @@ That gap is closed with a switch rather than by loosening the rule for everyone.
 1. [ ] The `v0.6.21` release exists on `main` before any other criterion is started.
 2. [ ] The chat appears only on a finalized run's report page, only when the switch is on,
        and answers only about that run.
-3. [ ] A test asserts the pack contains no report cell value that is not an aggregate, and
+3. [ ] A **Chat** section exists in the admin console with every setting in 8f, each
+       carrying a help line. The feature is off in a fresh install, and a test asserts the
+       endpoint refuses while it is off rather than relying on the launcher being hidden.
+4. [ ] Lowering **transcript turns kept** measurably lowers the tokens a conversation
+       costs, and setting **questions per person per day** to zero denies that person the
+       feature with a message that says so.
+5. [ ] A test asserts the pack contains no report cell value that is not an aggregate, and
        fails when a section is widened to include one.
-4. [ ] A test asserts a client cannot change the pack: a forged transcript and a forged
+6. [ ] A test asserts a client cannot change the pack: a forged transcript and a forged
        context field alter nothing about what the model is shown.
-5. [ ] A person who may not read a run cannot chat about it, and the refusal is the same
+7. [ ] A person who may not read a run cannot chat about it, and the refusal is the same
        one the report itself gives.
-6. [ ] The greeting is produced by code, names the run, the configuration and the finding
+8. [ ] The greeting is produced by code, names the run, the configuration and the finding
        count, and costs no model call.
-7. [ ] Every citation shown resolves to an id in the pack. A test feeds a fabricated id
+9. [ ] Every citation shown resolves to an id in the pack. A test feeds a fabricated id
        through the streaming path and asserts it never reaches the panel as a citation.
-8. [ ] A malformed citation tail leaves the streamed answer in place and shows the
-       unverified notice, without a second call and without replacing text.
-9. [ ] A cache hit is served whole and makes no network call; an interrupted stream
-       stores nothing.
-10. [ ] Asked to add two numbers from the report, the chat quotes the computed figure or
+10. [ ] A malformed citation tail leaves the streamed answer in place and shows the
+        unverified notice, without a second call and without replacing text.
+11. [ ] A cache hit is served whole and makes no network call; an interrupted stream
+        stores nothing.
+12. [ ] Asked to add two numbers from the report, the chat quotes the computed figure or
         declines. Asked something outside the pack, it says it cannot answer rather than
         answering.
-11. [ ] Chat calls are counted in the usage figures and per person, and no chat call
+13. [ ] Chat calls are counted in the usage figures and per person, and no chat call
         consumes the run's token budget.
-12. [ ] The frozen report file is byte-for-byte unchanged by the presence of the chat —
+14. [ ] The frozen report file is byte-for-byte unchanged by the presence of the chat —
         its checksum after a conversation matches the one stored at freeze.
-13. [ ] Both training documents and both in-product Guides describe the chat, including
+15. [ ] Both training documents and both in-product Guides describe the chat, including
         what it will not do, and the docs gate passes.
 
 ## What this phase deliberately does not do
@@ -324,7 +362,8 @@ Recorded so they are not relitigated. All four were answered by the user on 2026
 | Does it stream? | **Yes** — the prose streams, the citations are validated after the stream closes and only then shown (8c, ADR-053) |
 | What if the citation tail is malformed? | **Keep the answer, say the citations are unverified.** No retry that pulls text somebody is reading (8c) |
 | Which model answers? | **Its own setting, defaulting to the pipeline's model** (8c) |
-| Who may use it? | **Anyone who can read that run.** No new capability (8f) |
+| Who may use it? | **Anyone who can read that run.** No new capability; configuring it needs `MANAGE_SETTINGS` (8f) |
+| Where is it turned on and tuned? | **A `Chat` section in the admin console**, declared as `SettingSpec` rows like every other setting, resolved through the three layers of ADR-023 (8f) |
 | Can a conversation be kept? | **Copy to the clipboard**, by the person, into their own notes. The tool still stores nothing (8e) |
 
 ## Why this is worth a phase

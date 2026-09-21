@@ -2801,6 +2801,31 @@ looks like a malfunction even when it is correct.
 Streaming lives in `llm/` beside `complete`, not in a second path, which amends ADR-004's
 "one entry point" to "one module" — always the rule that mattered.
 
+### Every switch is the administrator's, and they live in one place
+
+The user asked for the chat to be turned on and off from the console, with its token
+settings and anything else relevant. `config/registry.py` already declares settings as
+`SettingSpec` rows grouped into console sections, so this is a **Chat** group of nine rows
+rather than a bespoke screen: the feature switch, the model, tokens per answer,
+temperature, questions per run, questions per person per day, transcript turns kept, the
+timeout, and the aggregates switch of ADR-052. The console renders the group and ADR-023
+resolves it.
+
+Two of the nine carry a marker and a register row, because they decide what the model is
+shown or which model is shown it. **Transcript turns kept** is named in the doc as the
+main cost lever, since every turn re-sends the ones before it. **Questions per person per
+day** doubles as the staged-rollout control: set it to zero and that person does not have
+the feature.
+
+### A stale comment the settings work turned up
+
+`llm/settings.py` said the cache key *does not* include temperature. It does —
+`BaseClient._canonical` puts it in the hashed content, which `cache_key` then hashes with
+the model and the prompt version. Verified by reading both, and corrected: temperature is
+still zero for reproducibility, but the consequence of changing it is that everything is
+re-asked, not that cached and fresh results disagree. Worth catching now, because the new
+Chat settings table states the opposite of what that comment said.
+
 ### Four smaller decisions
 
 Chat resolves **its own model**, defaulting to the pipeline's, so conversation can be

@@ -17,8 +17,9 @@ __all__ = ["Provider", "LLMSettings", "ConfigError", "resolved_llm_settings"]
 Provider = Literal["openai", "anthropic", "mock"]
 
 #: Defaults mirror ``.env.example``. Temperature is 0 because extraction must be
-#: reproducible: the cache key does not include it, so a varying temperature would make
-#: cached and fresh results disagree.
+#: reproducible: the same inputs must produce the same findings. It *is* part of the
+#: cache key — ``BaseClient._canonical`` puts it in the hashed content — so changing it
+#: re-asks everything rather than silently mixing settings.
 _DEFAULTS: Final[Mapping[str, str]] = {
     "LLM_PROVIDER": "mock",
     "LLM_BASE_URL": "",
