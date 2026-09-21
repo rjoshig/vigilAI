@@ -1752,3 +1752,57 @@ same question about themselves.
 **This is a count, not a judgment.** Deactivated accounts still appear: what somebody did
 does not stop having happened (ADR-022). Nothing here reaches a model, and the console
 says so on the card.
+
+## ADR-049 — Roles grant capabilities, a person holds several, and code asks about capabilities
+
+**Status:** accepted · 2026-09-21 · Phase 6.20
+
+**Context.** There were two roles — `admin` and `user` — and no matrix. `role ==
+"admin"` was written out in five routers, and the model's own comment said *"two roles,
+no permission matrix"*. That is workable for two and stops being workable at three.
+
+Two things were wrong in the product. The user app showed **everybody** the admin console
+link, so somebody who could change nothing there was still invited in. And there was no
+role for the person the whole training loop was built for: a senior associate who knows a
+programme well enough to approve what the tool learned from it, but who should not be
+creating accounts or editing what the tool may send to a model.
+
+**Decision.** Three roles — `user`, `reviewer`, `admin` — and **roles grant
+capabilities**. No router asks whether somebody is a reviewer; it asks whether they may
+approve training, and `auth/roles.py` answers. Adding a fourth role is an edit to one
+table rather than a search through five routers, and *what can a reviewer actually do?*
+has an answer that is read rather than reconstructed.
+
+**A person holds several roles**, and capabilities are the union, so holding more roles
+never takes anything away. A senior associate is a `user` and a `reviewer`; an
+administrator is nearly always a `user` too.
+
+**The line between reviewer and admin is judging the work versus defining the
+deployment.** A reviewer decides whether a rule is right. An administrator decides what a
+programme is, who has an account, and what the tool may send to a model. Different jobs,
+different blast radius, and the second group is much smaller.
+
+Two judgement calls are recorded so they can be argued with rather than discovered:
+
+- **Masked columns are admin-only although the rest of Reference data is not.** Naming a
+  column there is what keeps personal data out of every prompt (ADR-003) — the strongest
+  control in the product and the one whose failure is least visible, because nothing goes
+  wrong on screen when a column stops being masked. Aliases and field labels carry none
+  of that risk and stay with the reviewer.
+- **Reviewers get the rule surfaces, not only the training queue.** Approving an
+  observation produces a rule, and a rule the approver cannot then activate makes the
+  role a half-job that always needs an administrator. Shadow-then-activate (ADR-021) is
+  what makes it safe: nothing activated starts producing findings without having run
+  silently first.
+
+**Consequences.** This has **no effect until login is switched on**. ADR-022 ships it
+off, and with it off `deps.py` hands the placeholder `is_admin=True` — which must stay
+true, because ADR-022 promises that with both switches off the behaviour is exactly what
+it was before login existed. So the enforcement is built before the hiding, a hidden link
+is never mistaken for a closed door, and the acceptance criteria are tested with login
+**on**, which no existing UI test does.
+
+Refused, for now: **per-object permissions**. "Reviewer for programme AM only" would
+overload `scope`, which already means something specific (ADR-029), and make both harder
+to reason about. And **no permission editing in the console** — a console that lets
+somebody grant themselves `MANAGE_SETTINGS` has one role in it.

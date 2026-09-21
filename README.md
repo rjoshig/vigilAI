@@ -159,6 +159,9 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   product**: the "Helps the AI" marker on the thirteen fields that reach the model and
   do not say so, and a Guide in each app's sidebar so the training documents reach the
   people using the tool rather than sitting in a repository
+- [`docs/phase-6.20.md`](docs/phase-6.20.md) — **three roles**: user, reviewer and
+  administrator, with capabilities rather than role checks, several roles per person,
+  and a console that shows each person only their own job
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and
