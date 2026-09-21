@@ -173,6 +173,22 @@ def seed_admin(session: Any, data_dir: Path, fixtures: Path, manifest: dict[str,
                 role="admin",
             )
         )
+    # A senior associate: a user *and* a reviewer (ADR-049). Seeded so the difference
+    # between the three roles can be seen with login switched on, rather than only
+    # read about — with it off this account is not reachable and changes nothing.
+    if not session.execute(
+        sa.select(models.User).where(models.User.username == "demoreviewer")
+    ).first():
+        session.add(
+            models.User(
+                username="demoreviewer",
+                name="Robin Reviewer",
+                email="demoreviewer@example.com",
+                password_hash=hash_password("demo-reviewer-account"),
+                roles=["user", "reviewer"],
+                role="reviewer",
+            )
+        )
 
     for canonical, alias in FIXTURE_ALIASES.canonical_by_alias.items():
         session.add(models.AttributeAlias(canonical_name=alias, alias=canonical))

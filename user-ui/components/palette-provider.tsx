@@ -32,6 +32,8 @@ interface PaletteContextValue {
   tooltips: boolean;
   /** Whether the "used for setup, not for runs" markers show (Phase 6.19). */
   setupMarkers: boolean;
+  /** Whether this app offers its Guide in the sidebar (Phase 6.19b). */
+  guide: boolean;
   /** The line under the mark in the sidebar (Phase 6.14h). */
   tagline: string;
   /** Whether the user app should show a maintenance page (Phase 6.14j). */
@@ -121,6 +123,7 @@ export function PaletteProvider({
       locked: appearance.locked,
       tooltips: appearance.tooltips,
       setupMarkers: appearance.setupMarkers,
+      guide: appearance.guide,
       tagline: appearance.tagline,
       maintenance: appearance.maintenance,
       accepting: appearance.accepting,

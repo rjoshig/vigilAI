@@ -3,6 +3,7 @@
 /** The sidebar and page frame shared by every screen. */
 
 import {
+  BookOpen,
   ExternalLink,
   FileSearch,
   FileText,
@@ -69,6 +70,17 @@ const EXPLORE_NAV: NavItem = {
 };
 
 /**
+ * The Guide (Phase 6.19b). Shown while `ui.guide` is on, which is the default: it has to
+ * be findable without being told it exists, which is the whole reason it is in the rail
+ * rather than behind a help menu.
+ */
+const GUIDE_NAV: NavItem = {
+  href: "/guide",
+  label: "Guide",
+  icon: BookOpen,
+};
+
+/**
  * The mode indicator (6.4a). Drawn in both states, because "off" is a fact a person
  * should be able to see and not merely the absence of a control.
  */
@@ -122,10 +134,15 @@ function ThemeToggle() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // Null while login is off, which is the shipped default, so the footer stays as it was.
-  const { user, signOut } = useAuth();
+  const { user, canViewAdmin, signOut } = useAuth();
   const trainingEnabled = useTrainingEnabled();
-  const { tagline } = usePalette();
-  const nav = trainingEnabled ? [...NAV, EXPLORE_NAV, TRAINING_NAV] : [...NAV, EXPLORE_NAV];
+  const { tagline, guide } = usePalette();
+  const nav = [
+    ...NAV,
+    EXPLORE_NAV,
+    ...(trainingEnabled ? [TRAINING_NAV] : []),
+    ...(guide ? [GUIDE_NAV] : []),
+  ];
 
   return (
     <div className="flex min-h-screen">
@@ -176,16 +193,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
-          <a
-            href={ADMIN_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 flex items-center gap-3 rounded-md border border-dashed px-2.5 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-          >
-            <ShieldCheck className="h-[1.125rem] w-[1.125rem]" />
-            <span>Admin console</span>
-            <ExternalLink className="ml-auto h-3.5 w-3.5" />
-          </a>
+          {/* Only for somebody whose account includes the console (ADR-049). Inviting
+              everybody into a console they cannot change anything in is what prompted
+              the three roles; while login is off there is one account that holds
+              everything, so the link is there exactly as it was. */}
+          {canViewAdmin ? (
+            <a
+              href={ADMIN_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 flex items-center gap-3 rounded-md border border-dashed px-2.5 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+            >
+              <ShieldCheck className="h-[1.125rem] w-[1.125rem]" />
+              <span>Admin console</span>
+              <ExternalLink className="ml-auto h-3.5 w-3.5" />
+            </a>
+          ) : null}
         </nav>
 
         {user ? (

@@ -12,6 +12,8 @@ __all__ = [
     "AuthConfigOut",
     "ChangePasswordIn",
     "LoginIn",
+    "RoleOut",
+    "RolesIn",
     "UserIn",
     "UserOut",
     "ResetPasswordIn",
@@ -36,11 +38,16 @@ class WhoAmIOut(BaseModel):
     username: str = ""
     name: str = ""
     email: str = ""
-    role: str = "user"
-    #: Every role held, weakest first (ADR-049). ``role`` is the strongest of them and
-    #: stays until everything reads this list. Both consoles will gate on capabilities
-    #: derived from here rather than on the single field.
+    #: Every role held, weakest first (ADR-049).
     roles: list[str] = Field(default_factory=lambda: ["user"])
+    #: What this caller may actually do, so **neither app has to know the matrix**
+    #: (ADR-049). The matrix lives in one place and the apps read the answer: a console
+    #: that reimplemented it would disagree with the API the first time a grant moved,
+    #: and would disagree by showing a screen that then refuses.
+    #:
+    #: Empty for a plain user, and — while login is off — everything, because the
+    #: placeholder holds `user` and `admin` and nothing is being enforced.
+    capabilities: list[str] = Field(default_factory=list)
     is_admin: bool = False
     #: True when login is off and this is the stand-in every action is attributed to.
     is_placeholder: bool = False
@@ -75,7 +82,27 @@ class UserIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=200)
-    role: str = "user"
+    #: Which roles the account holds (ADR-049). They add up rather than replacing one
+    #: another, which is why this is a list and the screen shows checkboxes: a senior
+    #: associate is a ``user`` *and* a ``reviewer``.
+    roles: list[str] = Field(default_factory=lambda: ["user"], max_length=8)
+
+
+class RolesIn(BaseModel):
+    """What roles an account should hold from now on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    roles: list[str] = Field(max_length=8)
+
+
+class RoleOut(BaseModel):
+    """One role and what it is for, as the Users screen shows it beside its checkbox."""
+
+    role: str
+    #: From ``auth/roles.py``, so the console and the code cannot describe a role
+    #: differently. There is one sentence per role and it lives with the grants.
+    description: str = ""
 
 
 class ResetPasswordIn(BaseModel):
@@ -93,7 +120,8 @@ class UserOut(BaseModel):
     username: str
     name: str
     email: str
-    role: str
+    #: Every role held, weakest first (ADR-049).
+    roles: list[str] = Field(default_factory=lambda: ["user"])
     is_active: bool
     is_placeholder: bool
     must_change_password: bool

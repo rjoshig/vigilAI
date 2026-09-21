@@ -384,7 +384,15 @@ export interface CurrentUser {
   id: number;
   name: string;
   email: string;
-  role: string;
+  /** Every role held, weakest first (ADR-049). */
+  roles: string[];
+  /**
+   * What this person may do, as the API resolved it. The app never derives this from
+   * the roles: the matrix lives on the server, and a console that reimplemented it
+   * would disagree with the API the first time a grant moved — by offering a screen
+   * that then refuses.
+   */
+  capabilities: string[];
   is_admin: boolean;
   is_placeholder: boolean;
   must_change_password: boolean;

@@ -206,18 +206,32 @@ describe("the admin API client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/users");
   });
 
-  it("creates an account with its role", async () => {
+  it("creates an account with every role it holds", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 2 }, 201));
     await api.createUser({
       username: "ada",
       name: "Ada Lovelace",
       email: "ada@example.com",
       password: "a-long-enough-password",
-      role: "admin",
+      roles: ["user", "admin"],
     });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/v1/admin/users");
-    expect(JSON.parse(init.body).role).toBe("admin");
+    expect(JSON.parse(init.body).roles).toEqual(["user", "admin"]);
+  });
+
+  it("reads the roles and what each is for from the API, not from a list here", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([{ role: "user", description: "..." }]));
+    await api.listRoles();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/admin/users/roles");
+  });
+
+  it("changes the whole set of roles on one account", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 2, roles: ["user", "reviewer"] }));
+    await api.setUserRoles(2, ["user", "reviewer"]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/users/2/roles");
+    expect(JSON.parse(init.body)).toEqual({ roles: ["user", "reviewer"] });
   });
 
   it("resets a password on that account's own path", async () => {

@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from greenlight_ai.api.deps import CurrentUser, get_session, require_admin
+from greenlight_ai.api.deps import CurrentUser, get_session, require_settings
 from greenlight_ai.api.schemas_config import (
     ConfigChangeOut,
     ProviderTestResult,
@@ -37,7 +37,11 @@ _LOG: Final = logging.getLogger(__name__)
 #: Starlette deprecated its 422 constant; the number is stable and the import is not.
 HTTP_422: Final[int] = 422
 
-router = APIRouter(prefix="/admin/settings", tags=["admin"], dependencies=[Depends(require_admin)])
+# Settings decide what the tool sends to a model, so this is the administrator's
+# alone: a reviewer who could edit them could widen what leaves the deployment.
+router = APIRouter(
+    prefix="/admin/settings", tags=["admin"], dependencies=[Depends(require_settings)]
+)
 
 
 def _out(session: Session, resolved: Resolved) -> SettingOut:
@@ -76,7 +80,7 @@ def _out(session: Session, resolved: Resolved) -> SettingOut:
 @router.get("", response_model=list[SettingGroupOut])
 def list_settings(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_settings),
 ) -> list[SettingGroupOut]:
     """Every setting, grouped, with its effective value and source.
 
@@ -102,7 +106,7 @@ def list_settings(
 def save_setting(
     payload: SettingIn,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_settings),
 ) -> SettingOut:
     """Set one override, effective on the next request or job.
 
@@ -141,7 +145,7 @@ def save_setting(
 def revert_setting(
     key: str,
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_settings),
 ) -> SettingOut:
     """Remove an override so the setting follows the environment again.
 
@@ -168,7 +172,7 @@ def revert_setting(
 @router.get("/history", response_model=list[ConfigChangeOut])
 def change_history(
     session: Session = Depends(get_session),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_settings),
     limit: int = Query(default=100, ge=1, le=1000),
 ) -> list[ConfigChangeOut]:
     """Who changed which setting, when, and from what.
@@ -201,7 +205,7 @@ def change_history(
 @router.post("/test-model", response_model=ProviderTestResult)
 def test_model(
     session: Session = Depends(get_session),
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_settings),
 ) -> ProviderTestResult:
     """Make one cheap call with the settings as they currently resolve.
 

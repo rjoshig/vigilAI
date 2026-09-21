@@ -51,6 +51,7 @@ __all__ = [
     "has_capability",
     "normalize_roles",
     "describe",
+    "holds",
 ]
 
 
@@ -200,3 +201,21 @@ def describe(role: str) -> str:
         One or two sentences, or the empty string for a name that is not a role.
     """
     return _DESCRIPTIONS.get(role, "")
+
+
+def holds(roles: Iterable[str] | None, role: Role) -> bool:
+    """Whether a stored role list includes one role.
+
+    Args:
+        roles: What the account holds.
+        role: The role to look for.
+
+    Returns:
+        True when it is held.
+
+    Asked in Python rather than in SQL on purpose. JSON membership is not portable
+    across SQLite and Postgres (ADR-017) and the users table is small enough that
+    reading it whole costs nothing, so *is there another administrator?* is answered
+    over rows rather than by a dialect-specific predicate.
+    """
+    return role.value in normalize_roles(roles)

@@ -54,6 +54,12 @@ export interface Appearance {
    * markers are not optional — they say where somebody's words end up (ADR-046).
    */
   setupMarkers: boolean;
+  /**
+   * Whether this app offers its Guide (Phase 6.19b). Read from the API rather than from
+   * a build-time variable, so an administrator can switch it off in the console and the
+   * app follows on the next page load with no redeploy (ADR-023).
+   */
+  guide: boolean;
   /** The line under the mark in the sidebar (Phase 6.14h). */
   tagline: string;
   /** Whether the user app should show a maintenance page (Phase 6.14j). */
@@ -93,6 +99,9 @@ export function parseAppearance(body: unknown, fallback: Palette): Appearance {
     // reach the API still shows them rather than silently going quiet.
     tooltips: record.tooltips !== false,
     setupMarkers: record.setup_markers !== false,
+    // On unless the deployment says otherwise, for the same reason as the two above: a
+    // page that cannot reach the API should not silently lose its help.
+    guide: record.guide !== false,
     tagline: typeof record.tagline === "string" ? record.tagline : "",
     // Default to available: a page that cannot reach the API should not tell
     // somebody the tool is down when it may simply be the page that is.
@@ -115,6 +124,7 @@ export async function fetchAppearance(): Promise<Appearance> {
     locked: true,
     tooltips: true,
     setupMarkers: true,
+    guide: true,
     tagline: "",
     maintenance: false,
     accepting: true,

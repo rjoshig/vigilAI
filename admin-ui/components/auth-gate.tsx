@@ -24,19 +24,29 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import type { CurrentUser } from "@/lib/types";
+import type { Capability, CurrentUser } from "@/lib/types";
 
 interface AuthState {
   /** The signed-in account, or null when login is off or nobody has signed in. */
   user: CurrentUser | null;
   /** Whether the admin switch is on, which is what makes sign-out meaningful. */
   authEnabled: boolean;
+  /**
+   * Whether this person may do one thing (ADR-049).
+   *
+   * **With admin login off this is always true**, which is what ADR-022 promises: the
+   * placeholder holds every capability and the API gates nothing, so a console that
+   * hid screens anyway would be lying about what it would refuse. The answer always
+   * comes from the list the API sent; the matrix is never recomputed here.
+   */
+  can: (capability: Capability) => boolean;
   signOut: () => void;
 }
 
 const AuthContext = React.createContext<AuthState>({
   user: null,
   authEnabled: false,
+  can: () => true,
   signOut: () => undefined,
 });
 
@@ -109,6 +119,29 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Somebody whose account does not include the console at all. They can sign in --
+  // the credentials are valid -- but every screen here would refuse them, so they are
+  // told once rather than shown an empty rail and a dashboard of numbers they cannot
+  // act on. Only reachable with the switch on; with it off nobody is gated.
+  if (
+    adminAuth &&
+    user &&
+    !user.must_change_password &&
+    !user.capabilities?.includes("view_admin")
+  ) {
+    return (
+      <AuthFrame title="Not your console">
+        <p className="text-sm text-muted-foreground">
+          You are signed in as {user.name}, whose account does not include the admin console. Your
+          work is in the user app; an administrator can widen what you hold if that is wrong.
+        </p>
+        <Button variant="outline" onClick={signOut}>
+          Sign out
+        </Button>
+      </AuthFrame>
+    );
+  }
+
   if (user?.must_change_password) {
     return (
       <ChangePasswordScreen
@@ -123,8 +156,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Nothing is enforced while the switch is off, so nothing is hidden either.
+  const can = (capability: Capability) =>
+    !adminAuth || Boolean(user?.capabilities?.includes(capability));
+
   return (
-    <AuthContext.Provider value={{ user, authEnabled: adminAuth, signOut }}>
+    <AuthContext.Provider value={{ user, authEnabled: adminAuth, can, signOut }}>
       {children}
     </AuthContext.Provider>
   );

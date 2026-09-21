@@ -518,6 +518,19 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "stay either way, because those are facts about the run rather than help.",
     ),
     SettingSpec(
+        key="ui.guide",
+        env="GREENLIGHT_AI_UI_GUIDE",
+        label="Show the Guide",
+        group="Appearance",
+        kind="bool",
+        default=True,
+        help="On by default: each app carries a Guide in its sidebar, written for the "
+        "person using that app, from the same source as their training document. "
+        "Switch it off where training is delivered another way and a second copy in "
+        "the product would be one more thing to keep current. It changes nothing but "
+        "whether the Guide is offered — no check, no rule and no run is affected.",
+    ),
+    SettingSpec(
         key="ui.setup_markers",
         env="GREENLIGHT_AI_UI_SETUP_MARKERS",
         label="Show setup-only markers",

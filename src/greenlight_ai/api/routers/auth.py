@@ -22,6 +22,7 @@ from greenlight_ai.api.schemas_auth import (
 )
 from greenlight_ai.auth import accounts
 from greenlight_ai.auth.passwords import PasswordTooShort
+from greenlight_ai.auth.roles import Role, capabilities_of, holds
 from greenlight_ai.auth.sessions import COOKIE_NAME, create_session, revoke_session
 from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.db import repository
@@ -89,8 +90,8 @@ def whoami(user: CurrentUser = Depends(current_user)) -> WhoAmIOut:
         username=user.username,
         name=user.name,
         email=user.email,
-        role=user.role,
         roles=list(user.roles),
+        capabilities=sorted(capability.value for capability in user.capabilities),
         is_admin=user.is_admin,
         is_placeholder=user.is_placeholder,
         must_change_password=user.must_change_password,
@@ -146,9 +147,9 @@ def login(
         username=user.username,
         name=user.name or user.username,
         email=user.email,
-        role=user.role,
         roles=list(user.roles),
-        is_admin=user.role == "admin",
+        capabilities=sorted(capability.value for capability in capabilities_of(user.roles)),
+        is_admin=holds(user.roles, Role.ADMIN),
         is_placeholder=False,
         must_change_password=user.must_change_password,
     )
@@ -222,9 +223,9 @@ def change_password(
         username=user.username,
         name=user.name or user.username,
         email=user.email,
-        role=user.role,
         roles=list(user.roles),
-        is_admin=user.role == "admin",
+        capabilities=sorted(capability.value for capability in capabilities_of(user.roles)),
+        is_admin=holds(user.roles, Role.ADMIN),
         is_placeholder=False,
         must_change_password=False,
     )

@@ -73,7 +73,7 @@ def signed_in(
                 "name": "Second Pair Of Eyes",
                 "email": "second@example.com",
                 "password": SECOND,
-                "role": "user",
+                "roles": ["user"],
             },
         )
         assert made.status_code == 201, made.text

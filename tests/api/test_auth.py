@@ -242,7 +242,7 @@ def test_an_admin_creates_accounts_for_both_roles(admin_client: TestClient, api:
             "name": "John Doe",
             "email": "jdoe@example.com",
             "password": GOOD,
-            "role": "user",
+            "roles": ["user"],
         },
     )
     assert made.status_code == 201, made.text
@@ -258,7 +258,7 @@ def test_an_admin_creates_accounts_for_both_roles(admin_client: TestClient, api:
             "name": "Another",
             "email": "other@example.com",
             "password": GOOD,
-            "role": "user",
+            "roles": ["user"],
         },
     )
     assert clash.status_code == 422
@@ -270,7 +270,7 @@ def test_an_admin_creates_accounts_for_both_roles(admin_client: TestClient, api:
             "name": "S",
             "email": "s@example.com",
             "password": "short",
-            "role": "user",
+            "roles": ["user"],
         },
     )
     assert short.status_code == 422
@@ -287,7 +287,7 @@ def test_a_user_account_cannot_reach_an_admin_route(
                 name="Plain User",
                 email="plain@example.com",
                 password_hash=hash_password(GOOD),
-                role="user",
+                roles=["user"],
             )
         )
         session.commit()
@@ -314,7 +314,7 @@ def test_deactivating_an_account_ends_its_sessions_at_once(
             "name": "Temp",
             "email": "temp@example.com",
             "password": GOOD,
-            "role": "admin",
+            "roles": ["admin"],
         },
     ).json()
 
@@ -372,7 +372,7 @@ def test_an_admin_reset_forces_the_person_to_choose_their_own(
             "name": "Reset Me",
             "email": "reset@example.com",
             "password": GOOD,
-            "role": "user",
+            "roles": ["user"],
         },
     ).json()
     other = "another-long-password"
@@ -428,7 +428,7 @@ def test_a_signed_in_person_is_recorded_on_their_work(
                 name="Submitter",
                 email="sub@example.com",
                 password_hash=hash_password(GOOD),
-                role="user",
+                roles=["user"],
             )
         )
         session.commit()
@@ -493,11 +493,10 @@ def test_whoami_reports_the_roles_the_account_holds(client: TestClient, api: str
 
     It used to answer ``role: "user"`` from a literal in `deps.py` while behaving as an
     administrator, which is the sort of disagreement that is only found by reading the
-    code. The console will gate on these, so the answer has to be the account's own.
+    code. Both consoles gate on these, so the answer has to be the account's own.
     """
     body = client.get(f"{api}/auth/me").json()
 
     assert body["roles"] == ["user", "admin"]
-    assert body["role"] == "admin", "the legacy field holds the strongest role held"
     assert body["is_placeholder"] is True
     assert body["is_admin"] is True, "with login off nothing is gated (ADR-022)"

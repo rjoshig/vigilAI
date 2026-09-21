@@ -16,7 +16,7 @@ function person(overrides: Partial<UserUsage> = {}): UserUsage {
     user_id: 1,
     name: "Jo Bloggs",
     username: "jo",
-    role: "user",
+    roles: ["user"],
     is_active: true,
     runs: 4,
     finalized: 2,

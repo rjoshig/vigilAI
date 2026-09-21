@@ -14,13 +14,13 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Final, Iterator, Sequence
+from typing import Callable, Final, Iterator, Sequence
 
 from fastapi import Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session
 
 from greenlight_ai.auth.accounts import ensure_placeholder
-from greenlight_ai.auth.roles import normalize_roles
+from greenlight_ai.auth.roles import Capability, Role, capabilities_of, holds, normalize_roles
 from greenlight_ai.auth.sessions import COOKIE_NAME, resolve_session
 from greenlight_ai.auth.settings import AuthSettings, resolved_auth_settings
 from greenlight_ai.db.settings import DbSettings
@@ -30,6 +30,18 @@ __all__ = [
     "CurrentUser",
     "current_user",
     "require_admin",
+    "require_capability",
+    "assert_capability",
+    "require_training",
+    "require_rules",
+    "require_teaching",
+    "require_reference",
+    "require_privacy",
+    "require_artifacts",
+    "require_programmes",
+    "require_meaning",
+    "require_users",
+    "require_settings",
     "get_session",
     "get_db_settings",
     "get_llm_settings",
@@ -51,8 +63,10 @@ class CurrentUser:
         username: What is typed at the sign-in prompt.
         name: A display name for the audit log and the screens that show who did what.
         email: The account's address.
-        role: The strongest role held, kept for callers not yet moved to ``roles``.
         roles: Every role held, weakest first (ADR-049). Capabilities are the union.
+        capabilities: What this caller may actually do. Resolved from ``roles``, and
+            **empty when the deployment is not enforcing** — see :func:`current_user`.
+            This is what every guard reads; no router asks about a role.
         is_admin: Whether admin routes are permitted.
         is_placeholder: Whether this is the stand-in used while login is off.
         must_change_password: Whether every request but the password change should be
@@ -64,8 +78,8 @@ class CurrentUser:
         "username",
         "name",
         "email",
-        "role",
         "roles",
+        "capabilities",
         "is_admin",
         "is_placeholder",
         "must_change_password",
@@ -77,8 +91,8 @@ class CurrentUser:
         username: str = "",
         name: str = "anonymous",
         email: str = "",
-        role: str = "admin",
         roles: Sequence[str] | None = None,
+        capabilities: frozenset[Capability] | None = None,
         is_admin: bool = True,
         is_placeholder: bool = False,
         must_change_password: bool = False,
@@ -90,8 +104,10 @@ class CurrentUser:
             username: What is typed at the prompt.
             name: A display name.
             email: The account's address.
-            role: The strongest role held.
-            roles: Every role held; defaults to the one in ``role``.
+            roles: Every role held. Defaults to an administrator, which is what a
+                caller constructed without any is: the tests and the worker, neither of
+                which is a person being gated.
+            capabilities: What the caller may do; defaults to what ``roles`` grant.
             is_admin: Whether admin routes are permitted.
             is_placeholder: Whether this is the stand-in used while login is off.
             must_change_password: Whether a password change is outstanding.
@@ -100,8 +116,10 @@ class CurrentUser:
         self.username = username
         self.name = name
         self.email = email
-        self.role = role
-        self.roles = normalize_roles(roles if roles is not None else [role])
+        self.roles = normalize_roles(roles if roles is not None else [Role.ADMIN.value])
+        self.capabilities = (
+            capabilities_of(self.roles) if capabilities is None else frozenset(capabilities)
+        )
         self.is_admin = is_admin
         self.is_placeholder = is_placeholder
         self.must_change_password = must_change_password
@@ -254,18 +272,22 @@ def current_user(
         if required and not any(path.endswith(open_path) for open_path in _ALWAYS_OPEN):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sign in to continue")
         row = ensure_placeholder(session)
+        # With the switch off nothing is gated, which is how the product behaved before
+        # login existed (ADR-022): the placeholder holds `user` and `admin`, so what it
+        # may do is everything. With the switch on, an unauthenticated caller has
+        # reached a path that does not require a session — it may not use the console
+        # on the strength of the placeholder's roles, so it is granted nothing.
+        enforcing = settings.admin_auth
         return CurrentUser(
             id=row.id,
             username=row.username,
             name=row.name,
             email=row.email,
-            role=row.role,
             roles=list(row.roles or []),
-            # With the switch off nothing is gated by role, which is how the product
-            # behaved before login existed (ADR-022). The roles above say what this
-            # account holds; this says what the deployment is enforcing, which is
-            # nothing.
-            is_admin=not settings.admin_auth,
+            capabilities=frozenset() if enforcing else capabilities_of(row.roles),
+            # The roles above say what this account holds; this says what the
+            # deployment is enforcing, which is nothing.
+            is_admin=not enforcing,
             is_placeholder=True,
         )
 
@@ -277,9 +299,11 @@ def current_user(
         username=user.username,
         name=user.name or user.username,
         email=user.email,
-        role=user.role,
         roles=list(user.roles or []),
-        is_admin=user.role == "admin",
+        capabilities=capabilities_of(user.roles),
+        # Read from the role list rather than from the legacy column, so an account
+        # that holds `admin` is an administrator even if the two ever disagree.
+        is_admin=holds(user.roles, Role.ADMIN),
         must_change_password=user.must_change_password,
     )
 
@@ -306,21 +330,105 @@ def require_delete_word(confirm: str = Query(default="")) -> None:
         )
 
 
-def require_admin(user: CurrentUser = Depends(current_user)) -> CurrentUser:
-    """Guard admin routes.
+def require_capability(capability: Capability) -> Callable[..., CurrentUser]:
+    """Build a guard that refuses a caller who may not do one particular thing.
+
+    This is the only way a route asks about permission (ADR-049). Routes name the act
+    — approve training, manage settings — rather than the role, so the matrix in
+    :mod:`greenlight_ai.auth.roles` stays the only place that says who may do what.
+
+    Args:
+        capability: What the route needs.
+
+    Returns:
+        A FastAPI dependency yielding the caller, for use both as a router-level
+        ``dependencies=[...]`` entry and as an endpoint parameter that wants the user.
+
+    The refusal is **403, not 404**. The screen exists and is not theirs; pretending it
+    does not exist makes a support conversation impossible, and there is nothing secret
+    in the name of an endpoint the console links to.
+    """
+
+    def guard(user: CurrentUser = Depends(current_user)) -> CurrentUser:
+        """Refuse the caller unless they hold the capability.
+
+        Args:
+            user: The caller.
+
+        Returns:
+            The caller.
+
+        Raises:
+            HTTPException: 401 when nobody is signed in and the deployment wants them
+                to be, 403 when somebody is signed in without this capability.
+        """
+        if capability in user.capabilities:
+            return user
+        if user.is_placeholder:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sign in to continue")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"this action needs the {_CAPABILITY_NEEDS[capability]}",
+        )
+
+    guard.__name__ = f"require_{capability.value}"
+    return guard
+
+
+#: How a refusal names what was missing. In the words of the job rather than the
+#: constant, because the message reaches a person on a screen.
+_CAPABILITY_NEEDS: Final[dict[Capability, str]] = {
+    Capability.VIEW_ADMIN: "admin console",
+    Capability.APPROVE_TRAINING: "ability to approve training",
+    Capability.MANAGE_RULES: "ability to manage rules",
+    Capability.TEACH_MODEL: "ability to teach the tool",
+    Capability.MANAGE_REFERENCE: "ability to manage reference data",
+    Capability.MANAGE_PRIVACY: "ability to manage masked columns",
+    Capability.MANAGE_ARTIFACTS: "ability to manage artifact types",
+    Capability.MANAGE_PROGRAMMES: "ability to manage delivery programmes",
+    Capability.MANAGE_MEANING: "ability to manage meaning",
+    Capability.MANAGE_USERS: "ability to manage accounts",
+    Capability.MANAGE_SETTINGS: "ability to change settings",
+}
+
+
+def assert_capability(user: CurrentUser, capability: Capability) -> None:
+    """Refuse from inside a handler, where the capability depends on a path parameter.
+
+    A few routes serve several resources — a bulk delete, a revert of any definition —
+    and which capability applies is not known until the parameter is read. They take
+    the console floor as a dependency like everything else and call this once they know
+    what is being changed.
 
     Args:
         user: The caller.
-
-    Returns:
-        The caller.
+        capability: What this particular request turned out to need.
 
     Raises:
-        HTTPException: 403 when the caller is signed in without the admin role, and
-            401 when admin login is on and nobody is signed in.
+        HTTPException: 403 when the caller does not hold it. Not 401: reaching a handler
+            at all means the floor was cleared, so somebody is signed in.
     """
-    if user.is_admin:
-        return user
-    if user.is_placeholder:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sign in to continue")
-    raise HTTPException(status.HTTP_403_FORBIDDEN, "this action needs an administrator")
+    if capability not in user.capabilities:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"this action needs the {_CAPABILITY_NEEDS[capability]}",
+        )
+
+
+#: The floor for the admin console: opening it at all, and reading what changes
+#: nothing. Every other capability is asked for by the route that needs it.
+require_admin: Final = require_capability(Capability.VIEW_ADMIN)
+
+#: One guard per capability, so a route reads as the act it performs. Built once at
+#: import: FastAPI keys its dependency cache on the function object, and a guard built
+#: per request would resolve `current_user` again for every one of them.
+require_training: Final = require_capability(Capability.APPROVE_TRAINING)
+require_rules: Final = require_capability(Capability.MANAGE_RULES)
+require_teaching: Final = require_capability(Capability.TEACH_MODEL)
+require_reference: Final = require_capability(Capability.MANAGE_REFERENCE)
+require_privacy: Final = require_capability(Capability.MANAGE_PRIVACY)
+require_artifacts: Final = require_capability(Capability.MANAGE_ARTIFACTS)
+require_programmes: Final = require_capability(Capability.MANAGE_PROGRAMMES)
+require_meaning: Final = require_capability(Capability.MANAGE_MEANING)
+require_users: Final = require_capability(Capability.MANAGE_USERS)
+require_settings: Final = require_capability(Capability.MANAGE_SETTINGS)
