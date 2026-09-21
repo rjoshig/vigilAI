@@ -40,6 +40,11 @@ This module holds rungs 1 to 4 and depends on nothing. Rung 5 lives in
 
 from __future__ import annotations
 
+from greenlight_ai.resolve.attributes import (
+    AttributeMatch,
+    near_names,
+    present,
+)
 from greenlight_ai.resolve.ladder import (
     DETERMINISTIC_RUNGS,
     RUNGS,
@@ -56,12 +61,15 @@ from greenlight_ai.resolve.normalize import (
 )
 
 __all__ = [
+    "AttributeMatch",
     "DETERMINISTIC_RUNGS",
     "RUNGS",
     "Resolution",
     "Rung",
     "fold",
+    "near_names",
     "padded",
+    "present",
     "resolve",
     "spaced",
     "squashed",

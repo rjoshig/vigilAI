@@ -134,8 +134,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         app.state.session_factory = factory
 
         with factory() as session:
-            for canonical, alias in FIXTURE_ALIASES.canonical_by_alias.items():
-                session.add(models.AttributeAlias(canonical_name=alias, alias=canonical))
+            # ``canonical_by_alias`` maps alias to canonical, so the names read that
+            # way round. Spelled backwards this looks like a transposition and is not.
+            for alias, canonical in FIXTURE_ALIASES.canonical_by_alias.items():
+                session.add(models.AttributeAlias(canonical_name=canonical, alias=alias))
             session.commit()
 
         submit_times: list[float] = []

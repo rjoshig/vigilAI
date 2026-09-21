@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `feature/phase-6.21`, pushed. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)): the ladder, the layout map, anomalies, spend, guided decoding and the dress rehearsal. **Phase 8 is specified** ([`phase-8.md`](phase-8.md)) and queued behind 6.21 — documentation only, and the `v0.6.20` release gate is satisfied, so it may begin now that 6.21 has landed. **Next concrete action: nothing in 6.21 needs a session.** Its one open criterion — what guided decoding buys — can only be measured against a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After that, **phase 8**, or **6.18b** (the maturity level) once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Branch | `feature/phase-6.22a`, pushed. **Phase 6.22 is specified** ([`phase-6.22.md`](phase-6.22.md)) and **6.22a is complete** (ADR-059): an attribute name code cannot resolve is a `review` record, not a high-severity violation — measured one high finding before, zero after. **Next concrete action: 6.22b**, the record layout as a fourth artifact. Also landed: `fix/seed-demo-grace-window`, which repaired `scripts/seed_demo.py` (it crashed on the `role` column 6.20 dropped, then reported outcomes it had not reached); nothing in `tests/` covers that script. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)) and **phase 8 is specified** ([`phase-8.md`](phase-8.md)), queued behind it; 6.21's one open criterion — what guided decoding buys — needs a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After 6.22, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)). `test_announcements.py::...::test_a_sixth_notice_is_refused_with_the_reason` fails on clean `dev` and needs its own look |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -156,6 +156,101 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (a delivered attribute reported missing, at high severity)
+
+**Branch:** `feature/phase-6.22a`, pushed · **Phase:** 6.22a complete, ADR-059 ·
+**Status:** 1,841 Python tests, 123 user-ui; `black`, `flake8`, `mypy` and the docs
+check clean. One pre-existing failure untouched (see below).
+
+Specified [`phase-6.22.md`](phase-6.22.md) from a conversation about reference data, and
+built the first part of it, which turned out to be a repair rather than a feature.
+
+**What was wrong.** `checks/reports.py` asked "does the DIRT carry this attribute?" in
+two places and gave two different answers when it did not know. `_check_fields_present`
+tested `resolve(name) not in stats` and, on a miss, returned a **high-severity
+violation**; `_check_bound`, for the very same miss, returned *could not evaluate*. A
+third copy sat in `checks/field_constraints.py`. The louder one was wrong: an OSL asking
+for `AT01` against a DIRT column named `debsc_burs_atyrt_at01_1` describes a delivery
+that is entirely correct. Measured on the new `attribute_renamed` fixture: **one
+high-severity finding naming all ten delivered attributes as missing. After: zero.**
+
+`resolve/attributes.py` tells the two states apart by evidence — *missing* when nothing
+in the artifact resembles the name, which is still a violation, and *unresolved* when
+something does, which is a `review` record naming the closest candidates.
+
+**Two rules, not one, and both are load-bearing.** A substring test alone cannot reach
+`ST` inside `debsc_burs_atyrt_st_1`, so a whole-word test carries short names. A
+substring test without a length floor finds `st` inside `incomeest` and would have
+softened a genuinely undelivered attribute into a review record — a false positive
+traded for the far worse false negative. Each rule has a test that fails if the other is
+removed.
+
+**A widening that was not the goal.** Routing the three callers through one helper routes
+attribute names through the **ladder**, which they had never reached — they resolved on
+the alias table alone. ADR-054 says one ladder resolves every name and this was the
+surface it was never pointed at, so more resolves now with no configuration: *score*
+reaches `SCORE_V3` on the token rung, *open trades* reaches `OPEN_TRADES` on the squashed
+rung. Nothing that matched before stops matching, but "only the severity changed" would
+be false, so it is in the ADR and the phase doc. `tests/api/test_admin.py` now
+demonstrates the alias screen with *revolving utilization* against `REV_UTIL`, because
+the old demonstration resolves by itself.
+
+**Not a defect after all.** `scripts/seed_demo.py` looked like it wrote alias rows
+transposed, and the plan said to fix it. It does not: `canonical_by_alias` maps alias to
+canonical, so only the loop's variable names were the wrong way round. The names are
+fixed; the data was always right.
+
+**Also closed:** `.gitignore` blocked `*.docx` and `*.xlsx` outside `tests/fixtures/`
+and not `*.csv`, which ADR-003 plainly intends — and a record layout is exactly the file
+somebody drops in a working tree to test with.
+
+**Still open, and untouched:**
+`tests/test_announcements.py::TestTheRules::test_a_sixth_notice_is_refused_with_the_reason`
+fails on clean `dev` as well; a sixth notice is accepted where the test expects a
+refusal. It needs its own look. And `fix/seed-demo-grace-window` (PR #65) is still open
+against `dev`; it touches `scripts/seed_demo.py` too, so one of the two will need a
+trivial merge.
+
+## Session: 2026-09-21 (the demo seed told the truth about seven runs it never ran)
+
+**Branch:** `fix/seed-demo-grace-window`, pushed · **Phase:** none — a defect in a
+development script · **Status:** `black`, `flake8` clean; the seed verified end to end
+against a scratch database.
+
+Brought both UIs up against an empty database and seeded it to have something to look
+at. `scripts/seed_demo.py` crashed, and once it stopped crashing it lied.
+
+**It was stale.** `models.User(role=...)`: phase 6.20 replaced the single column with
+`roles`, and the script passed both. It died on the first account it created. The
+`roles` list beside it was already right, so the dropped keyword was all that had to go.
+
+**It ignored the submission grace window.** A run is enqueued with
+`run_after = now + queue.grace_seconds` (`api/routers/runs.py`), thirty seconds in which
+a person can notice a wrong file before any tokens are spent. The seed drives the worker
+by hand and called `run_once()` immediately, so nothing was ever due and nothing was
+claimed — and then it recorded **the outcome it had asked for rather than the one it
+got**. Seven runs sat queued while the summary announced them finalized and reviewed.
+The `failed` scenario was the only honest line, and only because its retry loop happened
+to bring its own job forward.
+
+Two functions fix it. `make_due` brings a run's jobs forward before the worker turn, and
+the failed path now uses it instead of the inline `__import__` block that was doing the
+same thing by hand. `actual_status` reads the row back and prints
+`queued (expected finalized)` when the scenario did not land, so the next person sees a
+broken seed in the summary rather than in the UI an hour later.
+
+**Not covered by a test**, which is how it rotted past a dropped column: nothing in
+`tests/` references `seed_demo`. A real test drives eight pipelines and is too slow for
+the suite; a fast one would assert only that a fresh run's job is not claimable until the
+grace clears. Left for the user to call.
+
+**Pre-existing and untouched:**
+`tests/test_announcements.py::TestTheRules::test_a_sixth_notice_is_refused_with_the_reason`
+fails on clean `dev` as well — a sixth notice is accepted where the test expects a
+refusal. Not this branch's doing; it needs its own look.
 
 ---
 

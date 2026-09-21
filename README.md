@@ -167,6 +167,11 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   label was meant; the report layout as admin data rather than Python constants; anomalies
   no rule covers; what a run cost; and the guided decoding the design has recommended
   since Phase 2
+- [`docs/phase-6.22.md`](docs/phase-6.22.md) — **product codes, the record layout, and
+  attribute resolution**: the delivered file's schema as a fourth artifact, a product code
+  the OSL can name instead of listing attributes, one central dictionary of what each
+  attribute is called in each artifact — and, first and alone, the repair that stops the
+  tool calling a delivered attribute missing because it is spelled differently
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and

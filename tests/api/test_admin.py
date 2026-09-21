@@ -627,23 +627,36 @@ def test_a_missing_named_value_becomes_a_could_not_evaluate_finding(
 def test_an_alias_added_by_an_admin_removes_the_could_not_evaluate(
     client: TestClient, api: str, submit: Submit, worker: Worker
 ) -> None:
-    """The reference-data screen exists to fix exactly this."""
+    """The reference-data screen exists to fix exactly this.
+
+    The OSL calls the attribute *revolving utilization* and the DIRT column is
+    ``REV_UTIL``. No amount of normalising bridges that, which is precisely when a
+    person has to write the alias down — and it is the case this screen is for.
+
+    It used to be demonstrated with *score* against ``SCORE_V3``. Since Phase 6.22a
+    routed attribute names through the ladder (ADR-054), those two resolve in code on
+    the token rung and need no alias at all, so they no longer demonstrate anything.
+    """
+    unresolved = "revolving utilization"
     first = submit("score_value_mismatch").json()["run_id"]
     worker.run_once()
     before = [
         f
         for f in client.get(f"{api}/runs/{first}/findings").json()
-        if f["type"] == "could_not_evaluate" and "score" in f["title"]
+        if f["type"] == "could_not_evaluate" and unresolved in f["title"]
     ]
-    assert before, "expected an unresolved score check before the alias is added"
+    assert before, "expected an unresolved utilization check before the alias is added"
 
-    client.post(f"{api}/admin/aliases", json={"canonical_name": "score", "alias": "SCORE_V3"})
+    client.post(
+        f"{api}/admin/aliases",
+        json={"canonical_name": unresolved, "alias": "REV_UTIL"},
+    )
 
     second = submit("score_value_mismatch", rerun_reason="alias added").json()["run_id"]
     worker.run_once()
     after = [
         f
         for f in client.get(f"{api}/runs/{second}/findings").json()
-        if f["type"] == "could_not_evaluate" and "score" in f["title"]
+        if f["type"] == "could_not_evaluate" and unresolved in f["title"]
     ]
     assert after == []

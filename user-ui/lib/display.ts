@@ -147,6 +147,7 @@ export const FINDING_LABEL: Record<string, string> = {
   profile_anomaly: "Profile anomaly",
   low_confidence_extraction: "Low-confidence extraction",
   could_not_evaluate: "Could not evaluate",
+  attribute_not_resolved: "Could not resolve attribute name",
 };
 
 /** Which leg of the reconciliation a finding names. */
