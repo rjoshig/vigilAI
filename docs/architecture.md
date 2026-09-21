@@ -74,8 +74,12 @@ into every parser.
 | 8 Verify high-severity findings | LLM | `pipeline/s8_verify.py` | one second opinion, or three independent lenses merged by code (ADR-034); disagreement ⇒ downgrade to Review with every reason; a lens's proposal and an unevidenced requirement that reads like an obligation each become a Review item |
 | 9 Summarize | LLM | `pipeline/s9_summarize.py` | findings list only |
 
-**Re-check** (user edited a rule or a trace link): stages 5–7 only, no LLM. **Review**
-(OK / Not OK, comments) and **report download**: no LLM.
+**Re-check** (user edited a rule or a trace link): stages 5–7 only, no LLM. It is
+queued by the edit, never by a button, and it leaves the run in `needs_review` — so
+`RunDetail.rechecking`, read from the job queue, is what says one is in flight and what
+the Review screen polls on (Phase 6.23b). A re-check that fails leaves the run's status
+alone: its findings are rebuilt from rows that are already stored, so the run is still
+reviewable. **Review** (OK / Not OK, comments) and **report download**: no LLM.
 
 ## Data flow per run
 

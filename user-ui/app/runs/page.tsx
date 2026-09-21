@@ -8,7 +8,7 @@
  * pointless load on a machine that is also serving the worker.
  */
 
-import { Plus, RefreshCw } from "lucide-react";
+import { FileText, Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
@@ -90,6 +90,30 @@ function RunProgress({ run }: { run: RunSummary }) {
       {finished ? ` ${finished}` : ""} ·{" "}
       {total === 0 ? "no findings" : `${total} finding${total === 1 ? "" : "s"}`}
     </span>
+  );
+}
+
+/**
+ * The Report column (Phase 6.23e).
+ *
+ * The list could only ever infer *"frozen"* from the status, so the one thing somebody
+ * scanning a month of history is looking for — did this delivery pass — was a click
+ * away on every row. The verdict is what the frozen report itself says; a run with no
+ * report shows nothing rather than a guess, because "no verdict yet" and "OK" are not
+ * near each other.
+ */
+function ReportCell({ run }: { run: RunSummary }) {
+  if (!run.report_verdict) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const notOk = run.report_verdict === "not_ok";
+  return (
+    <Link href={`/runs/${run.id}/report`} data-testid="report-link">
+      <Badge tone={notOk ? "destructive" : "success"} className="cursor-pointer hover:opacity-80">
+        <FileText className="mr-1 h-3 w-3" aria-hidden />
+        {notOk ? "Not OK" : "OK"}
+      </Badge>
+    </Link>
   );
 }
 
@@ -314,6 +338,7 @@ export default function RunsPage() {
                   <TH>Status</TH>
                   <TH className="min-w-[13rem]">Progress</TH>
                   <TH className="text-center">H / M / L</TH>
+                  <TH>Report</TH>
                   <TH className="text-right">Actions</TH>
                 </TR>
               </thead>
@@ -354,6 +379,9 @@ export default function RunsPage() {
                           <span className="text-info">{run.low}</span>
                         </>
                       )}
+                    </TD>
+                    <TD>
+                      <ReportCell run={run} />
                     </TD>
                     <TD className="text-right">
                       <Link

@@ -423,8 +423,18 @@ def recheck_run(
         run_pipeline(context, stages=("s1_parse",), resume=False)
     run_pipeline(context, stages=RECHECK_STAGES, resume=False)
 
-    if call_log.records:  # pragma: no cover - a guard against a future stage adding a call
-        _LOG.warning("re-check made %d LLM call(s); it must make none", len(call_log.records))
+    # What "free" means, precisely (ADR-054). Stages 6 and 7 each grew a model call
+    # after this function was written: the compliance locator (6.15), the programme
+    # reading (6.18f), a judgment check, and the name locator (6.21a). Every one is
+    # asked only where code failed, and every one is keyed on the artifacts, which a
+    # re-check does not touch — so on a re-check each is a cache hit (ADR-005). The
+    # guard therefore counts **tokens**, not rows: a cache hit is a row in the call log
+    # and costs nothing, and counting rows warned on every re-check that had behaved
+    # perfectly. The same fix was made in `pipeline/run.py::recheck`, which nothing in
+    # production calls; this is the path the worker actually runs (Phase 6.23b).
+    spent = call_log.total_tokens
+    if spent:
+        _LOG.warning("re-check spent %d tokens; every call it makes must be cached", spent)
 
     with session_scope(factory) as session:
         run = session.get(models.Run, run_id)

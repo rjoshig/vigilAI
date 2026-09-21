@@ -111,6 +111,12 @@ export interface RunSummary {
   expires_at?: string | null;
   /** The run this was cloned from, when it was one. */
   cloned_from?: number | null;
+  /**
+   * The frozen report's verdict — `"ok"`, `"not_ok"`, or empty when there is no
+   * report (Phase 6.23e). The list could only infer "frozen" from the status, so the
+   * outcome of a finished run was a click away on every row.
+   */
+  report_verdict?: string;
 }
 
 /** One artifact stored against a run, with its part and label (Phase 6.23c). */
@@ -159,6 +165,12 @@ export interface RunDetail extends RunSummary {
    * onto the run so that what the model was told cannot change after the fact.
    */
   config_notes: string[];
+  /**
+   * Whether a re-check is queued or running (Phase 6.23b). A re-check leaves the
+   * status at `needs_review`, so this is the only thing that says one is happening —
+   * and it is what the review screen polls on instead of asking for a manual reload.
+   */
+  rechecking?: boolean;
 }
 
 export interface Evidence {
