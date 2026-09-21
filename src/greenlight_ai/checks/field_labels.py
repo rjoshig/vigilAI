@@ -23,12 +23,13 @@ prevent.
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
 from typing import Final, Iterable, Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
+
+from greenlight_ai.resolve.normalize import spaced
 
 from greenlight_ai import scopes
 from greenlight_ai.db import models
@@ -69,9 +70,6 @@ DEFAULT_LABELS: Final[dict[str, tuple[str, ...]]] = {
     ),
 }
 
-_PUNCTUATION: Final = re.compile(r"[^\w\s]")
-_SEPARATORS: Final = re.compile(r"[\s_]+")
-
 
 @dataclass(frozen=True, slots=True)
 class LabelHit:
@@ -96,11 +94,12 @@ def normalize_label(value: str) -> str:
         value: A label as configured or as written in a report.
 
     Returns:
-        Lowercased, punctuation removed, runs of space and underscore collapsed to one
-        space, so ``As-of Date``, ``as_of date`` and ``As of  Date`` all compare alike.
+        Lowercased, punctuation removed, runs of separator collapsed to one space, so
+        ``As-of Date``, ``as_of date`` and ``As of  Date`` all compare alike. The
+        rule is :func:`greenlight_ai.resolve.normalize.spaced`, which is the one
+        implementation of it in the product (Phase 6.21a).
     """
-    text = _PUNCTUATION.sub(" ", value.strip().lower())
-    return _SEPARATORS.sub(" ", text).strip()
+    return spaced(value)
 
 
 def resolve_labels(

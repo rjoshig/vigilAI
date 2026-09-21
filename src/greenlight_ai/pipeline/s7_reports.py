@@ -24,6 +24,7 @@ from greenlight_ai.llm.prompts.schemas import JudgmentResponse, ProgrammeReading
 from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import RunContext
+from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.rules.derive import derive_checks
 from greenlight_ai.rules.schema import Evidence, Finding, Severity
 
@@ -49,6 +50,7 @@ def run(context: RunContext) -> None:
     # A re-check runs this stage again; counting both passes would report twice the
     # coverage of a run that did the same work once (Phase 6.11c).
     context.coverage_record.clear()
+    resolver = _resolver(context)
 
     for rule in context.rules:
         for check in derive_checks(rule):
@@ -61,7 +63,7 @@ def run(context: RunContext) -> None:
             # (ADR-021). "The field distribution is wrong" is useless when five were
             # uploaded.
             for documents, part_name in _views(context):
-                outcome = run_derived_check(check, documents, context.aliases)
+                outcome = run_derived_check(check, documents, context.aliases, resolver)
                 if outcome.passed is None:
                     context.coverage_record.unevaluated(rule.rule_id)
                 else:
@@ -105,6 +107,10 @@ def run(context: RunContext) -> None:
     _check_deliverable_count(context)
     _run_field_constraints(context)
     _run_admin_checks(context, settings, customer)
+    # After every check, because a name is only reasoned about when a check went
+    # looking for it. Raised here rather than where it happened so one record covers
+    # every check that needed the same sheet (Phase 6.21a).
+    _report_reasoned_names(context, resolver)
 
     # Coverage is settled here, where every check that was going to run has run. It
     # is not a stage of its own: it computes nothing new, it reports what the stage
@@ -116,6 +122,68 @@ def run(context: RunContext) -> None:
         context.run_id,
         len(context.findings) - before,
     )
+
+
+def _resolver(context: RunContext) -> LayoutResolver:
+    """Build the layout resolver for this run (Phase 6.21a).
+
+    The client is passed through, so a run that can call a model may spend the ladder's
+    fifth rung where its first four fail. A run without one — a re-check, a deployment
+    with no model configured — gets a resolver that stops at the deterministic rungs,
+    which is the behaviour the product had before the ladder existed.
+
+    Args:
+        context: The run context.
+
+    Returns:
+        The resolver, carrying the layout map, the run's context block and its worked
+        examples.
+    """
+    return LayoutResolver(
+        client=context.client,
+        alternates=context.admin.layout_map,
+        preamble=preamble(context.guidance),
+        examples=context.examples.get("name_locate", ()),
+    )
+
+
+def _report_reasoned_names(context: RunContext, resolver: LayoutResolver) -> None:
+    """Say which names the model had to read for us, so a person can disagree.
+
+    A resolved name is **never a pass**. The check it unblocked ran and reported its
+    own result; this is the separate record that the layout was not what the tool
+    expected, at review severity, naming what was wanted, what was used, and how sure
+    the model was. Without it a reviewer would see a passing check and have no way to
+    know it was pointed at a sheet nobody confirmed (ADR-001).
+
+    Args:
+        context: The run context, whose ``findings`` this appends to.
+        resolver: The resolver, read for what its fifth rung reached.
+    """
+    for reasoned in resolver.reasoned:
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="layout_reasoned",
+                severity="review",
+                title=reasoned.title,
+                detail=(
+                    f"No {reasoned.kind} named {reasoned.wanted!r} was found, so the model was "
+                    f"shown the {reasoned.kind} names this delivery carries and asked which one "
+                    f"was meant. It answered {reasoned.found!r} with a confidence of "
+                    f"{reasoned.confidence:.2f}: {reasoned.reason} Every check that needed "
+                    f"{reasoned.wanted!r} read {reasoned.found!r} instead. Confirm that is "
+                    "right; if it is, an administrator can record it on the artifact type so "
+                    "the next run finds it in code."
+                ),
+                leg="config_reports",
+                engine="model",
+                evidence=Evidence(
+                    report_name=reasoned.artifact,
+                    report_sheet=reasoned.found if reasoned.kind == "sheet" else "",
+                ),
+            )
+        )
 
 
 def _run_field_constraints(context: RunContext) -> None:

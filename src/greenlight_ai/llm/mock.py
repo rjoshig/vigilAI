@@ -70,6 +70,10 @@ def canned_for_stage(stage: str) -> str:
         # absence is what the deterministic matcher already concluded.
         "compliance_locate": '{"verdict": "absent", "json_path": "", '
         '"reason": "mock client", "confidence": 0.0}',
+        # "absent" rather than "found": the mock must not invent a name, and absence
+        # is what the four deterministic rungs already concluded (Phase 6.21a).
+        "name_locate": '{"verdict": "absent", "name": "", '
+        '"reason": "mock client", "confidence": 0.0}',
         # "unclear" rather than a programme: the mock must not contradict a submitter,
         # and unfamiliar vocabulary is what the keyword check already concluded.
         "programme_reading": '{"programme_code": "", "verdict": "unclear", '

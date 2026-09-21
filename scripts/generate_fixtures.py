@@ -22,9 +22,9 @@ import argparse
 import json
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final, Sequence
+from typing import Final, Mapping, Sequence
 
 _LOG: Final = logging.getLogger("generate_fixtures")
 
@@ -149,6 +149,22 @@ class Case:
     credit_date: str = ""
     #: How many requirements the run should leave unevidenced, as the oracle.
     expected_unevidenced: int = 0
+    #: What this delivery calls each sheet, column and row label the fixed checks look
+    #: for (Phase 6.21a). Empty means the names the checks ship with. A case that fills
+    #: it ships a report whose layout drifted, which is what a real delivery does and
+    #: what every fixture before 6.21 quietly assumed never happens.
+    layout: Mapping[str, str] = field(default_factory=dict)
+
+    def called(self, name: str) -> str:
+        """What this delivery calls ``name``.
+
+        Args:
+            name: The name the fixed checks look for.
+
+        Returns:
+            The delivery's own spelling, or ``name`` unchanged.
+        """
+        return self.layout.get(name, name)
 
 
 def _baseline_criteria(score_config: float | None = 755.0) -> tuple[Criterion, ...]:
@@ -485,6 +501,57 @@ CASES: Final[tuple[Case, ...]] = (
         expected_findings=("credit_date_missing",),
         notes="The low-severity path the bulk-OK test needed (found in 6.11a).",
     ),
+    Case(
+        name="layout_drift",
+        description=(
+            "Baseline again, delivered by a customer who names their sheets, headers "
+            "and totals differently. Nothing is wrong with the delivery."
+        ),
+        customer=CUSTOMERS[1],
+        order_number="ORD-10007",
+        configuration_id="CFG-SYNTH-LAYOUT-07",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        expected_findings=(),
+        layout={
+            # Reached by the ladder's third rung: the same words, one or two more
+            # besides. Before Phase 6.21 every one of these matched nothing.
+            "Attributes": "Attribute Summary",
+            "Attribute": "Attribute Name",
+            "States": "State Breakdown",
+            "State": "State Code",
+            "Fields": "Field Values",
+            "Field": "Field Name",
+            "Flow": "Record Flow",
+            "Input": "Input records",
+            # Reached by no deterministic rung: "Accepts" and "Accepted" share no
+            # token once the plural fold has run, which is the case the ladder's
+            # fifth rung exists for. A run with no model leaves these two unresolved
+            # and says so, which is the honest answer.
+            "Accepts": "Accepted total",
+            "Rejects": "Rejected total",
+        },
+        # One requirement stays unevidenced, and that is the oracle rather than a
+        # defect: "Accepts" and "Accepted" share no token once the plural fold has
+        # run, so the counts reconciliation needs the ladder's fifth rung. The golden
+        # set runs on the mock, which answers "absent" by design, so this case scores
+        # as a delivery whose counts nobody could check — which is exactly what a
+        # deployment with no model configured would see.
+        expected_unevidenced=1,
+        notes=(
+            "The Phase 6.21a case: a delivery that is entirely correct and whose "
+            "layout is not what the checks ship with. Nine names resolve in code and "
+            "two need the model."
+        ),
+    ),
 )
 
 
@@ -758,8 +825,10 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
     summary.append(["Total rows", flow.accepts])
     summary.append(["Pull date", "2026-09-01"])
 
-    attributes = workbook.create_sheet("Attributes")
-    attributes.append(["Attribute", "Type", "Nulls", "Min", "Max", "Mean"])
+    attributes = workbook.create_sheet(case.called("Attributes"))
+    attributes.append(
+        [case.called("Attribute"), "Type", "Nulls", case.called("Min"), case.called("Max"), "Mean"]
+    )
     by_field = {c.field_name: c for c in case.criteria}
     for name in case.report_attributes:
         criterion = by_field.get(name)
@@ -789,8 +858,8 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
     # --- State distribution -----------------------------------------------------------
     workbook = openpyxl.Workbook()
     sheet = workbook.active
-    sheet.title = "States"
-    sheet.append(["State", "Records"])
+    sheet.title = case.called("States")
+    sheet.append([case.called("State"), "Records"])
     share = max(flow.accepts // max(len(case.report_states), 1), 1)
     for state in case.report_states:
         sheet.append([state, share])
@@ -801,8 +870,8 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
     # --- Field distribution -----------------------------------------------------------
     workbook = openpyxl.Workbook()
     sheet = workbook.active
-    sheet.title = "Fields"
-    sheet.append(["Field", "Distinct", "Nulls", "Null %"])
+    sheet.title = case.called("Fields")
+    sheet.append([case.called("Field"), "Distinct", "Nulls", "Null %"])
     for name in case.report_attributes:
         sheet.append([name, 120, 0, 0.0])
     path = directory / "field_distribution.xlsx"
@@ -812,13 +881,13 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
     # --- Counts / number flow ---------------------------------------------------------
     workbook = openpyxl.Workbook()
     sheet = workbook.active
-    sheet.title = "Flow"
+    sheet.title = case.called("Flow")
     sheet.append(["Step", "Records in", "Removed", "Records out"])
     for step, records_in, removed, records_out in flow.rows:
         sheet.append([step, records_in, removed, records_out])
-    sheet.append(["Accepts", "", "", flow.accepts])
-    sheet.append(["Rejects", "", "", flow.rejects])
-    sheet.append(["Input", "", "", case.input_count])
+    sheet.append([case.called("Accepts"), "", "", flow.accepts])
+    sheet.append([case.called("Rejects"), "", "", flow.rejects])
+    sheet.append([case.called("Input"), "", "", case.input_count])
     path = directory / "counts.xlsx"
     workbook.save(path)
     written["counts"] = path

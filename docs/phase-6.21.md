@@ -101,40 +101,54 @@ Asked of the user during the assessment, answered 2026-09-21:
 
 ---
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 6.21a — One resolver, deterministic first, model second · ⬜ not started
+### 6.21a — One resolver, deterministic first, model second · ✅ complete
+
+**Built 2026-09-21.** `src/greenlight_ai/resolve/` holds the ladder; the
+`layout_drift` fixture is a correct delivery whose sheets, headers and totals are all
+named differently, and `tests/checks/test_layout_drift.py` is the before and the after
+on it. Nine of its eleven renamed names resolve in code; two — `Accepts` against
+`Accepted total` — share no token once the plural fold has run and need the fifth rung,
+which is the case the rung exists for.
+
+**One thing the work found that the specification had not.** The counts report carries
+a waterfall step called `input` *and* a total called `Input`. They are different rows,
+and the pre-6.21 lookup picked whichever openpyxl happened to return first. Rung 1 now
+resolves it by spelling — whichever is written the way the caller wrote it — which is
+strictly better than what was there, and falls back to the old first-wins rule only
+when spelling does not decide.
 
 A new package `src/greenlight_ai/resolve/` that answers one question — *which sheet,
 column or label did they mean?* — and is the only place in the codebase that answers it.
 
-- [ ] A ladder, stopping at the first confident answer, each rung named in the result so
+- [x] A ladder, stopping at the first confident answer, each rung named in the result so
       a finding can say which one reached it:
       **exact** (today's behaviour, so nothing that matches now stops matching) →
       **normalised** (case, separators, plurals) →
       **token overlap and ordered subsequence**, borrowing `compliance_match._covers` →
       **administrator-written alternates** from 6.21b →
       **the model**, shown the candidate names only.
-- [ ] The model rung obeys the 6.15 discipline exactly: names never values, the answer
+- [x] The model rung obeys the 6.15 discipline exactly: names never values, the answer
       must be one of the candidates offered, a confidence floor of 0.6, and
       `engine="model"` on whatever it produces. A run with no client, or one whose token
       budget is spent, falls back to the deterministic answer rather than failing —
       `s6_reverse._may_locate` is the precedent.
-- [ ] **Never a pass.** A lookup the model resolved produces its ordinary finding *and* a
+- [x] **Never a pass.** A lookup the model resolved produces its ordinary finding *and* a
       review-severity note saying the tool had to reason about the layout, naming what it
       expected, what it found, and how confident it was. A reviewer must be able to
       disagree with the resolution, not only with the finding.
-- [ ] Wire into the four surfaces that need it: `checks/reports.py` (the four sheet
+- [x] Wire into the four surfaces that need it: `checks/reports.py` (the four sheet
       constants, the DIRT header lookup, and the `Accepts`/`Rejects`/`Input` flow
       labels), `checks/named_values.py::resolve`, `checks/field_labels.py`, and
       `parsers/base.py::ReportDocument.sheet`.
-- [ ] **Collapse the four normalisers into this one.** `compliance_match.normalize_segment`,
+- [x] **Collapse the four normalisers into this one.** `compliance_match.normalize_segment`,
       `programme_match`, `parsers/base._normalise_label` and
       `field_labels.normalize_label` each implement "lower, strip separators" with
       slightly different rules today. A fifth would be the defect this phase is about.
-- [ ] One model call per *distinct unresolved name per run*, cached by content like every
+- [x] One model call per *distinct unresolved name per run*, cached by content like every
       other call (ADR-005), not one per check that referenced it.
-- [ ] Tests: a fixture set whose sheets and headers are deliberately renamed. Before this
+- [x] Tests: a fixture set whose sheets and headers are deliberately renamed. Before this
       rung existed it produced `could_not_evaluate`; after it, the checks run and the
       finding says the layout was reasoned about. Plus: an answer not in the candidate
       list refused, a below-floor answer refused, no client degrading to the

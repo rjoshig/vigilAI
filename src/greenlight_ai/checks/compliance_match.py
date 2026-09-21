@@ -52,12 +52,12 @@ import re
 from dataclasses import dataclass
 from typing import Final, Iterable, Sequence
 
+from greenlight_ai.resolve.normalize import squashed
+
 __all__ = ["MatchedPath", "matches", "normalize_segment", "segments"]
 
 _LOG: Final = logging.getLogger(__name__)
 
-#: Separators inside one key name. A path separator is a dot and is handled apart.
-_NOISE: Final = re.compile(r"[\s_\-]+")
 #: Array indices: ``rules[2]`` is the same key as ``rules``.
 _INDEX: Final = re.compile(r"\[\d+\]")
 
@@ -87,10 +87,12 @@ def normalize_segment(value: str) -> str:
         value: A key from a configuration path, e.g. ``"opt_out"`` or ``"rules[2]"``.
 
     Returns:
-        Lowercased, array indices dropped, and runs of underscore, hyphen and space
-        removed — so ``opt_out``, ``optOut`` and ``OPT-OUT`` all compare alike.
+        Lowercased, array indices dropped, and separators removed — so ``opt_out``,
+        ``optOut`` and ``OPT-OUT`` all compare alike. The removing is
+        :func:`greenlight_ai.resolve.normalize.squashed`, which is the one
+        implementation of it in the product (Phase 6.21a).
     """
-    return _NOISE.sub("", _INDEX.sub("", value).strip().lower())
+    return squashed(_INDEX.sub("", value))
 
 
 def segments(json_path: str) -> tuple[str, ...]:

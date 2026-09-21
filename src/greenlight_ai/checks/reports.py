@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from typing import Final, Mapping
 
 from greenlight_ai.checks.named_values import to_number
-from greenlight_ai.parsers.base import ReportDocument, ReportKind
+from greenlight_ai.parsers.base import ReportDocument, ReportKind, ReportSheet
+from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.rules.derive import DerivedCheck
 from greenlight_ai.rules.normalize import AliasTable, normalize_field_name
 
@@ -26,6 +27,7 @@ __all__ = [
     "attribute_stats",
     "AttributeStat",
     "REPORT_CHECKED_KINDS",
+    "WHAT",
 ]
 
 _LOG: Final = logging.getLogger(__name__)
@@ -54,6 +56,128 @@ REPORT_CHECKED_KINDS: Final[frozenset[str]] = frozenset(
         "count_equals",
     }
 )
+
+
+#: What each name the fixed checks look for is *for*, in one line. The model rung sees
+#: names and nothing else (ADR-003), so this sentence is the only account it gets of
+#: what it is being asked to find — and a name without one would be a guess invited.
+WHAT: Final[dict[str, str]] = {
+    DIRT_ATTRIBUTE_SHEET: (
+        f"a worksheet called {DIRT_ATTRIBUTE_SHEET!r} — the sheet listing each delivered "
+        "field with its statistics, one row per field"
+    ),
+    STATE_SHEET: (
+        f"a worksheet called {STATE_SHEET!r} — the sheet breaking the delivery down by "
+        "state or geography"
+    ),
+    FIELD_SHEET: (
+        f"a worksheet called {FIELD_SHEET!r} — the sheet breaking a field down by the "
+        "values it took"
+    ),
+    FLOW_SHEET: (
+        f"a worksheet called {FLOW_SHEET!r} — the sheet showing how many records entered "
+        "the process, how many each step removed, and how many came out"
+    ),
+    "Attribute": "a column heading naming the delivered field each row is about",
+    "Min": "a column heading holding the smallest value a field took",
+    "Max": "a column heading holding the largest value a field took",
+    "State": "a column heading holding the state or geography each row is about",
+    "Field": "a column heading holding the field value each row is about",
+    "Accepts": "a row label for the count of records that passed every filter",
+    "Rejects": "a row label for the count of records that were filtered out",
+    "Input": "a row label for the count of records that entered the process",
+}
+
+
+def _sheet(
+    document: ReportDocument,
+    wanted: str,
+    resolver: LayoutResolver | None,
+) -> ReportSheet | None:
+    """The sheet ``wanted`` names, up the ladder (Phase 6.21a).
+
+    Args:
+        document: The parsed report.
+        wanted: The sheet name the fixed check looks for.
+        resolver: The run's resolver, or ``None`` to stop at the deterministic rungs.
+
+    Returns:
+        The sheet, or ``None`` when no rung settled it. ``None`` still becomes a "could
+        not evaluate" finding: the ladder widens what counts as found, it never invents
+        one.
+    """
+    if resolver is None:
+        return document.sheet(wanted)
+    found = resolver.name(
+        wanted,
+        document.sheet_names,
+        kind="sheet",
+        artifact=str(document.kind),
+        description=WHAT.get(wanted, ""),
+    )
+    return None if found is None else document.named(found.value)
+
+
+def _column(
+    sheet: ReportSheet,
+    wanted: str,
+    resolver: LayoutResolver | None,
+    artifact: str = "",
+) -> int | None:
+    """The index of the column ``wanted`` names, up the ladder.
+
+    Args:
+        sheet: The worksheet.
+        wanted: The heading the fixed check looks for.
+        resolver: The run's resolver, or ``None``.
+        artifact: Which report, for the finding's wording.
+
+    Returns:
+        The zero-based index, or ``None`` when no rung settled it.
+    """
+    found = (
+        sheet.resolve_column(wanted)
+        if resolver is None
+        else resolver.name(
+            wanted,
+            sheet.header,
+            kind="column",
+            artifact=artifact,
+            description=WHAT.get(wanted, ""),
+        )
+    )
+    return None if found is None else list(sheet.header).index(found.value)
+
+
+def _label(
+    sheet: ReportSheet,
+    wanted: str,
+    resolver: LayoutResolver | None,
+    artifact: str = "",
+) -> str | None:
+    """The label ``wanted`` names, as the workbook spells it, up the ladder.
+
+    Args:
+        sheet: The worksheet.
+        wanted: The row label the fixed check looks for.
+        resolver: The run's resolver, or ``None``.
+        artifact: Which report, for the finding's wording.
+
+    Returns:
+        The label verbatim, or ``None`` when no rung settled it.
+    """
+    found = (
+        sheet.resolve_label(wanted)
+        if resolver is None
+        else resolver.name(
+            wanted,
+            sheet.labels(),
+            kind="label",
+            artifact=artifact,
+            description=WHAT.get(wanted, ""),
+        )
+    )
+    return None if found is None else found.value
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +220,9 @@ class AttributeStat:
 
 
 def attribute_stats(
-    reports: Mapping[ReportKind, ReportDocument], aliases: AliasTable | None = None
+    reports: Mapping[ReportKind, ReportDocument],
+    aliases: AliasTable | None = None,
+    resolver: LayoutResolver | None = None,
 ) -> dict[str, AttributeStat]:
     """Read the per-attribute statistics out of the DIRT.
 
@@ -105,6 +231,8 @@ def attribute_stats(
         aliases: The attribute alias table. The DIRT names a column ``SCORE_V3`` where
             the OSL says "score"; without resolving both sides the check cannot find
             the attribute it is meant to assert on.
+        resolver: The run's layout resolver (Phase 6.21a). ``None`` stops at the
+            deterministic rungs, which is what every caller did before it existed.
 
     Returns:
         Canonical attribute name to its statistics, empty when the DIRT is absent.
@@ -113,17 +241,15 @@ def attribute_stats(
     dirt = reports.get("dirt")
     if dirt is None:
         return {}
-    sheet = dirt.sheet(DIRT_ATTRIBUTE_SHEET)
+    sheet = _sheet(dirt, DIRT_ATTRIBUTE_SHEET, resolver)
     if sheet is None:
         return {}
 
-    header = [h.strip().lower() for h in sheet.header]
-    try:
-        name_index = header.index("attribute")
-    except ValueError:
+    name_index = _column(sheet, "Attribute", resolver, "dirt")
+    if name_index is None:
         return {}
-    min_index = header.index("min") if "min" in header else None
-    max_index = header.index("max") if "max" in header else None
+    min_index = _column(sheet, "Min", resolver, "dirt")
+    max_index = _column(sheet, "Max", resolver, "dirt")
 
     stats: dict[str, AttributeStat] = {}
     for row in sheet.rows:
@@ -151,6 +277,7 @@ def run_derived_check(
     check: DerivedCheck,
     reports: Mapping[ReportKind, ReportDocument],
     aliases: AliasTable | None = None,
+    resolver: LayoutResolver | None = None,
 ) -> CheckOutcome:
     """Run one derived check against the reports.
 
@@ -159,6 +286,8 @@ def run_derived_check(
         reports: The parsed reports.
         aliases: The attribute alias table, used to match the OSL's wording against the
             report's column names.
+        resolver: The run's layout resolver (Phase 6.21a). ``None`` stops at the
+            deterministic rungs, which is what every caller did before it existed.
 
     Returns:
         The outcome. ``passed`` is ``None`` when the report the check needs is absent,
@@ -166,15 +295,15 @@ def run_derived_check(
         :data:`REPORT_CHECKED_KINDS` first, so a non-report kind never reaches here.
     """
     if check.kind in ("min_at_least", "min_greater_than", "max_at_most", "max_less_than"):
-        return _check_bound(check, reports, aliases)
+        return _check_bound(check, reports, aliases, resolver)
     if check.kind in ("value_set_subset", "value_set_excludes"):
-        return _check_value_set(check, reports)
+        return _check_value_set(check, reports, resolver)
     if check.kind == "fields_present":
-        return _check_fields_present(check, reports, aliases)
+        return _check_fields_present(check, reports, aliases, resolver)
     if check.kind == "counts_reconcile":
-        return _check_counts_reconcile(reports)
+        return _check_counts_reconcile(reports, resolver)
     if check.kind == "count_equals":
-        return _check_count_equals(check, reports)
+        return _check_count_equals(check, reports, resolver)
     return CheckOutcome(passed=None, detail=f"No report check implements {check.kind!r}.")
 
 
@@ -182,6 +311,7 @@ def _check_bound(
     check: DerivedCheck,
     reports: Mapping[ReportKind, ReportDocument],
     aliases: AliasTable | None = None,
+    resolver: LayoutResolver | None = None,
 ) -> CheckOutcome:
     """Assert a delivered minimum or maximum respects the rule's bound.
 
@@ -193,7 +323,7 @@ def _check_bound(
     Returns:
         The outcome.
     """
-    stats = attribute_stats(reports, aliases)
+    stats = attribute_stats(reports, aliases, resolver)
     if not stats:
         return CheckOutcome(passed=None, detail="The DIRT attribute sheet was not available.")
 
@@ -244,13 +374,17 @@ def _check_bound(
 
 
 def _check_value_set(
-    check: DerivedCheck, reports: Mapping[ReportKind, ReportDocument]
+    check: DerivedCheck,
+    reports: Mapping[ReportKind, ReportDocument],
+    resolver: LayoutResolver | None = None,
 ) -> CheckOutcome:
     """Assert a distribution's keys obey an allow-list or a deny-list.
 
     Args:
         check: The derived check.
         reports: The parsed reports.
+        resolver: The run's layout resolver (Phase 6.21a). ``None`` stops at the
+            deterministic rungs, which is what every caller did before it existed.
 
     Returns:
         The outcome, naming the exact offending members.
@@ -265,13 +399,22 @@ def _check_value_set(
             passed=None, detail=f"The {check.field_name} distribution report was not supplied."
         )
 
-    sheet = document.sheet(sheet_name)
+    sheet = _sheet(document, sheet_name, resolver)
     if sheet is None:
         return CheckOutcome(
             passed=None, detail=f"Sheet {sheet_name!r} was not found in the distribution report."
         )
 
-    present = [str(c.value).strip() for c in sheet.column(column) if c.value is not None]
+    index = _column(sheet, column, resolver, str(document.kind))
+    if index is None:
+        return CheckOutcome(
+            passed=None,
+            detail=f"Column {column!r} was not found in sheet {sheet.name!r}.",
+            report_kind=document.kind,
+            sheet=sheet.name,
+        )
+    cells = tuple(row[index] for row in sheet.rows if index < len(row))
+    present = [str(c.value).strip() for c in cells if c.value is not None]
     allowed = {v.strip().upper() for v in check.values}
 
     if check.kind == "value_set_excludes":
@@ -303,6 +446,7 @@ def _check_fields_present(
     check: DerivedCheck,
     reports: Mapping[ReportKind, ReportDocument],
     aliases: AliasTable | None = None,
+    resolver: LayoutResolver | None = None,
 ) -> CheckOutcome:
     """Assert every requested attribute was delivered.
 
@@ -314,7 +458,7 @@ def _check_fields_present(
     Returns:
         The outcome, naming the missing attributes.
     """
-    stats = attribute_stats(reports, aliases)
+    stats = attribute_stats(reports, aliases, resolver)
     if not stats:
         return CheckOutcome(passed=None, detail="The DIRT attribute sheet was not available.")
 
@@ -333,7 +477,9 @@ def _check_fields_present(
     )
 
 
-def _flow_value(document: ReportDocument, label: str) -> float | None:
+def _flow_value(
+    document: ReportDocument, label: str, resolver: LayoutResolver | None = None
+) -> float | None:
     """Read one labelled total from the counts report.
 
     Args:
@@ -343,19 +489,27 @@ def _flow_value(document: ReportDocument, label: str) -> float | None:
     Returns:
         The number, or ``None`` when the label is absent or not numeric.
     """
-    sheet = document.sheet(FLOW_SHEET)
+    sheet = _sheet(document, FLOW_SHEET, resolver)
     if sheet is None:
         return None
     header_width = len(sheet.header)
-    cell = sheet.lookup(label, value_column=max(header_width - 1, 1))
+    spelled = _label(sheet, label, resolver, str(document.kind))
+    if spelled is None:
+        return None
+    cell = sheet.lookup(spelled, value_column=max(header_width - 1, 1))
     return None if cell is None else to_number(cell.value)
 
 
-def _check_counts_reconcile(reports: Mapping[ReportKind, ReportDocument]) -> CheckOutcome:
+def _check_counts_reconcile(
+    reports: Mapping[ReportKind, ReportDocument],
+    resolver: LayoutResolver | None = None,
+) -> CheckOutcome:
     """Assert accepts plus rejects equals the input count.
 
     Args:
         reports: The parsed reports.
+        resolver: The run's layout resolver (Phase 6.21a). ``None`` stops at the
+            deterministic rungs, which is what every caller did before it existed.
 
     Returns:
         The outcome, naming the shortfall.
@@ -364,9 +518,9 @@ def _check_counts_reconcile(reports: Mapping[ReportKind, ReportDocument]) -> Che
     if document is None:
         return CheckOutcome(passed=None, detail="The counts report was not supplied.")
 
-    accepts = _flow_value(document, "Accepts")
-    rejects = _flow_value(document, "Rejects")
-    total = _flow_value(document, "Input")
+    accepts = _flow_value(document, "Accepts", resolver)
+    rejects = _flow_value(document, "Rejects", resolver)
+    total = _flow_value(document, "Input", resolver)
     if accepts is None or rejects is None or total is None:
         return CheckOutcome(
             passed=None,
@@ -389,13 +543,17 @@ def _check_counts_reconcile(reports: Mapping[ReportKind, ReportDocument]) -> Che
 
 
 def _check_count_equals(
-    check: DerivedCheck, reports: Mapping[ReportKind, ReportDocument]
+    check: DerivedCheck,
+    reports: Mapping[ReportKind, ReportDocument],
+    resolver: LayoutResolver | None = None,
 ) -> CheckOutcome:
     """Assert the delivered count equals the quantity the OSL states.
 
     Args:
         check: The derived check.
         reports: The parsed reports.
+        resolver: The run's layout resolver (Phase 6.21a). ``None`` stops at the
+            deterministic rungs, which is what every caller did before it existed.
 
     Returns:
         The outcome.
@@ -403,7 +561,7 @@ def _check_count_equals(
     document = reports.get("counts")
     if document is None:
         return CheckOutcome(passed=None, detail="The counts report was not supplied.")
-    accepts = _flow_value(document, "Accepts")
+    accepts = _flow_value(document, "Accepts", resolver)
     if accepts is None or check.value is None:
         return CheckOutcome(
             passed=None,

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Final, Literal, Mapping, Sequence
 from greenlight_ai.checks.definitions import AdminConfig
 from greenlight_ai.llm.client import LLMClient
 from greenlight_ai.llm.examples import LibraryExample
+from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from greenlight_ai.rules.normalize import AliasTable
@@ -270,6 +271,11 @@ class RunContext:
     #: that could not run, a stage that stopped early. Appended by the stages,
     #: surfaced beside the coverage panel and recorded in the attestation (6.11c).
     notices: list[str] = field(default_factory=list)
+    #: Which sheet, column or label the delivery means by each name the fixed checks
+    #: look for (Phase 6.21a). Built by stage 7 from the layout map and this run's
+    #: client, so a report whose layout drifted is still checked; what the model had to
+    #: reason about is read back off it afterwards and reported.
+    resolver: "LayoutResolver | None" = None
 
     def record(self, stage: StageName) -> StageRecord:
         """Get or create the record for a stage.

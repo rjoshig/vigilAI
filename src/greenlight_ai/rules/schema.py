@@ -108,6 +108,11 @@ FindingType = Literal[
     "lens_proposed",
     #: A requirement no report evidenced that reads like an obligation (Phase 6.11f).
     "coverage_gap",
+    #: A sheet, column or label the tool could not find by name, which the model read
+    #: as one the report does carry (Phase 6.21a). Always ``review`` severity: the
+    #: check it unblocked ran and reported separately, and this says the layout had to
+    #: be reasoned about so a reviewer can disagree with the reading itself.
+    "layout_reasoned",
 ]
 
 #: A reviewer's decision on a finding.

@@ -244,6 +244,32 @@ class ComplianceLocation(BaseModel):
     confidence: Confidence = 0.5
 
 
+class NameLocation(BaseModel):
+    """Which of the offered names is the one the tool was looking for (Phase 6.21a).
+
+    Asked only when four deterministic rungs have already failed, which decides what
+    the prompt may claim: by the time this runs the honest prior is that the name is
+    absent, and a model told "find this" will find something.
+
+    The model is shown **names and nothing else** — never a cell value, never a row
+    (ADR-003) — and it never decides whether the delivery is correct. It says which
+    label on the shelf is the one asked for; code decides what that means (ADR-001).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: ``found`` when one offered name is the one asked for, ``absent`` when none is,
+    #: ``unsure`` when the names do not settle it. Prefer ``unsure`` to a guess: a
+    #: wrong ``found`` points a check at the wrong part of a report, which is worse
+    #: than the check not running.
+    verdict: Literal["found", "absent", "unsure"]
+    #: The name that matches, when ``found``. Must be one that appeared in the input;
+    #: code checks that it does before believing it.
+    name: str = ""
+    reason: str = ""
+    confidence: Confidence = 0.5
+
+
 class SynthesizedRule(BaseModel):
     """One rule the model proposes from what people wrote (ADR-021).
 

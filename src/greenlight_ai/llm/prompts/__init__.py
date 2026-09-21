@@ -21,6 +21,7 @@ from greenlight_ai.llm.prompts.admin_map import MAP_PROMPT
 from greenlight_ai.llm.prompts.compliance_locate import COMPLIANCE_LOCATE_PROMPT
 from greenlight_ai.llm.prompts.programme_reading import PROGRAMME_READING_PROMPT
 from greenlight_ai.llm.prompts.judgment import JUDGMENT_PROMPT
+from greenlight_ai.llm.prompts.name_locate import NAME_LOCATE_PROMPT
 from greenlight_ai.llm.prompts.registry import PROMPTS, Prompt, get_prompt, prompt_versions
 from greenlight_ai.llm.prompts.s2_extract import EXTRACT_PROMPT
 from greenlight_ai.llm.prompts.s3_describe import DESCRIBE_PROMPT
@@ -41,6 +42,7 @@ __all__ = [
     "COMPLIANCE_LOCATE_PROMPT",
     "PROGRAMME_READING_PROMPT",
     "JUDGMENT_PROMPT",
+    "NAME_LOCATE_PROMPT",
     "EXTRACT_PROMPT",
     "PROGRAMME_PROMPT",
     "PROMPTS",

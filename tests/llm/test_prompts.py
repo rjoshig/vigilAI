@@ -35,6 +35,10 @@ PIPELINE_STAGES = {
     # declared programme's words, so it costs one call per delivery on the exception
     # rather than on every run (Phase 6.18f).
     "programme_reading",
+    # The same shape again, wherever a name is looked for: asked only where four
+    # deterministic rungs failed to say which sheet, column or label was meant, so a
+    # delivery whose layout is what the tool expects never pays for it (Phase 6.21a).
+    "name_locate",
 }
 
 #: The admin flow's prompts: drafting a check (once, at authoring time) and answering a
