@@ -150,6 +150,58 @@ SCENARIOS: Final[list[tuple[str, str, str]]] = [
 ]
 
 
+#: How a terminal run status reads in the summary.
+LABELS: Final[dict[str, str]] = {
+    "queued": "queued",
+    "failed": "failed",
+    "needs_review": "needs review",
+    "finalized": "finalized",
+}
+
+
+def actual_status(factory: Any, run_id: int, expected: str) -> str:
+    """Describe where a run really ended up, not where it was meant to.
+
+    The seed used to record the outcome it asked for, so a run that never left the
+    queue was still announced as finalized. Reading the row back means a broken
+    scenario is visible in the summary instead of being discovered in the UI.
+
+    Args:
+        factory: A session factory.
+        run_id: The run to read.
+        expected: The DB status this scenario should have reached.
+
+    Returns:
+        A label for the summary, marked when it disagrees with ``expected``.
+    """
+    with factory() as session:
+        run = session.get(models.Run, run_id)
+        status = run.status if run is not None else "missing"
+    if status == expected:
+        return LABELS.get(status, status)
+    return f"{status} (expected {expected})"
+
+
+def make_due(factory: Any, run_id: int) -> None:
+    """Clear the submission grace window so the next worker turn claims this run.
+
+    A submitted run is enqueued with ``run_after = now + queue.grace_seconds``
+    (`api/routers/runs.py`), which gives a person half a minute to notice a wrong
+    file before any tokens are spent. The seed has no person and drives the worker
+    by hand, so it brings the job forward; without this every ``run_once`` finds
+    nothing due and the runs sit queued.
+
+    Args:
+        factory: A session factory.
+        run_id: The run whose jobs become due.
+    """
+    with factory() as session:
+        session.execute(
+            sa.update(models.Job).where(models.Job.run_id == run_id).values(run_after=utcnow())
+        )
+        session.commit()
+
+
 def seed_admin(session: Any, data_dir: Path, fixtures: Path, manifest: dict[str, Any]) -> None:
     """Load the reference data a working install would have.
 
@@ -170,7 +222,6 @@ def seed_admin(session: Any, data_dir: Path, fixtures: Path, manifest: dict[str,
                 email="demoadmin@example.com",
                 password_hash=hash_password("demo-administrator"),
                 roles=["user", "admin"],
-                role="admin",
             )
         )
     # A senior associate: a user *and* a reviewer (ADR-049). Seeded so the difference
@@ -186,7 +237,6 @@ def seed_admin(session: Any, data_dir: Path, fixtures: Path, manifest: dict[str,
                 email="demoreviewer@example.com",
                 password_hash=hash_password("demo-reviewer-account"),
                 roles=["user", "reviewer"],
-                role="reviewer",
             )
         )
 
@@ -668,24 +718,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     (settings.data_dir / osl.storage_key).unlink(missing_ok=True)
                     session.commit()
                 for _ in range(4):
+                    make_due(factory, run_id)
                     worker.run_once()
                     with factory() as session:
                         if session.get(models.Run, run_id).status == "failed":
                             break
-                        session.execute(
-                            __import__("sqlalchemy")
-                            .update(models.Job)
-                            .where(models.Job.run_id == run_id)
-                            .values(
-                                run_after=__import__(
-                                    "greenlight_ai.db.types", fromlist=["utcnow"]
-                                ).utcnow()
-                            )
-                        )
-                        session.commit()
-                created.append((run_id, "failed", note))
+                created.append((run_id, actual_status(factory, run_id, "failed"), note))
                 continue
 
+            make_due(factory, run_id)
             worker.run_once()
 
             findings = client.get(f"/api/v1/runs/{run_id}/findings").json()
@@ -699,7 +740,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         },
                     )
                 client.post(f"/api/v1/runs/{run_id}/finalize")
-                created.append((run_id, "finalized OK", note))
+                created.append((run_id, actual_status(factory, run_id, "finalized") + " OK", note))
             elif outcome == "finalize_not_ok":
                 for finding in findings:
                     if finding["severity"] == "high":
@@ -720,9 +761,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                             },
                         )
                 client.post(f"/api/v1/runs/{run_id}/finalize")
-                created.append((run_id, "finalized Not OK", note))
+                created.append(
+                    (run_id, actual_status(factory, run_id, "finalized") + " Not OK", note)
+                )
             else:
-                created.append((run_id, "needs review", note))
+                created.append((run_id, actual_status(factory, run_id, "needs_review"), note))
 
     print("")
     with factory() as session:
