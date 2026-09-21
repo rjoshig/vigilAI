@@ -225,3 +225,51 @@ class TestTheGraceWindow:
 
         submit()
         assert worker.run_once() is True
+
+
+# --- the origins a browser may call from ----------------------------------------------
+
+
+def test_cors_origins_default_to_the_development_pair() -> None:
+    """A checkout with no `.env` still serves both UIs."""
+    from greenlight_ai.api.app import cors_origins
+
+    assert cors_origins({}) == ["http://localhost:3000", "http://localhost:3001"]
+    assert cors_origins({"GREENLIGHT_AI_CORS_ORIGINS": "   "}) == [
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ]
+
+
+def test_cors_origins_are_read_from_the_environment() -> None:
+    """The setting `docs/deployment.md` documents has to be a setting.
+
+    It was a string literal that was then split on commas — the shape an environment
+    read leaves behind when it is inlined — while the deployment table went on telling
+    people to set `GREENLIGHT_AI_CORS_ORIGINS`. Any deployment on a real hostname, which
+    is exactly what that document's reverse-proxy section describes, set it, restarted,
+    and had the API refuse its own two UIs. Nothing failed loudly; the browser simply
+    blocked every call.
+    """
+    from greenlight_ai.api.app import cors_origins
+
+    assert cors_origins(
+        {"GREENLIGHT_AI_CORS_ORIGINS": "https://qc.example.com, https://qc-admin.example.com"}
+    ) == ["https://qc.example.com", "https://qc-admin.example.com"]
+
+
+def test_the_app_actually_installs_the_configured_origins(
+    db_settings: Any, factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reading the value is not enough; the middleware has to receive it."""
+    from greenlight_ai.api.app import create_app
+
+    monkeypatch.setenv("GREENLIGHT_AI_CORS_ORIGINS", "https://qc.example.com")
+    app = create_app(db_settings)
+    installed = [
+        middleware
+        for middleware in app.user_middleware
+        if "CORS" in str(getattr(middleware, "cls", ""))
+    ]
+    assert installed, "the CORS middleware is not installed at all"
+    assert installed[0].kwargs["allow_origins"] == ["https://qc.example.com"]

@@ -29,7 +29,7 @@ file is gitignored and never contains customer data.
 | `GREENLIGHT_AI_RETENTION_DAYS` | Purge window | 90 |
 | `GREENLIGHT_AI_MAX_UPLOAD_MB` | Upload size limit | 50 |
 | `GREENLIGHT_AI_API_URL` | Where the UIs proxy `/api/*` | `http://api:8000` |
-| `GREENLIGHT_AI_CORS_ORIGINS` | Allowed origins (the two UI URLs) | localhost dev origins |
+| `GREENLIGHT_AI_CORS_ORIGINS` | Allowed browser origins for the API, comma-separated. **Set it on any real hostname**: unset means the two localhost ports, and a deployment that leaves it has its own UIs refused. Read at startup, never from the console | localhost dev origins |
 | `GREENLIGHT_AI_DRAFT_DAYS` | How long an unsubmitted draft is kept (ADR-065) | 5 |
 | `GREENLIGHT_AI_CHAT` | Ask the frozen report (ADR-068). **Off unless set**, so an install that upgrades gains no outbound model surface by accident. `chat.model` unset means it answers with `LLM_MODEL` | `false` |
 
