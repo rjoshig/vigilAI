@@ -18,12 +18,25 @@
  * instruction; "without one the tool cannot tell which report is which, and no check
  * can be tested before a real delivery meets it" is a reason, and a reason is what
  * makes somebody do the step properly rather than tick it.
+ *
+ * **And each step says what it does to a run** (Phase 6.19d). The card itself is
+ * navigation: nothing on it reaches a prompt, is compared against anything, or is even
+ * stored — it reads what exists and links to the screen that owns it. But the seven
+ * steps do not all do the same thing, and until now the card was silent about which.
+ * Three of them are read by the model (the guide entries, the meaning rows, the
+ * programme instructions and rules), three are evaluated by code and reach no prompt
+ * (the report types, the layout map, the expression checks), and one is read only
+ * while somebody sets the product up (the samples). Somebody deciding where to spend
+ * an afternoon deserves that distinction on the card, in the same six-marker
+ * vocabulary every field already uses (ADR-046, `docs/model-context.md`) rather than
+ * in a wording invented here.
  */
 
 import { ArrowRight, Check, Circle } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
+import { FieldEffect, type FieldEffectKind } from "@/components/explain";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import type { ArtifactType } from "@/lib/types";
@@ -35,6 +48,10 @@ interface Step {
   href: string;
   done: boolean;
   detail: string;
+  /** What the thing this step sets up does to a run — the same marker its own screen shows. */
+  effect: FieldEffectKind;
+  /** Which stage or which code reads it, quoted from `docs/model-context.md`. */
+  effectNote: string;
 }
 
 export function SetupChecklist({ types }: { types: ArtifactType[] }) {
@@ -69,6 +86,11 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
       href: "/artifacts",
       done: reports.length > 0,
       detail: `${reports.length} report type${reports.length === 1 ? "" : "s"} switched on`,
+      effect: "code",
+      effectNote:
+        "Code matches each uploaded workbook against this list and decides which " +
+        "checks can run. Only where two types score alike is the model shown their " +
+        "labels to break the tie, and only from the shortlist code already made.",
     },
     {
       title: "Upload a sample of each",
@@ -78,6 +100,11 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
       href: "/artifacts",
       done: withSamples.length === reports.length && reports.length > 0,
       detail: `${withSamples.length} of ${reports.length} have a sample`,
+      effect: "reference",
+      effectNote:
+        "The AI reads these while you set up — type detection, example values, the " +
+        "mapping interview. No sample is opened when a delivery is checked. Use " +
+        "made-up files, never real customer data.",
     },
     {
       title: "Record what this delivery calls things",
@@ -91,6 +118,10 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
         withLayout.length > 0
           ? `${withLayout.length} type${withLayout.length === 1 ? "" : "s"} have a layout recorded`
           : "nothing recorded, which is the ordinary state",
+      effect: "code",
+      effectNote:
+        "A spelling recorded here resolves the name in code, before any model call — " +
+        "which is what makes the next run of that configuration spend nothing on it.",
     },
     {
       title: "Explain what the numbers mean",
@@ -100,6 +131,11 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
       href: "/artifacts",
       done: withGuide.length > 0,
       detail: `${withGuide.length} type${withGuide.length === 1 ? "" : "s"} have a guide`,
+      effect: "model",
+      effectNote:
+        "Read at tracing and verification, so the model knows what a cell is for " +
+        "rather than guessing from its label. A complete entry also compiles into a " +
+        "check code runs.",
     },
     {
       title: "Map the requirements to the configuration",
@@ -109,6 +145,12 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
       href: "/meaning",
       done: (counts?.meaning ?? 0) > 0,
       detail: counts ? `${counts.meaning} entr${counts.meaning === 1 ? "y" : "ies"}` : "…",
+      effect: "model",
+      effectNote:
+        "Read at tracing and verification as background, so the model reads where a " +
+        "requirement answers to instead of working it out — the step it is least " +
+        "certain about. A confirmed row with a configuration path also compiles into a " +
+        "comparison code makes itself.",
     },
     {
       title: "Write the checks a formula can express",
@@ -116,6 +158,10 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
       href: "/checks",
       done: (counts?.checks ?? 0) > 0,
       detail: counts ? `${counts.checks} check${counts.checks === 1 ? "" : "s"}` : "…",
+      effect: "code",
+      effectNote:
+        "Evaluated by code on every run in scope, at no token cost, and the same " +
+        "inputs always give the same answer.",
     },
     {
       title: "Set up the delivery programmes",
@@ -125,6 +171,11 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
       href: "/scopes",
       done: (counts?.programmes ?? 0) > 0,
       detail: counts ? `${counts.programmes} programme${counts.programmes === 1 ? "" : "s"}` : "…",
+      effect: "model",
+      effectNote:
+        "The standing instructions are background on every run in the programme, and " +
+        "the model reads each programme rule and says whether it holds — code sets how " +
+        "serious that is. The keywords beside them are compared by code alone.",
     },
   ];
 
@@ -142,7 +193,10 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
         <p className="mb-3 text-muted-foreground">
           The order these are usually done in. Nothing here forces anything — every step is a screen
           you can go to whenever you like, and a step that says it is done can still be worth
-          another look.
+          another look. The marker under each one says what the thing you set up there does to a
+          run: three of the seven are read by the AI, three are compared by code and reach no
+          prompt, and one — the samples — is read only while you are setting up. This card itself is
+          a path through the screens; it reaches nothing and is stored nowhere.
         </p>
         <ol className="grid gap-2">
           {steps.map((step, index) => (
@@ -167,6 +221,7 @@ export function SetupChecklist({ types }: { types: ArtifactType[] }) {
                 </Link>
                 <p className="text-muted-foreground">{step.why}</p>
                 <p className="mt-0.5 text-muted-foreground">{step.detail}</p>
+                <FieldEffect kind={step.effect} note={step.effectNote} className="mt-1" />
               </div>
             </li>
           ))}

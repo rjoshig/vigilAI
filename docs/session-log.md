@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **6.23a and 6.23c complete**; **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 6.22 is complete** ([`phase-6.22.md`](phase-6.22.md), ADR-059 to ADR-062): the record layout as an optional fourth artifact, product codes expanded in code, the attribute dictionary as the ladder's fourth rung with a soft cap on the fifth, one alarm between the DIRT and the layout, and a suggestion rail that closes the loop. 6.22c keeps two items open and says why under its heading — a bulk master-file upload, and how a code reads in real OSL prose, which is [`phase-7.md`](phase-7.md)'s. **Next concrete action: 6.23b** (remove the Re-check control, make the automatic re-check visible) and **6.23e** (the report column), which is where `main` was. After that, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 6.22 is complete** ([`phase-6.22.md`](phase-6.22.md), ADR-059 to ADR-062): the record layout as an optional fourth artifact, product codes expanded in code, the attribute dictionary as the ladder's fourth rung with a soft cap on the fifth, one alarm between the DIRT and the layout, and a suggestion rail that closes the loop. 6.22c keeps two items open and says why under its heading — a bulk master-file upload, and how a code reads in real OSL prose, which is [`phase-7.md`](phase-7.md)'s. **6.19d landed after it**: the *Setting up a new delivery* checklist now marks each of its seven steps with what that step does to a run — three **Helps the AI**, three **Checked by code**, one setup-only — and says of itself that it reaches nothing, because the card was built in 6.21f and so was never held against Part A's marker audit. **Next concrete action: 6.23b** (remove the Re-check control, make the automatic re-check visible) and **6.23e** (the report column), which is where `main` was. After that, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -20,7 +20,8 @@ are open and each needs somebody other than a session:
 
 - **6.19 criterion 5** — the user Guide read by somebody who has never seen the tool, who
   then submits and reviews an order without asking. A person's job, and it belongs to
-  stage 2 of [`gd-rollout-plan.md`](gd-rollout-plan.md), where the focus group is.
+  stage 2 of [`gd-rollout-plan.md`](gd-rollout-plan.md), where the focus group is. The
+  rest of 6.19 is now finished: part D closed the one surface built after its audit.
 - **6.18b–e** — the maturity level, trustworthiness as a number, the demotion record and
   the honest sample. All four want real verdicts to measure against
   ([`phase-7.1.md`](phase-7.1.md)).
@@ -3387,3 +3388,48 @@ can tune. `phase-7.md` now carries both, plus a per-artifact table for the recor
 
 **Next: 6.23b and 6.23e**, which is where `main` was — remove the Re-check control and
 make the automatic re-check visible, then the report column.
+
+---
+
+## 2026-09-21 — 6.19d: the setup checklist says what each step does to a run
+
+| Field | Value |
+| --- | --- |
+| Branch | `claude/eager-turing-8ay4w6` |
+| Phase | 6.19, part D (the rest of 6.19 was complete bar criterion 5) |
+| Status | ✅ built, tested, docs and Guide aligned |
+
+**The question, and the honest answer.** Asked whether the *Setting up a new delivery*
+checklist on Artifact types "helps the AI", the answer is two-part, and only the second
+part is useful. **The card itself does nothing to a run** — it is navigation, it reads
+what exists to tick steps off, and it reaches no prompt, feeds no comparison and is
+stored nowhere. `<FieldEffect>` is defined for a field a person can write, and the card
+has none, so putting a marker on it would have been the first false marker in the
+product. **But its seven steps are not alike**, and that is the distinction worth
+showing: three of them set up something the model reads, three set up something code
+evaluates at no token cost, and one is read only while somebody is setting up.
+
+**What landed.** Each step now carries the marker of the thing it sets up, quoted from
+the screen it links to rather than invented on the card: **Helps the AI** on the
+validation guide, the meaning entries, and the programme instructions and rules;
+**Checked by code** on the report types, the layout map and the expression checks;
+**Used for setup, not for runs** on the samples. The intro paragraph states the count and
+says the card claims nothing for itself. Five tests pin it, including that switching the
+setup marker off (ADR-046) removes that one and leaves the other six.
+
+**Why it was missed.** Part A's marker audit was taken on 2026-09-20 and was complete for
+the product as it stood. This card was built in 6.21f, two phases later. That is how a
+marker sweep decays — not by anybody removing a marker, but by a surface arriving after
+the sweep — so it is written into `phase-6.19.md` as part D with the habit stated: a
+surface that tells somebody what to go and do inherits the obligation to say what the
+doing will reach.
+
+**Docs.** `model-context.md` gains a row for the card in the reference-only table.
+`admin-training.md`'s *Setting up a new delivery* section gains the step-by-step table,
+and is now in the admin Guide at position 3 (the later markers renumbered), so the answer
+is in the product rather than only in a file.
+
+**Pending / blockers:** none new. 6.19 criterion 5 still needs a person.
+
+**Next concrete action:** 6.23b — remove the Re-check control and make the automatic
+re-check visible — then 6.23e, the report column.
