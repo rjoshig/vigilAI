@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import { STATUS_LABEL, STATUS_TONE, isActive } from "@/lib/display";
+import { expiresIn } from "@/lib/draft";
 import { STAGE_LABELS, type RunSummary } from "@/lib/types";
 import { fmtRelative } from "@/lib/utils";
 
@@ -73,7 +74,12 @@ function RunProgress({ run }: { run: RunSummary }) {
     );
   }
   if (run.status === "draft") {
-    return <span className="text-xs text-muted-foreground">Draft — no files uploaded yet</span>;
+    const left = expiresIn(run.expires_at);
+    return (
+      <span className="text-xs text-muted-foreground">
+        Draft — not submitted{left ? ` · ${left}` : ""}
+      </span>
+    );
   }
 
   const total = run.high + run.medium + run.low + run.review;
@@ -100,6 +106,10 @@ export default function RunsPage() {
   // on the client rather than with `useSearchParams`, which would put this whole page
   // behind a Suspense boundary for a parameter that is usually absent.
   const [submittedBy, setSubmittedBy] = React.useState<number | null>(null);
+  // Fetched separately because the list deliberately does not carry drafts. They are
+  // few by nature — one per source run per person, and they expire in days — so this
+  // is a small request, and it is what lets the toggle show a count.
+  const [draftCount, setDraftCount] = React.useState(0);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -121,6 +131,15 @@ export default function RunsPage() {
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
+    }
+    try {
+      setDraftCount(
+        (await api.listRuns({ status: "draft", submittedBy: submittedBy ?? undefined, limit: 100 }))
+          .length
+      );
+    } catch {
+      // A count is decoration: failing to read it must not empty the runs list above.
+      setDraftCount(0);
     }
   }, [status, submittedBy]);
 
@@ -231,6 +250,21 @@ export default function RunsPage() {
           <option value="finalized">Finalized</option>
           <option value="failed">Failed</option>
         </Select>
+        {/* Drafts are unfinished work, not deliveries, so they are kept out of the
+            history and reached by this one toggle instead (Phase 6.23c). */}
+        <Button
+          variant={status === "draft" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setStatus(status === "draft" ? "" : "draft")}
+          aria-pressed={status === "draft"}
+          title={
+            status === "draft"
+              ? "Back to the runs"
+              : "Runs you cloned and have not submitted yet. They are kept out of the list below."
+          }
+        >
+          {status === "draft" ? "Back to runs" : `Drafts${draftCount ? ` (${draftCount})` : ""}`}
+        </Button>
         {submittedBy !== null ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-info/40 bg-info/10 px-2 py-1 text-xs">
             Showing one person&rsquo;s runs
@@ -259,8 +293,12 @@ export default function RunsPage() {
         <Card className="p-0">
           {visible.length === 0 ? (
             <EmptyState
-              title="No runs yet"
-              hint="Submit an OSL, a config, and at least one report to start one."
+              title={status === "draft" ? "No drafts" : "No runs yet"}
+              hint={
+                status === "draft"
+                  ? "Cloning a finished run leaves a draft here until you submit it."
+                  : "Submit an OSL, a config, and at least one report to start one."
+              }
             />
           ) : (
             <Table>
@@ -318,12 +356,20 @@ export default function RunsPage() {
                       )}
                     </TD>
                     <TD className="text-right">
-                      <Link href={`/runs/${run.id}`}>
+                      <Link
+                        href={
+                          run.status === "draft" ? `/runs/new?draft=${run.id}` : `/runs/${run.id}`
+                        }
+                      >
                         <Button
                           size="sm"
                           variant={run.status === "needs_review" ? "default" : "outline"}
                         >
-                          {run.status === "needs_review" ? "Review" : "Open"}
+                          {run.status === "needs_review"
+                            ? "Review"
+                            : run.status === "draft"
+                              ? "Finish"
+                              : "Open"}
                         </Button>
                       </Link>
                     </TD>

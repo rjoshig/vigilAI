@@ -9,7 +9,7 @@
  */
 
 import { AlertTriangle, HelpCircle, Play, ShieldCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 
 import { ConfigNotes } from "@/components/config-notes";
@@ -28,9 +28,16 @@ import {
   Select,
   Textarea,
 } from "@/components/ui/primitives";
-import { PageHeader } from "@/components/ui/primitives";
+import { Badge, PageHeader } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import type { ArtifactSlot, DuplicateRun, NewRunOptions, TypeDetection } from "@/lib/types";
+import { draftToForm, expiresIn } from "@/lib/draft";
+import type {
+  ArtifactSlot,
+  DuplicateRun,
+  NewRunOptions,
+  RunDetail,
+  TypeDetection,
+} from "@/lib/types";
 import { fmtTime } from "@/lib/utils";
 
 const CONFIG_ID_DEBOUNCE_MS = 500;
@@ -47,6 +54,13 @@ function useDebounced(value: string, delayMs: number): string {
 
 export default function NewRunPage() {
   const router = useRouter();
+  // Cloning a run leaves a draft; this is the screen that finishes it (Phase 6.23c).
+  // The alternative was a second uploader on the run page, which would mean a second
+  // place to keep the slots, the type detection and the field markers correct.
+  const params = useSearchParams();
+  const draftId = Number(params.get("draft")) || null;
+  const [draft, setDraft] = React.useState<RunDetail | null>(null);
+  const [discarding, setDiscarding] = React.useState(false);
 
   const [customer, setCustomer] = React.useState("");
   const [order, setOrder] = React.useState("");
@@ -78,6 +92,27 @@ export default function NewRunPage() {
   const [rerunReason, setRerunReason] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (draftId === null) return;
+    api
+      .getRun(draftId)
+      .then((run) => {
+        setDraft(run);
+        const form = draftToForm(run);
+        setCustomer(form.customer);
+        setOrder(form.order);
+        setConfigurationId(form.configurationId);
+        setCreditDate(form.creditDate);
+        setNotes(form.notes);
+        setHasSuppressions(form.hasSuppressions);
+        setDeliveryNotes(form.deliveryNotes);
+        if (form.scope) setScope(form.scope);
+      })
+      .catch((caught: unknown) =>
+        setError(caught instanceof ApiError ? caught.detail : "Could not load the draft.")
+      );
+  }, [draftId]);
 
   React.useEffect(() => {
     api
@@ -248,11 +283,42 @@ export default function NewRunPage() {
     return form;
   }
 
+  /** Save a field to the draft as soon as it is left, so a closed tab loses nothing. */
+  async function saveField(changes: Record<string, unknown>) {
+    if (draftId === null) return;
+    try {
+      setDraft(await api.updateDraft(draftId, changes));
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not save the draft.");
+    }
+  }
+
+  async function discardDraft() {
+    if (draftId === null) return;
+    setDiscarding(true);
+    try {
+      await api.discardDraft(draftId, "delete");
+      router.push("/runs");
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not discard the draft.");
+      setDiscarding(false);
+    }
+  }
+
   async function submit(reason: string) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await api.createRun(buildForm(reason));
+      // A draft already exists, so its files go up first and then it is started.
+      // The fields were saved as they were edited; only the artifacts and the
+      // re-run reason are left to send.
+      const result =
+        draftId === null
+          ? await api.createRun(buildForm(reason))
+          : await (async () => {
+              await api.attachDraftFiles(draftId, buildForm(""));
+              return api.submitDraft(draftId, reason);
+            })();
       if (result.duplicate) {
         setDuplicate(result.duplicate);
         return;
@@ -268,9 +334,49 @@ export default function NewRunPage() {
   return (
     <>
       <PageHeader
-        title="New run"
-        description="Upload the OSL, the ETL config, and the output reports. Every OSL requirement is traced into the config and then into the reports."
+        title={draft ? `Edit draft ${draft.order_number || draft.id}` : "New run"}
+        description={
+          draft
+            ? "Everything the run you cloned was submitted with, ready to change. The artifacts are not copied — a clone is almost always a re-run with corrected inputs, so upload them fresh."
+            : "Upload the OSL, the ETL config, and the output reports. Every OSL requirement is traced into the config and then into the reports."
+        }
+        action={
+          draft ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={discarding}
+              onClick={() => void discardDraft()}
+            >
+              Discard draft
+            </Button>
+          ) : null
+        }
       />
+
+      {draft ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {draft.cloned_from ? (
+            <span>
+              Cloned from run{" "}
+              <a className="underline" href={`/runs/${draft.cloned_from}`}>
+                {draft.cloned_from}
+              </a>
+            </span>
+          ) : null}
+          {draft.expires_at ? (
+            <Badge tone={expiresIn(draft.expires_at).includes("hour") ? "warn" : "muted"}>
+              {expiresIn(draft.expires_at)}
+            </Badge>
+          ) : null}
+          <Explain label="What is a draft?">
+            A draft is a run that has not started. Nothing has been validated and no tokens have
+            been spent, so it can be changed freely — and it is deleted automatically if it is left
+            unsubmitted, which is why the countdown is there. An administrator sets how long that
+            is.
+          </Explain>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mb-4">
@@ -293,6 +399,7 @@ export default function NewRunPage() {
                   id="customer"
                   value={customer}
                   onChange={(event) => setCustomer(event.target.value)}
+                  onBlur={() => void saveField({ customer_name: customer })}
                 />
                 <FieldEffect
                   kind="record"
@@ -308,6 +415,7 @@ export default function NewRunPage() {
                   className="mono"
                   value={order}
                   onChange={(event) => setOrder(event.target.value)}
+                  onBlur={() => void saveField({ order_number: order })}
                 />
                 <FieldEffect
                   kind="record"
@@ -335,6 +443,7 @@ export default function NewRunPage() {
                   className="mono"
                   value={configurationId}
                   onChange={(event) => setConfigurationId(event.target.value)}
+                  onBlur={() => void saveField({ configuration_id: configurationId })}
                 />
                 <span className="text-[0.7rem] text-muted-foreground">
                   The order&apos;s ETL configuration number, the Solution Canvas config number.
@@ -371,6 +480,7 @@ export default function NewRunPage() {
                   type="date"
                   value={creditDate}
                   onChange={(event) => setCreditDate(event.target.value)}
+                  onBlur={() => void saveField({ credit_date: creditDate || null })}
                 />
                 <span className="text-[0.7rem] text-muted-foreground">
                   The date the delivery is cut as of.
@@ -382,7 +492,14 @@ export default function NewRunPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="scope">Delivery programme</Label>
-                <Select id="scope" value={scope} onChange={(event) => setScope(event.target.value)}>
+                <Select
+                  id="scope"
+                  value={scope}
+                  onChange={(event) => {
+                    setScope(event.target.value);
+                    void saveField({ scope: event.target.value });
+                  }}
+                >
                   {(options?.scopes ?? []).map((option) => (
                     <option key={option.code} value={option.code}>
                       {option.label}
@@ -406,7 +523,10 @@ export default function NewRunPage() {
                       type="radio"
                       name="has-suppressions"
                       checked={!hasSuppressions}
-                      onChange={() => setHasSuppressions(false)}
+                      onChange={() => {
+                        setHasSuppressions(false);
+                        void saveField({ has_suppressions: false });
+                      }}
                     />
                     No
                   </label>
@@ -415,7 +535,10 @@ export default function NewRunPage() {
                       type="radio"
                       name="has-suppressions"
                       checked={hasSuppressions}
-                      onChange={() => setHasSuppressions(true)}
+                      onChange={() => {
+                        setHasSuppressions(true);
+                        void saveField({ has_suppressions: true });
+                      }}
                     />
                     Yes
                   </label>
@@ -431,6 +554,7 @@ export default function NewRunPage() {
                   id="delivery-notes"
                   value={deliveryNotes}
                   onChange={(event) => setDeliveryNotes(event.target.value)}
+                  onBlur={() => void saveField({ delivery_notes: deliveryNotes })}
                   placeholder="Anything about the delivery itself: which segments were sent, what is still to come."
                 />
                 <FieldEffect
@@ -444,6 +568,7 @@ export default function NewRunPage() {
                   id="notes"
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
+                  onBlur={() => void saveField({ notes })}
                   placeholder="Anything the reviewer should know: special instructions, known deviations, who asked for the run."
                 />
                 <FieldEffect

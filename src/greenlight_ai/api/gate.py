@@ -80,6 +80,12 @@ class GateState:
     undecided_findings: tuple[str, ...] = ()
     unacknowledged_requirements: tuple[str, ...] = ()
     unacknowledged_findings: tuple[str, ...] = ()
+    #: The run has not reached review at all, so there is nothing to freeze whatever
+    #: the findings say (Phase 6.23a). A draft has no findings and no coverage, so
+    #: every other test below passes vacuously and the gate used to report that the
+    #: run was ready — on a run with no files. The same was true of a queued, running,
+    #: held, failed or cancelled run.
+    not_reviewable: str = ""
     #: Serious findings the first reviewer marked OK on a programme that asks for a
     #: second approver, when nobody else has signed off yet (ADR-036).
     awaiting_second_approval: tuple[str, ...] = ()
@@ -92,7 +98,8 @@ class GateState:
             ``True`` when nothing is outstanding.
         """
         return not (
-            self.undecided_findings
+            self.not_reviewable
+            or self.undecided_findings
             or self.unacknowledged_requirements
             or self.unacknowledged_findings
             or self.awaiting_second_approval
@@ -107,6 +114,10 @@ class GateState:
             satisfied. It names counts rather than listing ids, because the screen
             beside it lists them.
         """
+        # First, because it is not one outstanding item among several: it says the
+        # question does not apply yet, and naming findings beside it would be noise.
+        if self.not_reviewable:
+            return self.not_reviewable
         parts: list[str] = []
         if self.undecided_findings:
             parts.append(f"{len(self.undecided_findings)} finding(s) still need a decision")
@@ -276,6 +287,17 @@ def gate_state(session: Session, run: models.Run, user_auth: bool = False) -> Ga
     Returns:
         What is outstanding.
     """
+    # A run that never reached review cannot be frozen, and every test below would
+    # pass vacuously for one. Answering it here rather than on the button means the
+    # header, the report page's card and the coverage card all tell the truth at once.
+    if run.status not in ("needs_review", "finalized"):
+        return GateState(
+            not_reviewable=(
+                f"This run is {run.status.replace('_', ' ')}; "
+                "only a run that has been validated and reviewed can be frozen."
+            )
+        )
+
     undecided = session.execute(
         sa.select(models.Finding.finding_id)
         .where(

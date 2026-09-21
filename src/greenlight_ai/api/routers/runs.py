@@ -10,7 +10,7 @@ from dataclasses import asdict
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Annotated, Any, Final, Optional, cast
+from typing import Annotated, Any, Final, Optional, Sequence, cast
 
 import sqlalchemy as sa
 from fastapi import (
@@ -156,6 +156,8 @@ def _summary(
         scope=run.scope,
         scope_label=_scope_label(session, run.scope),
         credit_date=run.credit_date,
+        expires_at=run.expires_at,
+        cloned_from=run.cloned_from_id,
         **counts,
     )
 
@@ -247,6 +249,10 @@ def _detail(
         finalized=finalized,
         stages=stages,
         files={f.kind: f.filename for f in run.files},
+        files_detail=[
+            schemas.RunFileOut.model_validate(f)
+            for f in sorted(run.files, key=lambda f: (f.kind, f.part))
+        ],
         mismatches=[_mismatch_out(row) for row in _mismatches_for(session, run.id)],
     )
 
@@ -286,6 +292,320 @@ def new_run_options(
             schemas.ScopeOption(code=s.code, label=s.label, description=s.description)
             for s in catalog.load_scopes(session, active_only=True)
         ],
+    )
+
+
+def _read_uploads(
+    form: Any,
+    active: set[str],
+    osl: UploadFile | None = None,
+    config: UploadFile | None = None,
+) -> list[tuple[str, UploadFile, int, str]]:
+    """Read every artifact out of a multipart form.
+
+    Report slots are whatever the admin catalog has active, so a type added in the
+    console needs no code change here (ADR-020). A slot may carry several files: some
+    campaigns deliver one field distribution per segment (ADR-021). ``getlist`` is what
+    makes that work; ``get`` would silently keep only the last.
+
+    Args:
+        form: The parsed multipart form.
+        active: The artifact keys currently switched on.
+        osl: The OSL, when the caller took it as a declared field. A draft edit does
+            not, because it may be replacing only one report.
+        config: The configuration, likewise.
+
+    Returns:
+        ``(kind, file, part ordinal, part label)`` for every file that arrived.
+    """
+    uploads: list[tuple[str, UploadFile, int, str]] = []
+    if osl is not None:
+        uploads.append(("osl", osl, 1, ""))
+    if config is not None:
+        uploads.append(("config", config, 1, ""))
+
+    for key in sorted(active):
+        if key in ("osl", "config") and (osl is not None or config is not None):
+            continue
+        labels = [str(value) for value in form.getlist(f"{key}__label")]
+        ordinal = 0
+        for value in form.getlist(key):
+            # `request.form()` yields Starlette's UploadFile; FastAPI's is a subclass,
+            # so testing against the subclass silently matched nothing and every
+            # report was dropped. Test the base.
+            if not isinstance(value, StarletteUploadFile) or not value.filename:
+                continue
+            ordinal += 1
+            label = labels[ordinal - 1] if ordinal <= len(labels) else ""
+            uploads.append((key, cast(UploadFile, value), ordinal, label.strip()))
+    return uploads
+
+
+def _admit(session: Session, request: Request, order_number: str) -> JobQueue:
+    """Decide whether the tool will take this work at all.
+
+    Three refusals in the order that wastes the least of somebody's time, and one body
+    for both submission paths — two copies is how they would come to admit different
+    deliveries (Phase 6.23c).
+
+    Args:
+        session: The request's session.
+        request: The incoming request.
+        order_number: The order being submitted.
+
+    Returns:
+        The queue, ready for the caller to enqueue on.
+
+    Raises:
+        HTTPException: 409 when too many runs are queued for the order, 429 when the
+            start-rate window is spent, 503 when the tool is not accepting work.
+    """
+    queue = _queue(request, session)
+    already_queued = session.execute(
+        sa.select(sa.func.count())
+        .select_from(models.Run)
+        .where(models.Run.order_number == order_number, models.Run.status == "queued")
+    ).scalar_one()
+    per_order = int(resolve(session, "queue.per_order_limit").value)
+    if int(already_queued) >= per_order:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{already_queued} runs are already queued for order {order_number}; "
+            "wait for one to finish",
+        )
+
+    # A rate limit on starting work, so a bulk submission cannot empty the token
+    # budget in a minute. The run is refused rather than queued, because the person
+    # is standing there and a queue they cannot see the end of is worse than a clear
+    # "try again shortly" (ADR-023).
+    window_s = int(resolve(session, "queue.window_s").value)
+    started_recently = int(
+        session.execute(
+            sa.select(sa.func.count())
+            .select_from(models.Run)
+            .where(
+                models.Run.created_at >= utcnow() - dt.timedelta(seconds=window_s),
+                # A draft has started nothing. Once one can sit for days, counting it
+                # here would let an old draft consume a window it never used.
+                models.Run.status != "draft",
+            )
+        ).scalar_one()
+    )
+    starts_allowed = int(resolve(session, "queue.starts_per_window").value)
+    if started_recently >= starts_allowed:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"{started_recently} runs have started in the last {window_s // 60} minutes, "
+            f"which is the configured limit of {starts_allowed}. Try again shortly.",
+        )
+
+    # Before a single byte is stored: is the tool accepting work at all? (Phase 6.14j)
+    # Refusing here rather than after the upload means somebody who cannot submit has
+    # not waited for seven files to travel first.
+    available = availability.read(session)
+    if not available.accepting:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            available.message
+            or "Greenlight AI is not accepting submissions at the moment. Try again shortly.",
+        )
+    return queue
+
+
+def _store_uploads(
+    session: Session,
+    run: models.Run,
+    uploads: list[tuple[str, UploadFile, int, str]],
+    data_dir: Path,
+) -> None:
+    """Put the uploaded files on the volume and record them against the run.
+
+    The rows are written **before** the fingerprint is computed, which is the one
+    non-obvious ordering here. It is what lets the create path and the draft-submit
+    path share everything downstream: both then answer "what files does this run
+    have?" by reading ``run.files`` rather than a list only one of them holds
+    (Phase 6.23c).
+
+    Args:
+        session: The request's session.
+        run: The run, already flushed so it has an id.
+        uploads: What arrived, as ``(kind, file, part, label)``.
+        data_dir: The shared volume.
+
+    Raises:
+        HTTPException: 400 when an upload is rejected.
+    """
+    try:
+        for kind, upload, part, part_label in uploads:
+            file = store_upload(
+                upload.file,
+                upload.filename or kind,
+                upload.content_type or "",
+                kind,
+                data_dir,
+                str(run.id),
+                part=part,
+                max_bytes=_upload_limit(session),
+            )
+            session.add(
+                models.RunFile(
+                    run_id=run.id,
+                    kind=file.kind,
+                    part=part,
+                    part_label=part_label,
+                    filename=file.filename,
+                    storage_key=file.storage_key,
+                    sha256=file.sha256,
+                    size_bytes=file.size_bytes,
+                )
+            )
+    except UploadError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    session.flush()
+
+
+def _upload_limit(session: Session) -> int:
+    """The largest upload this deployment accepts, in bytes.
+
+    Resolved here rather than read into a constant (ADR-023). The setting has existed
+    in the console since Phase 6.3 and nothing ever passed it, so the limit was always
+    the module default however an administrator set it (Phase 6.23c).
+
+    Args:
+        session: An open session.
+
+    Returns:
+        The limit in bytes.
+    """
+    return int(resolve(session, "uploads.max_mb").value) * 1024 * 1024
+
+
+def _finish_submission(
+    session: Session,
+    run: models.Run,
+    data_dir: Path,
+    user: CurrentUser,
+    queue: JobQueue,
+    rerun_reason: str,
+    *,
+    discard_on_duplicate: bool,
+) -> schemas.CreateRunResult:
+    """Fingerprint, check for a duplicate, capture the config, and start the run.
+
+    Everything from "the files are stored" to "the job is queued", shared by
+    ``POST /runs`` and ``POST /runs/{id}/submit``. Two copies of this is how the two
+    doors would come to admit different deliveries (Phase 6.23c).
+
+    Args:
+        session: The request's session.
+        run: The run, with its files already recorded.
+        data_dir: The shared volume.
+        user: The submitter.
+        queue: The job queue.
+        rerun_reason: Why identical inputs are being run again (ADR-005).
+        discard_on_duplicate: Whether to delete the run when it matches an earlier one
+            and no reason was given. True for a run built seconds ago by ``POST /runs``,
+            which is a throwaway; **false for a draft**, which holds typed fields and
+            uploaded files that deleting would destroy in the act of asking about them.
+
+    Returns:
+        The queued run, the run that was held, or the duplicate it matched.
+    """
+    files = list(run.files)
+    digest = repository.fingerprint(
+        (f.sha256 for f in files), repository.active_check_versions(session)
+    )
+    duplicate = session.execute(
+        sa.select(models.Run)
+        .where(
+            models.Run.input_fingerprint == digest,
+            models.Run.id != run.id,
+            models.Run.status.not_in(("failed", "draft")),
+        )
+        .order_by(models.Run.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    if duplicate is not None and not rerun_reason.strip():
+        # A clone whose files were never replaced is the commonest way to reach here,
+        # and "these inputs were already run" is unhelpful when the person believes
+        # they just uploaded them. Naming the run it came from says what happened.
+        from_source = run.cloned_from_id is not None and duplicate.id == run.cloned_from_id
+        if discard_on_duplicate:
+            repository.delete_run(session, run, data_dir)
+        repository.audit(session, "run.duplicate_blocked", duplicate.id, digest[:12])
+        return schemas.CreateRunResult(
+            duplicate=schemas.DuplicateRun(
+                run_id=duplicate.id,
+                status=duplicate.status,
+                created_at=duplicate.created_at,
+                is_source=from_source,
+                message=(
+                    (
+                        f"This is a clone of run {duplicate.id} and its files are "
+                        "unchanged, so it would produce the same report. Replace a "
+                        "file, or supply a reason to run it again."
+                    )
+                    if from_source
+                    else (
+                        "These inputs were already run. Supply a reason to run them "
+                        "again; the cache keeps the re-run cheap."
+                    )
+                ),
+            )
+        )
+
+    run.input_fingerprint = digest
+    run.rerun_reason = rerun_reason.strip()
+    # Re-stamped here rather than after the mismatch check, because a run that is held
+    # is real work waiting on a person: leaving it on the draft's five-day window would
+    # purge it while somebody was deciding whether to accept the disagreement. A draft
+    # may also have sat for days, and its retention starts when it becomes a run, not
+    # when it was cloned.
+    run.expires_at = repository.expiry_for(session, run, run_from=utcnow())
+    # Taken at submission, not when the draft was made, so it is the note in force for
+    # whatever configuration id the draft ended up with (ADR-024).
+    run.config_notes_snapshot = repository.active_config_notes(session, run.configuration_id)
+    _capture_config_from_upload(session, run, data_dir, files, user)
+
+    # Do these artifacts belong to the delivery that was just described? Code compares,
+    # before anything is asked of the model (ADR-041). A run whose artifacts agree
+    # queues exactly as it always did; one whose artifacts disagree is held with its
+    # files intact, so accepting costs a click rather than a re-upload.
+    mismatches = _record_mismatches(session, run, data_dir, files)
+    if mismatches:
+        run.status = "held"
+        session.flush()
+        repository.audit(session, "run.held", run.id, ",".join(row.field for row in mismatches))
+        _LOG.info(
+            "run %d held: %s disagree with the artifacts",
+            run.id,
+            ", ".join(row.field for row in mismatches),
+        )
+        return schemas.CreateRunResult(
+            run_id=run.id,
+            status=run.status,
+            mismatches=[_mismatch_out(row) for row in mismatches],
+        )
+
+    run.status = "queued"
+    session.flush()
+    # The change-your-mind window. `run_after` already means "earliest a job may be
+    # claimed", so this is the existing mechanism given a purpose rather than a new one.
+    queue.enqueue(
+        TASK_RUN_PIPELINE,
+        run_id=run.id,
+        run_after=utcnow() + availability.read(session).grace,
+    )
+    repository.audit(
+        session,
+        "run.created",
+        run.id,
+        f"rerun={bool(rerun_reason.strip())} files={len(files)}",
+    )
+    _LOG.info("run %d created for order %s (%d files)", run.id, run.order_number, len(files))
+    return schemas.CreateRunResult(
+        run_id=run.id, status=run.status, queue_position=queue.queue_position(run.id)
     )
 
 
@@ -358,75 +678,12 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     active = {a.key for a in catalog.load_artifacts(session, active_only=True)}
     form = await request.form()
 
-    # (key, file, part ordinal, part label). A slot may carry several files: some
-    # campaigns deliver one field distribution per segment (ADR-021). `getlist` is
-    # what makes that work; `get` would silently keep only the last.
-    uploads: list[tuple[str, UploadFile, int, str]] = [
-        ("osl", osl, 1, ""),
-        ("config", config, 1, ""),
-    ]
-    for key in sorted(active - {"osl", "config"}):
-        labels = [str(value) for value in form.getlist(f"{key}__label")]
-        ordinal = 0
-        for value in form.getlist(key):
-            # `request.form()` yields Starlette's UploadFile; FastAPI's is a subclass,
-            # so testing against the subclass silently matched nothing and every
-            # report was dropped. Test the base.
-            if not isinstance(value, StarletteUploadFile) or not value.filename:
-                continue
-            ordinal += 1
-            label = labels[ordinal - 1] if ordinal <= len(labels) else ""
-            uploads.append((key, cast(UploadFile, value), ordinal, label.strip()))
-
+    uploads = _read_uploads(form, active, osl=osl, config=config)
     if len(uploads) < 3:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "at least one output report must be uploaded"
         )
-
-    queue = _queue(request, session)
-    already_queued = session.execute(
-        sa.select(sa.func.count())
-        .select_from(models.Run)
-        .where(models.Run.order_number == order_number, models.Run.status == "queued")
-    ).scalar_one()
-    per_order = int(resolve(session, "queue.per_order_limit").value)
-    if int(already_queued) >= per_order:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"{already_queued} runs are already queued for order {order_number}; "
-            "wait for one to finish",
-        )
-
-    # A rate limit on starting work, so a bulk submission cannot empty the token
-    # budget in a minute. The run is refused rather than queued, because the person
-    # is standing there and a queue they cannot see the end of is worse than a clear
-    # "try again shortly" (ADR-023).
-    window_s = int(resolve(session, "queue.window_s").value)
-    started_recently = int(
-        session.execute(
-            sa.select(sa.func.count())
-            .select_from(models.Run)
-            .where(models.Run.created_at >= utcnow() - dt.timedelta(seconds=window_s))
-        ).scalar_one()
-    )
-    starts_allowed = int(resolve(session, "queue.starts_per_window").value)
-    if started_recently >= starts_allowed:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            f"{started_recently} runs have started in the last {window_s // 60} minutes, "
-            f"which is the configured limit of {starts_allowed}. Try again shortly.",
-        )
-
-    # Before a single byte is stored: is the tool accepting work at all? (Phase 6.14j)
-    # Refusing here rather than after the upload means somebody who cannot submit has
-    # not waited for seven files to travel first.
-    available = availability.read(session)
-    if not available.accepting:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            available.message
-            or "Greenlight AI is not accepting submissions at the moment. Try again shortly.",
-        )
+    queue = _admit(session, request, order_number)
 
     run = models.Run(
         customer_name=customer_name.strip(),
@@ -441,120 +698,13 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
         deliverable_count=max(0, deliverable_count),
         outputs_validated=max(0, outputs_validated),
         delivery_notes=delivery_notes.strip(),
-        # Copied at submission so the run page and the frozen report show what the
-        # model was told even after the note is edited or switched off (ADR-024).
-        config_notes_snapshot=repository.active_config_notes(session, configuration_id.strip()),
     )
     session.add(run)
     session.flush()
-    run.expires_at = repository.expiry_from(run.created_at or utcnow())
 
-    stored: list[tuple[Any, int, str]] = []
-    try:
-        for kind, upload, part, part_label in uploads:
-            stored.append(
-                (
-                    store_upload(
-                        upload.file,
-                        upload.filename or kind,
-                        upload.content_type or "",
-                        kind,
-                        data_dir,
-                        str(run.id),
-                        part=part,
-                    ),
-                    part,
-                    part_label,
-                )
-            )
-    except UploadError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-
-    digest = repository.fingerprint(
-        (f.sha256 for f, _, _ in stored), repository.active_check_versions(session)
-    )
-    duplicate = session.execute(
-        sa.select(models.Run)
-        .where(
-            models.Run.input_fingerprint == digest,
-            models.Run.id != run.id,
-            models.Run.status != "failed",
-        )
-        .order_by(models.Run.id.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-
-    if duplicate is not None and not rerun_reason.strip():
-        session.delete(run)
-        repository.audit(session, "run.duplicate_blocked", duplicate.id, digest[:12])
-        return schemas.CreateRunResult(
-            duplicate=schemas.DuplicateRun(
-                run_id=duplicate.id,
-                status=duplicate.status,
-                created_at=duplicate.created_at,
-                message=(
-                    "These inputs were already run. Supply a reason to run them again; "
-                    "the cache keeps the re-run cheap."
-                ),
-            )
-        )
-
-    run.input_fingerprint = digest
-    run.rerun_reason = rerun_reason.strip()
-    for file, part, part_label in stored:
-        session.add(
-            models.RunFile(
-                run_id=run.id,
-                kind=file.kind,
-                part=part,
-                part_label=part_label,
-                filename=file.filename,
-                storage_key=file.storage_key,
-                sha256=file.sha256,
-                size_bytes=file.size_bytes,
-            )
-        )
-
-    _capture_config_from_upload(session, run, data_dir, stored, user)
-
-    # Do these artifacts belong to the delivery that was just described? Code compares,
-    # before anything is asked of the model (ADR-041). A run whose artifacts agree
-    # queues exactly as it always did; one whose artifacts disagree is held with its
-    # files intact, so accepting costs a click rather than a re-upload.
-    mismatches = _record_mismatches(session, run, data_dir, stored)
-    if mismatches:
-        run.status = "held"
-        session.flush()
-        repository.audit(
-            session,
-            "run.held",
-            run.id,
-            ",".join(row.field for row in mismatches),
-        )
-        _LOG.info(
-            "run %d held: %s disagree with the artifacts",
-            run.id,
-            ", ".join(row.field for row in mismatches),
-        )
-        return schemas.CreateRunResult(
-            run_id=run.id,
-            status=run.status,
-            mismatches=[_mismatch_out(row) for row in mismatches],
-        )
-
-    # The change-your-mind window. `run_after` already means "earliest a job may be
-    # claimed", so this is the existing mechanism given a purpose rather than a new one.
-    queue.enqueue(TASK_RUN_PIPELINE, run_id=run.id, run_after=utcnow() + available.grace)
-    repository.audit(
-        session,
-        "run.created",
-        run.id,
-        f"rerun={bool(rerun_reason.strip())} files={len(stored)}",
-    )
-    _LOG.info("run %d created for order %s (%d files)", run.id, order_number, len(stored))
-
-    return schemas.CreateRunResult(
-        run_id=run.id, status=run.status, queue_position=queue.queue_position(run.id)
+    _store_uploads(session, run, uploads, data_dir)
+    return _finish_submission(
+        session, run, data_dir, user, queue, rerun_reason, discard_on_duplicate=True
     )
 
 
@@ -616,7 +766,7 @@ def _mismatch_out(row: models.ArtifactMismatch) -> schemas.ArtifactMismatchOut:
 
 
 def _labelled_credit_date(
-    session: Session, run: models.Run, data_dir: Path, stored: list[Any]
+    session: Session, run: models.Run, data_dir: Path, files: Sequence[models.RunFile]
 ) -> field_labels.LabelHit | None:
     """Read the credit date a report says it is cut as of, if one says so.
 
@@ -633,7 +783,7 @@ def _labelled_credit_date(
         session: An open session, for the scoped labels.
         run: The run row.
         data_dir: The shared volume.
-        stored: The stored files.
+        files: The run's stored files.
 
     Returns:
         The first labelled date found, or ``None``.
@@ -657,7 +807,7 @@ def _labelled_credit_date(
     candidates = sorted(
         (
             (file.kind, data_dir / file.storage_key)
-            for file, _, _ in stored
+            for file in files
             if file.kind not in ("osl", "config")
         ),
         key=lambda pair: pair[1].stat().st_size if pair[1].exists() else 0,
@@ -682,7 +832,7 @@ def _labelled_credit_date(
 
 
 def _record_mismatches(
-    session: Session, run: models.Run, data_dir: Path, stored: list[Any]
+    session: Session, run: models.Run, data_dir: Path, files: Sequence[models.RunFile]
 ) -> list[models.ArtifactMismatch]:
     """Compare the submission with its artifacts and store what disagrees.
 
@@ -695,13 +845,13 @@ def _record_mismatches(
         session: An open session.
         run: The run row, already flushed so it has an id.
         data_dir: The shared volume.
-        stored: The stored files.
+        files: The run's stored files.
 
     Returns:
         The rows written, empty when everything agreed. An unreadable configuration
         produces no rows: that is the pipeline's failure to report, not a disagreement.
     """
-    config_file = next((f for f, _, _ in stored if f.kind == "config"), None)
+    config_file = next((f for f in files if f.kind == "config"), None)
     if config_file is None:
         return []
     try:
@@ -713,7 +863,7 @@ def _record_mismatches(
 
     declared_id = decoded.get("configuration_id")
     declared_customer = decoded.get("customer")
-    hit = _labelled_credit_date(session, run, data_dir, stored)
+    hit = _labelled_credit_date(session, run, data_dir, files)
     results = (
         artifact_match.compare_configuration_id(
             run.configuration_id, declared_id if isinstance(declared_id, str) else ""
@@ -792,11 +942,14 @@ def cancel_run(
             f"run {run_id} was picked up a moment ago and is running now",
         )
 
+    # Read before the write: the detail is meant to name what the run was, and taking
+    # it afterwards made every cancellation in the audit log say "was cancelled".
+    was = run.status
     run.status = "cancelled"
     run.finished_at = utcnow()
     session.flush()
     repository.audit(
-        session, "run.cancelled", run.id, f"was {run.status}", user_id=user.id, actor=user.name
+        session, "run.cancelled", run.id, f"was {was}", user_id=user.id, actor=user.name
     )
     _LOG.info("run %d cancelled by %s", run.id, user.name)
     return _summary(session, run)
@@ -907,7 +1060,11 @@ def _parse_date(value: str | None) -> dt.date | None:
 
 
 def _capture_config_from_upload(
-    session: Session, run: models.Run, data_dir: Path, stored: list[Any], user: CurrentUser
+    session: Session,
+    run: models.Run,
+    data_dir: Path,
+    files: Sequence[models.RunFile],
+    user: CurrentUser,
 ) -> None:
     """Record the uploaded config in the versioned config history.
 
@@ -915,11 +1072,11 @@ def _capture_config_from_upload(
         session: An open session.
         run: The run row.
         data_dir: The shared volume.
-        stored: The stored files.
+        files: The run's stored files.
         user: Who submitted the run, recorded against the captured version so the
             config history can show who ran it (ADR-022).
     """
-    config_file = next((f for f, _, _ in stored if f.kind == "config"), None)
+    config_file = next((f for f in files if f.kind == "config"), None)
     if config_file is None:
         return
     try:
@@ -961,7 +1118,10 @@ def list_runs(
         session: The request's session.
         _user: The caller.
         customer: Filter by customer.
-        run_status: Filter by status.
+        run_status: Filter by status. **Drafts are excluded unless they are asked for
+            by name**: a draft is unfinished work rather than a delivery that was
+            validated, and letting abandoned ones accumulate in the history is noise
+            in front of the runs somebody is actually looking for (Phase 6.23c).
         submitted_by: Only this account's runs. An id rather than a name, because two
             people can share a display name and a link that quietly widened to both
             would be worse than one that found nobody.
@@ -978,6 +1138,8 @@ def list_runs(
         statement = statement.where(models.Run.customer_name == customer)
     if run_status:
         statement = statement.where(models.Run.status == run_status)
+    else:
+        statement = statement.where(models.Run.status != "draft")
     if submitted_by is not None:
         statement = statement.where(models.Run.user_id == submitted_by)
     if q and q.strip():
@@ -1237,6 +1399,30 @@ def get_requirements(
     )
 
 
+def _must_be_reviewable(run: models.Run) -> None:
+    """Refuse a re-check on a run that is not awaiting review (Phase 6.23a).
+
+    One condition covers every wrong case at once. The sharpest is ``finalized``: a
+    re-check rewrites rules, traces and findings, and doing that under a frozen report
+    breaks the invariant `reports.py` states and hard rule 5 requires — re-reviewing a
+    finalized run is already refused by the findings, coverage and report routes, and
+    this was the hole in that. The rest — ``draft`` with no files, ``queued`` and
+    ``running`` where the pipeline owns the row, ``failed``, ``held`` and ``cancelled``
+    where there is nothing to re-compare — were all accepted silently.
+
+    Args:
+        run: The run a re-check was asked for.
+
+    Raises:
+        HTTPException: 409 when the run is in any other state.
+    """
+    if run.status != "needs_review":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run.id} is {run.status}; only a run awaiting review can be re-checked",
+        )
+
+
 @router.put("/{run_id}/requirements", response_model=schemas.RecheckResult)
 def edit_requirements(
     run_id: int,
@@ -1265,6 +1451,7 @@ def edit_requirements(
             edited rule fails validation.
     """
     run = _get_run(session, run_id)
+    _must_be_reviewable(run)
     version = run.rules_version + 1
 
     for edit in payload.edits:
@@ -1333,6 +1520,7 @@ def recheck(
         Confirmation that a re-check was queued.
     """
     run = _get_run(session, run_id)
+    _must_be_reviewable(run)
     _queue(request, session).enqueue(TASK_RECHECK, run_id=run_id)
     repository.audit(session, "run.recheck_requested", run_id)
     return schemas.RecheckResult(run_id=run_id, rules_version=run.rules_version, queued=True)
@@ -1360,6 +1548,25 @@ def clone_run(
         The new run.
     """
     source = _get_run(session, run_id)
+
+    # Three clicks used to make three orphan drafts, each living out the retention
+    # window with nobody aware of them. Answered here rather than by disabling the
+    # button, because the button cannot know what other tabs have done.
+    existing = session.execute(
+        sa.select(models.Run)
+        .where(
+            models.Run.cloned_from_id == source.id,
+            models.Run.user_id == user.id,
+            models.Run.status == "draft",
+        )
+        .order_by(models.Run.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if existing is not None:
+        return schemas.CloneResult(
+            run_id=existing.id, cloned_from=source.id, status=existing.status
+        )
+
     clone = models.Run(
         customer_name=source.customer_name,
         order_number=source.order_number,
@@ -1371,10 +1578,18 @@ def clone_run(
         user_id=user.id,
         scope=source.scope,
         has_suppressions=source.has_suppressions,
+        # Typed by the submitter on the form and silently dropped by every clone until
+        # Phase 6.23c, so a cloned run quietly lost the deliverable counts.
+        deliverable_count=source.deliverable_count,
+        outputs_validated=source.outputs_validated,
+        delivery_notes=source.delivery_notes,
     )
     session.add(clone)
     session.flush()
-    clone.expires_at = repository.expiry_from(clone.created_at or utcnow())
+    # The short window: an unsubmitted draft is not worth the full retention period.
+    # The configuration notes are snapshotted at submit, not here, because the draft's
+    # configuration id can still change (ADR-024).
+    clone.expires_at = repository.expiry_for(session, clone)
     repository.audit(
         session,
         "run.cloned",
@@ -1384,6 +1599,234 @@ def clone_run(
         actor=user.name,
     )
     return schemas.CloneResult(run_id=clone.id, cloned_from=source.id, status=clone.status)
+
+
+def _must_be_draft(run: models.Run) -> None:
+    """Refuse anything but a draft (Phase 6.23c).
+
+    Every one of these endpoints edits or destroys what a run is made of. A run that
+    has been submitted is a record of what the pipeline was told, and a finalized one
+    is part of a frozen report — so the guard is a whitelist of the one state where
+    the question makes sense, named in the message so the caller knows why.
+
+    Args:
+        run: The run addressed.
+
+    Raises:
+        HTTPException: 409 when it is not a draft.
+    """
+    if run.status != "draft":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run.id} is {run.status}, not a draft; only a draft can be edited",
+        )
+
+
+@router.patch("/{run_id}", response_model=schemas.RunDetail)
+def update_draft(
+    run_id: int,
+    payload: schemas.DraftUpdate,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
+) -> schemas.RunDetail:
+    """Change a draft's fields.
+
+    Args:
+        run_id: The draft.
+        payload: The fields to change. Only the keys sent are touched.
+        request: The incoming request.
+        session: The request's session.
+        user: The caller.
+        auth: Whether login is on (ADR-036).
+
+    Returns:
+        The draft as it now stands.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when it is not a draft, 422 when
+            the credit date is not a date.
+    """
+    run = _get_run(session, run_id)
+    _must_be_draft(run)
+
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        if field == "credit_date":
+            run.credit_date = _parse_date(value)
+        elif field == "scope":
+            run.scope = str(value).strip().upper()
+        elif field in ("deliverable_count", "outputs_validated"):
+            setattr(run, field, max(0, int(value or 0)))
+        elif isinstance(value, str):
+            setattr(run, field, value.strip() if field != "notes" else value)
+        else:
+            setattr(run, field, value)
+    session.flush()
+    repository.audit(
+        session,
+        "run.draft_edited",
+        run.id,
+        ",".join(sorted(changes)),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _detail(session, run, _queue(request, session), auth.user_auth)
+
+
+@router.post("/{run_id}/files", response_model=schemas.RunDetail)
+async def attach_draft_files(
+    run_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(current_user),
+    auth: AuthSettings = Depends(get_auth_settings),
+) -> schemas.RunDetail:
+    """Attach or replace a draft's artifacts.
+
+    **Replace by kind**: every kind present in the request replaces all existing parts
+    of that kind, and kinds absent are left alone. That matches how the form edits a
+    slot — a slot is a list of parts edited as a whole — and it makes the orphaned file
+    impossible to forget, because replacing unlinks what it replaced. A ``.docx`` OSL
+    swapped for a ``.pdf`` writes a different storage key, so without that the old
+    bytes would sit on the volume for the life of the run.
+
+    Args:
+        run_id: The draft.
+        request: The incoming request, carrying the multipart form.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller.
+        auth: Whether login is on (ADR-036).
+
+    Returns:
+        The draft with its files as they now stand.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when it is not a draft, 400 when
+            an upload is rejected.
+    """
+    run = _get_run(session, run_id)
+    _must_be_draft(run)
+
+    catalog.seed_defaults(session)
+    active = {a.key for a in catalog.load_artifacts(session, active_only=True)}
+    form = await request.form()
+    uploads = _read_uploads(form, active)
+    if not uploads:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "no files were supplied")
+
+    replaced = {upload[0] for upload in uploads}
+    for kind in replaced:
+        for existing in [f for f in run.files if f.kind == kind]:
+            candidate = data_dir / existing.storage_key
+            if candidate.exists():
+                candidate.unlink()
+            session.delete(existing)
+    session.flush()
+
+    _store_uploads(session, run, uploads, data_dir)
+    session.refresh(run)
+    repository.audit(
+        session,
+        "run.draft_files",
+        run.id,
+        ",".join(sorted(replaced)),
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _detail(session, run, _queue(request, session), auth.user_auth)
+
+
+@router.post("/{run_id}/submit", response_model=schemas.CreateRunResult)
+def submit_draft(
+    run_id: int,
+    payload: schemas.SubmitDraft,
+    request: Request,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(current_user),
+) -> schemas.CreateRunResult:
+    """Start a draft.
+
+    It goes through the same admission checks and the same duplicate rule as a run
+    submitted from scratch, because two copies of those is how the two doors would come
+    to admit different deliveries. The one deliberate difference: a duplicate answer
+    **keeps** the draft, where ``POST /runs`` discards the row it built seconds ago. A
+    draft holds typed fields and uploaded files, and deleting it would destroy the work
+    in the act of asking a question about it.
+
+    Args:
+        run_id: The draft.
+        payload: The re-run reason, when one is needed.
+        request: The incoming request.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller.
+
+    Returns:
+        The queued run, the run that was held, or the duplicate it matched.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when it is not a draft or too
+            many runs are queued for the order, 400 when no report is attached.
+    """
+    run = _get_run(session, run_id)
+    _must_be_draft(run)
+
+    kinds = {f.kind for f in run.files}
+    if not kinds - {"osl", "config"} or not {"osl", "config"} <= kinds:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "a draft needs the OSL, the configuration and at least one report "
+            "before it can be submitted",
+        )
+
+    queue = _admit(session, request, run.order_number)
+    return _finish_submission(
+        session, run, data_dir, user, queue, payload.rerun_reason, discard_on_duplicate=False
+    )
+
+
+@router.delete("/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def discard_draft(
+    run_id: int,
+    confirm: str = Query(default=""),
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(current_user),
+) -> None:
+    """Discard a draft and everything uploaded to it.
+
+    A draft is deleted rather than cancelled. Nothing about it was validated, no token
+    was spent and no report exists, so there is no record worth keeping beyond the
+    audit line — and the purge was going to delete it in a few days anyway. The typed
+    word is ADR-032's, and the draft guard is the only thing standing between this
+    route and a way to delete a finalized run.
+
+    Args:
+        run_id: The draft.
+        confirm: Must be the word ``delete``.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 409 when it is not a draft, 400 when
+            the word was not typed.
+    """
+    run = _get_run(session, run_id)
+    _must_be_draft(run)
+    if confirm != "delete":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "type 'delete' to confirm; a delete cannot be undone"
+        )
+    repository.audit(
+        session, "run.draft_discarded", run.id, run.order_number, user_id=user.id, actor=user.name
+    )
+    repository.delete_run(session, run, data_dir)
 
 
 @router.get("/{run_id}/stats", response_model=schemas.RunStats)

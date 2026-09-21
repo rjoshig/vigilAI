@@ -38,7 +38,10 @@ where a term maps to code, the subpackage is named.
 | **Review** (severity) | A finding kept for a human look: low-confidence extraction (< 0.7) or a verify-stage disagreement. |
 | **Review status** | The reviewer's decision on a finding, one of three: **false positive** (not a real problem), **accepted risk** (real, accepted anyway, always with a comment), or **confirmed** — shown as **Not OK**, meaning the delivery has to change. Undecided until they choose. |
 | **Traceability matrix** | The main review view: one row per requirement, three columns (OSL, config, reports), status match / mismatch / partial / missing / extra. |
-| **Re-check** | Re-running stages 5–7 after a rule or trace edit. Seconds, no LLM. |
+| **Re-check** | Re-running stages 5–7 after a rule or trace edit. Seconds, no LLM. Queued by the edit itself; refused on any run that is not awaiting review, so a frozen report cannot be rewritten (ADR-066). |
+| **Clone** | Copying a finished run's submitted fields into a new **draft**, without its files. The commonest reason is a re-run with corrected inputs, which is why the artifacts are uploaded fresh. Cloning the same run twice returns the draft you already have. |
+| **Draft run** | A run that has not started: its fields and artifacts can still be edited, nothing has been validated and no tokens have been spent. Finished on the New run form, which prefills from it. Expires on a short window an administrator sets (ADR-065), where a submitted run keeps the full retention period. **Kept out of the runs list** and reached by its own filter, so unfinished work is not noise in the history. |
+| **Discard** (a draft) | Deleting a draft and its uploads under the typed word. A draft is deleted rather than cancelled: there is no validated work to keep a record of, and the audit line is the record (ADR-063). |
 | **Finalize / final report** | Generating the frozen one-page HTML report after review. Stored once, never regenerated; PDF rendered from it. |
 
 ## Configurable checks (admin-ui)
