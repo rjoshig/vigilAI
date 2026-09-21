@@ -28,6 +28,7 @@ from greenlight_ai.db.queue import ClaimedJob, JobQueue
 from greenlight_ai.db.session import create_all, create_engine, session_factory, session_scope
 from greenlight_ai.db.settings import DbSettings
 from greenlight_ai.db.types import utcnow
+from greenlight_ai.worker.diagnostics import describe_failure
 from greenlight_ai.llm.settings import LLMSettings, resolved_llm_settings
 from greenlight_ai.config.store import resolve
 from greenlight_ai.worker.replay import replay_candidate
@@ -216,6 +217,15 @@ class Worker:
                     # "failed" and then recover; only a dead job marks the run failed.
                     run.status = "queued" if will_retry else "failed"
                     run.error = message[:2000]
+                    # Kept for a run awaiting a retry too: the attempt that failed is
+                    # what somebody wants to see, and the next one overwrites it.
+                    run.error_detail = describe_failure(
+                        exc,
+                        run_id=run.id,
+                        stage=run.current_stage,
+                        attempt=job.attempts,
+                        attempts=job.max_attempts,
+                    )
                     if not will_retry:
                         run.finished_at = utcnow()
 

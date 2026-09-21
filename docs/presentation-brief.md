@@ -7,10 +7,13 @@ design documents, and management briefings. Everything here is at the level a us
 a manager needs; engineering detail lives in the repository. Diagrams are in Mermaid
 so they render in most tools and can be redrawn in any.
 
-**As of:** 2026-09-20. The tool is built through phase 6.13, with phase 6.14 part
-built, and is ahead of its first UAT. It has been run end to end against a real
-commercial model, not only the scripted stand-in. Timing figures in sections 9 and 10 are
-expected values to be confirmed in UAT, not measurements.
+**As of:** 2026-09-20. The tool is **built through phase 6.18a and 6.18f** and is ahead
+of its first UAT: the pipeline, both apps, the frozen report, the learning loop, and the
+machinery that will let a reviewer stop reading every finding. It has been run end to end
+against a real commercial model, not only the scripted stand-in. Timing figures in
+sections 10 and 11 are expected values to be confirmed in UAT, not measurements — and
+where a number *has* been measured, this document says so and says what it was measured
+on.
 
 ---
 
@@ -266,7 +269,124 @@ comparison of a value, a set, a range, a count or a sequence is made by code. Th
 not a limitation to be lifted later — it is what makes the results reproducible,
 explainable to a regulator, and identical on two runs of the same inputs.
 
-## 8. What an administrator controls, without engineering
+
+**8. It survives your customers writing things their own way.** The first version of
+several checks matched text literally, and a measurement showed what that costs: of
+twenty deliveries that were exactly what they claimed to be, worded the way a different
+customer might word them, **five produced a false alarm at the highest severity the tool
+has**. Singular where the rule said plural, a hyphen, two words in the other order. Those
+now match, and where a customer's vocabulary is genuinely new the tool reads the
+documents, recognises the work, and offers the customer's own phrase to the
+administrator with one click to adopt it. The point is not that the bug was fixed — it
+is that the tool was **measured for it before anybody shipped a promise**, and the
+measurement is kept as a test so the answer cannot quietly change.
+
+**9. It is honest about not knowing.** Three different checks were measured for the same
+weakness and answered differently on purpose: one was repaired, one was left alone
+because it already failed safely, and one was given a second opinion. A check that
+cannot tell says *"could not evaluate"* rather than guessing, and a model that cannot
+tell says *"unclear"* rather than picking. A tool that never says "I am not sure" is a
+tool nobody can calibrate.
+
+**10. The review list shrinks as the tool earns it — and only then.** The tool records
+which recurring findings your reviewers have waved through, every time, on every
+delivery. Ten occurrences with no exceptions and it marks that finding as one they have
+stopped needing to see. **It then does nothing about it.** Every reviewer still sees
+every finding, because the first evidence that hiding something is safe must not be a
+reviewer failing to see it. What it produces instead is a list and a question — *it would
+have hidden these; was any of them real?* — put to the senior people during rollout. Only
+their answer justifies acting on it.
+
+**11. Trust, when it comes, is revocable and never self-granted.** A finding judged real
+even once is never hidden again. Serious findings are never hidden at any level of
+evidence — the goal is a reviewer who reads only the serious ones, not one who reads
+none. Nothing hidden is ever deleted: it is still evaluated, still stored, still in the
+audit log, with the reason it was not surfaced. And the one automatic move in the design
+runs in the safe direction only: **the tool may revoke its own trust and may never grant
+it.**
+
+## 8. Three ways to judge it: the associate, the accuracy, and the AI
+
+The same product answers to three different audiences, and the honest answer is
+different for each. A brief that gives only one of them will be challenged by whichever
+room it did not address.
+
+### The associate's view — *"what changes on Monday?"*
+
+They fill in a short form, drop three files, and come back to a list of findings with the
+evidence already next to each one. They decide OK or Not OK; the tool never decides for
+them. A one-page report is generated once and frozen with their name on it.
+
+What is different from any other tool they have been given:
+
+- **It explains itself.** Every finding names the clause, the configuration path and the
+  report cell it came from. Nothing asks to be believed.
+- **Their expertise is the product, not an obstacle to it.** When they disagree with a
+  finding, or check something by habit that the tool missed, they write one sentence and
+  it becomes a candidate rule a specialist approves. The knowledge that currently leaves
+  the team when a senior person does now stays.
+- **It does not nag.** When it is unsure, it says so and asks; when a customer's wording
+  keeps confusing it, the fix is a click by an administrator, not a monthly irritation.
+- **It cannot lock them out.** Sign-off is theirs, and the tool refuses to freeze a
+  report that has not been properly reviewed rather than letting it through quietly.
+
+### The accuracy view — *"how do we know it is right?"*
+
+This is the question a QC function must be able to answer about its own QC tool, and the
+design answers it structurally rather than by assertion.
+
+- **Every comparison is made by code.** Values, sets, ranges, counts and sequences are
+  never compared by the model. Two runs of the same inputs give the same answer, and the
+  answer can be recomputed by hand.
+- **Coverage is tracked, not assumed.** Every requirement read out of the OSL is traced
+  into the configuration and then into the reports, and anything left unchecked is
+  reported rather than silently dropped.
+- **The claims are measured, and the measurements are kept.** Precision and recall per
+  finding type and per programme come from a benchmark harness, not from an impression.
+  Where a weakness was suspected it was measured before it was fixed, and the measurement
+  became a test — for the programme check, the compliance rules, and the named values
+  alike, including the one measurement that concluded *"this is fine, leave it alone"*.
+- **Sign-off is fail-closed.** A report cannot be frozen with findings undecided or
+  coverage gaps unacknowledged. Freezing records an attestation of what was in force.
+- **It is designed to be checked, forever.** Nothing is deleted from the training record,
+  every decision carries a name and a time, and the frozen report is the record of what
+  was signed.
+
+### The AI view — *"what is the model actually doing?"*
+
+The shortest accurate answer: **the model reads and judges meaning; code does every
+comparison.** That single rule explains most of the design, and it is worth being
+specific about what it does and does not permit.
+
+**What the model does.** It reads the OSL and works out what each requirement means. It
+reads the configuration and describes what each block does in the same vocabulary. It
+judges whether a requirement is implemented. It gives a second opinion on serious
+findings — or three independent ones, merged by code. It reads a delivery for which
+programme it describes when the word lists miss. It drafts a rule from a reviewer's
+sentence. **All of that is reading and judging, which is what a language model is good
+at.**
+
+**What the model never does.** It never compares two values. It never counts. It never
+decides whether a delivery is compliant, or whether a finding is important, or whether a
+reviewer was right. It never activates anything. Its stated confidence is used to
+**discard** a weak answer and never to **trust** a strong one — because a model's
+confidence is not a calibrated probability, and a system that lets a model skip a human
+by being sure fails hardest exactly where it is most sure.
+
+**How the model is kept honest.** Where a model call could downgrade a serious finding,
+code bounds it: the answer must quote something the model was actually offered, clear a
+confidence floor, and even then it buys a *question for a person* rather than a pass. The
+two calls that could soften a high-severity finding — one at stage 6, one at stage 7 —
+both follow that rule, and both run **only where the deterministic check already failed**,
+so the ordinary delivery costs nothing.
+
+**And the model is a setting.** Provider, endpoint and model name come from configuration.
+It runs against a model inside your own network, in which case no delivery data crosses a
+boundary at all. Nothing personal reaches it in any case: columns are masked as the
+workbook is read, a tripwire scans every assembled prompt before it is sent, and where the
+model is shown what a report looks like it is shown labels and addresses, never a row.
+
+## 9. What an administrator controls, without engineering
 
 Everything below changes from a screen and takes effect on the next run, with no
 deployment and no restart.
@@ -289,7 +409,7 @@ a technology team. The dependency a tool like this usually creates — every adj
 queued behind somebody else's sprint — is not there, which is what lets it keep pace
 with customers whose requirements change faster than release cycles do.
 
-## 9. What changes for the associate: time and effort
+## 10. What changes for the associate: time and effort
 
 Today's manual check is about three to six hours per order. The expected shape with
 Greenlight AI is below. These are design targets, to be confirmed by the UAT benchmark in
@@ -336,7 +456,16 @@ Beyond time:
   one the UAT benchmark measures directly: findings against the manual outcome, on
   real orders.
 
-## 10. Cost, control, and not being tied to a model
+**And a second dimension, later.** The ten to fifteen minutes above is the review of a
+full findings list. As the tool learns which recurring findings a team has consistently
+waved through, that list gets shorter — a mature configuration should put three findings
+in front of a reviewer where a new one puts forty. **That reduction is not claimed
+here**: the machinery to measure it is built and the machinery to act on it is not,
+deliberately, until the senior associates have looked at what it would have hidden and
+said whether any of it was real. The honest claim today is the first table. The second
+dimension is a designed-for outcome with an evidence gate in front of it.
+
+## 11. Cost, control, and not being tied to a model
 
 The three questions a technology group and a finance owner ask, answered from the way
 the tool is built rather than from a promise.
@@ -375,7 +504,7 @@ it predictable.
 | --- | --- |
 | **A token budget per run** | A ceiling set in the admin console. A run that exceeds it stops and is flagged rather than quietly spending. One pathological input cannot empty a month's budget. |
 | **A content-addressed cache** | Nothing is ever sent to the model twice. The cache key is a hash of exactly what was sent, so a re-run, a repeated OSL section, or two deliveries sharing a clause cost nothing the second time. In a measured re-run, 22 of 23 calls were cache hits and the run cost a fifth of a cent. |
-| **Code does the bulk of the work** | Three of the nine stages make no model call at all — every comparison of a value, a set, a count or a sequence is Python. The model is used only where meaning has to be read, which is the expensive part and the small part. |
+| **Code does the bulk of the work** | Every comparison of a value, a set, a count or a sequence is Python, and two of the nine stages make no model call at all. Two more — the compliance locator and the programme reading — call the model **only where the deterministic check has already failed**, so an ordinary delivery never pays for them. The model is used where meaning has to be read, which is the small part. |
 | **A ceiling on second opinions** | Stage 8 re-reads high-severity findings. How many lenses read them, and a hard cap on those calls per run, are both settings. |
 
 Every one of these is visible: each run records its calls, tokens and cache hits, and
@@ -412,7 +541,7 @@ files, and read findings. What the controls buy them is that the tool answers in
 minute, answers the same way twice, and does not stop working because a budget ran out
 mid-month.
 
-## 11. Why certain choices were made
+## 12. Why certain choices were made
 
 | Choice | Why |
 | --- | --- |
@@ -425,8 +554,13 @@ mid-month.
 | Rules are data an administrator edits | The people who understand the deliveries shape the checks, without a release. |
 | A learned rule starts in shadow | Its precision is unknown until it meets real data; a false-positive flood costs trust that takes months to earn back. |
 | The report is frozen | What was signed off is what stays on record. |
+| A match is tolerant of spelling but strict about evidence | A rule that breaks because a customer wrote "account" instead of "accounts" raises a false alarm at the highest severity; a programme named on two generic words does the same. Both were measured, not guessed at. |
+| The model may soften a serious finding, never erase one | A model agreeing with the submitter is the one answer that could hide a real problem. It buys a question for a person, not a silence. |
+| A model's confidence can discard an answer, never authorise one | A model's stated confidence is not a calibrated probability. A system that lets a model skip a human by being sure fails hardest where it is most sure. |
+| The review list shrinks on human verdicts, never on the model's opinion | "Ten people saw this and none of them cared" is evidence. "The AI is 92% sure" is a tone of voice. |
+| The tool may revoke its own trust and never grant it | The safe direction is the only one worth automating. |
 
-## 12. Where it runs
+## 13. Where it runs
 
 Five containers on the internal network: the user app, the admin console on its own
 URL, the API, a background worker, and the database. The model is an in-house
@@ -446,7 +580,7 @@ flowchart LR
     W --> LLM[In-house model endpoint]
 ```
 
-## 13. How it reaches the teams
+## 14. How it reaches the teams
 
 Four stages, each with an exit gate rather than a date.
 
@@ -463,7 +597,10 @@ senior associates on the floor to engineering, with escalation severities and
 response times written down. Acceptance is a signature per programme per region,
 against a precision and recall floor measured on real orders.
 
-## 14. Where the build stands
+## 15. Where the build stands
+
+**Built and tested: phases 0 through 6.18a and 6.18f.** 1,514 automated tests, every
+linter and type checker clean, both applications building.
 
 | Done | Still to do |
 | --- | --- |
@@ -472,12 +609,22 @@ against a precision and recall floor measured on real orders.
 | Optional login and full attribution | The first UAT and its benchmark |
 | Train AI mode end to end, with shadow rules; an administrator's own library of worked examples for the model | Compliance sign-off on retention and personal data |
 | Coverage of every requirement, a fail-closed sign-off gate, and three independent second opinions merged by code | Region-by-region rollout |
-| One place an administrator describes what to check in their own words, and one vocabulary for where a rule applies | A screen for the field-label table; the remaining field markers and tooltips |
-| The artifacts checked against the submission before any model call, waived with a reason and printed on the report | Moving the credit-date comparison into that pre-flight |
-| Training documents and the rollout plan; delivery drift; four themes, locked by default | |
+| One place an administrator describes what to check in their own words, and one vocabulary for where a rule applies | **The evidence that lets the review list actually shrink** — real verdicts from real reviewers, gathered during rollout stage 3 |
+| The artifacts checked against the submission before any model call, waived with a reason and printed on the report | The maturity levels, the trust numbers and the honesty sample that act on that evidence |
+| Matching that survives being spelled differently, measured before and after, in the compliance rules, the named values and the programme check | |
+| A second reading of a delivery's programme where the word lists miss, with the customer's own phrase offered back for one-click adoption | |
+| The review-load machinery: which recurring findings reviewers have stopped needing to see, recorded with its evidence and **acting on nothing** | |
+| Which engine produced each finding, a thirty-day run count, and a dated report of the manual hours displaced | |
+| Training documents and the rollout plan, both current; delivery drift; four themes, locked by default | |
 | Proven on a real commercial model end to end: a full run in 33 seconds and about five cents, reproducing the planted findings exactly | |
 
-## 15. Glossary for a general audience
+**What is deliberately not finished.** The parts of the design that decide what a
+reviewer stops seeing are specified and not built, because they need evidence this
+repository cannot manufacture: real verdicts from real people on real deliveries. That
+evidence is gathered during the rollout, and the question it answers is written down in
+advance so nobody has to invent a standard after seeing the numbers.
+
+## 16. Glossary for a general audience
 
 | Term | Meaning |
 | --- | --- |
@@ -491,3 +638,7 @@ against a precision and recall floor measured on real orders.
 | Configuration note | A standing note on an ETL configuration that reaches the model as background on every future run of it. |
 | Artifact match check | The comparison, made by code before any question is put to the model, between what was typed on the form and what the uploaded configuration declares about itself. |
 | Held run | A run whose artifacts disagree with the form. Its files are stored and nothing is lost; it starts as soon as somebody says, in one sentence, why they belong together. |
+| Delivery programme | Which kind of work a delivery is: Account Monitoring, Account Solicitation, Archives, or Other. It decides which standing rules apply, and the tool checks that the documents read like the programme that was claimed. |
+| Finding signature | "This same finding again": one customer, one programme, one rule, one thing it fired on. What the tool counts verdicts against when learning which findings a team has stopped needing to see. |
+| Review load | The admin screen showing which recurring findings the tool *would* stop surfacing, and the evidence for each. It acts on nothing; it exists to be argued with. |
+| Precision and recall | Of the findings the tool raised, how many were real (precision); of the real problems there were, how many it found (recall). The two numbers a QC tool is judged on, measured in UAT against the manual check. |

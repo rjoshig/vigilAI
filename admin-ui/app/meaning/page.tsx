@@ -11,9 +11,10 @@
  */
 
 import { Sparkles } from "lucide-react";
+import Link from "next/link";
 import * as React from "react";
 
-import { Explain } from "@/components/explain";
+import { Explain, FieldEffect } from "@/components/explain";
 import { BulkBar } from "@/components/bulk-bar";
 import { GuideEditor } from "@/components/guide-editor";
 import {
@@ -52,6 +53,18 @@ const STATUS_TONE: Record<MeaningStatus, "success" | "warn" | "info" | "muted"> 
 };
 
 type Tab = "requirements" | "cells";
+
+/**
+ * What each missing artifact is called in a sentence somebody can act on.
+ *
+ * The API answers with the artifact keys the interview needs. "osl, config" is a
+ * correct answer to a question nobody asked; what an administrator needs to know is
+ * which file to go and upload.
+ */
+const MISSING_LABELS: Record<string, string> = {
+  osl: "example OSL document",
+  config: "example ETL configuration",
+};
 
 export default function MeaningPage() {
   const [scope, setScope] = React.useState("");
@@ -132,6 +145,38 @@ export default function MeaningPage() {
             compiles a confirmed row into a shadow check.
             <br />
             <br />
+            <b>Why do this at all?</b> Without a mapping the model works out where every requirement
+            lands <i>from scratch, on every run</i> — reading the OSL, then the configuration, then
+            the reports, and deciding which part answers which. That is the step it is least certain
+            about and the one it can answer differently on two runs of the same delivery. A
+            confirmed mapping replaces the guessing with a fact.
+            <br />
+            <br />
+            <b>What one confirmed row actually does — two things at once:</b>
+            <br />
+            <b>1. The AI reads it.</b> It goes into the prompt at tracing and at verification as
+            background:{" "}
+            <i>this cell means X, it answers to OSL section Y and configuration path Z</i>. The
+            model stops deriving that and spends its attention on whether the delivery is right,
+            which is the judgment you actually want from it.
+            <br />
+            <b>2. Code turns it into a check.</b> A row with both a configuration path and a locator
+            that lands on your samples compiles into two named values and a comparison code runs
+            itself — no model, no tokens, the same answer every time. It starts in shadow, so you
+            watch it fire before it counts.
+            <br />
+            <br />
+            <b>What gets better:</b> fewer requirements come back as <i>could not trace</i>; the
+            same requirement resolves the same way every month instead of being re-derived; and each
+            confirmed row quietly adds a deterministic check you did not have to write.
+            <br />
+            <br />
+            <b>Why you confirm rather than the model.</b> Nothing the model proposes acts on
+            anything until a person accepts it (ADR-021). A wrong mapping is worse than none — it
+            teaches the tool the wrong place to look — so the model does the reading and you do the
+            deciding.
+            <br />
+            <br />
             Scoped globally or per programme. A programme entry with the same key as a global one
             replaces it on that programme&rsquo;s runs.
           </Explain>
@@ -195,10 +240,23 @@ export default function MeaningPage() {
               </div>
             )}
             {samples && samples.missing.length > 0 ? (
-              <div className="mt-1 text-destructive">
-                Missing before Map can run: {samples.missing.join(", ")}.
+              <div className="mt-1 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-destructive">
+                <b>Map cannot run yet.</b> It reads one example of each artifact to work out where
+                requirements land, and {scopeLabel} has no{" "}
+                {samples.missing.map((key) => MISSING_LABELS[key] ?? key).join(" and no ")} to read.
+                <br />
+                <Link href="/artifacts" className="underline underline-offset-2">
+                  Upload one on Artifact types
+                </Link>{" "}
+                — a made-up file of the right shape is enough, and it is never used when a delivery
+                is checked. A programme with none of its own falls back to the global samples.
               </div>
             ) : null}
+            <FieldEffect
+              kind="reference"
+              className="mt-1.5"
+              note="The AI reads these example files when you press Map, to suggest where each requirement fits. They are not used when a delivery is checked — the mappings you confirm below are."
+            />
           </div>
           <div className="flex flex-col items-end gap-2">
             <Button
@@ -466,6 +524,11 @@ function EntryCard({
             <b>The model asks:</b> {entry.question}
           </div>
         ) : null}
+        <FieldEffect
+          kind="model"
+          className="mb-2"
+          note="Two things at once. The AI reads it at tracing and verification as background — it stops working out where this requirement answers to and reads the answer instead, which is the step it is least certain about. And where the row has a configuration path and a locator that lands on your samples, code compiles it into a comparison it runs itself, in shadow, at no token cost."
+        />
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_6rem]">
           <div className="flex flex-col gap-1">
             <Label htmlFor={`m-cfg-${entry.id}`}>Configuration path</Label>
@@ -623,7 +686,29 @@ function NewEntry({
   return (
     <Card className="mt-4">
       <CardHeader className="border-b">
-        <CardTitle>Add a mapping by hand</CardTitle>
+        <CardTitle className="flex items-center gap-1">
+          Add a mapping by hand
+          <Explain label="When to add one by hand">
+            Press <b>Map</b> first — the model proposes from your samples and you confirm, which is
+            faster and less error-prone than typing paths.
+            <br />
+            <br />
+            <b>Add one by hand when the model cannot see it:</b> a requirement the samples
+            don&rsquo;t cover, a cell that only appears in some months, or a mapping you already
+            know and would rather not wait to be proposed.
+            <br />
+            <br />
+            <b>It does the same work either way.</b> A hand-written row reaches the model as
+            background at tracing and verification, and compiles into a code check exactly as a
+            confirmed one does. The only difference is who wrote it — which is why it starts
+            confirmed rather than waiting for you to confirm your own entry.
+            <br />
+            <br />
+            <b>Get the configuration path right.</b> The path is what makes a row compile into a
+            check; a row without one still helps the AI read the delivery, but code has nothing to
+            compare and no check is born.
+          </Explain>
+        </CardTitle>
         <span className="text-[0.7rem] text-muted-foreground">
           Starts confirmed. Give it the same key as a global entry to override that entry for this
           programme.

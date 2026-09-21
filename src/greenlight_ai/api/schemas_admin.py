@@ -427,6 +427,68 @@ class ValueReportOut(BaseModel):
     working_weeks: float = 0.0
 
 
+class UserUsageOut(BaseModel):
+    """One person's use of the tool over a period (Phase 6.19)."""
+
+    user_id: int
+    #: Their name, or their username where they have none.
+    name: str = ""
+    username: str = ""
+    role: str = ""
+    #: Deactivated accounts still appear: what they did does not stop having happened.
+    is_active: bool = True
+
+    runs: int = 0
+    finalized: int = 0
+    needs_review: int = 0
+    failed: int = 0
+    #: The artifacts disagreed with the form and nobody has accepted it (ADR-041).
+    held: int = 0
+    cancelled: int = 0
+    #: Queued or running when the report was built.
+    in_flight: int = 0
+
+    #: Distinct order numbers: how much work, rather than how many attempts.
+    orders: int = 0
+    customers: int = 0
+    configurations: int = 0
+    repeat_runs: int = 0
+    #: Runs that recorded an artifact disagreement, accepted or not.
+    mismatch_runs: int = 0
+    high_findings: int = 0
+    completed_runs: int = 0
+
+    #: The three ways a run goes wrong, as rates, to compare against the deployment's
+    #: own averages on `UsageByUserOut` rather than against an invented threshold.
+    failure_rate: float = 0.0
+    held_rate: float = 0.0
+    repeat_rate: float = 0.0
+    high_per_run: float = 0.0
+
+    first_run_at: Optional[dt.datetime] = None
+    last_run_at: Optional[dt.datetime] = None
+    #: Sparse: a day they submitted nothing is absent rather than zero.
+    per_day: list[DayCount] = Field(default_factory=list)
+
+
+class UsageByUserOut(BaseModel):
+    """Everyone's use of the tool over one period (Phase 6.19)."""
+
+    start: dt.date
+    end: dt.date
+    days: int = 0
+    #: Busiest first.
+    users: list[UserUsageOut] = Field(default_factory=list)
+    runs: int = 0
+    #: The deployment's own averages. A person's rate means something next to these
+    #: and nothing on its own.
+    failure_rate: float = 0.0
+    held_rate: float = 0.0
+    repeat_rate: float = 0.0
+    #: The periods the console may ask for, so the picker cannot drift from the API.
+    periods: list[int] = Field(default_factory=list)
+
+
 class UsageOut(BaseModel):
     """The admin dashboard numbers, all plain SQL over the run tables."""
 
@@ -626,3 +688,91 @@ class PromoteIn(BaseModel):
     rule_id: str = ""
     scope: ScopeToken = scopes.EVERYWHERE
     note: str = ""
+
+
+class SignatureStateOut(BaseModel):
+    """One recurring finding and what people have decided about it (Phase 6.18a)."""
+
+    signature: str
+    customer_name: str = ""
+    #: The delivery programme's code. Trust is learned per customer per programme, so
+    #: what Account Solicitation taught never applies to that customer's Archives work.
+    scope: str = ""
+    rule_ref: str = ""
+    finding_type: str = ""
+    #: What it fired on. A blank score column and a blank state column are two
+    #: signatures however much they share a rule.
+    element_ref: str = ""
+    #: watching · would_demote · blocked
+    state: str = "watching"
+    #: One sentence saying why it is in that state.
+    reason: str = ""
+    occurrences: int = 0
+    dismissed: int = 0
+    upheld: int = 0
+    severities: list[str] = Field(default_factory=list)
+    #: The runs whose verdicts this rests on. A demotion has to be checkable against
+    #: the deliveries it was learned from, not merely asserted.
+    justified_by_run_ids: list[int] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class DemotionReportOut(BaseModel):
+    """What demotion would do, before anything acts on it (Phase 6.18a, ADR-043).
+
+    Every reviewer still sees every finding. This is the evidence for the question
+    that decides whether they should: *it would have hidden these — was any of them
+    real?*
+    """
+
+    #: How many signatures are in each state.
+    counts: dict[str, int] = Field(default_factory=dict)
+    #: The signatures that have earned their way out of the queue, most recent first.
+    would_demote: list[SignatureStateOut] = Field(default_factory=list)
+    #: Signatures a person has upheld, which are never demotable until cleared.
+    blocked: list[SignatureStateOut] = Field(default_factory=list)
+    #: True while nothing acts on any of this, which is the whole of 6.18a.
+    shadow: bool = True
+
+
+class KeywordSuggestionOut(BaseModel):
+    """A word the model quoted that would have matched a programme (Phase 6.18f)."""
+
+    scope_code: str = ""
+    phrase: str = ""
+    #: How many deliveries the model quoted it from. A phrase seen repeatedly is the
+    #: customer's vocabulary; one seen once may be a turn of phrase.
+    seen: int = 0
+    #: The runs it came from, so an administrator can read the delivery before
+    #: accepting a word into the list that decides what the tool believes.
+    run_ids: list[int] = Field(default_factory=list)
+    #: True when the programme already lists it, matching how the check compares.
+    already_listed: bool = False
+
+
+class KeywordSuggestionsOut(BaseModel):
+    """Every pending suggestion, grouped by programme."""
+
+    suggestions: list[KeywordSuggestionOut] = Field(default_factory=list)
+
+
+class AcceptKeywordIn(BaseModel):
+    """Add one suggested word to a programme's list."""
+
+    scope_code: str = Field(min_length=1)
+    phrase: str = Field(min_length=1)
+
+
+class PromptBudgetOut(BaseModel):
+    """What one prompt's context allowance has left (Phase 6.17b)."""
+
+    per_field_cap: int = 0
+    block_cap: int = 0
+    #: What the configured context takes today, counted the way the trimmer counts it.
+    used: int = 0
+    remaining: int = 0
+    lines: int = 0
+    #: True when the block is already over and losing its oldest lines. A field should
+    #: say so rather than let somebody write an eleventh note that never arrives.
+    trimmed: bool = False

@@ -9,18 +9,18 @@ resolved produces a "could not evaluate" finding; the run never skips a check si
 from __future__ import annotations
 
 import logging
-from typing import Any, Final, Mapping, cast
+from typing import Any, Final, Literal, Mapping, cast
 
 from greenlight_ai.checks.definitions import AdminConfig, CheckDefinition
-from greenlight_ai.checks import artifact_match, field_labels
+from greenlight_ai.checks import artifact_match, field_labels, programme_match
 from greenlight_ai.checks.expressions import ExpressionError, UnresolvedValue, evaluate
 from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.checks.field_constraints import evaluate as evaluate_constraints
 from greenlight_ai.checks.reports import REPORT_CHECKED_KINDS, CheckOutcome, run_derived_check
 from greenlight_ai.llm.client import LLMError
-from greenlight_ai.llm.prompts import JUDGMENT_PROMPT
-from greenlight_ai.llm.prompts.schemas import JudgmentResponse
+from greenlight_ai.llm.prompts import JUDGMENT_PROMPT, PROGRAMME_READING_PROMPT
+from greenlight_ai.llm.prompts.schemas import JudgmentResponse, ProgrammeReading
 from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import RunContext
@@ -352,38 +352,139 @@ def _check_credit_date(context: RunContext) -> None:
 _PROGRAMME_HIT_FLOOR: Final[int] = 2
 
 
+def _haystack(context: RunContext) -> list[str]:
+    """Everything the classification check is allowed to read.
+
+    Args:
+        context: The run context, after stage 1 has parsed everything.
+
+    Returns:
+        The OSL text, the configuration's JSON paths and descriptions, and the report
+        sheet names and headers. Never a data row (ADR-003): a header says what a
+        delivery is about, a row says who is in it.
+    """
+    parts: list[str] = []
+    if context.osl is not None:
+        parts.extend(section.as_text() for section in context.osl.sections)
+    if context.config is not None:
+        parts.extend(block.as_text() for block in context.config.blocks)
+    for document in context.reports.values():
+        for sheet in document.sheets:
+            parts.append(sheet.name)
+            parts.extend(sheet.header)
+    return parts
+
+
 def _programme_hits(context: RunContext, words: tuple[str, ...]) -> list[str]:
     """Which of a programme's words appear in the inputs.
+
+    Still a grep rather than a judgement, and still deliberately explainable — but a
+    grep that survives a hyphen and a plural, which Phase 6.17a measured it failing.
+    The matching rules are in `checks/programme_match.py`.
 
     Args:
         context: The run context, after stage 1 has parsed everything.
         words: The programme's keywords.
 
     Returns:
-        The words found, scanning the OSL text, the configuration's JSON paths and
-        descriptions, and the report sheet names and headers. A grep, not a judgement:
-        it is deliberately simple so it is deliberately explainable.
+        The words found.
     """
-    haystack_parts: list[str] = []
-    if context.osl is not None:
-        haystack_parts.extend(section.as_text() for section in context.osl.sections)
-    if context.config is not None:
-        haystack_parts.extend(block.as_text() for block in context.config.blocks)
-    for document in context.reports.values():
-        for sheet in document.sheets:
-            haystack_parts.append(sheet.name)
-            haystack_parts.extend(sheet.header)
-    haystack = " ".join(haystack_parts).lower()
-    return [word for word in words if word.lower() in haystack]
+    return programme_match.hits(_haystack(context), words)
+
+
+#: How much of the delivery's own words the reading prompt is shown. Enough to say what
+#: the work is for, and far short of the whole OSL: this runs once per delivery and the
+#: question is what kind of work it is, not what it requires.
+_READING_EXTRACT_CHARS: Final[int] = 4000
+
+#: Below this the model's reading is discarded. A locator that is unsure has told us
+#: nothing the keyword match had not, and the keyword match is free.
+_READING_CONFIDENCE_FLOOR: Final[float] = 0.6
+
+
+def _ask_what_it_reads_like(
+    context: RunContext, keywords: Mapping[str, tuple[str, ...]], declared: str
+) -> "ProgrammeReading | None":
+    """Ask the model which programme the delivery's own words describe (6.18f).
+
+    Reached only where the keyword match has already failed, so the common case costs
+    nothing. The model is asked what the documents sound like; the caller compares that
+    with what was declared, because the comparison is code's (ADR-001).
+
+    Args:
+        context: The run context.
+        keywords: Every programme's keywords, whose keys are the codes on offer.
+        declared: The declared programme's code, which is offered like any other.
+
+    Returns:
+        The answer, or ``None`` when it could not be obtained or cannot be believed —
+        no client, an unparseable reply, a programme code nobody offered, or an answer
+        the model itself was not confident in.
+    """
+    if context.client is None:
+        return None
+
+    labels = context.guidance.programme_labels or {}
+    offered = sorted(code for code, words in keywords.items() if words)
+    if len(offered) < 2:
+        return None
+    programmes = "\n".join(f"- {code}: {labels.get(code, code)}" for code in offered)
+
+    extracts = " ".join(" ".join(part.split()) for part in _haystack(context))
+    extracts = extracts[:_READING_EXTRACT_CHARS]
+    if not extracts.strip():
+        return None
+
+    try:
+        result = context.client.complete(
+            PROGRAMME_READING_PROMPT.system,
+            preamble(context.guidance)
+            + PROGRAMME_READING_PROMPT.render_with_examples(
+                context.examples.get("programme_reading", ()),
+                programmes=programmes,
+                extracts=extracts,
+            ),
+            ProgrammeReading,
+            stage="programme_reading",
+            prompt_version=PROGRAMME_READING_PROMPT.version,
+        )
+        answer = result.parsed(ProgrammeReading)
+    except LLMError as exc:
+        _LOG.info("programme reading: no answer (%s)", type(exc).__name__)
+        return None
+
+    if answer.verdict != "reads_like":
+        return answer
+    # The model was given a list of codes. Code checks it used one: a code nobody
+    # offered is a hallucination, and believing one would be the comparison ADR-001
+    # keeps out of the model's hands.
+    if answer.programme_code not in set(offered):
+        _LOG.info("programme reading: proposed %r, which was not offered", answer.programme_code)
+        return None
+    if answer.confidence < _READING_CONFIDENCE_FLOOR:
+        _LOG.info(
+            "programme reading: %r at confidence %.2f, below the floor",
+            answer.programme_code,
+            answer.confidence,
+        )
+        return None
+    _ = declared
+    return answer
 
 
 def _check_programme(context: RunContext) -> None:
-    """Confirm the inputs read like the declared programme (ADR-026).
+    """Confirm the inputs read like the declared programme (ADR-026, ADR-045).
 
     A user says a run is Account Solicitation; the OSL, the configuration, and the
-    reports usually say so somewhere in their own words. When none of the declared
-    programme's words appear and another programme's do, that is worth a finding
-    before anything else is checked.
+    reports usually say so somewhere in their own words.
+
+    Three steps, cheapest first, and code decides at every one:
+
+    1. **The keyword match**, which tolerates plurals, hyphens and reordered phrases
+       (6.17a). A hit anywhere and the check is silent, free, and explainable.
+    2. **The model, asked once**, only where that found nothing. It says what the
+       documents read like; it is never asked whether the submitter was right.
+    3. **Code compares** its answer with the declaration and decides the severity.
 
     Args:
         context: The run context, whose ``findings`` this may append to.
@@ -398,22 +499,92 @@ def _check_programme(context: RunContext) -> None:
     if declared_hits:
         return
 
+    # Only a word one programme alone claims is evidence for naming that programme.
+    # Two of the shipped Archives keywords were ordinary data-delivery vocabulary, and
+    # a shared word cannot tell two programmes apart whoever added it (6.17a).
     others = {
-        code: _programme_hits(context, words)
+        code: _programme_hits(context, programme_match.discriminating(code, keywords))
         for code, words in keywords.items()
         if code != declared and words
     }
-    strongest = max(others.items(), key=lambda item: len(item[1]), default=("", []))
-    looks_like = strongest[0] if len(strongest[1]) >= _PROGRAMME_HIT_FLOOR else ""
+    ranked = sorted(others.items(), key=lambda item: len(item[1]), reverse=True)
+    strongest = ranked[0] if ranked else ("", [])
+    runner_up = len(ranked[1][1]) if len(ranked) > 1 else 0
+    # Clear the floor, and be strictly ahead of the next programme. Two that look
+    # equally likely mean the inputs are unfamiliar, not that either one is the answer.
+    looks_like = (
+        strongest[0]
+        if len(strongest[1]) >= _PROGRAMME_HIT_FLOOR and len(strongest[1]) > runner_up
+        else ""
+    )
 
+    reading = _ask_what_it_reads_like(context, keywords, declared)
+    engine: Literal["code", "model"] = "code"
+    agreed_phrases: tuple[str, ...] = ()
+    if reading is not None and reading.verdict == "reads_like":
+        engine = "model"
+        if reading.programme_code == declared:
+            # The model read the delivery as what the submitter said. The keyword list
+            # is missing this customer's vocabulary — a gap in a word list, not a
+            # defect in the delivery — so the phrases it quoted are offered to an
+            # administrator as the words that would have matched (ADR-045).
+            context.add_keyword_suggestion(declared, tuple(reading.phrases))
+            _LOG.info(
+                "programme reading: agreed with the declared %s; %d phrase(s) suggested",
+                declared,
+                len(reading.phrases),
+            )
+            if not looks_like:
+                # Code had nothing but "none of its words appear", which is a word-list
+                # gap and an administrator's problem. Nothing for a reviewer to do.
+                return
+            # Code had enough to name a different programme, which is a high-severity
+            # finding. **The model may soften that; it may not erase it** — the same
+            # rule the compliance locator follows, and for the same reason: a model
+            # agreeing with the submitter is the one answer that could hide a real
+            # mismatch, so it buys a question rather than a silence.
+            context.add_finding(
+                Finding(
+                    finding_id=context.next_finding_id(),
+                    type="programme_mismatch",
+                    severity="review",
+                    engine="model",
+                    title=(
+                        f"Declared as {guidance.scope_label or declared}; some words point "
+                        f"to {guidance.programme_labels.get(looks_like, looks_like)}"
+                    ),
+                    detail=(
+                        f"None of {guidance.scope_label or declared}'s words appear, and "
+                        f"these do: {', '.join(strongest[1])}. Read as a whole, though, the "
+                        f"delivery's own words describe {guidance.scope_label or declared}"
+                        + (f": {'; '.join(reading.phrases)}." if reading.phrases else ".")
+                        + " Confirm the programme, and consider adding this customer's "
+                        "words to its keyword list so the question does not recur."
+                    ),
+                    leg="osl_config",
+                    evidence=Evidence(osl_ref="whole OSL, configuration, and report headers"),
+                )
+            )
+            return
+        # The model read it as a different programme. That is the case the check
+        # exists for, and it now has a reason a person can read.
+        looks_like = reading.programme_code
+        agreed_phrases = tuple(reading.phrases)
+    elif reading is not None:
+        # `unclear`: the model could not tell either. It cannot raise the severity,
+        # and it stops a keyword coincidence from being reported as certainty.
+        looks_like = ""
+
+    label = guidance.programme_labels.get(looks_like, looks_like) if looks_like else ""
     context.add_finding(
         Finding(
             finding_id=context.next_finding_id(),
             type="programme_mismatch",
             severity="high" if looks_like else "review",
+            engine=engine,
             title=(
                 f"Declared as {guidance.scope_label or declared}, but the inputs read like "
-                f"{looks_like}"
+                f"{label}"
                 if looks_like
                 else (
                     f"Declared as {guidance.scope_label or declared}, but none of its "
@@ -423,9 +594,13 @@ def _check_programme(context: RunContext) -> None:
             detail=(
                 f"Looked for: {', '.join(keywords[declared])}. "
                 + (
-                    f"Found instead: {', '.join(strongest[1])}."
-                    if looks_like
-                    else "Found none of them, and no other programme's words either."
+                    f"The delivery's own words say {label}: " f"{'; '.join(agreed_phrases)}."
+                    if agreed_phrases
+                    else (
+                        f"Found instead: {', '.join(strongest[1])}."
+                        if looks_like
+                        else "Found none of them, and no other programme's words either."
+                    )
                 )
                 + " Confirm the programme on the run before trusting the programme rules."
             ),

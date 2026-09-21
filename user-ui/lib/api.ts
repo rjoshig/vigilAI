@@ -85,6 +85,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export interface ListRunsParams {
   customer?: string;
   status?: string;
+  /** Only this account's runs, which is what the admin console links to. */
+  submittedBy?: number;
   limit?: number;
   offset?: number;
 }
@@ -139,6 +141,7 @@ export const api = {
     const query = new URLSearchParams();
     if (params.customer) query.set("customer", params.customer);
     if (params.status) query.set("status", params.status);
+    if (params.submittedBy) query.set("submitted_by", String(params.submittedBy));
     if (params.limit) query.set("limit", String(params.limit));
     if (params.offset) query.set("offset", String(params.offset));
     const suffix = query.toString() ? `?${query}` : "";

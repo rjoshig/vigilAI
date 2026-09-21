@@ -309,9 +309,10 @@ export default function NewRunPage() {
                   value={order}
                   onChange={(event) => setOrder(event.target.value)}
                 />
-                <span className="text-[0.7rem] text-muted-foreground">
-                  Identifies the order in the run list and the report. Not sent to the model.
-                </span>
+                <FieldEffect
+                  kind="record"
+                  note="Identifies the order in the run list and on the report. It is never sent to the model and changes no finding."
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="configuration">Configuration ID *</Label>
@@ -363,10 +364,12 @@ export default function NewRunPage() {
                 </Select>
                 <span className="text-[0.7rem] text-muted-foreground">
                   {options?.scopes.find((option) => option.code === scope)?.description ??
-                    "Which kind of delivery this is."}{" "}
-                  Sent to the model as background, with the programme&apos;s rules. Choosing the
-                  right programme improves the validation.
+                    "Which kind of delivery this is."}
                 </span>
+                <FieldEffect
+                  kind="model"
+                  note="One of the most important fields on this form. It tells the model what kind of work it is reading before it judges anything, brings in that programme's standing rules, and code checks that your documents really do read like this programme. Choosing the right one improves everything that follows."
+                />
               </div>
               <fieldset className="flex flex-col gap-1.5">
                 <legend className="text-xs font-medium">Suppressions applied</legend>
@@ -390,9 +393,10 @@ export default function NewRunPage() {
                     Yes
                   </label>
                 </div>
-                <span className="text-[0.7rem] text-muted-foreground">
-                  Whether records were suppressed before delivery. Sent to the model as background.
-                </span>
+                <FieldEffect
+                  kind="model"
+                  note="Whether records were suppressed before delivery. The model reads it as background, so it does not report an expected gap as a defect. The default is No, because assuming Yes would let a missing suppression pass unremarked."
+                />
               </fieldset>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="delivery-notes">Delivery notes</Label>

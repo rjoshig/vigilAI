@@ -226,6 +226,7 @@ def _detail(
     return schemas.RunDetail(
         **base.model_dump(),
         pdf_available=renderer_available(),
+        error_detail=run.error_detail,
         notes=run.notes,
         rules_version=run.rules_version,
         model_used=run.model_used,
@@ -943,6 +944,8 @@ def list_runs(
     _user: CurrentUser = Depends(current_user),
     customer: str | None = Query(default=None),
     run_status: str | None = Query(default=None, alias="status"),
+    submitted_by: int | None = Query(default=None),
+    q: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> list[schemas.RunSummary]:
@@ -954,6 +957,11 @@ def list_runs(
         _user: The caller.
         customer: Filter by customer.
         run_status: Filter by status.
+        submitted_by: Only this account's runs. An id rather than a name, because two
+            people can share a display name and a link that quietly widened to both
+            would be worse than one that found nobody.
+        q: Free text over the fields a person remembers a run by — the order number,
+            the customer, the configuration id, and the submitter's name.
         limit: Page size.
         offset: Page offset.
 
@@ -965,6 +973,32 @@ def list_runs(
         statement = statement.where(models.Run.customer_name == customer)
     if run_status:
         statement = statement.where(models.Run.status == run_status)
+    if submitted_by is not None:
+        statement = statement.where(models.Run.user_id == submitted_by)
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        # The submitter is on another table, so their name is matched by resolving it
+        # to account ids first: a join would need an outer one for the runs stored
+        # before accounts existed, and would drop them from every search.
+        matching_users = [
+            int(row)
+            for row in session.execute(
+                sa.select(models.User.id).where(
+                    sa.or_(
+                        models.User.name.ilike(term),
+                        models.User.username.ilike(term),
+                    )
+                )
+            ).scalars()
+        ]
+        wanted = [
+            models.Run.order_number.ilike(term),
+            models.Run.customer_name.ilike(term),
+            models.Run.configuration_id.ilike(term),
+        ]
+        if matching_users:
+            wanted.append(models.Run.user_id.in_(matching_users))
+        statement = statement.where(sa.or_(*wanted))
 
     queue = _queue(request, session)
     return [_summary(session, run, queue) for run in session.execute(statement).scalars()]

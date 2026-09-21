@@ -108,6 +108,9 @@ class RunSummary(BaseModel):
 class RunDetail(RunSummary):
     """A run with everything the Review screen needs up front."""
 
+    #: The failure at length: stage, attempt and traceback, for somebody tracing it.
+    #: On the run only — the list carries the one-line ``error`` and nothing more.
+    error_detail: str = ""
     notes: str = ""
     rules_version: int = 1
     model_used: str = ""

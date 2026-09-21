@@ -1402,3 +1402,353 @@ to know about, and one more question a submitter can be asked at submit time. Th
 gate is code-only and adds no prompt, so the golden set is unaffected. What this does not
 do is verify that a configuration *belongs* to a customer — only that the artifacts agree
 with each other and with what was typed; point 4 is the reason, and it is revisitable.
+
+## ADR-042 — A programme keyword is matched loosely and counted strictly
+
+**Status:** accepted 2026-09-20 (Phase 6.17a).
+
+**Context:** The programme classification check greps a delivery's OSL, configuration
+and report headers for a programme's keywords and reports `programme_mismatch` when
+none of the declared programme's words appear. It was the third surface measured for
+the brittleness [`phase-6.15.md`](phase-6.15.md) found in compliance rules and
+[`phase-6.16.md`](phase-6.16.md) 6.16d found in named values, and it failed worse than
+either: compliance rules were repaired, named values were left alone because they fail
+at review severity, and this one fails at high.
+
+Twenty deliveries, every one genuinely the programme it declared, worded the way
+another customer might word it: 4 were silent, 11 raised a review item, and **5 fired
+at high severity**. Two defects compounded.
+
+1. A phrase keyword needed exact adjacency and exact plurality. `existing accounts` did
+   not find `existing account`; `invitation to apply` did not find
+   `invitation-to-apply`; `portfolio review` did not find *ongoing review of the
+   portfolio*. Single-word keywords survived inflection for free, because a substring
+   test catches `archives` for `archive`. Phrases had no such luck, so the shipped
+   programmes were unequally exposed.
+2. Severity rose to `high` only when *another* programme cleared a two-hit floor, and
+   two of the four shipped Archives keywords — `snapshot` and `historical` — are
+   ordinary data-delivery vocabulary that appears in a specification for any programme
+   at all. Archives cleared the floor by accident, so a delivery whose own words were
+   missed was not merely raised for review: it was confidently reported as a different
+   programme, at the highest severity the tool has.
+
+**Decision:** Match loosely, count strictly.
+
+**Loosely**, in `checks/programme_match.py`: three tests, any of which finds a keyword —
+a normalised substring (which preserves every match the old behaviour made, inflections
+included), the keyword's words adjacent after a conservative singular fold, and, for a
+multi-word keyword only, its words within a stated window of each other in any order.
+The fold is deliberately not a stemmer: it removes a plural and nothing else, because a
+false match here has to be explainable to the person reading the finding.
+
+**Strictly**, in the severity decision: a programme may be named as what a delivery
+"reads like" only on words **it alone claims**, and only when it is strictly ahead of
+the next programme. A word two programmes both list cannot tell them apart whoever
+added it, and a tie means the inputs are unfamiliar rather than evidence for either.
+The shipped lists also lost the two words that meant nothing and gained the words the
+business actually says.
+
+**Consequences:** The same twenty deliveries now measure 15 silent, 4 review and **1
+high**, with the control class — deliveries genuinely declared as the wrong programme —
+unchanged at 3 of 3. The check stays a grep: free, reproducible, and explainable to an
+auditor, which is the property worth protecting.
+
+The remaining high is kept deliberately and is the reason
+[`phase-6.18.md`](phase-6.18.md) 6.18f exists. A prescreen delivery that calls itself a
+*promotional acquisition mailing* and suppresses `existing accounts` has two of Account
+Monitoring's words and none of its own. **Nothing is misspelled** — the words really are
+the other programme's, and what makes them innocent is that they appear under *suppress*
+and *removes*. That is meaning, and no spelling rule reaches it. Closing it is the
+model's job, asked once after the code check has failed and answering *which programme
+does this read like*, never *is this correct*, which stays code's (ADR-001).
+
+The structural guard matters more than the keyword fix it replaced: removing `snapshot`
+and `historical` corrected one instance, and "a programme is named only on words it
+alone claims" is what stops an administrator recreating it with the next overlapping
+word they add.
+
+## ADR-043 — A finding earns its way out of the review queue on human verdicts alone, and earns it in shadow first
+
+**Status:** accepted 2026-09-20 (Phase 6.18a, user decision).
+
+**Context:** The product's value at volume is a reviewer who reads the findings that
+matter instead of all of them. The tool has recorded every verdict a reviewer gave since
+Phase 6.11 and displayed a per-rule fired/dismissed tally since 6.13, and **nothing has
+ever read either**. Meanwhile a misreading had taken hold, in conversation and in review:
+that ADR-021 requires a person to see every finding. It does not. It requires a person
+at the gate of a **rule**, and approving a rule is precisely the act of saying *apply
+this without asking me again*. A tool that keeps asking has wasted the approval.
+
+**Decision:** Group findings into **signatures** and let a signature stop reaching the
+review queue when the people who saw it have consistently said it did not matter.
+
+- **A signature is one customer, one delivery programme, one rule, and one thing it
+  fired on.** Trust is shared across a customer's deliveries within a programme and
+  never across programmes, because a control genuinely is implemented differently under
+  Account Solicitation than under Archives. The thing it fired on is part of the
+  identity: a blank score column and a blank state column share a rule and are not the
+  same finding, and pooling them would let evidence about a harmless case silence one
+  that matters.
+- **Ten occurrences, every one waved through.** A count with no exceptions in it, not a
+  rate. *"It was shown to a person ten times and never once mattered"* can be said to an
+  auditor; *"nine times out of ten"* cannot, because the tenth is the one that would
+  have been hidden. The count is settable upward; what a verdict means is not.
+- **One upheld finding blocks the signature permanently**, until a person clears it.
+  `accepted_risk` counts as upheld, not as a dismissal: the reviewer agreed the finding
+  was true and chose to carry it, which is the opposite of saying it should never have
+  been raised.
+- **`high` and above are never demoted**, at any level of evidence. The goal is a
+  reviewer who reads only the serious findings, not one who reads none.
+- **Nothing returns on its own.** A demotion is undone by a person or by a new verdict
+  upholding the finding, never by elapsed time — ADR-021's rule that nothing in the
+  training record expires by itself.
+- **Findings from a rule in shadow are not evidence.** A rule nobody has been shown
+  cannot have earned anybody's trust, and counting them would let a shadow rule demote
+  itself.
+- **The decision is arithmetic over human verdicts** (ADR-001). The model is not asked
+  whether a finding is important, and a model's stated confidence is not evidence here.
+  Confidence is used elsewhere in this product to *discard* a weak answer and never to
+  *trust* a strong one; that asymmetry stays.
+
+**And it ships in shadow.** 6.18a computes every signature's state, records it with the
+runs whose verdicts justify it, and **changes nothing about what any reviewer sees**.
+That is deliberate: the first evidence about whether demotion is safe must not be a
+reviewer failing to see something. After some weeks there is a real list to put the
+question to — *it would have hidden these forty; was any of them real?* — and that
+evidence is what 6.18b acts on and 6.18c measures.
+
+**Consequences:** One table, `finding_signatures`, which is a cache of an answer
+derivable from `findings` and `runs`; it exists because a demotion must be explainable
+months later, so it stores the sentence and the run ids rather than only the verdict.
+Recomputation reads every finding sharing a signature rather than adjusting a counter,
+so a corrected verdict or a deleted run lands correctly with nobody remembering to undo
+anything. `GET /admin/demotion-report` is the shadow report.
+
+What this does **not** do is remove a human from signing off a delivery. The finalize
+attestation of Phase 6.11 is untouched. What shrinks is how many findings a reviewer
+must read before they can honestly sign — not whether they sign.
+
+## ADR-044 — The compliance locator is told the run's programme and its standing instructions
+
+**Status:** accepted 2026-09-20 (Phase 6.17c, user decision).
+
+**Context:** When the deterministic compliance matcher finds nothing, stage 6 asks the
+model where the control is, if anywhere. `phase-6.15.md` left open whether that prompt
+should be told which programme the run belongs to. The question was written as though
+it were not, and **the shipped code already was**: `_locate()` prepends
+`preamble(context.guidance)`, which emits the programme's label and that programme's
+standing instructions. Nobody decided this; it arrived with the preamble.
+
+Nothing asserted it either, so a refactor could have dropped it, or doubled it, with
+every test still passing.
+
+**Decision:** Keep both, pin them with tests, and record the decision that was never
+made.
+
+The argument for is the one 6.15 anticipated: OFAC screening may be implemented
+differently under Account Solicitation than under Archives, and the model cannot know
+that from a configuration alone. The argument against is real and specific to this
+prompt — it is the only call in the product whose answer can soften a high-severity
+compliance finding — but it is bounded by guards code already applies: the model may
+only quote a path from the list it was given, must clear a confidence floor, must
+answer `found` rather than hedge, and **a located control is never a pass**. It becomes
+a review-severity question for a person. A standing instruction cannot clear a
+requirement; at worst it costs a reviewer one more question.
+
+**Consequences:** Four tests in `tests/pipeline/test_compliance_locate.py` now assert
+what reaches this prompt: that the programme and its standing instructions arrive, that
+they are labelled as background rather than as a requirement, that the preamble is sent
+once rather than twice, and that a run with nothing configured sends no preamble at all,
+so the prompt is byte-for-byte what it was before any of this existed.
+
+The narrower option — sending the programme label but not the administrator's free text
+— stays available and is a one-line change if a measurement ever shows the prose
+steering an answer. Running that measurement needs a real model, since the mock always
+answers `absent`; it is worth doing if the locator is ever seen to be too generous, and
+is not worth blocking on now.
+
+## ADR-045 — The model reads a delivery for its programme only where the keywords failed, and may soften a finding but never erase one
+
+**Status:** accepted 2026-09-20 (Phase 6.18f, user decision).
+
+**Context:** Phase 6.17a measured the programme classification check, found it brittle,
+and repaired it deterministically: false high-severity findings fell from five to one.
+The one left is not a spelling problem. A delivery that calls itself a *promotional
+acquisition mailing* and says *suppress existing accounts* carries two of Account
+Monitoring's words and none of Account Solicitation's. **Nothing is misspelled** — the
+words really are the other programme's, and what makes them innocent is that they
+appear under *suppress* and *removes*. That is meaning, and no normalising rule reaches
+it.
+
+The user asked for both paths — *"consult the AI after checking programmatically"* —
+which is the shape `phase-6.15.md` option A already established for compliance rules.
+
+**Decision:** Code first, the model once, code decides.
+
+1. **The keyword match runs first.** A hit anywhere and the check is silent, free and
+   explainable. The common case costs nothing, which is what makes asking affordable at
+   all: this is one call per delivery, and only on deliveries the keywords missed.
+2. **The model is asked one narrow question** — *which of these programmes do these
+   documents read like, and which words say so?* It is **never** asked whether the
+   submitter was right; that is a comparison, and comparisons are code's (ADR-001). The
+   prompt tells it that the deterministic match has already failed, and that "unclear"
+   is a good answer, because unfamiliar vocabulary is more common than a mis-declared
+   delivery.
+3. **Code refuses what it cannot believe**: a programme code nobody offered, an answer
+   below a confidence floor, an unparseable reply, or no reply. Each falls back to the
+   deterministic answer, which is what the check would have had anyway — so asking is
+   never worse than not asking.
+4. **Code decides what a believable answer means**, and this is the rule that keeps it
+   safe:
+   - The model **disagrees** with the declaration → the high-severity finding the check
+     exists for, now with a reason a person can read.
+   - The model **agrees**, and code had only *"none of its words appear"* → silent. That
+     finding was a word-list gap, which is an administrator's problem and not a
+     reviewer's, and raising it on every delivery from that customer forever is the
+     noise Phase 6.18 exists to remove.
+   - The model **agrees**, and code had enough to name a different programme → the
+     finding **drops to review severity**. It is not erased. A model agreeing with the
+     submitter is the one answer that could hide a real mismatch, so it buys a question
+     rather than a silence — the same line the compliance locator holds.
+   - The model is **unclear** → review severity, and it never raises one.
+
+**And the loop closes in code, not in the model.** When the model agrees, the phrases it
+quoted are recorded on the run and offered to an administrator on the programme's card.
+Accepting one adds it to the keyword list; from then on the check matches that
+customer's vocabulary deterministically and **the model is not asked again**. The tool
+stops asking because code now knows, not because the model grew confident — which is the
+distinction this product keeps everywhere (ADR-043). Nothing is applied without a person
+(ADR-021).
+
+**Consequences:** One new prompt, `programme_reading`, versioned and cached like every
+other. `Run.keyword_suggestions` holds what was quoted. `docs/model-context.md` records
+that a delivery's own words now reach a model at stage 7, capped, and never a data row
+(ADR-003) — the prompt is told not to quote a phrase containing a person's details, and
+the tripwire scans it like every other.
+
+The cost is one model call per delivery whose keywords missed, falling to zero for a
+customer as their vocabulary is accepted. The benefit is that the last measured false
+high-severity finding in the classification check has an answer, and that a customer
+who writes about their work in their own words stops being asked about it every month.
+
+## ADR-046 — A marker may be switched off only where it says a field is *not* read in a run
+
+**Status:** accepted · 2026-09-20 · Phase 6.19
+
+**Context.** Every field a person can write carries a `<FieldEffect>` marker saying what
+it does to a run, and until now the rule was absolute: **markers never hide.** The
+reason is in `CLAUDE.md` — an administrator cannot see a prompt, so the label beside the
+box is the only account they get of where their words end up, and a console that stops
+giving that account once somebody ticks a box is a console that lies to its experienced
+users. `ui.tooltips` turns off *help*; it has never touched the markers.
+
+Phase 6.19 then added a sixth kind, `reference`, for material the AI reads **while
+somebody sets the product up and never during a validation run**: the sample workbooks,
+and an artifact type's description. On the Artifact types screen that marker repeats
+under every sample in every scope group, saying the same sentence each time.
+
+**Decision.** `reference` — *"Used for setup, not for runs"* — is switchable, with
+`ui.setup_markers`, on by default. The other four are not, and the asymmetry has a
+reason rather than being a convenience:
+
+- A marker that says a field **reaches the model** or **is checked by code** is
+  accountability. Hiding it leaves somebody writing a careful paragraph with no idea it
+  will be read, or no idea it will not. That is the defect the markers exist to prevent.
+- A marker that says a field is **not read during a run** cannot mislead anybody about
+  where their words go. Switching it off removes a repeated reassurance, not a fact
+  somebody needed.
+
+The distinction is the direction of the claim, not how useful the sentence is.
+
+**Consequences.** `FieldEffect` consults one setting, in one line, for one kind:
+`if (kind === "reference" && !setupMarkers) return null;`. It does not consult
+`ui.tooltips` at all. Two tests hold the line —
+`test_the_marker_cannot_be_switched_off` keeps help and markers apart, and
+`test_only_the_setup_marker_may_be_switched_off` asserts the *shape* of that guard, so
+widening the condition fails even though every rendering test would still pass. The way
+this decision would erode is somebody adding `|| kind === "notes"` to a line nobody is
+watching.
+
+The switch lives in Appearance beside **Explain each screen**, because the two are what
+an administrator reaches for when a console feels chatty — and the help text says
+plainly which markers it cannot touch, so nobody switches it expecting more silence than
+they get.
+
+## ADR-047 — A failed run stores a traceback, and it is shown on the run rather than in the list
+
+**Status:** accepted · 2026-09-20 · Phase 6.19
+
+**Context.** A failed run carried one string. The runs list truncated it to forty
+characters and the run page showed the whole of it, which sounds like two views of one
+failure and is really one view twice: *"PipelineError: s4_trace: 3 requirements did not
+resolve"* says what happened and nothing about where it came from. Anybody reporting the
+failure had to be told to go and read a worker log they cannot reach.
+
+**Decision.** Two fields, answering different questions. `Run.error` stays one line —
+*what* — and is what the list shows. `Run.error_detail` is *where*: the stage, the
+attempt, and the traceback through this codebase, written by
+`worker/diagnostics.py::describe_failure` on both failure paths. It appears on the run
+behind a closed disclosure with a copy button, and **never in the list payload**, which
+a test asserts.
+
+**Why a traceback is allowed at all.** ADR-003 keeps delivery content out of logs and
+prompts, and a traceback is where that could be broken by accident, because a frame's
+message can quote whatever was being parsed. It is safe here because of how the pipeline
+raises: `PipelineError` carries a stage and a reason written in counts and ids, never a
+value from a workbook, and nothing formats local variables. What is stored is frames, an
+exception type, and that reason.
+
+**Consequences.** It is bounded at both ends: the whole text is capped at 8,000
+characters, dropping the **oldest** frames because the innermost call and the exception
+are at the end, and saying so rather than showing a trimmed traceback that looks
+complete. The header's copy of the exception message is capped separately at 500 — a
+parser that quotes what it choked on can raise something enormous, and the header would
+otherwise consume the whole budget and leave a detail with no frames in it. Both caps
+are tested against a deliberately vast message.
+
+The detail is written for a run awaiting a retry too, not only a dead one: the attempt
+that failed is what somebody wants to see, and the next attempt overwrites it.
+
+## ADR-048 — Usage is counted per person, and the three ways a run goes wrong are counted apart
+
+**Status:** accepted · 2026-09-20 · Phase 6.19
+
+**Context.** The usage dashboard counted the deployment, which answers *is anybody using
+this* and nothing else. The question an administrator arrives with is narrower: **is this
+going badly for a particular group of people?** A team whose runs fail twice as often as
+everyone else's is either meeting a report layout the parsers do not handle or has been
+taught the product wrong. Both are fixable and neither is visible in one average.
+
+**Decision.** `user_usage.build` counts per account over a closed set of periods — 7, 30,
+90 and 180 days, defaulting to 30 — and **keeps the three failure modes apart**, because
+they have different causes and different fixes:
+
+- **Failed** — the pipeline raised. Usually the tool's problem.
+- **Held** — the artifacts disagreed with the form (ADR-041). Usually a person's, and
+  the most teachable of the three.
+- **Re-run** — the same order submitted again. Something was wrong either way.
+
+A single "problems" count would hide the only thing worth knowing, which is which of the
+three an administrator can act on.
+
+**Rates are reported against the deployment's own average**, not a threshold. *Twice
+everyone else* is a fact somebody can act on; *a score of 68* is not, and nobody can
+argue with it. A row under five runs is never flagged, because a rate over three runs is
+noise whatever it says.
+
+**Consequences.** The period list is closed rather than a range, so the report cannot be
+asked for ten years of days by editing a URL; an unknown period is a 422 naming the four.
+The per-day series is **sparse** — a day with no runs is absent rather than zero —
+because a 180-day period is mostly zeroes. Days are UTC days, the frame run timestamps
+are stored in; taking "today" from a local clock counts the wrong day for anybody west of
+Greenwich in the evening, which is a bug this phase found in the value report's tests.
+
+A count links to that person's runs, which needed `GET /runs?submitted_by=` — an account
+id rather than a name, because two people can share a display name and a link that
+quietly widened to both would be worse than one that found nobody. The user app gained
+the matching filter and a search that covers the submitter, so somebody can answer the
+same question about themselves.
+
+**This is a count, not a judgment.** Deactivated accounts still appear: what somebody did
+does not stop having happened (ADR-022). Nothing here reaches a model, and the console
+says so on the card.

@@ -18,7 +18,7 @@ without anyone having to remember to bump a version.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final, Sequence
 
 __all__ = [
@@ -27,6 +27,9 @@ __all__ = [
     "preamble",
     "MAX_BLOCK_CHARS",
     "MAX_CONTEXT_CHARS",
+    "Budget",
+    "budget",
+    "context_lines",
 ]
 
 _LOG: Final = logging.getLogger(__name__)
@@ -82,6 +85,10 @@ class RunGuidance:
     programme_rules: tuple[tuple[int, str, str, str], ...] = ()
     #: Every programme's keywords, for the classification check: code to words.
     programme_keywords: dict[str, tuple[str, ...]] | None = None
+    #: Every programme's name, by code. The reading prompt offers the model a list of
+    #: programmes, and a code on its own says nothing about what the programme is; a
+    #: finding quotes the name back to a person for the same reason (Phase 6.18f).
+    programme_labels: dict[str, str] = field(default_factory=dict)
     validation_guides: tuple[tuple[str, ...], ...] = ()
 
     @property
@@ -165,21 +172,23 @@ def _fit(lines: Sequence[str], what: str, bullet: bool = True) -> str:
     return "\n".join([f"- {marker}" if bullet else marker, *kept])
 
 
-def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
-    """Build the context block that goes above a prompt's task.
+def context_lines(guidance: RunGuidance | None, artifact_key: str = "") -> list[str]:
+    """Every line the administrator and submitter contribute to one prompt.
+
+    Split out from :func:`preamble` so the budget a console shows is measured from
+    exactly the text a prompt carries, rather than from a second implementation that
+    can drift from it (Phase 6.17b).
 
     Args:
         guidance: What the administrator configured, or ``None``.
         artifact_key: The artifact this prompt is about, when it is about one.
 
     Returns:
-        A short block ending in a blank line, or an empty string when nothing is
-        configured. The wording tells the model this is background, not a requirement:
-        standing instructions are context for reading the OSL, never a substitute for
-        what the OSL says.
+        The lines, each already clipped to :data:`MAX_CONTEXT_CHARS`, before the
+        whole-block ceiling is applied.
     """
     if guidance is None or guidance.is_empty:
-        return ""
+        return []
 
     lines: list[str] = []
     if guidance.scope_label:
@@ -210,7 +219,74 @@ def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
     artifact = guidance.for_artifact(artifact_key) if artifact_key else ""
     if artifact:
         lines.append(f"About the document below: {_clip(artifact)}")
+    return lines
 
+
+@dataclass(frozen=True, slots=True)
+class Budget:
+    """How much of one prompt's context allowance is already spent (Phase 6.17b).
+
+    A field that states its cap tells somebody the rule. A field that states what is
+    *left* tells them whether their next sentence will survive — and the eleventh
+    configuration note on a configuration is trimmed whether or not anybody knew the
+    rule.
+
+    Attributes:
+        per_field_cap: The ceiling on any single field.
+        block_cap: The ceiling on everything an administrator contributes to one prompt.
+        used: What the configured context takes today, counted the way the trimmer
+            counts it.
+        remaining: ``block_cap - used``, never below zero.
+        lines: How many context lines there are.
+        trimmed: Whether the block is already over and losing its oldest lines.
+    """
+
+    per_field_cap: int = MAX_CONTEXT_CHARS
+    block_cap: int = MAX_BLOCK_CHARS
+    used: int = 0
+    remaining: int = MAX_BLOCK_CHARS
+    lines: int = 0
+    trimmed: bool = False
+
+
+def budget(guidance: RunGuidance | None, artifact_key: str = "") -> Budget:
+    """What one prompt's context allowance has left.
+
+    Args:
+        guidance: What the administrator configured, or ``None``.
+        artifact_key: The artifact this prompt is about, when it is about one.
+
+    Returns:
+        The budget, measured over the same lines :func:`preamble` renders and counted
+        the way :func:`_fit` counts them, so the number a console shows is the number
+        that decides what is dropped.
+    """
+    lines = context_lines(guidance, artifact_key)
+    used = sum(len(f"- {line}") + 1 for line in lines)
+    return Budget(
+        per_field_cap=MAX_CONTEXT_CHARS,
+        block_cap=MAX_BLOCK_CHARS,
+        used=used,
+        remaining=max(0, MAX_BLOCK_CHARS - used),
+        lines=len(lines),
+        trimmed=used > MAX_BLOCK_CHARS,
+    )
+
+
+def preamble(guidance: RunGuidance | None, artifact_key: str = "") -> str:
+    """Build the context block that goes above a prompt's task.
+
+    Args:
+        guidance: What the administrator configured, or ``None``.
+        artifact_key: The artifact this prompt is about, when it is about one.
+
+    Returns:
+        A short block ending in a blank line, or an empty string when nothing is
+        configured. The wording tells the model this is background, not a requirement:
+        standing instructions are context for reading the OSL, never a substitute for
+        what the OSL says.
+    """
+    lines = context_lines(guidance, artifact_key)
     if not lines:
         return ""
 

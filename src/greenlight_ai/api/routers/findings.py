@@ -16,6 +16,7 @@ from greenlight_ai.api import provenance, schemas
 from greenlight_ai.api.deps import CurrentUser, current_user, get_session
 from greenlight_ai.db import models, repository
 from greenlight_ai.db.types import utcnow
+from greenlight_ai.training import signatures
 
 __all__ = ["decision_problem", "router"]
 
@@ -111,6 +112,9 @@ def review_finding(
     repository.audit(
         session, "finding.reviewed", finding.run_id, f"{finding.finding_id}={payload.review_status}"
     )
+    # A verdict is the only event that can change what this finding has earned. The
+    # state is recorded and read by nobody in 6.18a: the queue is what it was (ADR-043).
+    signatures.recompute_for_finding(session, finding)
     _LOG.info("finding %s reviewed as %s", finding.finding_id, payload.review_status)
     return provenance.decorate_findings(session, [schemas.FindingOut.model_validate(finding)])[0]
 
@@ -154,4 +158,7 @@ def bulk_ok_low_severity(
         user_id=user.id,
         actor=user.name,
     )
+    # One pass over the run rather than one per finding: a bulk decision touches many
+    # findings and usually few signatures.
+    signatures.recompute_for_run(session, run_id)
     return decided

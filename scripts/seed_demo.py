@@ -476,6 +476,70 @@ def seed_training(session: Any) -> None:
     )
 
 
+def seed_review_load(session: Any) -> int:
+    """Show what the Review load screen looks like once people have used it (6.18a).
+
+    The screen reads verdicts people gave, and a fresh install has none, so it opens
+    empty and says nothing about itself. This seeds the three states an administrator
+    needs to be able to tell apart, each built from *decided findings on real runs*
+    rather than written straight into the signature table — so what appears is what the
+    production path would have produced, and the arithmetic is exercised rather than
+    asserted.
+
+    Deliberately synthetic and deliberately not evidence. The real question — *it would
+    have hidden these; was any of them real?* — needs real verdicts from real reviewers
+    and is `docs/phase-7.1.md`.
+
+    Args:
+        session: An open session, after the runs exist.
+
+    Returns:
+        How many signature rows ended up in each state, as a count of rows written.
+    """
+    from greenlight_ai.training import signatures
+
+    customer = "Northwind Credit Union"
+    cases = [
+        # (rule, element, severity, verdicts) — the three states, in order.
+        ("check:12", "score_band", "low", ["false_positive"] * 10),
+        ("check:12", "state_code", "low", ["false_positive"] * 4),
+        ("check:31", "account_status", "medium", ["false_positive"] * 8 + ["confirmed"]),
+        ("check:44", "credit_date", "high", ["false_positive"] * 12),
+    ]
+
+    written = 0
+    for rule_ref, element_ref, severity, verdicts in cases:
+        for index, verdict in enumerate(verdicts):
+            run = models.Run(
+                customer_name=customer,
+                order_number=f"ORD-{rule_ref[-2:]}-{index:02d}",
+                configuration_id="CFG-NWCU-AS",
+                scope="AS",
+                status="finalized",
+            )
+            session.add(run)
+            session.flush()
+            finding = models.Finding(
+                run_id=run.id,
+                finding_id="F-01",
+                type="value_mismatch",
+                severity=severity,
+                title=f"{element_ref} did not match the configuration",
+                detail="Seeded for the Review load screen.",
+                leg="config_reports",
+                rule_ref=rule_ref,
+                element_ref=element_ref,
+                review_status=verdict,
+                reviewed_at=utcnow(),
+                evidence={},
+            )
+            session.add(finding)
+            session.flush()
+            signatures.recompute_for_finding(session, finding)
+        written += 1
+    return written
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point.
 
@@ -646,10 +710,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         seed_training(session)
         session.commit()
 
+    with factory() as session:
+        signature_rows = seed_review_load(session)
+        session.commit()
+
     print(f"Seeded {len(created)} run(s) into {settings.url}")
     print("")
     for run_id, state, note in created:
         print(f"  VR-{run_id:04d}  {state:16}  {note}")
+    print("")
+    print(f"Review load: {signature_rows} finding signature(s) across watching, would-hide")
+    print("  and blocked. Nothing is acted on; see docs/phase-7.1.md for the real question.")
     print("")
     print("Start the services:")
     print("  uvicorn greenlight_ai.api.app:get_app --factory --reload")

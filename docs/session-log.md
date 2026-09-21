@@ -12,8 +12,15 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev`, level with `main` (2026-09-21). **Phases 6.14, 6.15 and 6.16 are complete and merged.** Everything still open is gathered in [`phase-6.17.md`](phase-6.17.md) — nothing blocking, each item with the reason it was left. **Next concrete action: 6.17a**, measure the programme keyword check for the brittleness compliance rules and named values were both measured for; it is the one surface never tested for it, and the two precedents point opposite ways so the answer is not guessable. About half an hour, and it either creates a phase or removes a worry |
+| Branch | `claude/pending-items-review-f35uek`, **not pushed — this session's work is uncommitted**. Phase 6.17 complete; 6.18a and 6.18f built; **6.19 parts A and C complete** — every field says what it does (now six markers, the sixth switchable per ADR-046), a failed run says *where* it failed (ADR-047), and usage is counted per person (ADR-048). **Next concrete action: commit and push this session's work**, then 6.19 part B — the Guide in each app's sidebar, which the user has deferred. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
 | Last updated | 2026-09-20 |
+
+**Before starting the demo, migrate the demo database.** `scripts/seed_demo.py` builds
+its schema with `create_all`, which creates missing *tables* and never alters an
+existing one — so a `data/demo.db` carried across a branch that added a column keeps the
+old shape, and the failure surfaces as a 500 on the runs and usage screens rather than
+at seed time. `alembic upgrade head` against the demo database fixes it and is now
+part of the block below.
 
 **The product is built and works end to end.** Submit an OSL, a config, and the
 reports; the worker runs the nine stages; a reviewer decides each finding; the frozen
@@ -28,6 +35,9 @@ set -a && . ./.env && set +a   # nothing in src/ loads .env; without this the
                                # "building mock client (model=gemma3:27b)"
 export DATABASE_URL="sqlite+pysqlite:///$PWD/data/demo.db" GREENLIGHT_AI_DATA_DIR="$PWD/data"
 python scripts/seed_demo.py          # 8 runs in every lifecycle state + admin data
+alembic upgrade head                 # create_all never ALTERs an existing table, so a
+                                     # demo db carried across branches needs this or the
+                                     # runs and usage screens answer 500
 uvicorn greenlight_ai.api.app:get_app --factory --reload   # :8000
 python -m greenlight_ai.worker.app                          # another terminal
 cd user-ui && npm run dev                             # :3000
@@ -103,6 +113,476 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-20 (the demo database, the sixth marker, failure detail, usage per person)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Phase:** 6.19 parts A and C ·
+**Status:** built and verified in a browser; **uncommitted at the time of writing.**
+
+### The 500s were the demo database, not the code
+
+Both apps answered *internal server error* on the home and usage screens while 1,514
+tests passed. The cause: `scripts/seed_demo.py` builds its schema with
+`Base.metadata.create_all`, which creates **missing tables** and never alters an existing
+one. The mobile branch's migrations added `runs.keyword_suggestions` and
+`findings.engine`; the new tables appeared and those two columns did not, and the
+database had no `alembic_version` row at all, so nothing would have caught up later.
+
+Fixed by applying exactly what the two migrations apply and stamping the database at
+head — a stamp rather than an upgrade, because the intervening revision creates
+`finding_signatures`, which `create_all` had already made. The "See it running" block now
+carries `alembic upgrade head`, and that stamp is what let this session's own migration
+apply cleanly an hour later.
+
+### A sixth marker, and the one that may be switched off
+
+`reference` — **"Used for setup, not for runs"** — for what the AI reads while somebody
+sets the product up and no run ever reads: the sample workbooks, an artifact type's
+description, the workbooks the mapping interview reads. The concept was already in the
+register and in the component's own docstring; there was no marker, so those fields
+carried nothing, and silence is the wrong answer when the honest one is *yes, but never
+during a run*.
+
+**The register was wrong and is corrected.** It claimed a sample's contents never enter a
+validation run. Where a guide entry's locator lands on a sample, that cell's value is
+quoted to the model as a worked example at stages 4 and 8 — one named value an
+administrator chose rather than a row, and exactly why samples must be synthetic.
+
+**Only this marker is switchable** (`ui.setup_markers`, ADR-046). It says a field is
+*not* read in a run, so hiding it cannot mislead anybody; the four that say where words
+**do** go cannot be switched off, and a test asserts the shape of that guard so widening
+the condition fails even though every rendering test would pass.
+
+### Help tips close on any click
+
+They closed only on a second click of the same 16-pixel target. Now the next click
+anywhere closes one — the control, the tip's body, the far side of the page — done with a
+transparent sheet rather than a document listener, because a listener races the button's
+own handler and the tip either survives the click or reopens on it. Playwright proves it
+by refusing to click the button: it reports the sheet *intercepts pointer events*, which
+is the behaviour under test.
+
+### A failed run says where (ADR-047)
+
+`Run.error_detail`: the stage, the attempt and the traceback, behind a closed disclosure
+on the run with a copy button, and **never in the list payload**. Bounded at both ends —
+the whole text at 8,000 characters dropping the oldest frames, and the header's copy of
+the exception message at 500, because a parser that quotes what it choked on would
+otherwise leave a detail with no frames in it. Writing the test found that second cap was
+missing.
+
+### Usage per person (ADR-048)
+
+`user_usage.build`, its own sub-tab with 7/30/90/180-day periods, CSV and pagination. The
+three ways a run goes wrong are counted **apart** — failed, held, re-run — because they
+have different causes; rates are read against the deployment's own average and never
+flagged under five runs. A count opens that person's runs through
+`GET /runs?submitted_by=`, and the user app gained the matching filter and a search that
+covers the submitter.
+
+### Two things the product could not explain about itself
+
+The **Meaning** screen said what a mapping is and not why anybody would spend an
+afternoon on one — that the model otherwise re-derives where every requirement lands on
+every run, and that one confirmed row both reaches the prompt and compiles into a
+token-free code check. And *"Missing before Map can run: osl, config"* named artifact
+keys; it now says what Map needs, in words, with a link to the screen that fixes it.
+
+### The user document redrawn, and five gaps in it closed
+
+The end-to-end journey was ASCII art. It is Mermaid now, in the presentation brief's
+style, and it carries the held branch and the cancel window the prose never did. Two
+more diagrams: where what you type actually goes — which is the thing associates most
+often have backwards — and the observation's life in the same words the **My
+observations** screen uses. All three were rendered with `mermaid-cli` and looked at;
+the second had a subgraph with no edge, which only showed up in the picture.
+
+Five things an associate can meet on any day and the document never mentioned: a held
+run and the two ways out, the thirty-second cancel window, the notice bar, the
+maintenance page and paused submissions, and the **?** help. Two sections that are about
+the app rather than about a run were moved up beside the sidebar, which is where the
+reader is when they meet them.
+
+### A real bug found by the clock
+
+The value report's tests took "today" from the local clock while runs are stamped in UTC,
+so they failed once the evening crossed UTC midnight — and the same mistake would
+under-count a real report for anybody west of Greenwich. Both now count UTC days, and
+`user_usage` was written that way from the start.
+
+### Gates
+
+1,559 Python tests, both UI suites, `black`/`flake8`/`mypy`/`check_docs.sh`, and both
+`npm run build`s. Verified in Chromium: the tabs, the CSV (filename, header, the averages
+footer), the markers, the tip dismissal, and the user-app filter.
+
+**Pending:** commit and push — nothing here is committed. 6.19 part B (the in-app Guide)
+remains deferred. The branch name still contains an agent name, which `CLAUDE.md`
+forbids, and must be renamed before its first push.
+
+## Session: 2026-09-20 (the markers, fixed)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.19 part A complete,
+gates green at 1531 tests and all ten UI gates across both apps.
+
+**Every gap the audit found is closed.** Markers added to worked examples (the screen
+that most directly teaches the model and had none), meaning entries, validation guides,
+sample notes, the *Tell the tool* sentence, the observation dialog in the user app,
+programme rules, keywords, masked columns, the delivery programme, the suppressions
+answer and the order number.
+
+The two written most carefully are the two that matter most. **Delivery programme** now
+says it is one of the most important fields on the form and why — background for
+everything the model does, it brings in that programme's rules, and code checks the
+documents really do read like it. **Masked columns** says naming a column there is the
+strongest control an administrator has, which is the marker the product most needed and
+least had.
+
+Fields that reach *nothing* are marked too, because somebody deciding how much care to
+take deserves to know which it is: the order number identifies the run, and an example's
+"why it is here" note is never shown to the model.
+
+**`tests/test_field_markers.py`**, seventeen checks, so the audit never has to be done by
+hand again. It also asserts the two apps word the marker identically — a user told their
+note *helps the AI* and an administrator told the same thing differently are being given
+two products to reason about — and that `<FieldEffect>` never consults the tooltips
+setting, because what a field does to a run is not a tip for beginners and a console that
+stops saying it once somebody ticks a box lies to its experienced users.
+
+**Two corrections to my own audit**, recorded in the phase doc rather than quietly
+dropped. There is **no deliverable-count field on the new-run form**, so there was
+nothing to mark. And several fields I listed as unmarked did carry the information as
+prose beneath the box; what they lacked was the standing marker. The gap was real, but in
+those cases it was inconsistency rather than silence, and the phase doc now says which
+were genuinely silent.
+
+**A self-inflicted near-miss worth recording.** I verified the new test by breaking a
+marker and watching it fail — then restored the file with `git checkout`, which threw
+away the *uncommitted* marker I had just added. The full suite caught it. Verifying a
+guard test by breaking the thing it guards is right; doing it on unstaged work is not.
+
+**`user-training.md`'s claim is true again**: every field on the form says whether the
+model sees it, restored in the commit that earned it.
+
+**Next concrete action:** 6.19 part B, the Guide in each sidebar, deferred by the user.
+
+---
+
+## Session: 2026-09-20 (the marker audit, and phase 6.19)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** specification and one
+correction; nothing built, by request.
+
+**The audit found what it was asked to look for.** Twelve surfaces carry a
+`<FieldEffect>` marker and are correct. **Thirteen fields reach the model, or decide what
+the model is shown, and say nothing.** The two that matter most:
+
+- **Worked examples**, the screen that most directly teaches the model, has no marker at
+  all.
+- **Delivery programme** on the new-run form is unmarked and sits *between two fields
+  that are marked*, so it reads as less consequential than the notes box beneath it. It
+  reaches the model as background on every stage, selects which programme rules are read,
+  and triggers the check that the documents read like that programme.
+
+Also unmarked: meaning entries, validation guides, sample notes, the *Tell the tool*
+sentence, observation statements in both apps, programme rules, keywords, the
+suppressions answer, the deliverable count, the order number, aliases — and **masked
+columns**, which decide what never reaches a prompt at all and so arguably need the
+clearest marker in the product.
+
+**A doc claim that the audit falsified.** `user-training.md` said *"Every field on the
+form says whether the model sees it."* Four do not. Corrected to what is true today,
+and 6.19 restores the stronger sentence in the commit that earns it — the same discipline
+used on the training-document dates earlier in this session.
+
+**6.19 has two halves because they are the same problem at two distances**: a field that
+does not say what it does, and a product that does not say how to use it well. The second
+half is a **Guide in each app's sidebar**, one per audience, from the training document
+that already exists so it cannot drift. The phase doc says what each Guide must answer —
+for a user, what matters most from them *ranked*, how to read a finding, that deciding is
+theirs, what the tool says when it is unsure, and **what it will not catch**; for an
+administrator, which of the five surfaces to use and what improves the QC in the order it
+pays off. Its acceptance criterion for the user Guide is that somebody who has never seen
+the tool can read it and complete a run without asking anybody — **tested on a person,
+not asserted**.
+
+**Nothing in this session is a defect in the engine.** Everything the tool computes, it
+computes correctly. What 6.19 fixes is whether the people using it can tell.
+
+**Next concrete action:** 6.19, starting with the delivery-programme and worked-examples
+markers.
+
+---
+
+## Session: 2026-09-20 (the presentation brief, and four stale documents)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** documentation only, gates
+green at 1514 tests.
+
+**`presentation-brief.md` brought current and widened.** It was dated at phase 6.13 with
+6.14 part built. It now covers 6.14 to 6.18f, with four advantages added: that the tool
+survives customers writing things their own way *and was measured for it before anybody
+shipped a promise*; that it is honest about not knowing; that the review list shrinks
+only once the tool has earned it; and that trust is revocable and never self-granted.
+
+**A new section 8, "Three ways to judge it",** because the same product answers to three
+audiences and a brief giving only one will be challenged by whichever room it did not
+address. The associate's view is what changes on Monday. The accuracy view is how a QC
+function answers that question about its own QC tool — coverage tracked rather than
+assumed, claims measured and the measurements kept, sign-off fail-closed. The AI view is
+what the model actually does and, at greater length, what it never does: no comparison,
+no count, no compliance verdict, no activation, and **its confidence discards a weak
+answer and never authorises a strong one**.
+
+**A stale claim caught by checking rather than by reading.** The brief said three of the
+nine stages make no model call. Stage 6 gained one in 6.15 and stage 7 in 6.18f, so it is
+two — and the more useful statement, which it now makes, is that both of those call the
+model only where the deterministic check has already failed.
+
+**Three more documents were behind, none of them noticed by `check_docs.sh`** because it
+checks links and status markers, not claims:
+
+- `architecture.md` still described stages 6 and 7 as pure code, and its `checks/` and
+  `training/` rows predated `programme_match.py`, `demotion.py` and `signatures.py`.
+- `llm-privacy.md` had no row for either exception prompt. The programme reading is the
+  one prompt whose input is largely free prose the tool did not compose, so it now says
+  what bounds it: the same haystack the keyword check greps and never a data row, an
+  instruction not to quote a phrase carrying a person's details, and the tripwire.
+- `glossary.md` said Phase 6.2 was "specified but not built" — it has been complete since
+  2026-09-18 — and had none of the 6.15 to 6.18 vocabulary.
+
+**Worth noting for the next session:** `check_docs.sh` passed on every one of these. It
+verifies that links resolve and that status markers match their checkboxes, and it cannot
+tell that a sentence became false. The phase docs are kept honest by the boxes; the
+descriptive documents are kept honest only by somebody re-reading them, which is what the
+two standing touchpoints in `CLAUDE.md` exist to force and why this one was worth doing
+by hand.
+
+**Next concrete action:** unchanged — nothing in this repository. 6.18b waits on
+[`phase-7.1.md`](phase-7.1.md).
+
+---
+
+## Session: 2026-09-20 (6.18f, 6.17b, the touchpoints, and phase 7.1)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.17 complete, 6.18a and
+6.18f built, gates green at 1514 tests and all five admin-ui gates.
+
+**6.18f — the model reads a delivery for its programme.** ADR-045. Code first: a keyword
+hit costs no model call, which is what makes asking affordable. Where the keywords miss,
+the model is asked once *which of these programmes do these documents read like, and
+which words say so* — never whether the submitter was right, which is a comparison and
+is code's. Code refuses a programme nobody offered, an answer below a confidence floor,
+an unparseable reply and no reply, each falling back to the deterministic answer, so
+**asking is never worse than not asking**.
+
+Then code decides, and the rule that keeps it safe is that **the model may soften a
+high-severity finding and may never erase one**. Agreement where code had only *"none of
+its words appear"* is silent, because that was a word-list gap and an administrator's
+problem. Agreement where code had named a different programme drops to review severity —
+a model agreeing with the submitter is the one answer that could hide a real mismatch, so
+it buys a question. That is the compliance locator's line, held on a second surface.
+
+The loop closes in code: the phrases the model quoted appear on the programme's card, and
+accepting one adds it to the word list, after which the check matches in code and the
+model is not asked again. The case 6.17a could not close — a *promotional acquisition
+mailing* that suppresses `existing accounts` — now drops from high to a question.
+
+**6.17b — the cap countdown**, deferred twice and cheap once `preamble` was split so the
+number could be measured from the text a prompt actually carries. `GET
+/admin/prompt-budget` and a `<CapMeter>` that counts down on the two fields that spend
+the budget. Exact for what is saved, an estimate while typing, which is the honest way
+round.
+
+**The two standing touchpoints, both done.** `gd-rollout-plan.md` re-read and dated:
+stage 1 gained keyword-vocabulary and locator items, and **stage 3's gate now requires
+the Review load question to be answered in writing**. Both training documents realigned
+and re-dated to 6.18 — the user document explains the finding a reviewer now sees when
+the tool is unsure which programme a delivery is, and says plainly that writing in your
+own words is not a problem.
+
+**`phase-7.1.md`, dormant.** The thing this repository cannot manufacture is real
+verdicts from real reviewers, and that is exactly what 6.18a's shadow evidence needs.
+Written as a dormant phase that runs during rollout stage 3, with the question to ask,
+what each answer means, and the three things about real data that could change what it
+measures — above all whether `element_ref` is populated, since an empty one collapses a
+rule's findings into a single signature.
+
+**Synthetic evidence for the screen**, so it is not empty in a demo: `seed_demo.py`
+builds four signatures through the production path — one that would be hidden, one still
+gathering, one blocked by a single escalation among eight dismissals, and one blocked at
+high severity despite twelve. Deliberately synthetic and deliberately not evidence.
+
+**Caught by the suite:** a new prompt stage that the prompt registry test knew about and
+I had not registered. Worth noting because it is the second time this session that a test
+written for one purpose caught something unrelated — the first being the migration chain.
+
+**One convention drift to raise.** `CLAUDE.md` says `api/` never imports `pipeline/`. The
+budget endpoint imports `pipeline.guidance`, a pure leaf that imports only `logging`.
+**The rule was already broken twice before this** — `api/routers/runs.py` imports
+`s4_trace` and `api/gate.py` imports `coverage`, both for the same reason: a pure
+function that lives under `pipeline/`. Either the rule should say what it means (the API
+may import pure pipeline helpers, never the stages) or all three should move. **A
+decision for the user; I have not changed the rule unilaterally.**
+
+**Next concrete action:** nothing here. 6.18b waits on `phase-7.1.md`.
+
+---
+
+## Session: 2026-09-20 (6.18a built in shadow, 6.17c closed)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.18a complete, 6.17c
+complete, all gates green at 1485 tests and all five admin-ui gates.
+
+**6.18a — findings that learn their own severity.** The tool has recorded every verdict
+since Phase 6.11 and displayed a per-rule tally since 6.13, and nothing read either.
+Now something does. ADR-043 holds the decisions, all of which the user answered before
+a line was written.
+
+A **signature** is one customer, one delivery programme, one rule, and one thing it
+fired on. Ten occurrences with every one waved through earns `would_demote`; one upheld
+finding blocks it permanently, `accepted_risk` counting as upheld because the reviewer
+agreed it was true; `high` and above are never demoted at any evidence; findings from a
+shadow rule are not evidence, or a rule nobody was shown could demote itself; nothing
+returns on its own.
+
+**And it acts on nothing.** A test asserts that a signature at `would_demote` still puts
+its finding in front of a reviewer, undecided, exactly as before — the property the whole
+of 6.18a rests on and the one a later change is most likely to break quietly. The
+`Review load` screen carries the question it exists for in words.
+
+**6.17c.** The phase doc's premise was wrong about the code: the locator already receives
+the run's programme and its standing instructions through the preamble, and nothing
+asserted it. Kept, pinned with four tests, recorded as ADR-044. The narrower option —
+the programme label without the administrator's free text — stays a one-line change if a
+measurement ever shows the prose steering an answer.
+
+**A real defect found and fixed mid-build.** The new migration shipped with a revision id
+another migration already claimed, and **every test stayed green**, because the suite
+builds its schema from the models with `create_all` and nothing exercised alembic at all.
+An operator would have found it. `tests/db/test_migration_chain.py` now covers the three
+ways the chain breaks in practice and runs a real upgrade against an empty database,
+comparing the result to the models.
+
+**Pending:** 6.18's remaining scope (b–f) and its three still-open questions — the
+evidence bar for a maturity *promotion*, the sample rate, and whether promotion belongs
+in 6.18b; 6.17b, the cap countdown; and the two standing touchpoints,
+`gd-rollout-plan.md` unread since 6.13 and both training documents still dated *after
+Phase 6.14*. `admin-training.md` now documents the keyword rules and the Review load
+screen, but its date is deliberately unchanged rather than claiming a full realignment
+with 6.15 and 6.16 that has not been done.
+
+**Next concrete action:** let 6.18a gather evidence, then read the Review load screen and
+answer its question before building 6.18b.
+
+---
+
+## Session: 2026-09-20 (6.17a repaired, and 6.18 specified)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.17a repaired, 6.18
+written, all gates green at 1443 tests.
+
+**6.17a — the repair.** Two changes, neither of which asks a model anything. ADR-042
+records the decision as *match loosely, count strictly*.
+
+*Loosely*: `checks/programme_match.py`, in the shape `compliance_match.py` established.
+Three tests, any of which finds a keyword — a normalised substring first, because it
+preserves every match the old behaviour made and with it every inflection a substring
+caught for free; the keyword's words adjacent after a conservative singular fold; and,
+for a multi-word keyword only, its words within a stated window in any order. The fold
+removes a plural and nothing else, because a false match here has to be explainable to
+the person reading the finding.
+
+*Strictly*: a programme may be named as what a delivery reads like only on words **it
+alone claims**, and only when it is strictly ahead of the next programme. A tie is not
+an answer. The seeded lists lost `snapshot` and `historical` and gained the words the
+business says. The structural guard matters more than the keyword edit: removing two
+words fixed one instance, and *a programme is named only on words it alone claims* is
+what stops an administrator recreating it with the next overlapping word they add.
+
+The same twenty deliveries re-measured: **4 silent / 11 review / 5 high → 15 silent /
+4 review / 1 high**, with the control class unchanged at 3 of 3. The four review items
+left are honest — `ITA` for *invitation to apply*, a *legacy history pull* where the
+list says `legacy extract` — and an administrator's added word closes each permanently.
+
+The one remaining high is kept as a test and is the worked example for 6.18f: a
+*promotional acquisition mailing* that suppresses `existing accounts` has two of
+Account Monitoring's words and none of its own. Nothing is misspelled — the words
+really are the other programme's, and what makes them innocent is that they appear
+under *suppress* and *removes*. No normalising rule reaches meaning.
+
+**6.18 — specified, not started.** Written from the goal the user stated directly: a
+reviewer should not have to look at every validation point. It corrects a misreading
+this session was itself making — ADR-021 puts a person at the gate of a **rule**, not
+of every **finding**, and approving a rule is precisely the act of saying *apply this
+without asking me again*. Five scope groups: findings that learn their own severity
+from the verdicts people gave; a maturity level an administrator sets deliberately and
+can drop instantly; trustworthiness as a dated number that gates any promotion;
+nothing hidden without a record, with `high` and above never auto-demoted; and a small
+random sample reviewed in full forever, so drift is caught by the tool rather than by
+the customer. The one automatic move in the phase is in the safe direction only: **the
+tool may revoke its own trust and may never grant it.** The model's own confidence
+score is explicitly not a licence to skip anyone — it discards a weak answer today and
+never trusts a strong one, and that stays.
+
+**Also corrected:** ADR-042 first cited a non-existent ADR for 6.15's matching work —
+there is no ADR covering it, so the reference now points at the phase doc. The admin
+console's keyword hint and `admin-training.md` both understated what the field does;
+an administrator cannot see a prompt or a matcher, so the hint is the only account they
+get of why their word list behaves as it does.
+
+**Pending:** 6.18's five open questions, which want the user; 6.17b (the cap
+countdown); 6.17c, where the premise is still factually wrong in the doc and the user
+has not yet said whether to correct it; and the two standing touchpoints —
+`gd-rollout-plan.md` unread since 6.13, and both training documents still dated *after
+Phase 6.14*. The admin document's keyword section is now current; the rest of its
+realignment with 6.15 and 6.16 has not been done, so the date is deliberately left as
+it was rather than claiming an alignment that did not happen.
+
+**Next concrete action:** the user reads `phase-6.18.md` and answers its open questions.
+
+---
+
+## Session: 2026-09-20 (6.17a — the programme keyword check, measured)
+
+**Branch:** `claude/pending-items-review-f35uek` · **Status:** 6.17a complete, gates green.
+
+The third surface finally got the half-hour measurement the other two had. Seventeen
+deliveries, every one genuinely the programme it declared, worded the way another
+customer might word it. Four were silent, eleven raised a review item, and **five fired
+at HIGH** — a false positive at the highest severity the tool has.
+
+Two defects, and they compound. A phrase keyword needs exact adjacency and exact
+plurality, so `existing account` misses `existing accounts` and `invitation-to-apply`
+misses `invitation to apply`; that opens the door. Then `snapshot` and `historical` —
+two of the four shipped Archives keywords — are ordinary data-delivery vocabulary that
+any programme's specification contains, so Archives clears the two-hit floor by accident
+and the run is confidently reported as the wrong programme. The knife-edge case is a
+realistic prescreen OSL that is silent only because one sentence says `firm offer`:
+reword that phrase and the same document is HIGH.
+
+The control class still passes 3 of 3 — a delivery genuinely declared as the wrong
+programme is caught every time — so the check is not broken and should not be replaced.
+Anything built goes behind it, as 6.15's option C did.
+
+The measurement is kept as `tests/pipeline/test_programme_keyword_brittleness.py`,
+mirroring how 6.15 kept its measured failure shapes. Those tests assert what the check
+does **today**, not what it should do, so the result cannot drift unnoticed and a fix
+has to come past them deliberately.
+
+Also corrected status drift the tables had accumulated: `CLAUDE.md` and
+`phase-plan.md` both said 6.14 was not started and `phase-plan.md` said 6.15 was in
+progress, while both phase docs said otherwise. `check_docs.sh` does not compare the
+two tables against the phase docs, which is how that survived.
+
+**Pending:** a decision on which of 6.17a's four recommendations to build; 6.17b (the
+cap countdown); 6.17c, to be **discussed before any code** at the user's request; and
+the two standing touchpoints — `gd-rollout-plan.md` unread since 6.13, and both training
+documents still saying "after Phase 6.14".
+
+**Next concrete action:** discuss 6.17c with the user, then decide 6.17a's build.
 
 ---
 

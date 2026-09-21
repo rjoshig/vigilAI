@@ -14,6 +14,8 @@ ADR-003, ADR-004, ADR-005.
 | A lens's finding and evidence; the list of requirements no report evidenced, as text and references; a drafted rule with the statements it came from | Any report value or configuration value not already in a finding's evidence |
 | Named values and the reasoning behind an admin check | Uploaded file contents verbatim |
 | An administrator's worked examples: what a stage would be shown and a good answer, checked by the tripwire on save (ADR-038) | A report row or a configuration value pasted into an example |
+| Configuration paths and the *shape* of their contents, when the model is asked where a compliance control is implemented (ADR-036 shape, Phase 6.15) | Any value at those paths — the locator is shown `suppressions.ofac (boolean)`, never `true` |
+| A capped extract of the delivery's own words — OSL prose, configuration paths and descriptions, report sheet names and column headers — when the model is asked which programme it reads like (ADR-045) | Any data row. Headers say what a delivery is about; rows say who is in it |
 
 The model never needs sample rows to do its job. If a stage seems to need one, that is a
 `# SPEC GAP:` and a question, not a prompt change.
@@ -28,6 +30,27 @@ The model never needs sample rows to do its job. If a stage seems to need one, t
 | Application logs | No — ids and counts only. `LLM_LOG_PROMPTS=true` is for synthetic data on a developer machine only |
 | `tests/fixtures/`, the repo, commit messages, PR text | No — fixtures are synthetic (invented customers, states, thresholds) |
 | The review screen, the HTML report, the PDF | Masked values only; no unmask control in v1 |
+
+### The two prompts that run only where code failed
+
+Both are narrow by construction and are listed here because each sends something the
+other prompts do not.
+
+**The compliance locator** (stage 6) is shown configuration paths and the type of what
+sits at each — never a value. It answers *where is this control, if anywhere*, and code
+checks the path it quotes was one of the paths offered.
+
+**The programme reading** (stage 7) is shown a capped extract of the delivery's own
+words, and is the one prompt whose input is largely free prose the tool did not compose.
+Three things bound it: the extract is built from the same haystack the keyword check
+greps — OSL text, configuration paths and descriptions, report sheet names and headers,
+and **never a data row**; the prompt instructs the model not to quote a phrase
+containing a person's name, address or account number, because what it quotes is shown
+to an administrator and offered as a keyword; and the tripwire scans the assembled
+prompt like every other, failing closed (ADR-018).
+
+Neither call happens on a delivery the deterministic check already answered, so neither
+is on the common path.
 
 ## The adapter contract (ADR-004)
 

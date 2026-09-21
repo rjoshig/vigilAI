@@ -109,7 +109,8 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/admin-training.md`](docs/admin-training.md) — **administrator training**: the
   admin console, the training queue, the rules, and a weekly routine
 - [`docs/presentation-brief.md`](docs/presentation-brief.md) — **design brief** for slide
-  decks and management documents: the design, its reasons, the advantages, what a run
+  decks and management documents: the design, its reasons, the advantages, the same
+  product answered for three audiences (the associate, the accuracy, the AI), what a run
   costs and the controls on it, why the model is a setting rather than a dependency,
   and what it changes for an associate — at a general-audience level
 - [`docs/gd-rollout-plan.md`](docs/gd-rollout-plan.md) — **Global Delivery rollout**:
@@ -151,8 +152,18 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   manual hours displaced that states the assumption it rests on
 - [`docs/phase-6.17.md`](docs/phase-6.17.md) — **what is left**: everything still open
   after 6.14 to 6.16, in one document, each with why it was left and what would settle it
+- [`docs/phase-6.18.md`](docs/phase-6.18.md) — **trust that is earned, measured, and
+  revocable**: findings that learn their own severity from the verdicts people gave, a
+  maturity level an administrator sets, and the sample that keeps the whole thing honest
+- [`docs/phase-6.19.md`](docs/phase-6.19.md) — **say what helps, and teach it in the
+  product**: the "Helps the AI" marker on the thirteen fields that reach the model and
+  do not say so, and a Guide in each app's sidebar so the training documents reach the
+  people using the tool rather than sitting in a repository
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
+- [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and
+  the one thing this repository cannot manufacture — real verdicts from real reviewers,
+  gathered during the rollout's stage 3, which is what 6.18b waits on
 - [`e2e/README.md`](e2e/README.md) — **browser tests**: what they cover, how to run them, and the conventions that keep them deterministic
 - [`docs/decisions.md`](docs/decisions.md) — architectural decision records (append-only)
 - [`docs/llm-privacy.md`](docs/llm-privacy.md) — what may and may not reach the LLM, the cache, fixture policy

@@ -176,27 +176,49 @@ DEFAULT_ARTIFACTS: Final[tuple[ArtifactSpec, ...]] = (
 #: The programmes most customers fall into, plus a catch-all. The standing
 #: instructions ship empty on purpose: they are the customer's compliance regime, and
 #: inventing one would be worse than leaving the model to read the OSL alone.
+#:
+#: **Every keyword here has to mean its programme and no other.** Phase 6.17a measured
+#: what a word that does not costs: ``snapshot`` and ``historical`` shipped as Archives
+#: keywords, appear in a specification for any programme at all, and let Archives be
+#: named as the answer — at the highest severity the tool has — for deliveries that
+#: were nothing of the kind. They are gone. A word the delivery business uses generally
+#: does not belong in any of these lists; matching now survives a hyphen and a plural
+#: (`checks/programme_match.py`), so a list does not need spelling variants either.
 DEFAULT_SCOPES: Final[tuple[ScopeSpec, ...]] = (
     ScopeSpec(
         code="AM",
         label="Account Monitoring",
         description="Ongoing review of an existing portfolio.",
         sort_order=10,
-        keywords=("account monitoring", "portfolio review", "existing accounts", "account review"),
+        keywords=(
+            "account monitoring",
+            "portfolio monitoring",
+            "portfolio review",
+            "existing accounts",
+            "account review",
+            "account management",
+        ),
     ),
     ScopeSpec(
         code="AS",
         label="Account Solicitation",
         description="Prescreen and invitation-to-apply campaigns.",
         sort_order=20,
-        keywords=("prescreen", "pre-screen", "solicitation", "firm offer", "invitation to apply"),
+        keywords=(
+            "prescreen",
+            "solicitation",
+            "firm offer",
+            "invitation to apply",
+            "promotional offer",
+            "acquisition campaign",
+        ),
     ),
     ScopeSpec(
         code="ARCHIVE",
         label="Archives",
         description="Historical or archival extracts.",
         sort_order=30,
-        keywords=("archive", "archival", "historical", "snapshot"),
+        keywords=("archive", "archival", "back file", "prior year", "legacy extract"),
     ),
     ScopeSpec(
         code="OTHER",

@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from greenlight_ai.config.store import invalidate
 from greenlight_ai.db import models
 
-TODAY = dt.date.today()
+# UTC, not the local clock: a run's ``created_at`` is UTC and the report's bounds are
+# UTC days, so a machine in an earlier timezone took `date.today()` to mean yesterday
+# every evening and counted none of the runs it had just written.
+TODAY = dt.datetime.now(dt.timezone.utc).date()
 MONTH_AGO = TODAY - dt.timedelta(days=30)
 
 
