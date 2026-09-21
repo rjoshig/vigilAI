@@ -333,7 +333,12 @@ the others.
 report is one page: the header, the summary, the Not OK findings with your comments,
 and expandable detail. It is **frozen**: generated once, stored, and never regenerated,
 so what you signed off is what stays on record. **Download PDF** gives you the same
-page as a file. The report names who submitted the run and who finalized it.
+page as a file, laid out for paper — tighter leading, the headline figures on one line,
+and every collapsed section opened, because a section nobody can click is invisible on
+paper. Nothing is left out of the PDF that is on the page.
+
+Because a report is frozen, a change to that layout reaches the reports generated after
+it and not the ones already filed. An old PDF looks the way it looked when it was signed. The report names who submitted the run and who finalized it.
 
 ## Config history
 
