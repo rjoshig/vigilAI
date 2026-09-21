@@ -2780,9 +2780,36 @@ relitigated.
 **ADR-051** — the chat is run-scoped, read-only, and keeps nothing, with isolation stated
 as five independent mechanisms rather than one. **ADR-052** — report aggregates reach it
 only behind an administrator's switch, computed where masking already happens. **ADR-053**
-— multi-turn by flattening the transcript into one adapter call, and no streaming in this
-phase, because a second network path would re-implement the tripwire, the cache, the
-budget and the recording in exchange for a typing animation.
+— the chat streams its prose and shows a citation only after code has checked it.
+
+### The streaming question, and a correction worth recording
+
+Streaming was first written up as deferred, on the reasoning that it would need a second
+network path around the tripwire, the cache, the budget and the recording. Put to the
+user, the answer was to build it — and pressing on the objection showed part of it was
+simply wrong. **Streaming does not weaken the tripwire**: the prompt is assembled and
+scanned in full before a byte is sent, and only the response streams back.
+
+The real conflict is narrower and survives. The answer is schema-constrained, code checks
+that every citation resolves to an id in the pack before showing it, and **code cannot
+check what has already been displayed**. So the prose streams and the citations do not:
+the model writes plain prose with no ids in it, emits a structured tail, and only the
+citations that resolve are rendered when the stream closes. A malformed tail keeps the
+answer and says the citations are unverified, because pulling text somebody is reading
+looks like a malfunction even when it is correct.
+
+Streaming lives in `llm/` beside `complete`, not in a second path, which amends ADR-004's
+"one entry point" to "one module" — always the rule that mattered.
+
+### Four smaller decisions
+
+Chat resolves **its own model**, defaulting to the pipeline's, so conversation can be
+cheaper without touching validation accuracy. The panel offers **four starter questions
+built by code** from this run's pack, because a blank box under a greeting is how a chat
+feature goes unused. A person can **copy the conversation to the clipboard** — the tool
+still stores nothing, and the decision to keep it moves to them. And **no new
+capability**: anyone who can read the run can ask about it, since the chat shows nothing
+the report does not.
 
 ### One repair to the tooling
 

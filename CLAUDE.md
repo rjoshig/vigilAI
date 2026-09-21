@@ -88,7 +88,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.19 | Say what helps, and teach it in the product: the "Helps the AI" marker on every field that reaches the model or decides what it is shown, what a failed run will not say, usage counted per person, and a Guide in each app's sidebar | `docs/phase-6.19.md` | 🟡 all built; criterion 5 needs a person (stage 2 of the rollout) |
 | 6.20 | Three roles — user, reviewer, admin — with capabilities rather than role checks, several roles per person, and a console that shows each person only their own job | `docs/phase-6.20.md` | ✅ complete |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
-| 8 | Ask the frozen report: an optional chat box on the final report page, scoped to one run — the global rules, the previous run of that configuration id, the findings of the last three runs, this run's findings, and an inventory of its artifacts | `docs/phase-8.md` | ⬜ not started — **queued behind 6.21 and the `v0.6.21` release** |
+| 8 | Ask the frozen report: an optional chat box on the final report page, scoped to one run — the global rules, the previous run of that configuration id, the findings of the last three runs, this run's findings, and an inventory of its artifacts; the prose streams and the citations are checked before they are shown | `docs/phase-8.md` | ⬜ not started — **queued behind 6.21 and the `v0.6.21` release** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same
 commit that changes a phase's status; `docs/phase-plan.md` must agree with it.

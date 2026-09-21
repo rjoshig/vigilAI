@@ -10,6 +10,11 @@ that the product as it stands can be returned to. The release gate is milestone 
 comes first deliberately — a chat box is the first feature in this tool that talks back,
 and the version that does not is worth being able to check out.
 
+Eight design decisions were taken with the user the same day and are recorded in
+*Decisions taken* below. The one that most changed the shape of the work: **the answer
+streams**, which is why 8c is about proving a citation before it is shown rather than
+about a typing animation.
+
 ## Why this is its own phase, and not a sub-phase of 6
 
 Phase 6 is hardening and in-house fit: taking what exists and making it fit the people who
@@ -107,27 +112,47 @@ The pack is the feature. Everything else is plumbing around it.
       layering rule transitively, which is the kind of violation that is invisible in a
       diff and permanent once merged.
 
-### 8c — One turn, through the adapter that already exists · ⬜ not started
+### 8c — The answer streams, and the citations are checked before they are shown · ⬜ not started
+
+The chat streams, because a paragraph that appears a word at a time is the difference
+between a feature people use and one they try once. Streaming a **validated** answer is
+the part that needs designing, and the constraint is precise: the tripwire is unaffected —
+it scans the assembled prompt before anything is sent, and only the response streams —
+but **code cannot check a citation it has already displayed**, which is what shapes the
+design below.
 
 - [ ] **One new registered prompt, versioned like every other** — a `chat_answer` entry in
       the prompt registry, its version part of the cache key.
-- [ ] **No new network path, and no streaming in this phase.** `complete(system, user,
-      schema)` stays the only way to reach a model (ADR-004), so the tripwire, the cache,
-      the budget check and the per-call record all apply without being re-implemented.
-      Streaming would mean a second code path around every one of those, which is a large
-      price for a typing animation. The widget shows a working indicator instead, and the
-      decision is recorded so it can be revisited rather than rediscovered.
+- [ ] **Streaming lives in the adapter, not beside it.** `llm/` gains a streaming entry
+      point alongside `complete`, so the tripwire, the cache check, the budget stop and
+      the per-call record still happen in exactly one place (ADR-004). A second network
+      path in `api/` or `chat/` that reached a model directly would put every one of those
+      invariants somewhere they can be forgotten.
+- [ ] **The prose streams; the citations do not.** The model is instructed to write the
+      answer as plain prose containing **no finding ids**, then emit a structured tail
+      naming what it answered from. The prose reaches the panel token by token. The tail
+      is validated against the pack when the stream closes, and only the citations that
+      resolve are rendered as chips beneath the answer. A fabricated id is therefore never
+      shown as a citation — not briefly, not dimmed, not at all.
+- [ ] **A failed tail keeps the answer and says the citations are unverified.** The prose
+      is what the person asked for and stands on its own; pulling text somebody is
+      mid-way through reading looks like a malfunction even when it is correct. The panel
+      says *citations could not be verified for this answer* rather than showing chips.
+      This is the one place the adapter's single-retry contract does not apply, and it is
+      written down here rather than discovered later.
+- [ ] **A cache hit is served whole, immediately.** The cache is checked before the stream
+      opens, as it is before every call; a hit replays the stored answer with its stored
+      citations and no network call. A miss streams, and the completed answer is stored
+      when the stream closes — a partial answer is never cached.
 - [ ] **Multi-turn by flattening, with the transcript labelled as data.** Earlier turns go
       into the user prompt inside a delimited block with an instruction that everything
       within is a person's words to interpret and never an instruction to follow — the
       same technique the training synthesis already uses for reviewer statements.
-- [ ] **The answer is schema-constrained** — an answer, its citations, whether the pack
-      contained enough to answer, and a refusal reason. Nothing downstream parses prose.
-      Loose parsing of free-form model output is where code starts trusting something
-      nobody checked.
-- [ ] **Code checks every citation resolves** to an id that is actually in the pack, and
-      drops the ones that do not. A fabricated finding id is the failure mode that would
-      most damage trust in this feature, and it is cheap to make impossible.
+- [ ] **A model of its own, defaulting to the pipeline's.** Chat resolves its model through
+      the three configuration layers (ADR-023); unset, it uses whatever the pipeline uses,
+      so nothing changes on upgrade. A deployment can point conversation at a cheaper or
+      faster model without touching validation accuracy, and because the model name is
+      already part of every cache key the two can never serve each other's answers.
 
 ### 8d — No overlap between people, by five independent means · ⬜ not started
 
@@ -163,11 +188,25 @@ mechanism can be wrong; five that fail independently is a property.
 >
 > What would you like to know about this report, this run, or this configuration?
 
+- [ ] **Four starter questions, built by code from this run's pack.** *Why is finding
+      F-003 high? What changed since the last run of this configuration? What did nobody
+      check? Which global rules applied here?* They are generated from what the pack
+      actually contains, so a question is never offered when there is nothing to answer,
+      and they cost no model call. A blank box beneath a two-line greeting is the most
+      reliable way a chat feature goes unused: people cannot tell what it knows, so they
+      do not ask.
 - [ ] **The panel says what it cannot see** — rows and cell values — **that it changes
       nothing**, and **that the conversation is not saved.** Three sentences that prevent
       three different wrong expectations.
-- [ ] **Answers carry their citations as links** into the report and the findings, so a
-      claim can be checked against the document rather than believed.
+- [ ] **Answers carry their verified citations as links** into the report and the
+      findings, so a claim can be checked against the document rather than believed.
+- [ ] **Copy the conversation to the clipboard.** Nothing is stored by the tool, so the
+      decision to keep a conversation — and the responsibility for where it ends up —
+      belongs to the person who had it. One button, no export file, no attachment to the
+      run.
+- [ ] **Resizable, and it hides nothing.** It opens bottom-right above its launcher and
+      the top edge drags taller. On the one-page report that corner is whitespace, so in
+      practice it overlaps nothing worth reading while staying where the eye expects it.
 - [ ] **It is keyboard-reachable, closes on Escape, traps focus while open, and uses the
       theme tokens.** A floating panel that cannot be closed from the keyboard is a defect
       in a tool people use all day.
@@ -185,6 +224,11 @@ mechanism can be wrong; five that fail independently is a property.
 - [ ] **Every call is recorded like every other**, so the usage screens and the per-person
       counts include it. A feature whose cost is invisible is a feature nobody can decide
       to keep.
+- [ ] **No new capability.** Anyone who can read the run can ask about it, because the
+      chat shows nothing the report and the run screens do not already show that person.
+      A capability that guards no data is a row in the table nobody can explain later,
+      and ADR-049 exists to stop the table growing one per feature. The per-person daily
+      cap remains the lever for a staged rollout.
 
 ### 8g — The switch that widens what it may see · ⬜ not started
 
@@ -233,22 +277,27 @@ That gap is closed with a switch rather than by loosening the rule for everyone.
        one the report itself gives.
 6. [ ] The greeting is produced by code, names the run, the configuration and the finding
        count, and costs no model call.
-7. [ ] Every citation in an answer resolves to an id in the pack; fabricated ones are
-       dropped before the answer is shown.
-8. [ ] Asked to add two numbers from the report, the chat quotes the computed figure or
-       declines. Asked something outside the pack, it says it cannot answer rather than
-       answering.
-9. [ ] Chat calls are counted in the usage figures and per person, and no chat call
-       consumes the run's token budget.
-10. [ ] The frozen report file is byte-for-byte unchanged by the presence of the chat —
+7. [ ] Every citation shown resolves to an id in the pack. A test feeds a fabricated id
+       through the streaming path and asserts it never reaches the panel as a citation.
+8. [ ] A malformed citation tail leaves the streamed answer in place and shows the
+       unverified notice, without a second call and without replacing text.
+9. [ ] A cache hit is served whole and makes no network call; an interrupted stream
+       stores nothing.
+10. [ ] Asked to add two numbers from the report, the chat quotes the computed figure or
+        declines. Asked something outside the pack, it says it cannot answer rather than
+        answering.
+11. [ ] Chat calls are counted in the usage figures and per person, and no chat call
+        consumes the run's token budget.
+12. [ ] The frozen report file is byte-for-byte unchanged by the presence of the chat —
         its checksum after a conversation matches the one stored at freeze.
-11. [ ] Both training documents and both in-product Guides describe the chat, including
+13. [ ] Both training documents and both in-product Guides describe the chat, including
         what it will not do, and the docs gate passes.
 
 ## What this phase deliberately does not do
 
-- **It does not stream.** The reason is in 8c: one adapter entry point is worth more than
-  a typing animation. Revisit it as its own decision if people ask for it.
+- **It does not stream the citations.** The prose streams; what the answer rests on is
+  checked before it is shown. The distinction is in 8c and it is the whole of the
+  streaming design.
 - **It does not store conversations.** That was asked and answered: ephemeral, browser
   only. It means a question asked before a report was shared cannot be recovered later,
   which is the cost, and it means there is no transcript store to secure, retain, or leak,
@@ -272,6 +321,11 @@ Recorded so they are not relitigated. All four were answered by the user on 2026
 | Are conversations stored? | **No — ephemeral, browser only.** Nothing server-side (8d, ADR-051) |
 | Where is it available? | **Frozen reports only** (8e) |
 | What pays for it? | **Its own switch and its own caps, off by default.** Never the run's budget (8f) |
+| Does it stream? | **Yes** — the prose streams, the citations are validated after the stream closes and only then shown (8c, ADR-053) |
+| What if the citation tail is malformed? | **Keep the answer, say the citations are unverified.** No retry that pulls text somebody is reading (8c) |
+| Which model answers? | **Its own setting, defaulting to the pipeline's model** (8c) |
+| Who may use it? | **Anyone who can read that run.** No new capability (8f) |
+| Can a conversation be kept? | **Copy to the clipboard**, by the person, into their own notes. The tool still stores nothing (8e) |
 
 ## Why this is worth a phase
 

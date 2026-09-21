@@ -1932,6 +1932,13 @@ accepted: a question asked last week cannot be recovered. The model call itself 
 recorded like every other — ids and counts, never text — so the usage is visible without
 the content being kept.
 
+**A person may copy their own conversation to the clipboard**, which is the one
+concession and is deliberately not a feature of the tool's storage. Somebody who wants to
+keep an answer pastes it into their own notes or a ticket, and the responsibility for
+where masked-but-real delivery detail ends up moves to the person who chose to move it.
+That is the right place for it, and it is honest about what would otherwise happen anyway
+by selecting text.
+
 **It acts on nothing.** No decision, no finding, no rule, no re-run, no regenerated
 report. Everything it can do is read.
 
@@ -1981,30 +1988,68 @@ non-aggregate value" runs against both. The aggregates must be computed where ma
 already happens, at parse time, rather than read back out of a report later — a value
 computed after masking is a value that was never masked.
 
-## ADR-053 — The chat is multi-turn by flattening, and does not stream
+## ADR-053 — The chat streams its prose, and shows a citation only after code has checked it
 
 **Status:** accepted · 2026-09-21 · Phase 8
 
 **Context.** The adapter has one entry point, `complete(system, user, schema)`, and every
-invariant the tool depends on lives behind it: the PII tripwire, the cache check before
+invariant the tool depends on sits behind it: the PII tripwire, the cache check before
 every call, the budget stop, the single schema-validated retry, and the per-call record
-(ADR-004, ADR-005). It is single-turn and it does not stream. A chat box wants both.
+(ADR-004, ADR-005). It is single-turn and it does not stream. A chat box wants both, and
+an answer that appears whole after a silent wait is the difference between a feature
+people use and one they try once.
 
-**Decision.** Neither is added to the adapter in this phase.
+One objection to streaming can be dismissed immediately, because getting it wrong would
+distort the whole design: **streaming does not weaken the tripwire.** The prompt is
+assembled and scanned in full before a single byte is sent; only the response streams
+back. Nothing about personal data leaving the building changes.
+
+The real conflict is narrower and cannot be dismissed. The answer is schema-constrained,
+and code checks that every citation resolves to an id that is actually in the pack before
+showing it — a fabricated finding reference is the failure that would most damage trust in
+a QC tool. **Code cannot check what has already been displayed.** The single retry has the
+same shape of problem: once prose is on screen, re-asking silently is not available.
+
+**Decision.** The chat streams, and the structure it is judged on does not.
+
+**The prose streams; the citations do not.** The model writes the answer as plain prose
+containing **no finding ids**, then emits a structured tail naming what it answered from.
+The prose reaches the panel token by token. The tail is validated against the pack when
+the stream closes, and only the citations that resolve are rendered. A fabricated id is
+therefore never shown as a citation — not briefly, not dimmed, not at all.
+
+**Streaming lives in the adapter.** `llm/` gains a streaming entry point beside
+`complete`, rather than a second network path in `api/` or `chat/`. The tripwire, the
+cache check, the budget stop and the per-call record continue to happen in exactly one
+place. This amends ADR-004's "one entry point" to "one module", which was always the rule
+that mattered: what must not spread is the network call, not the method count.
+
+**A malformed tail keeps the answer.** The panel says the citations could not be verified
+rather than showing chips, and nothing is re-asked. Pulling text somebody is part-way
+through reading looks like a malfunction even when it is correct behaviour, and the prose
+answers the question on its own. This is the one place the single-retry contract does not
+apply, and it is written here so that it is a decision rather than a later surprise.
+
+**A cache hit is served whole.** The cache is checked before the stream opens, as before
+every call. A hit replays the stored answer and its stored citations with no network call;
+a miss streams, and the answer is stored only when the stream closes. **A partial answer is
+never cached**, so an interrupted conversation cannot poison the next one.
 
 **Multi-turn is flattening.** Earlier turns are rendered into the user prompt inside a
 delimited block, labelled as a person's words to interpret and never as instructions to
 follow — the technique ADR-021 already uses for reviewer statements, for the same reason.
-`complete` is unchanged, so the tripwire scans the whole transcript, the cache key covers
-it, and a cache hit is therefore only ever an exact repeat of the same conversation
-against the same pack.
+The cache key therefore covers the whole transcript, so a hit is only ever an exact repeat
+of the same conversation against the same pack.
 
-**Streaming waits.** It would need a second network path that re-implements the tripwire,
-the cache, the budget and the recording, or bypasses them. That is a large amount of
-duplicated safety-critical code in exchange for a typing animation. The widget shows a
-working indicator, and answers to a frozen report are not read a word at a time.
+**The chat resolves its own model**, through the three layers of ADR-023, defaulting to
+the pipeline's when unset. Conversation and schema-constrained extraction are different
+jobs and may deserve different models or different costs; because the model name is
+already part of every cache key, the two can never serve each other's answers.
 
-**Consequences.** A long conversation re-sends its own history, so the transcript is
-capped in turns and the cap is a setting rather than a constant. The first answer is shown
-whole, after a wait — which is stated here so that "why does it not type?" has a written
-answer rather than being reopened as a defect.
+**Consequences.** There is now a streaming path to test as carefully as the answer itself:
+an interrupted stream must store nothing, and a fabricated citation must not reach the
+panel. Both are acceptance criteria rather than hopes. A long conversation re-sends its own
+history, so the transcript is capped in turns and the cap is a setting rather than a
+constant. And the prompt must hold the model to prose without ids, which is a real
+instruction-following burden — the citation check is what makes a lapse harmless rather
+than embarrassing.
