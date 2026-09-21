@@ -31,8 +31,9 @@ vi.mock("@/components/auth-gate", () => ({
   }),
 }));
 
+let guideOn = true;
 vi.mock("@/components/palette-provider", () => ({
-  usePalette: () => ({ tagline: "" }),
+  usePalette: () => ({ tagline: "", guide: guideOn }),
   PalettePicker: () => null,
 }));
 
@@ -79,6 +80,7 @@ function shell() {
 describe("the sidebar", () => {
   beforeEach(() => {
     pathname = "/usage";
+    guideOn = true;
   });
 
   it("shows an administrator every screen", () => {
@@ -136,6 +138,36 @@ describe("a screen reached by its URL", () => {
   it("lets the dashboard through, which the sign-in gate has already guarded", () => {
     held = REVIEWER;
     pathname = "/";
+    shell();
+
+    expect(screen.getByText("the screen itself")).toBeInTheDocument();
+  });
+});
+
+describe("the Guide", () => {
+  beforeEach(() => {
+    pathname = "/usage";
+    guideOn = true;
+  });
+
+  it("is offered to anyone who can open the console at all", () => {
+    held = REVIEWER;
+    shell();
+
+    expect(screen.getByText("Guide")).toBeInTheDocument();
+  });
+
+  it("goes when the deployment switches it off", () => {
+    held = ADMIN;
+    guideOn = false;
+    shell();
+
+    expect(screen.queryByText("Guide")).not.toBeInTheDocument();
+  });
+
+  it("is still reachable by URL when it is on", () => {
+    held = REVIEWER;
+    pathname = "/guide";
     shell();
 
     expect(screen.getByText("the screen itself")).toBeInTheDocument();

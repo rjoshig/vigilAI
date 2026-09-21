@@ -34,8 +34,9 @@ vi.mock("@/components/auth-gate", () => ({
   }),
 }));
 
+let guideOn = true;
 vi.mock("@/components/palette-provider", () => ({
-  usePalette: () => ({ tagline: "" }),
+  usePalette: () => ({ tagline: "", guide: guideOn }),
 }));
 vi.mock("@/components/theme-picker", () => ({ PalettePicker: () => null }));
 vi.mock("@/components/notice-bar", () => ({ NoticeBar: () => null }));
@@ -69,6 +70,7 @@ function shell() {
 describe("the Admin console link", () => {
   beforeEach(() => {
     user = null;
+    guideOn = true;
   });
 
   it("is there while login is off, exactly as it always was", () => {
@@ -97,5 +99,33 @@ describe("the Admin console link", () => {
 
     expect(screen.getByText("Runs")).toBeInTheDocument();
     expect(screen.getByText("New run")).toBeInTheDocument();
+  });
+});
+
+describe("the Guide link", () => {
+  beforeEach(() => {
+    user = null;
+    guideOn = true;
+  });
+
+  it("is in the sidebar by default, so it is found without being told about", () => {
+    shell();
+
+    expect(screen.getByText("Guide")).toBeInTheDocument();
+  });
+
+  it("goes when the deployment switches it off", () => {
+    guideOn = false;
+    shell();
+
+    expect(screen.queryByText("Guide")).not.toBeInTheDocument();
+    expect(screen.getByText("Runs")).toBeInTheDocument();
+  });
+
+  it("is there for a plain user, who needs it most", () => {
+    user = account([]);
+    shell();
+
+    expect(screen.getByText("Guide")).toBeInTheDocument();
   });
 });

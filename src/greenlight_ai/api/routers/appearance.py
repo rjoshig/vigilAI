@@ -42,6 +42,12 @@ class AppearanceOut(BaseModel):
     #: one kind is optional: it says a field is *not* read during a run, so hiding it
     #: cannot mislead anybody about where their words go (ADR-046).
     setup_markers: bool = True
+    #: Whether each app offers its Guide in the sidebar (Phase 6.19b). Read from here
+    #: rather than from a build-time variable so an administrator can turn it off in
+    #: the console and both apps follow on their next page load, with no redeploy
+    #: (ADR-023). It gates the link and the screen, and nothing else: a Guide is help,
+    #: so switching it off cannot change what a run does.
+    guide: bool = True
     #: The line under the mark in both apps' sidebars (Phase 6.14h).
     tagline: str = ""
     #: Whether the user app should show a maintenance page instead of itself
@@ -71,6 +77,7 @@ def appearance(session: Session = Depends(get_session)) -> AppearanceOut:
         palettes=list(SETTINGS_BY_KEY["ui.theme"].choices),
         tooltips=bool(store.resolve(session, "ui.tooltips").value),
         setup_markers=bool(store.resolve(session, "ui.setup_markers").value),
+        guide=bool(store.resolve(session, "ui.guide").value),
         tagline=str(store.resolve(session, "ui.tagline").value),
         maintenance=state.maintenance,
         accepting=state.accepting,

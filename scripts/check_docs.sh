@@ -3,6 +3,7 @@
 #  1. Every relative markdown link in *.md resolves to a file or directory.
 #  2. Every phase-doc status marker matches the checkboxes beneath it.
 #  3. Every file under docs/ is mentioned in README.md (the human index).
+#  4. Each app's in-product Guide is current with the training document it is built from.
 # Run from the repo root: bash scripts/check_docs.sh
 set -euo pipefail
 
@@ -32,7 +33,14 @@ if ! python3 scripts/update_phase_status.py --check; then
   fail=1
 fi
 
-# 3. docs/ index in README.md.
+# 3. Each app's Guide matches its training document (Phase 6.19b). The Guide has one
+#    source per audience; a generated file left stale is the second document this check
+#    exists to prevent.
+if ! python3 scripts/build_guides.py --check; then
+  fail=1
+fi
+
+# 4. docs/ index in README.md.
 for f in docs/*.md; do
   name=$(basename "$f")
   if ! grep -q "$name" README.md; then

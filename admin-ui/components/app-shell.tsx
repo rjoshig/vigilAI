@@ -95,6 +95,18 @@ const NAV: NavItem[] = [
 ];
 
 /**
+ * The Guide (Phase 6.19b). On the console floor rather than behind a stronger
+ * capability: it explains the job to whoever can open the console at all, and a reviewer
+ * needs the part about reading the numbers as much as an administrator does.
+ */
+const GUIDE_NAV: NavItem = {
+  href: "/guide",
+  label: "Guide",
+  icon: BookOpen,
+  capability: "view_admin",
+};
+
+/**
  * What a screen reached by URL says when it is not this person's.
  *
  * Not an empty page and not a broken one: an empty screen reads as a bug and generates
@@ -225,12 +237,15 @@ function SidebarFooter() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { tagline } = usePalette();
   const { can } = useAuth();
+  const { tagline, guide } = usePalette();
 
-  const nav = NAV.filter((item) => can(item.capability));
+  // The Guide sits at the foot of the rail and only while it is switched on, so the
+  // screens somebody works on are not pushed down by help they may have turned off.
+  const screens = guide ? [...NAV, GUIDE_NAV] : NAV;
+  const nav = screens.filter((item) => can(item.capability));
   // The longest matching prefix, so `/rules` does not answer for `/reference`.
-  const screen = [...NAV]
+  const screen = [...screens]
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => pathname.startsWith(item.href));
   const allowed = !screen || can(screen.capability);

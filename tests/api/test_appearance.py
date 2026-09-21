@@ -22,6 +22,7 @@ def test_the_default_theme_comes_from_the_environment_then_the_built_in(
         "palettes": ["classic-teal-navy", "classic-teal", "light-blue-yellow", "default"],
         "tooltips": True,
         "setup_markers": True,
+        "guide": True,
         "tagline": "Nothing ships without a green light.",
         "maintenance": False,
         "accepting": True,
@@ -84,6 +85,33 @@ def test_the_console_can_switch_the_explanations_off(
     assert saved.status_code == 200, saved.text
     store.invalidate()
     assert client.get(f"{api}/appearance").json()["tooltips"] is False
+
+
+def test_the_guide_can_be_switched_off_for_a_deployment(
+    client: TestClient, api: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On by default, and off from either `.env` or the console (Phase 6.19b, ADR-023).
+
+    Both apps read the answer from here, so switching it off reaches open tabs on their
+    next page load rather than needing a redeploy. It gates the Guide and nothing else:
+    help is not a control, so turning it off cannot change what a run does.
+    """
+    from greenlight_ai.config import store
+
+    monkeypatch.delenv("GREENLIGHT_AI_UI_GUIDE", raising=False)
+    store.invalidate()
+    assert client.get(f"{api}/appearance").json()["guide"] is True
+
+    # The environment layer, beneath the console.
+    monkeypatch.setenv("GREENLIGHT_AI_UI_GUIDE", "false")
+    store.invalidate()
+    assert client.get(f"{api}/appearance").json()["guide"] is False
+
+    # And the console wins over it, which is the point of the three layers.
+    saved = client.post(f"{api}/admin/settings", json={"key": "ui.guide", "value": True})
+    assert saved.status_code == 200, saved.text
+    store.invalidate()
+    assert client.get(f"{api}/appearance").json()["guide"] is True
 
 
 def test_the_tagline_comes_from_the_console(

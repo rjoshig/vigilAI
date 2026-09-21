@@ -7,6 +7,7 @@ and turns what reviewers know into rules. **Covers:** the admin console at
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
 
+<!-- guide 1: What an administrator is responsible for -->
 ## What an administrator is responsible for
 
 Three things, in order of how often they come up.
@@ -44,6 +45,7 @@ Under the mark: **Train AI mode on** (green) or **off** (grey). When it is on,
 reviewers can record observations and they arrive in your queue. The switch itself is
 on the Settings screen.
 
+<!-- guide 2: The front door, and which surface a thing belongs on -->
 ## Tell the tool
 
 The first item in the sidebar, and the one to reach for when you are not sure which of
@@ -600,6 +602,97 @@ Three things about it are worth knowing before you turn it on.
 
 Who approved, when, and what they covered are recorded on the frozen report.
 
+<!-- guide 5: Who may do what: the three roles -->
+## Who may do what: the three roles
+
+An account holds any of three roles, and it can hold several. **What somebody may do is
+the union of what their roles grant**, so adding one never takes another away.
+
+| Role | What it is for |
+| --- | --- |
+| **user** | Submits runs and decides findings in the user app. No admin console at all — the link is not even offered. |
+| **reviewer** | Everything in this console that is about *judging the work*: approving what the tool learned, the rule surfaces, worked examples, the figures, and the reference data a delivery's vocabulary needs. |
+| **admin** | All of that, plus what *defines the deployment*: delivery programmes, artifact types, meaning, accounts, settings, and masked columns. |
+
+The line is between **judging the work** and **defining the deployment**. A reviewer
+decides whether a rule is right. An administrator decides what a programme is, who has an
+account, and what the tool is allowed to send to a model. Different jobs, different blast
+radius, and the second group should be much smaller.
+
+Two things to know when you assign them:
+
+- **A senior associate is a user and a reviewer**, not an administrator. That is the
+  person the whole training loop was built for: they know a programme well enough to
+  approve what the tool learned from it, and they should not be creating accounts or
+  changing what the tool may send to a model.
+- **Masked columns sit on the admin side** even though the rest of Reference data does
+  not. Naming a column there is what keeps personal data out of every prompt; it is the
+  strongest control in the product and the one whose failure is least visible, because
+  nothing goes wrong on screen when a column stops being masked.
+
+The checkboxes on the Users screen are checkboxes and not a dropdown for a reason: the
+roles are not exclusive. **You cannot remove the last administrator**, by unticking the
+box or by deactivating the account, including your own — locking everybody out of the
+console cannot be undone without editing the database.
+
+None of this applies until login is switched on. With it off there is one placeholder
+account that everything is attributed to, it holds every role, and nothing is gated.
+
+<!-- guide 3: What improves the QC, in the order it pays off -->
+## What improves the QC, in the order it pays off
+
+Five things are worth your time, and they are not equally worth it. In order:
+
+1. **Worked examples.** One example of a judgement the tool got wrong, at the stage it
+   got it wrong, changes its answers on every run afterwards. Nothing else you can do has
+   that reach for that little effort.
+2. **Artifact guidance and AI context.** Telling the tool how to read a workbook — which
+   tab is what, which heading row to trust — fixes a whole class of "could not evaluate"
+   at once, because a check that cannot find its column is not a check.
+3. **Programme keywords in the customer's own vocabulary.** The keyword check is what
+   confirms a delivery is the programme it claims to be. It matches text, so it only
+   works in words the customer actually uses: add *their* phrase, not the industry's.
+4. **Standing instructions on a programme.** Background the tool should carry into every
+   run of that programme. Useful, bounded, and read as background rather than as a rule —
+   which is also why it is fourth: it informs answers rather than deciding them.
+5. **Masked columns**, whenever a new layout arrives carrying personal data. This one is
+   not about quality at all; it is the control that has to be right regardless.
+
+What is *not* on that list: writing more rules. A noisy rule costs a reviewer attention
+on every run, forever. Sort Rules by dismissal rate before you add another one.
+
+<!-- guide 4: How to read the numbers -->
+## How to read the numbers
+
+- **Fired and dismissed**, per rule. Fired is how often it produced a finding; dismissed
+  is how often a person said that finding was not a real problem. The ratio is the
+  number that matters, and a high one means the rule is spending reviewer attention
+  rather than saving it.
+- **Shadow** means a rule is being evaluated and its findings are recorded but shown to
+  nobody. It is how a rule earns activation: you can see what it *would* have raised,
+  against real deliveries, before anybody has to read it.
+- **Precision**, here, means: of the findings this rule raised, how many a person agreed
+  with. It is measured from verdicts people actually gave, so it is only as meaningful as
+  the number of verdicts behind it — a rule with four results has no precision worth
+  quoting.
+- **Review load** shows what reviewers would stop needing to see. It is **acting on
+  nothing**: it reports, and no finding is hidden because of it. That is deliberate, and
+  it stays that way until the numbers behind it have been read by a person who can judge
+  them.
+- **Usage** counts runs per person and per period. It is there to show where the work
+  actually is, not to rank anybody.
+
+<!-- guide 6: What is never editable, and why -->
+## What is never editable, and why
+
+Four settings are shown read-only on the Settings screen, and no console anywhere can
+change them: the **database URL**, the **data directory**, the **bind address**, and the
+**master key**. Each one is needed to reach or protect the settings store itself. A
+database URL that lived in the database could be pointed somewhere else and then never
+read back; a master key stored under its own encryption cannot decrypt itself. They are
+environment configuration, changed where the service is deployed and nowhere else.
+
+<!-- guide 7: A weekly routine that keeps the tool honest -->
 ## A weekly routine that keeps the tool honest
 
 1. Read the training queue. Reject what cannot be a rule, with reasons; synthesize

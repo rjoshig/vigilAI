@@ -8,6 +8,7 @@ to be re-read against the product after every major milestone, and `CLAUDE.md` a
 for a check roughly every ten commits. If a screen does not match what is written
 here, the document is wrong and should be fixed in the same change as the screen.
 
+<!-- guide 1: What the tool is doing for you -->
 ## What the tool does, in one paragraph
 
 You upload the order's requirement spec (the **OSL**, a Word document), the ETL
@@ -82,6 +83,32 @@ Two things follow from this, and they are the whole reason the markers exist:
   comparing the three documents. Your notes change what the model *understands*, never
   what the tool *decides*.
 
+<!-- guide 2: What matters most from you -->
+## What matters most from you
+
+Most of the form is identification: it labels the run so somebody can find it again.
+Three things change what the tool finds, and they are worth real care.
+
+1. **The delivery programme.** It decides which rules apply and what the tool expects
+   to see. Get it wrong and you will either be shown findings that were never relevant
+   to this delivery, or miss the ones that were. If the list does not obviously contain
+   your delivery, ask rather than guess — and the tool reads the artifacts a second time
+   to check they look like the programme you chose, so a mismatch is usually caught.
+2. **The delivery notes.** One sentence of context here improves what the tool finds
+   more than anything else you can type. It is read as background, never as a
+   requirement, so it cannot make a delivery pass — it helps the tool understand what
+   it is looking at. *"The state list was cut to four states at the customer's request
+   on the 14th"* saves a reviewer three findings and a phone call.
+3. **The right files.** The tool checks the configuration id, the customer and the
+   credit date against what the artifacts themselves say, before it starts, and holds
+   the run when they disagree. That check costs nothing and catches the expensive
+   mistake, but it can only compare what you gave it: the wrong report for the right
+   order still looks consistent.
+
+Everything else on the form — the order number, your own reference — identifies the run
+and is never sent to the model. The marker under each box says which kind it is.
+
+<!-- guide 3: When the tool is unsure -->
 ## Three different things are called "review"
 
 The word does three jobs in this tool, and mixing them up is the commonest confusion.
@@ -267,6 +294,7 @@ now you could only do that from a finding, which meant you could only talk about
 the tool had already noticed — and what you know is usually about what it said nothing
 about.
 
+<!-- guide 4: How to read a finding, and how to decide -->
 ## Reviewing findings
 
 The run page shows the **traceability matrix** and the **findings**, worst first.
@@ -285,6 +313,7 @@ The run page shows the **traceability matrix** and the **findings**, worst first
   that freezing is permanent: the report is stored once, never regenerated, and the
   findings can no longer be re-reviewed.
 
+<!-- guide 5: How to tell a clean delivery from an unexamined one -->
 ## What was checked
 
 Above the findings is a panel headed **What was checked**. It exists because a short
@@ -412,6 +441,51 @@ from the rule itself each time, so it is never out of date.
   save text that looks like it, and tells you so, because the only moment it can be
   removed is before it is saved.
 
+<!-- guide 6: What it will not catch -->
+## What it will not catch
+
+A tool whose limits are written down is trusted correctly rather than uniformly, and a
+reviewer who believes it catches everything is the exact failure this product exists to
+prevent. So, plainly:
+
+- **It compares three documents. It does not check the world.** If the OSL itself asks
+  for the wrong thing, every artifact can agree with it and nothing will be raised.
+- **It cannot see what nobody wrote down.** A verbal agreement with the customer, a
+  decision in an email, a convention everyone in the team knows — none of it reaches the
+  tool unless it is in the OSL, the configuration, or your delivery notes.
+- **A requirement no check can express is marked as needing a person**, not silently
+  passed. *What was checked* lists those, and they are yours.
+- **It reads a sample of rows, not the whole file**, for anything a person's judgement
+  would be needed for. Volume checks are done by code over counts; the tool does not
+  re-derive every row of a delivery.
+- **A finding it is unsure about says so.** Treat a `review` severity as a question. It
+  is not the tool hedging on something it knows.
+- **Nothing it says is a sign-off.** It reports where three documents disagree. Whether
+  the delivery is acceptable has your name on it, not the tool's.
+
+<!-- guide 7: Why your disagreement is worth recording -->
+## Why recording your disagreement matters
+
+When you mark a finding a false positive, or say in your own words what the tool should
+have expected, that sentence does not stop at your screen. An administrator reads it,
+and where it can become a rule the tool drafts one — which then runs **silently** beside
+the real checks until there are enough results to know whether it is any good. Only then
+can it start producing findings anybody sees.
+
+Two things follow that are worth knowing. Your sentence is worth writing carefully,
+because a person will read it and it may end up as a rule. And you find out what happened
+to it: your observations screen says whether it became a rule, is still being measured,
+or was not taken forward, with the reason.
+
+<!-- guide 8: Why the Admin console link may not be there -->
+## Why the Admin console link may not be there
+
+The sidebar offers an **Admin console** link only to accounts that include it. If you do
+not see it, your account is a user account: submitting runs and deciding findings is the
+whole job, and there is nothing in the console you would be able to change. Ask an
+administrator if you think that is wrong — a senior associate who approves what the tool
+has learned is usually given the reviewer role as well, which does show the link.
+
 ## Things the tool will refuse, and why
 
 | It says | Why |
@@ -425,6 +499,7 @@ from the rule itself each time, so it is never out of date.
 | The maintenance page instead of the app | Something the tool depends on is deliberately down. The page checks for itself and the app returns on its own. |
 | "its artifacts disagree with what was submitted" | The run is held: what you typed and what the files declare do not match. See **When a run is held**. |
 
+<!-- guide 9: Getting help -->
 ## Getting help
 
 Your administrator can see every setting, every rule, and every observation in the
