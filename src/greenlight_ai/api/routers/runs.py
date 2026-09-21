@@ -1118,7 +1118,10 @@ def list_runs(
         session: The request's session.
         _user: The caller.
         customer: Filter by customer.
-        run_status: Filter by status.
+        run_status: Filter by status. **Drafts are excluded unless they are asked for
+            by name**: a draft is unfinished work rather than a delivery that was
+            validated, and letting abandoned ones accumulate in the history is noise
+            in front of the runs somebody is actually looking for (Phase 6.23c).
         submitted_by: Only this account's runs. An id rather than a name, because two
             people can share a display name and a link that quietly widened to both
             would be worse than one that found nobody.
@@ -1135,6 +1138,8 @@ def list_runs(
         statement = statement.where(models.Run.customer_name == customer)
     if run_status:
         statement = statement.where(models.Run.status == run_status)
+    else:
+        statement = statement.where(models.Run.status != "draft")
     if submitted_by is not None:
         statement = statement.where(models.Run.user_id == submitted_by)
     if q and q.strip():

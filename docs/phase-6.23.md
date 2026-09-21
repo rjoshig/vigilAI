@@ -157,8 +157,13 @@ run is known not to be a duplicate, before the mismatch branch.
       what finally gives `cloned_from_id` a reader.
 - [x] Clone carries the fields it dropped, and returns an existing draft rather than
       making a second.
-- [x] A draft's row in the runs list leads to the editor and reads **Finish**, and
-      `draft` is in the status filter at last.
+- [x] A draft's row in the runs list leads to the editor and reads **Finish**.
+- [x] **Drafts are kept out of the runs list entirely** and reached by one toggle
+      beside the filters, which carries a count. A draft is unfinished work rather than
+      a delivery that was validated, so letting abandoned ones accumulate in the history
+      puts noise in front of the runs somebody is looking for. The API excludes them
+      unless they are asked for by name, so the exclusion cannot be undone by a screen
+      that forgets it.
 - [x] `lib/draft.ts` holds the prefill as pure, tested functions — `user-ui` has no
       page-level tests, so the logic lives in `lib/` beside a test file.
 

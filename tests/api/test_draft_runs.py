@@ -302,3 +302,41 @@ def test_discarding_is_recorded(
             ).scalars()
         )
     assert "run.draft_discarded" in actions
+
+
+# --- drafts stay out of the history ---------------------------------------------------
+
+
+def test_the_runs_list_leaves_drafts_out(client: TestClient, api: str, submit: Submit) -> None:
+    """A draft is unfinished work, not a delivery that was validated.
+
+    Letting abandoned ones accumulate in the history puts noise in front of the runs
+    somebody is actually looking for, so they are reached by their own filter instead.
+    """
+    run_id = submit().json()["run_id"]
+    draft_id = _clone(client, api, run_id)["run_id"]
+
+    listed = {row["id"] for row in client.get(f"{api}/runs").json()}
+    assert run_id in listed
+    assert draft_id not in listed
+
+
+def test_drafts_are_listed_when_they_are_asked_for(
+    client: TestClient, api: str, submit: Submit
+) -> None:
+    """The filter has to be able to find them, or they would be unreachable."""
+    run_id = submit().json()["run_id"]
+    draft_id = _clone(client, api, run_id)["run_id"]
+
+    listed = {row["id"] for row in client.get(f"{api}/runs?status=draft").json()}
+    assert listed == {draft_id}
+
+
+def test_asking_for_another_status_still_excludes_drafts(
+    client: TestClient, api: str, submit: Submit
+) -> None:
+    run_id = submit().json()["run_id"]
+    _clone(client, api, run_id)
+
+    rows = client.get(f"{api}/runs?status=queued").json()
+    assert rows and all(row["status"] == "queued" for row in rows)

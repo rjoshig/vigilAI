@@ -106,6 +106,10 @@ export default function RunsPage() {
   // on the client rather than with `useSearchParams`, which would put this whole page
   // behind a Suspense boundary for a parameter that is usually absent.
   const [submittedBy, setSubmittedBy] = React.useState<number | null>(null);
+  // Fetched separately because the list deliberately does not carry drafts. They are
+  // few by nature — one per source run per person, and they expire in days — so this
+  // is a small request, and it is what lets the toggle show a count.
+  const [draftCount, setDraftCount] = React.useState(0);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -127,6 +131,15 @@ export default function RunsPage() {
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
+    }
+    try {
+      setDraftCount(
+        (await api.listRuns({ status: "draft", submittedBy: submittedBy ?? undefined, limit: 100 }))
+          .length
+      );
+    } catch {
+      // A count is decoration: failing to read it must not empty the runs list above.
+      setDraftCount(0);
     }
   }, [status, submittedBy]);
 
@@ -231,13 +244,27 @@ export default function RunsPage() {
           aria-label="Filter by status"
         >
           <option value="">All statuses</option>
-          <option value="draft">Draft</option>
           <option value="queued">Queued</option>
           <option value="running">Running</option>
           <option value="needs_review">Needs review</option>
           <option value="finalized">Finalized</option>
           <option value="failed">Failed</option>
         </Select>
+        {/* Drafts are unfinished work, not deliveries, so they are kept out of the
+            history and reached by this one toggle instead (Phase 6.23c). */}
+        <Button
+          variant={status === "draft" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setStatus(status === "draft" ? "" : "draft")}
+          aria-pressed={status === "draft"}
+          title={
+            status === "draft"
+              ? "Back to the runs"
+              : "Runs you cloned and have not submitted yet. They are kept out of the list below."
+          }
+        >
+          {status === "draft" ? "Back to runs" : `Drafts${draftCount ? ` (${draftCount})` : ""}`}
+        </Button>
         {submittedBy !== null ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-info/40 bg-info/10 px-2 py-1 text-xs">
             Showing one person&rsquo;s runs
@@ -266,8 +293,12 @@ export default function RunsPage() {
         <Card className="p-0">
           {visible.length === 0 ? (
             <EmptyState
-              title="No runs yet"
-              hint="Submit an OSL, a config, and at least one report to start one."
+              title={status === "draft" ? "No drafts" : "No runs yet"}
+              hint={
+                status === "draft"
+                  ? "Cloning a finished run leaves a draft here until you submit it."
+                  : "Submit an OSL, a config, and at least one report to start one."
+              }
             />
           ) : (
             <Table>
