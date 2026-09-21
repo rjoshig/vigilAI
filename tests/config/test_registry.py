@@ -87,6 +87,30 @@ def test_env_example_agrees_with_the_built_in_defaults() -> None:
     assert not problems, "`.env.example` disagrees with the registry:\n  " + "\n  ".join(problems)
 
 
+def test_no_variable_is_defined_twice_in_env_example() -> None:
+    """One line per setting, because the last one silently wins.
+
+    Found by a merge rather than by reasoning: `dev` had added
+    `GREENLIGHT_AI_CHAT=false` at the foot of the file while this branch was giving the
+    chat a section of its own. Git merged both regions happily — two definitions of one
+    variable, the second overriding the first, and nothing in the suite looking. A
+    duplicate is worse than an omission: the file reads as though it says one thing and
+    behaves as the other.
+    """
+    example = pathlib.Path(__file__).resolve().parents[2] / ".env.example"
+    seen: dict[str, int] = {}
+    for number, line in enumerate(example.read_text(encoding="utf-8").splitlines(), 1):
+        match = re.match(r"^([A-Z][A-Z0-9_]+)=", line)  # uncommented definitions only
+        if match:
+            key = match.group(1)
+            if key in seen:
+                raise AssertionError(
+                    f"{key} is defined twice in .env.example, at lines {seen[key]} and "
+                    f"{number}; the second silently wins"
+                )
+            seen[key] = number
+
+
 def test_no_two_settings_share_an_environment_variable() -> None:
     """One name, one setting. Two names for one setting is how the temperature drifted.
 
