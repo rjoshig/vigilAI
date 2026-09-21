@@ -15,6 +15,14 @@ names, no sample data.
 | Branch | `claude/pending-items-review-f35uek`, **not pushed — this session's work is uncommitted**. Phase 6.17 complete; 6.18a and 6.18f built; **6.19 parts A and C complete** — every field says what it does (now six markers, the sixth switchable per ADR-046), a failed run says *where* it failed (ADR-047), and usage is counted per person (ADR-048). **Next concrete action: commit and push this session's work**, then 6.19 part B — the Guide in each app's sidebar, which the user has deferred. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
 | Last updated | 2026-09-20 |
 
+**A column added nullable is the defect to watch for in this schema.** Five columns on
+`runs` were added by migrations without a backfill while the model declared them NOT
+NULL. `create_all` builds the test schema from the model and writes NOT NULL, so a test
+database cannot hold the NULL a migrated one is full of — the suite was green while the
+review screen answered 500. `tests/db/test_migration_chain.py` now compares a migrated
+database with the models **column for column**, and carries a list of seven older
+divergences that may only shrink.
+
 **Before starting the demo, migrate the demo database.** `scripts/seed_demo.py` builds
 its schema with `create_all`, which creates missing *tables* and never alters an
 existing one — so a `data/demo.db` carried across a branch that added a column keeps the

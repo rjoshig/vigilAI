@@ -226,7 +226,10 @@ def _detail(
     return schemas.RunDetail(
         **base.model_dump(),
         pdf_available=renderer_available(),
-        error_detail=run.error_detail,
+        # `or ""` rather than the bare column: a database migrated before the
+        # backfill holds NULL here, and the review screen is the wrong place to
+        # discover that. Empty and absent mean the same thing to a reader.
+        error_detail=run.error_detail or "",
         notes=run.notes,
         rules_version=run.rules_version,
         model_used=run.model_used,
