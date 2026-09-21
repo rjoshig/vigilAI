@@ -2442,3 +2442,87 @@ OSL prose, and what real deliveries carry beyond their code, can be tuned agains
 files and nothing else.
 
 ---
+
+## ADR-062 — The attribute dictionary is tables, read as the ladder's fourth rung
+
+**Status:** accepted · 2026-09-21 · Phase 6.22d
+
+**Context.** Rung 4 of the resolution ladder has existed since Phase 6.21a and has never
+had anything to read. It takes `alternates` — *other names that also mean this one* —
+and the only caller that ever filled it was the layout map: sheet names, column headings
+and row labels, a handful per artifact, in a JSON column on `artifact_types`.
+
+Attribute names are the reason the rung was built and the one thing it has never
+covered. 6.22a made the tool honest about it — an attribute it cannot locate is a
+`review` record naming the closest columns, not a high-severity violation — and honest
+is where it stopped. Five of `attribute_renamed`'s requirements stay unevidenced,
+correctly, because nothing tells the tool that `debsc_burs_atyrt_at01_1` is `AT01`.
+
+`design.md` has carried the matching open question since Phase 0: *"Is there an
+attribute data dictionary to seed the alias table?"*
+
+**Decision.** An **attribute dictionary**: `attribute_terms` (one canonical attribute,
+scoped with the ADR-037 vocabulary) and `attribute_spellings` (one row per way an
+artifact writes it, with provenance). It compiles into rung 4 and changes nothing about
+`ladder.py`.
+
+**Tables, not a JSON column.** `checks/layout.py`'s entries keep sheets, columns and row
+labels and do **not** grow an `attribute` kind. A credit bureau's vocabulary runs to
+thousands of attributes, each with a spelling per artifact and provenance on each
+spelling; that is not a JSON column, and pretending otherwise would make every run load
+a blob to answer one lookup. `resolve/layout.py`'s *kinds* do gain `attribute`, because
+an attribute name reaches the same five rungs as a sheet name and what the model had to
+reason about is offered to a person the same way.
+
+**Provenance is on the spelling, not the term.** An administrator typed it, a record
+layout declared it, the fifth rung reached it and somebody confirmed it, or a reviewer
+proposed it. It is the *spelling* somebody vouched for.
+
+**It never picks.** The dictionary hands the ladder alternates; the ladder decides, and
+it still refuses when two candidates tie. A dictionary entry is a stronger claim than
+any amount of normalising — which is why it is rung 4 and not rung 1 — but it is
+evidence offered to code, not a verdict. One name means one attribute: the console
+refuses a spelling another term already claims, because two terms claiming it would
+leave the ladder unable to answer the question the dictionary exists to settle.
+
+**A deterministic shortlist before any model call.** Rung 5 for an attribute is shown
+`near_names`' handful, never a column dump — and then only what the dictionary cannot
+already rule out, because a candidate it assigns to a *different* term is a distraction
+somebody has already answered. Ruling out everything gives the candidates back
+unchanged: an empty shortlist tells the model nothing and would turn a narrowing into a
+refusal the caller never asked for.
+
+**The cap is soft.** `llm.max_attribute_calls_per_run` bounds what rung 5 may cost, and
+past it the resolver stops asking, the run records the names it did not look for, and
+nothing is refused. No delivery fails over a budget; the checks that needed those names
+have already said, separately, that they could not be evaluated. The precedent is
+`s6_reverse._may_locate`. `runs.attribute_locate_calls` counts what was actually spent,
+so the number can be measured rather than claimed — and so the second run of a
+configuration whose spellings were recorded can be *shown* to have spent none.
+
+**`attribute_aliases` is superseded by a dual-run read, not a migration.** The alias
+rows are read alongside the dictionary on every run, the dictionary's own terms first.
+Nothing that matched before stops matching. An explicit, previewed copy is offered in
+the console for whoever wants to tidy up, and it adds and never removes — rewriting a
+table an administrator seeded is not something to do behind their back, which is the
+same reasoning ADR-037 gives for not rewriting stored scope strings.
+
+**Consequences.** The two dormant hooks are populated at last.
+`NamedValue.label_alternates` has been threaded from the pointer to `ReportSheet.lookup`
+since Phase 6.15 with nothing ever putting a value in it; the dictionary fills it, so a
+pointer whose label names an attribute finds it under whatever this delivery calls it.
+`ReportSheet.resolve_column`'s `alternates` is filled the same way.
+
+`present()` takes a resolver through a **Protocol** rather than an import.
+`greenlight_ai.parsers` uses this package for its normalisers, and `LayoutResolver`
+reaches `greenlight_ai.llm`; importing it would drag a model adapter into every parser.
+
+**A silent defect this uncovered.** `context.resolver` was never assigned. Stage 7 built
+a resolver in a local variable and `repository.save_context` read `context.resolver`,
+which was always `None` — so **every run since Phase 6.21b has stored an empty
+`layout_suggestions` list**, however much the model had to reason about. The
+suggest-then-accept rail ADR-054 describes has never once been offered something a real
+run found. Stage 7 assigns it now, which is also what makes `attribute_locate_calls`
+reach the database.
+
+---

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Final, Sequence
+from typing import Callable, Final, Protocol, Sequence
 
 from greenlight_ai.resolve.ladder import Resolution, Rung, resolve
 from greenlight_ai.resolve.normalize import fold, squashed, tokens
@@ -39,9 +39,34 @@ from greenlight_ai.resolve.normalize import fold, squashed, tokens
 __all__ = [
     "MAX_NEAR",
     "AttributeMatch",
+    "NameResolver",
     "near_names",
     "present",
 ]
+
+
+class NameResolver(Protocol):
+    """The one thing :func:`present` needs from a resolver: ask which name was meant.
+
+    A Protocol rather than an import, and deliberately so. :mod:`greenlight_ai.parsers`
+    uses this package for its normalisers, and
+    :class:`greenlight_ai.resolve.layout.LayoutResolver` reaches
+    :mod:`greenlight_ai.llm` — importing it here would drag a model adapter into every
+    parser. Structural typing keeps the dependency pointing the way it already did.
+    """
+
+    def name(
+        self,
+        wanted: str,
+        candidates: Sequence[str],
+        *,
+        kind: str = ...,
+        artifact: str = ...,
+        description: str = ...,
+    ) -> "Resolution | None":
+        """Resolve one name; see :meth:`greenlight_ai.resolve.layout.LayoutResolver.name`."""
+        ...
+
 
 _LOG: Final = logging.getLogger(__name__)
 
@@ -188,6 +213,8 @@ def present(
     *,
     alternates: Sequence[str] = (),
     canonical: Callable[[str], str] | None = None,
+    resolver: NameResolver | None = None,
+    artifact: str = "",
 ) -> AttributeMatch:
     """Decide whether an artifact carries one attribute.
 
@@ -203,6 +230,13 @@ def present(
         canonical: The legacy alias resolver, applied to both sides. Passing it
             reproduces the pre-6.22 lookup exactly, so a seeded alias table behaves as
             it always did.
+        resolver: The run's resolver (Phase 6.22d). Passing one lets the fifth rung be
+            reached where the four deterministic ones failed *and something resembles
+            the name*, and only then: the model is shown the shortlist below rather
+            than a column dump, and the run's cap decides whether the call happens at
+            all. ``None`` stops at rung 4, which is what every caller did before 6.22d.
+        artifact: Which artifact is being read, so the dictionary offers a spelling
+            recorded against the DIRT for the DIRT and not for the record layout.
 
     Returns:
         The match. ``resolved`` says the artifact carries it; ``plausible`` distinguishes
@@ -244,6 +278,29 @@ def present(
     #    entirely on whether anything here resembles what was asked for.
     near = near_names(wanted, candidates)
     if near:
+        # 4. Rung 5, and only here: the model is asked which of a handful of resembling
+        #    names was meant, never which of a hundred. Nothing resembling the name
+        #    means there is nothing to ask about, and spending a call to be told so
+        #    would be spending it to learn what code already knows (Phase 6.22d).
+        if resolver is not None:
+            said = resolver.name(
+                wanted,
+                near,
+                kind="attribute",
+                artifact=artifact,
+                description=(
+                    f"the column holding the attribute {wanted!r}, as the OSL asks " "for it"
+                ),
+            )
+            if said is not None:
+                return AttributeMatch(
+                    wanted=wanted,
+                    found=said.value,
+                    rung=said.rung,
+                    confidence=said.confidence,
+                    near=near,
+                    reason=said.reason,
+                )
         _LOG.info("attribute %r unresolved; %d near miss(es)", wanted, len(near))
         return AttributeMatch(
             wanted=wanted,

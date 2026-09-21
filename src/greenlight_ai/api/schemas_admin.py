@@ -45,6 +45,10 @@ __all__ = [
     "AliasOut",
     "MaskedColumnIn",
     "MaskedColumnOut",
+    "AliasCopyPreview",
+    "AttributeSpellingIn",
+    "AttributeTermIn",
+    "AttributeTermOut",
     "ProductCodeIn",
     "ProductCodeMemberIn",
     "ProductCodeOut",
@@ -360,6 +364,68 @@ class AnnouncementOut(AnnouncementIn):
     #: Whether it is showing at this moment, so the console can say so rather than
     #: leaving an administrator to compare dates in their head.
     showing_now: bool = False
+
+
+class AttributeSpellingIn(BaseModel):
+    """One way an artifact writes an attribute (Phase 6.22d)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    spelling: str = Field(min_length=1, max_length=200)
+    #: Which artifact writes it this way, e.g. ``dirt``. Empty means anywhere, which is
+    #: the ordinary case and what an administrator writes by hand.
+    artifact: str = Field(default="", max_length=60)
+    #: admin · record_layout · model · observation · alias. Provenance sits on the
+    #: spelling rather than the term, because it is the spelling somebody vouched for.
+    origin: str = Field(default="admin", max_length=30)
+    origin_run_id: int = 0
+
+
+class AttributeTermIn(BaseModel):
+    """One attribute and every name it goes by, as the admin-ui submits it (6.22d).
+
+    The dictionary the project has carried an open question about since Phase 0. It is
+    the ladder's **fourth rung** for attribute names: a lookup for any spelling reaches
+    the term, and the term's other spellings become the alternates the ladder is given.
+    It never picks — the ladder still refuses to answer when two candidates tie.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    canonical: str = Field(min_length=1, max_length=200)
+    label: str = Field(default="", max_length=200)
+    description: str = ""
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    spellings: list[AttributeSpellingIn] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class AttributeTermOut(AttributeTermIn):
+    """A stored term."""
+
+    id: int
+    scope_label: str = ""
+    created_by: str = ""
+    spelling_count: int = 0
+
+
+class AliasCopyPreview(BaseModel):
+    """What copying the legacy alias table into the dictionary would do (6.22d).
+
+    Shown before anything is written. The aliases are **read** alongside the dictionary
+    whether or not anybody copies them (ADR-062), so this is a tidying step somebody
+    chooses rather than a migration that happens behind their back.
+    """
+
+    #: Terms that would be created, with the spellings each would gain.
+    creates: list[AttributeTermIn] = Field(default_factory=list)
+    #: Terms that already exist and would gain spellings.
+    extends: list[AttributeTermIn] = Field(default_factory=list)
+    #: Aliases already in the dictionary, which would be skipped.
+    already_known: int = 0
+    #: What was actually written, on a copy. Zero on a preview.
+    written: int = 0
 
 
 class ProductCodeMemberIn(BaseModel):

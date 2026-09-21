@@ -248,6 +248,13 @@ def build_context(
         rules_version=run.rules_version,
         verify_lenses=llm_settings.verify_lenses,
         max_lens_calls=llm_settings.max_lens_calls_per_run,
+        # The attribute dictionary is the ladder's fourth rung for attribute names,
+        # and the cap bounds what the fifth may cost (Phase 6.22d). Both empty and
+        # zero leave every check answering as it did before the dictionary existed.
+        dictionary=repository.load_attribute_dictionary(
+            session, run.customer_name, run.configuration_id, run.scope or ""
+        ),
+        max_attribute_calls=llm_settings.max_attribute_calls_per_run,
         # The delivery's own history, which is the only honest baseline for a finding
         # no rule covers (Phase 6.21c). Finalized runs only, and never this one.
         profile_history=repository.load_profile_history(

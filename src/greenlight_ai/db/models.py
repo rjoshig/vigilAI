@@ -220,6 +220,12 @@ class Run(Base):
     #: finalized report reproduce — and what lets a re-check say that the catalogue has
     #: moved since. Empty is the ordinary state on a deployment that defines no codes.
     product_code_attributes: Mapped[Any] = mapped_column(Json, default=dict)
+    #: How many model calls this run spent asking which column an attribute is
+    #: (Phase 6.22d). Counted so the cap can be measured rather than claimed, and so
+    #: the second run of a configuration whose suggestions were accepted can be shown
+    #: to have spent none. A **soft** limit inside the existing token ceiling: past it
+    #: the run stops asking and says so, and nothing is refused.
+    attribute_locate_calls: Mapped[int] = mapped_column(sa.Integer, default=0)
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
@@ -493,6 +499,80 @@ class AttributeAlias(Base):
     canonical_name: Mapped[str] = mapped_column(sa.String(200), index=True)
     alias: Mapped[str] = mapped_column(sa.String(200), index=True)
     customer_name: Mapped[Optional[str]] = mapped_column(sa.String(200), nullable=True)
+
+
+class AttributeTerm(Base):
+    """One attribute, and the name the tool uses for it (Phase 6.22d).
+
+    The dictionary the project has carried an open question about since Phase 0:
+    *"Is there an attribute data dictionary to seed the alias table?"* This is where the
+    answer lives once somebody has one, and where the tool writes down what it learned
+    when nobody does.
+
+    A term is the canonical name; :class:`AttributeSpelling` holds the ways artifacts
+    write it. Tables rather than a JSON column because a credit bureau's vocabulary runs
+    to thousands of attributes, each with a spelling per artifact and provenance on each
+    spelling — which is why `checks/layout.py`'s JSON entries stay for sheets, columns
+    and row labels and do not grow an `attribute` kind (ADR-062).
+    """
+
+    __tablename__ = "attribute_terms"
+    __table_args__ = (sa.UniqueConstraint("canonical", "scope", name="uq_attribute_term_scope"),)
+
+    id: Mapped[int] = _pk()
+    #: The one name the tool uses: what the OSL is expected to say, and what a check
+    #: asks for.
+    canonical: Mapped[str] = mapped_column(sa.String(200), index=True)
+    label: Mapped[str] = mapped_column(sa.String(200), default="")
+    description: Mapped[str] = mapped_column(sa.Text, default="")
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: Mapped[str] = mapped_column(sa.String(200), default="everywhere", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+
+    spellings: Mapped[list["AttributeSpelling"]] = relationship(
+        back_populates="term",
+        cascade="all, delete-orphan",
+        order_by="AttributeSpelling.id",
+    )
+
+
+class AttributeSpelling(Base):
+    """One way an artifact writes an attribute (Phase 6.22d).
+
+    Provenance sits here rather than on the term, because it is the *spelling* somebody
+    vouched for: an administrator typed it, a record layout declared it, the ladder's
+    fifth rung reached it and a person confirmed it, or a reviewer proposed it. A
+    spelling with no artifact is offered everywhere, which is the ordinary case and what
+    an administrator writes by hand.
+    """
+
+    __tablename__ = "attribute_spellings"
+    __table_args__ = (
+        sa.UniqueConstraint("term_id", "spelling", "artifact", name="uq_attribute_spelling"),
+    )
+
+    id: Mapped[int] = _pk()
+    term_id: Mapped[int] = mapped_column(
+        sa.ForeignKey("attribute_terms.id", ondelete="CASCADE"), index=True
+    )
+    spelling: Mapped[str] = mapped_column(sa.String(200), index=True)
+    #: Which artifact writes it this way, e.g. ``dirt``. Empty means anywhere.
+    artifact: Mapped[str] = mapped_column(sa.String(60), default="", index=True)
+    #: admin · record_layout · model · observation · alias.
+    origin: Mapped[str] = mapped_column(sa.String(30), default="admin", index=True)
+    #: The run it was learned from, when it was learned from one.
+    origin_run_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("runs.id"), nullable=True, index=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+
+    term: Mapped[AttributeTerm] = relationship(back_populates="spellings")
 
 
 class ProductCode(Base):

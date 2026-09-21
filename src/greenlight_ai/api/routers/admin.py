@@ -1962,6 +1962,286 @@ def delete_announcement(
     )
 
 
+def _term_out(row: models.AttributeTerm) -> wire.AttributeTermOut:
+    """Render one attribute term for the console.
+
+    Args:
+        row: The stored term, with its spellings loaded.
+
+    Returns:
+        The wire model.
+    """
+    return wire.AttributeTermOut(
+        id=row.id,
+        canonical=row.canonical,
+        label=row.label,
+        description=row.description,
+        scope=scopes.token(row.scope),
+        scope_label=scopes.label(row.scope),
+        spellings=[
+            wire.AttributeSpellingIn(
+                spelling=spelling.spelling,
+                artifact=spelling.artifact,
+                origin=spelling.origin,
+                origin_run_id=int(spelling.origin_run_id or 0),
+            )
+            for spelling in row.spellings
+        ],
+        is_active=row.is_active,
+        created_by=row.created_by,
+        spelling_count=len(row.spellings),
+    )
+
+
+@router.get("/attribute-terms", response_model=list[wire.AttributeTermOut])
+def list_attribute_terms(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.AttributeTermOut]:
+    """List the attribute dictionary (Phase 6.22d).
+
+    One canonical attribute, a spelling per artifact. It is the ladder's fourth rung
+    for attribute names, and every spelling recorded here is a model call the next run
+    does not make.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The terms, alphabetically.
+    """
+    rows = session.execute(
+        sa.select(models.AttributeTerm).order_by(
+            models.AttributeTerm.canonical, models.AttributeTerm.id
+        )
+    ).scalars()
+    return [_term_out(row) for row in rows]
+
+
+@router.post(
+    "/attribute-terms", response_model=wire.AttributeTermOut, status_code=status.HTTP_201_CREATED
+)
+def save_attribute_term(
+    payload: wire.AttributeTermIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.AttributeTermOut:
+    """Create or update one attribute term and its spellings.
+
+    Upserted on ``(canonical, scope)``, and the spellings are replaced wholesale: a
+    term *is* its spellings, and keeping a stale one would go on offering a name this
+    delivery no longer uses.
+
+    Args:
+        payload: The term and its spellings.
+        session: The request's session.
+        user: The caller, recorded against the row.
+
+    Returns:
+        The stored term.
+
+    Raises:
+        HTTPException: 422 when a spelling already belongs to a different term. One
+            name means one attribute: two terms claiming it would make the rung that
+            reads them ambiguous, and the ladder would have to refuse the answer it
+            was given the dictionary to settle.
+    """
+    scope = scopes.token(payload.scope)
+    wanted = {squashed(payload.canonical)} | {
+        squashed(s.spelling) for s in payload.spellings if s.spelling.strip()
+    }
+    for other in session.execute(
+        sa.select(models.AttributeTerm).where(models.AttributeTerm.is_active.is_(True))
+    ).scalars():
+        if other.canonical == payload.canonical and other.scope == scope:
+            continue
+        theirs = {squashed(other.canonical)} | {squashed(s.spelling) for s in other.spellings}
+        clash = sorted(wanted & theirs)
+        if clash:
+            raise HTTPException(
+                HTTP_422,
+                f"{clash[0]!r} already belongs to {other.canonical!r}. One name means "
+                "one attribute: two terms claiming it would leave the ladder unable to "
+                "say which was meant. Remove it from one of them.",
+            )
+
+    row = session.execute(
+        sa.select(models.AttributeTerm).where(
+            models.AttributeTerm.canonical == payload.canonical,
+            models.AttributeTerm.scope == scope,
+        )
+    ).scalar_one_or_none()
+    created = row is None
+    if row is None:
+        row = models.AttributeTerm(
+            canonical=payload.canonical.strip(),
+            scope=scope,
+            created_by=user.name,
+            created_by_user_id=user.id,
+        )
+        session.add(row)
+
+    row.label = payload.label.strip()
+    row.description = payload.description
+    row.is_active = payload.is_active
+    row.spellings.clear()
+    session.flush()
+    for spelling in payload.spellings:
+        if not spelling.spelling.strip():
+            continue
+        row.spellings.append(
+            models.AttributeSpelling(
+                spelling=spelling.spelling.strip(),
+                artifact=spelling.artifact.strip().lower(),
+                origin=spelling.origin.strip() or "admin",
+                origin_run_id=spelling.origin_run_id or None,
+                created_by=user.name,
+            )
+        )
+    session.flush()
+
+    repository.audit(
+        session,
+        "admin.attribute_term_created" if created else "admin.attribute_term_saved",
+        detail=f"{row.canonical} @ {scope} ({len(row.spellings)} spelling(s))",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _term_out(row)
+
+
+@router.delete("/attribute-terms/{term_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_attribute_term(
+    term_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+    _confirmed: None = Depends(require_delete_word),
+) -> None:
+    """Delete an attribute term and its spellings.
+
+    Args:
+        term_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.AttributeTerm, term_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"attribute term {term_id} not found")
+    canonical, scope = row.canonical, row.scope
+    session.delete(row)
+    repository.audit(
+        session,
+        "admin.attribute_term_deleted",
+        detail=f"{canonical} @ {scope}",
+        user_id=user.id,
+        actor=user.name,
+    )
+
+
+def _alias_copy(session: Session, apply: bool, actor: str = "") -> wire.AliasCopyPreview:
+    """What copying the legacy alias table into the dictionary would do, or does.
+
+    The aliases are **read** alongside the dictionary whether or not anybody copies
+    them (ADR-062), so nothing here is required and nothing that matched before stops
+    matching. This is a tidying step somebody chooses, previewed first, because
+    rewriting a table an administrator seeded is not something to do behind their back
+    — the same reasoning ADR-037 gives for not rewriting stored scope strings.
+
+    Args:
+        session: The request's session.
+        apply: Whether to write, or only describe.
+        actor: Who asked, recorded on what is written.
+
+    Returns:
+        The preview, with ``written`` filled on a copy.
+    """
+    aliases: dict[str, list[str]] = {}
+    for row in session.execute(sa.select(models.AttributeAlias)).scalars():
+        aliases.setdefault(row.canonical_name, []).append(row.alias)
+
+    existing = {
+        row.canonical: row for row in session.execute(sa.select(models.AttributeTerm)).scalars()
+    }
+    known = {squashed(spelling.spelling) for row in existing.values() for spelling in row.spellings}
+
+    creates: list[wire.AttributeTermIn] = []
+    extends: list[wire.AttributeTermIn] = []
+    already = 0
+    written = 0
+    for canonical, spellings in sorted(aliases.items()):
+        wanted = [s for s in sorted(set(spellings)) if squashed(s) != squashed(canonical)]
+        new = [s for s in wanted if squashed(s) not in known]
+        already += len(wanted) - len(new)
+        if not new:
+            continue
+        entry = wire.AttributeTermIn(
+            canonical=canonical,
+            spellings=[wire.AttributeSpellingIn(spelling=s, origin="alias") for s in new],
+        )
+        term = existing.get(canonical)
+        (extends if term is not None else creates).append(entry)
+        if not apply:
+            continue
+        if term is None:
+            term = models.AttributeTerm(canonical=canonical, created_by=actor)
+            session.add(term)
+            existing[canonical] = term
+            session.flush()
+        for spelling in new:
+            term.spellings.append(
+                models.AttributeSpelling(spelling=spelling, origin="alias", created_by=actor)
+            )
+            written += 1
+    if apply:
+        session.flush()
+        repository.audit(session, "admin.alias_copy", detail=f"{written} spelling(s)", actor=actor)
+    return wire.AliasCopyPreview(
+        creates=creates, extends=extends, already_known=already, written=written
+    )
+
+
+@router.get("/attribute-terms/alias-copy", response_model=wire.AliasCopyPreview)
+def preview_alias_copy(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.AliasCopyPreview:
+    """Show what copying the legacy alias table into the dictionary would do (6.22d).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The preview. Nothing is written.
+    """
+    return _alias_copy(session, apply=False)
+
+
+@router.post("/attribute-terms/alias-copy", response_model=wire.AliasCopyPreview)
+def apply_alias_copy(
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.AliasCopyPreview:
+    """Copy the legacy alias table into the dictionary (Phase 6.22d).
+
+    The alias rows are left alone. They are read alongside the dictionary either way,
+    so this adds and never removes — and a second copy writes nothing, because every
+    alias is already a spelling by then.
+
+    Args:
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        What was written.
+    """
+    return _alias_copy(session, apply=True, actor=user.name)
+
+
 def _product_code_out(
     row: models.ProductCode, conflicts: Mapping[str, list[str]] | None = None
 ) -> wire.ProductCodeOut:

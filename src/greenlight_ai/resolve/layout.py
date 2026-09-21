@@ -31,17 +31,25 @@ from typing import Final, Mapping, Sequence
 
 from greenlight_ai.llm.client import LLMClient
 from greenlight_ai.llm.examples import LibraryExample
+from greenlight_ai.resolve.dictionary import AttributeDictionary
 from greenlight_ai.resolve.ladder import Resolution, resolve
 from greenlight_ai.resolve.locate import locate
 from greenlight_ai.resolve.normalize import squashed
 
-__all__ = ["LayoutResolver", "ReasonedName", "alternates_key"]
+__all__ = ["ATTRIBUTE", "LayoutResolver", "ReasonedName", "alternates_key"]
 
 _LOG: Final = logging.getLogger(__name__)
 
 #: What kind of name was being resolved. Used in the key of the alternates map, in the
-#: wording of a finding, and to group suggestions on the admin screen.
-_KINDS: Final[frozenset[str]] = frozenset({"sheet", "column", "label"})
+#: wording of a finding, and to group suggestions on the admin screen. ``attribute``
+#: joined the three in Phase 6.22d: an attribute name reaches the same five rungs as a
+#: sheet name, and what the model had to reason about is offered to a person the same
+#: way. Its *alternates* come from the dictionary rather than the layout map, because a
+#: dictionary is thousands of rows and a JSON column is the wrong home (ADR-062).
+_KINDS: Final[frozenset[str]] = frozenset({"sheet", "column", "label", "attribute"})
+
+#: The kind whose alternates and cap come from the dictionary rather than the map.
+ATTRIBUTE: Final[str] = "attribute"
 
 
 def alternates_key(artifact: str, kind: str, wanted: str) -> str:
@@ -105,15 +113,30 @@ class LayoutResolver:
         preamble: The run's context block, so this call carries the same background as
             every other one.
         examples: Library examples for the ``name_locate`` stage.
+        dictionary: The attribute dictionary in force (Phase 6.22d). Supplies rung 4
+            for ``attribute`` names and narrows the shortlist rung 5 is shown. Empty is
+            the ordinary state and leaves the ladder stopping at rung 3.
+        max_attribute_calls: How many model calls this run may spend asking which
+            column an attribute is. A **soft** limit inside the existing token
+            ceiling: past it the resolver stops asking and the run says so, and nothing
+            is refused. Zero means never ask.
         reasoned: Every name the model reached this run, in the order it reached them.
             Read by stage 7 to raise the review records and offer the suggestions.
+        attribute_calls: How many attribute locate calls were actually spent, counted
+            so the cap can be measured rather than claimed.
+        capped: Attribute names the cap stopped this run from asking about, so the run
+            can say what it did not look for rather than leaving the gap silent.
     """
 
     client: LLMClient | None = None
     alternates: Mapping[str, Sequence[str]] = field(default_factory=dict)
+    dictionary: AttributeDictionary = field(default_factory=AttributeDictionary)
+    max_attribute_calls: int = 0
     preamble: str = ""
     examples: Sequence[LibraryExample] = ()
     reasoned: list[ReasonedName] = field(default_factory=list)
+    attribute_calls: int = 0
+    capped: list[str] = field(default_factory=list)
     _cache: dict[tuple[str, str, str, tuple[str, ...]], Resolution | None] = field(
         default_factory=dict, repr=False
     )
@@ -155,7 +178,14 @@ class LayoutResolver:
         if key in self._cache:
             return self._cache[key]
 
-        known = self.alternates.get(alternates_key(artifact, kind, asked), ())
+        # Rung 4's data comes from the layout map for a sheet, column or label, and
+        # from the dictionary for an attribute (ADR-062). Both are "other names that
+        # also mean this one"; only their storage differs.
+        known = (
+            self.dictionary.alternates(asked, artifact)
+            if kind == ATTRIBUTE
+            else self.alternates.get(alternates_key(artifact, kind, asked), ())
+        )
         found = resolve(asked, offered, known)
         if found is None:
             found = self._ask(asked, offered, kind, artifact, description)
@@ -183,6 +213,25 @@ class LayoutResolver:
         Returns:
             The model's resolution once code has checked it, or ``None``.
         """
+        if kind == ATTRIBUTE:
+            if self.attribute_calls >= self.max_attribute_calls:
+                # Soft: the run goes on and says what it did not look for. A refusal
+                # here would fail a delivery over a budget, which is never the answer
+                # (the precedent is `s6_reverse._may_locate`).
+                if wanted not in self.capped:
+                    self.capped.append(wanted)
+                _LOG.info(
+                    "attribute %r: not asked; the run's cap of %d locate call(s) is spent",
+                    wanted,
+                    self.max_attribute_calls,
+                )
+                return None
+            self.attribute_calls += 1
+            # Everything the dictionary can already rule out, removed before the model
+            # sees it: a candidate it assigns to a *different* term is not what this
+            # name means, whatever it looks like.
+            candidates = self.dictionary.shortlist(wanted, candidates)
+
         said = locate(
             self.client,
             wanted,

@@ -129,6 +129,7 @@ def column_for(
     wanted: str,
     resolver: LayoutResolver | None,
     artifact: str = "",
+    alternates: Sequence[str] = (),
 ) -> int | None:
     """The index of the column ``wanted`` names, up the ladder.
 
@@ -137,12 +138,21 @@ def column_for(
         wanted: The heading the fixed check looks for.
         resolver: The run's resolver, or ``None``.
         artifact: Which report, for the finding's wording.
+        alternates: Other headings that also mean this one, from a caller that knows
+            some. The resolver's dictionary supplies any it knows besides
+            (Phase 6.22d).
 
     Returns:
         The zero-based index, or ``None`` when no rung settled it.
     """
+    # ``resolve_column``'s ``alternates`` has existed since 6.21a and nothing has ever
+    # filled it on this path. The dictionary fills it now (Phase 6.22d): it holds other
+    # names for *any* name, and offering them at rung 4 costs nothing when it knows
+    # none — which is every name on a deployment with an empty dictionary, and every
+    # structural name on any deployment.
+    known = () if resolver is None else resolver.dictionary.alternates(wanted, artifact)
     found = (
-        sheet.resolve_column(wanted)
+        sheet.resolve_column(wanted, alternates)
         if resolver is None
         else resolver.name(
             wanted,
@@ -151,6 +161,7 @@ def column_for(
             artifact=artifact,
             description=WHAT.get(wanted, ""),
         )
+        or sheet.resolve_column(wanted, tuple(alternates) + tuple(known))
     )
     return None if found is None else list(sheet.header).index(found.value)
 
@@ -416,7 +427,13 @@ def _check_bound(
 
     canonical = aliases.resolve if aliases is not None else normalize_field_name
     by_spelling = {stat.name: stat for stat in stats.values()}
-    match = attribute_match.present(check.field_name, tuple(by_spelling), canonical=canonical)
+    match = attribute_match.present(
+        check.field_name,
+        tuple(by_spelling),
+        canonical=canonical,
+        resolver=resolver,
+        artifact="dirt",
+    )
     stat = by_spelling.get(match.found or "")
     if stat is None:
         # Unchanged behaviour — this path was always honest about not knowing. It goes
@@ -570,7 +587,9 @@ def _check_fields_present(
     missing: list[str] = []
     unresolved: list[str] = []
     for name in check.values:
-        match = attribute_match.present(name, spellings, canonical=canonical)
+        match = attribute_match.present(
+            name, spellings, canonical=canonical, resolver=resolver, artifact="dirt"
+        )
         if match.resolved:
             continue
         (unresolved if match.plausible else missing).append(name)

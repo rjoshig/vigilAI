@@ -35,6 +35,11 @@ from greenlight_ai.llm import examples as example_library
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
+from greenlight_ai.resolve.dictionary import (
+    AttributeDictionary,
+    AttributeSpellingEntry,
+    AttributeTermEntry,
+)
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.product_codes import ProductCatalogue, ProductCodeEntry, ProductMember
 from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, Trace
@@ -42,6 +47,7 @@ from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, T
 __all__ = [
     "load_admin_config",
     "load_aliases",
+    "load_attribute_dictionary",
     "load_product_codes",
     "product_code_snapshot",
     "catalogue_from_snapshot",
@@ -188,6 +194,12 @@ def load_admin_config(
         else tuple(DEFAULT_CATEGORIES)
     )
 
+    # The dictionary fills ``label_alternates``, which has been threaded from the
+    # pointer to ``ReportSheet.lookup`` since Phase 6.15 with nothing ever putting a
+    # value in it (Phase 6.22d). A pointer whose label names an attribute the
+    # dictionary knows now finds it under whatever this delivery calls it, without
+    # anybody writing the alternates out a second time.
+    dictionary = load_attribute_dictionary(session, customer, configuration_id, programme_code)
     named_values = tuple(
         NamedValue(
             name=row.name,
@@ -196,6 +208,10 @@ def load_admin_config(
             kind=(row.locator or {}).get("kind", "label"),
             cell=(row.locator or {}).get("cell", ""),
             label=(row.locator or {}).get("label", ""),
+            label_alternates=tuple((row.locator or {}).get("label_alternates", ()))
+            or dictionary.alternates(
+                str((row.locator or {}).get("label", "")), str(row.report_type or "")
+            ),
             label_column=(row.locator or {}).get("label_column", 0),
             value_column=(row.locator or {}).get("value_column", 1),
             description=row.description,
@@ -374,6 +390,110 @@ def load_aliases(session: Session, customer: str = "") -> AliasTable:
     for row in rows:
         mapping.setdefault(row.canonical_name, []).append(row.alias)
     return AliasTable.from_mapping(mapping)
+
+
+def load_attribute_dictionary(
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
+) -> AttributeDictionary:
+    """Build the attribute dictionary in force for one run (Phase 6.22d).
+
+    Two sources, read together and in this order (ADR-062):
+
+    1. **The dictionary itself**, narrowest scope first, so a configuration's own
+       spelling of ``SCORE`` wins over a customer's and a customer's over a global one.
+    2. **The legacy ``attribute_aliases`` rows**, behind it. A deployment that seeded
+       aliases before the dictionary existed keeps resolving exactly as it did; nothing
+       that matched before stops matching, which is the promise every rung of the
+       ladder has made since 6.21a.
+
+    Args:
+        session: An open session.
+        customer: The run's customer, so a customer-scoped term applies.
+        configuration_id: The run's ETL configuration.
+        programme_code: The run's delivery programme.
+
+    Returns:
+        The dictionary. Empty on a deployment that has neither, which leaves the ladder
+        stopping at rung 3 exactly as it did before this existed.
+    """
+    rows = list(
+        session.execute(
+            sa.select(models.AttributeTerm)
+            .where(models.AttributeTerm.is_active.is_(True))
+            .order_by(models.AttributeTerm.canonical, models.AttributeTerm.id)
+        ).scalars()
+    )
+    rank = {"configuration": 0, "customer": 1, "programme": 2, "everywhere": 3}
+    in_scope = [
+        row
+        for row in rows
+        if scopes.parse(row.scope).covers(
+            customer=customer,
+            programme_code=programme_code,
+            configuration_id=configuration_id,
+        )
+    ]
+    in_scope.sort(key=lambda row: rank.get(scopes.parse(row.scope).kind, 9))
+
+    dictionary = AttributeDictionary.from_terms(
+        AttributeTermEntry(
+            canonical=row.canonical,
+            label=row.label,
+            description=row.description,
+            scope=scopes.token(row.scope),
+            spellings=tuple(
+                AttributeSpellingEntry(
+                    spelling=spelling.spelling,
+                    artifact=spelling.artifact,
+                    origin=spelling.origin,
+                    origin_run_id=int(spelling.origin_run_id or 0),
+                )
+                for spelling in row.spellings
+            ),
+        )
+        for row in in_scope
+    )
+    return dictionary.merged(_alias_terms(session, customer))
+
+
+def _alias_terms(session: Session, customer: str = "") -> AttributeDictionary:
+    """The legacy ``attribute_aliases`` rows, read as dictionary terms (ADR-062).
+
+    Read rather than migrated. A table somebody seeded is not a reason to rewrite their
+    rows behind their back (ADR-037 says the same about scope strings), and the admin
+    console offers an explicit, previewed copy for whoever wants one.
+
+    Args:
+        session: An open session.
+        customer: Rows scoped to this customer are included alongside global ones.
+
+    Returns:
+        One term per canonical name, its aliases as spellings offered everywhere.
+    """
+    rows = session.execute(
+        sa.select(models.AttributeAlias).where(
+            sa.or_(
+                models.AttributeAlias.customer_name.is_(None),
+                models.AttributeAlias.customer_name == customer,
+            )
+        )
+    ).scalars()
+    aliases: dict[str, list[str]] = {}
+    for row in rows:
+        aliases.setdefault(row.canonical_name, []).append(row.alias)
+    return AttributeDictionary.from_terms(
+        AttributeTermEntry(
+            canonical=canonical,
+            spellings=tuple(
+                AttributeSpellingEntry(spelling=alias, origin="alias")
+                for alias in sorted(set(spellings))
+            ),
+        )
+        for canonical, spellings in sorted(aliases.items())
+    )
 
 
 def load_product_codes(
@@ -615,6 +735,12 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
     run.record_layout = context.record_layout.as_rows()
     run.record_layout_run_id = context.record_layout.source_run_id
     run.record_layout_source_date = context.record_layout.source_date
+
+    # What the run spent reaching for an attribute name (Phase 6.22d). Counted so the
+    # cap can be measured rather than claimed, and so the second run of a configuration
+    # whose suggestions were accepted can be *shown* to have spent none.
+    if context.resolver is not None:
+        run.attribute_locate_calls = context.resolver.attribute_calls
 
     # Names the ladder's fifth rung had to read, kept where the evidence for them is
     # (Phase 6.21b). A suggestion, never an application — an administrator records

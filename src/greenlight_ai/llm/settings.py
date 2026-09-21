@@ -46,6 +46,7 @@ _DEFAULTS: Final[Mapping[str, str]] = {
     # reports as a notice rather than passing over in silence.
     "LLM_VERIFY_LENSES": "single",
     "LLM_MAX_LENS_CALLS_PER_RUN": "150",
+    "LLM_MAX_ATTRIBUTE_CALLS_PER_RUN": "20",
 }
 
 
@@ -80,6 +81,8 @@ class LLMSettings(BaseModel):
             always made; naming lenses (``delivery``, ``compliance``,
             ``requirements``) has each read the same evidence independently and code
             merge the answers. Empty turns verification off, which the run reports.
+        max_attribute_calls_per_run: A soft ceiling on attribute lookups. Past it the
+            run stops asking and says what it did not look for.
         max_lens_calls_per_run: A ceiling on lens calls, beside the token budget. Past
             it the remaining findings are left unverified and the run says so.
     """
@@ -101,6 +104,10 @@ class LLMSettings(BaseModel):
     prompt_version: str = "1"
     verify_lenses: tuple[str, ...] = ("single",)
     max_lens_calls_per_run: int = Field(default=150, ge=0)
+    #: How many times a run may ask the model which column an attribute is
+    #: (Phase 6.22d). A soft limit inside the token ceiling: past it the run stops
+    #: asking and names what it did not look for, and nothing is refused.
+    max_attribute_calls_per_run: int = Field(default=20, ge=0)
 
     @field_validator("base_url")
     @classmethod
@@ -205,6 +212,7 @@ class LLMSettings(BaseModel):
                 prompt_version=get("LLM_PROMPT_VERSION"),
                 verify_lenses=lenses("LLM_VERIFY_LENSES"),
                 max_lens_calls_per_run=integer("LLM_MAX_LENS_CALLS_PER_RUN"),
+                max_attribute_calls_per_run=integer("LLM_MAX_ATTRIBUTE_CALLS_PER_RUN"),
             )
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
@@ -299,4 +307,5 @@ def resolved_llm_settings(session: Any, environ: Mapping[str, str] | None = None
         # reachable ran with the lenses pinned to ``single`` whatever ``.env`` said.
         verify_lenses=parse_lenses(str(value("llm.verify_lenses")), "llm.verify_lenses"),
         max_lens_calls_per_run=int(value("llm.max_lens_calls_per_run")),
+        max_attribute_calls_per_run=int(value("llm.max_attribute_calls_per_run")),
     )

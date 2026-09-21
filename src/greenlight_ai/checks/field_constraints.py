@@ -18,6 +18,7 @@ from typing import Any, Final, Iterable, Mapping, Sequence
 
 from greenlight_ai.parsers.base import ReportDocument, ReportKind
 from greenlight_ai.resolve import attributes as attribute_match
+from greenlight_ai.resolve.attributes import NameResolver
 from greenlight_ai.rules.normalize import AliasTable
 
 __all__ = ["FieldConstraintSpec", "ConstraintOutcome", "evaluate", "CONSTRAINT_KINDS"]
@@ -92,7 +93,11 @@ _MAX_OFFENDING: Final[int] = 5
 
 
 def _columns(
-    document: ReportDocument, field: str, aliases: AliasTable
+    document: ReportDocument,
+    field: str,
+    aliases: AliasTable,
+    resolver: NameResolver | None = None,
+    artifact: str = "",
 ) -> list[tuple[str, tuple[Any, ...]]]:
     """Find the field's column in a report, under any of its names.
 
@@ -100,6 +105,9 @@ def _columns(
         document: The parsed report.
         field: The canonical attribute name.
         aliases: The alias table.
+        resolver: The run's resolver, for rungs 4 and 5 (Phase 6.22d).
+        artifact: Which report, so a dictionary spelling recorded against one artifact
+            is not offered for another.
 
     Returns:
         One entry per sheet that carries the field: the sheet name and its values.
@@ -109,7 +117,13 @@ def _columns(
         # The third copy of "does this artifact carry this attribute", and the reason
         # it now goes through one helper: tolerance added for the DIRT used to leave
         # this one matching on equality alone (Phase 6.22a).
-        match = attribute_match.present(field, tuple(sheet.header), canonical=aliases.resolve)
+        match = attribute_match.present(
+            field,
+            tuple(sheet.header),
+            canonical=aliases.resolve,
+            resolver=resolver,
+            artifact=artifact,
+        )
         if not match.resolved or match.found is None:
             continue
         found.append((sheet.name, tuple(cell.value for cell in sheet.column(match.found))))
@@ -237,6 +251,7 @@ def evaluate(
     specs: Sequence[FieldConstraintSpec],
     reports: Mapping[ReportKind, ReportDocument],
     aliases: AliasTable,
+    resolver: NameResolver | None = None,
 ) -> list[ConstraintOutcome]:
     """Check every constraint against the reports that carry its field.
 
@@ -245,6 +260,9 @@ def evaluate(
         reports: The parsed reports.
         aliases: The alias table, so a name that differs between artefacts still
             lines up.
+        resolver: The run's resolver, so a field the dictionary knows is found by its
+            spelling and, failing that, by the fifth rung within the run's cap
+            (Phase 6.22d). ``None`` stops at rung 4, which is what this did before.
 
     Returns:
         One outcome per constraint and report it applies to. A constraint whose field
@@ -259,7 +277,7 @@ def evaluate(
         for kind, document in reports.items():
             if wanted and kind not in wanted:
                 continue
-            for sheet_name, values in _columns(document, spec.field, aliases):
+            for sheet_name, values in _columns(document, spec.field, aliases, resolver, str(kind)):
                 looked = True
                 passed, detail, offending = _check_values(spec, values)
                 outcomes.append(

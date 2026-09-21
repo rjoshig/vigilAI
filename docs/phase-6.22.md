@@ -1,8 +1,8 @@
 # Phase 6.22 — Product codes, the record layout, and attribute resolution
 
-**Status:** 🟡 **in progress** — 6.22a and 6.22b complete and 6.22c built, 2026-09-21.
-6.22c leaves two items open and says why under its heading. The remaining parts are
-specified below and not started.
+**Status:** 🟡 **in progress** — 6.22a, 6.22b and 6.22d complete and 6.22c built,
+2026-09-21. 6.22c leaves two items open and says why under its heading. 6.22e, f and g
+are specified below and not started.
 
 ## The goal, in the user's words
 
@@ -221,19 +221,43 @@ at the end of stage 2, where every later stage sees the result.
 - [ ] **Phase 7 refines this**: how a product code is recognised in real OSL prose, and
       what real deliveries carry beyond their code, can only be tuned against real files.
 
-### 6.22d — The dictionary and one resolution path · ⬜ not started
+### 6.22d — The dictionary and one resolution path · ✅ complete
 
-- [ ] `attribute_terms` and `attribute_spellings`: one canonical attribute, a spelling
-      per artifact, scoped with the ADR-029 vocabulary, provenance on the spelling.
-- [ ] The dictionary compiles into the ladder's **fourth rung**. Nothing in `ladder.py`
+**Built 2026-09-21**, ADR-062. The answer to the question `design.md` has carried since
+Phase 0: *"Is there an attribute data dictionary to seed the alias table?"* This is
+where one lives when somebody has one, and where the tool writes down what it learned
+when nobody does.
+
+**Found while building, and it is the worst defect this phase has turned up.** · ✅ complete
+`context.resolver` was never assigned. Stage 7 built its resolver in a local variable
+and `repository.save_context` read `context.resolver`, which was always `None` — so
+**every run since 6.21b has stored an empty `layout_suggestions` list**, however much
+the model had to reason about. The suggest-then-accept rail ADR-054 describes has never
+once been offered something a real run found. Stage 7 assigns it now, which is also what
+makes `attribute_locate_calls` reach the database at all.
+
+- [x] `attribute_terms` and `attribute_spellings`: one canonical attribute, a spelling
+      per artifact, scoped with the ADR-029 vocabulary, provenance on the spelling —
+      on the spelling rather than the term, because it is the spelling somebody
+      vouched for.
+- [x] The dictionary compiles into the ladder's **fourth rung**. Nothing in `ladder.py`
       changes; `resolve/layout.py`'s kinds gain `attribute` and `checks/layout.py`'s do
       not, because a dictionary is thousands of rows and a JSON column is the wrong home.
-- [ ] A deterministic shortlist before any model call, and a per-run cap on attribute
+- [x] A deterministic shortlist before any model call, and a per-run cap on attribute
       locate calls — a **soft** limit inside the existing ceiling, not a new refusal.
-- [ ] `attribute_aliases` superseded by a dual-run read and an explicit previewed copy.
-      Nothing that matched before stops matching.
-- [ ] The two dormant hooks populated: `NamedValue.label_alternates` and
-      `ReportSheet.resolve_column`'s alternates.
+      Past it the run stops asking and names what it did not look for.
+      `llm.max_attribute_calls_per_run` sets it; `runs.attribute_locate_calls` counts
+      what was spent, so the cap is measured rather than claimed.
+- [x] `attribute_aliases` superseded by a dual-run read and an explicit previewed copy.
+      Nothing that matched before stops matching, and the copy adds and never removes.
+- [x] The two dormant hooks populated: `NamedValue.label_alternates`, threaded since
+      Phase 6.15 with nothing ever filling it, and `ReportSheet.resolve_column`'s
+      alternates.
+- [x] `present()` takes a resolver through a **Protocol** rather than an import, so
+      `parsers` does not acquire a model adapter by using this package's normalisers.
+- [x] ADR-062.
+- [x] Tests: `tests/resolve/test_dictionary.py`, `tests/resolve/test_attribute_cap.py`,
+      `tests/api/test_attribute_dictionary.py`.
 
 ### 6.22e — What the layout lets us check · ⬜ not started
 
@@ -279,10 +303,13 @@ at the end of stage 2, where every later stage sees the result.
       note and no failure.
 - [ ] 6. Re-checking a finalized run after the catalogue changed uses the run's snapshot
       and says the catalogue has since moved.
-- [ ] 7. With a record layout uploaded and an empty dictionary, a run makes at most the
-      configured cap of attribute locate calls, recorded in `llm_calls`.
-- [ ] 8. The second run of the same configuration, after one accepted suggestion, makes
-      **zero** attribute locate calls — asserted by counting calls, not claimed in prose.
+- [x] 7. With a record layout uploaded and an empty dictionary, a run makes at most the
+      configured cap of attribute locate calls, counted on the run itself
+      (`runs.attribute_locate_calls`) rather than inferred from `llm_calls`, because the
+      question is how many *this* run spent and the cap is enforced where they are spent.
+- [x] 8. The second run of the same configuration, after the spellings are recorded,
+      makes **zero** attribute locate calls — asserted by counting calls, not claimed in
+      prose (`tests/api/test_attribute_dictionary.py`).
 - [ ] 9. An OSL attribute absent from the record layout produces **one** finding, not two.
 - [ ] 10. A user without admin capability can propose a mapping when Train AI mode is on
       and cannot activate one.

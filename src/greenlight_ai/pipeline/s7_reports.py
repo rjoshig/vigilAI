@@ -73,7 +73,13 @@ def run(context: RunContext) -> None:
     # A re-check runs this stage again; counting both passes would report twice the
     # coverage of a run that did the same work once (Phase 6.11c).
     context.coverage_record.clear()
+    # Kept on the context, not only in this frame. `repository.save_context` reads the
+    # resolver back off it for the layout suggestions (6.21b) and the attribute call
+    # count (6.22d) — and it was never assigned, so every run since 6.21b has stored an
+    # empty suggestion list however much the model had to reason about. The rail has
+    # never once been offered something a real run found.
     resolver = _resolver(context)
+    context.resolver = resolver
 
     for rule in context.rules:
         for check in derive_checks(rule, context.product_codes):
@@ -149,12 +155,13 @@ def run(context: RunContext) -> None:
     _check_programme(context)
     _check_credit_date(context)
     _check_deliverable_count(context)
-    _run_field_constraints(context)
+    _run_field_constraints(context, resolver)
     _run_admin_checks(context, settings, customer)
     # After every check, because a name is only reasoned about when a check went
     # looking for it. Raised here rather than where it happened so one record covers
     # every check that needed the same sheet (Phase 6.21a).
     _report_reasoned_names(context, resolver)
+    _report_capped_attributes(context, resolver)
     _check_anomalies(context, resolver)
     # Read here rather than at render time, because by then the workbooks are long
     # parsed and gone (Phase 6.21f).
@@ -190,6 +197,9 @@ def _resolver(context: RunContext) -> LayoutResolver:
     return LayoutResolver(
         client=context.client,
         alternates=context.admin.layout_map,
+        # Rung 4 for attribute names, and the shortlist rung 5 is shown (Phase 6.22d).
+        dictionary=context.dictionary,
+        max_attribute_calls=context.max_attribute_calls,
         preamble=preamble(context.guidance),
         examples=context.examples.get("name_locate", ()),
     )
@@ -233,6 +243,45 @@ def _report_reasoned_names(context: RunContext, resolver: LayoutResolver) -> Non
                 ),
             )
         )
+
+
+def _report_capped_attributes(context: RunContext, resolver: LayoutResolver) -> None:
+    """Say which attribute names the run's cap stopped it looking for (Phase 6.22d).
+
+    A notice rather than a finding, and the distinction is the point. Nothing is wrong
+    with the delivery: the tool ran out of the budget it was given and stopped asking,
+    which is a fact about this run rather than about what was delivered. It is a
+    **soft** limit — nothing was refused, and the checks that needed those names have
+    already said, separately, that they could not be evaluated.
+
+    Silent when nothing was capped, which is every run on a deployment whose dictionary
+    covers its deliveries.
+
+    Args:
+        context: The run context, whose ``notices`` this appends to.
+        resolver: The run's resolver, which counted.
+    """
+    if not resolver.capped:
+        return
+    shown = ", ".join(resolver.capped[:_MAX_EXTRA_ATTRIBUTES])
+    more = (
+        f" and {len(resolver.capped) - _MAX_EXTRA_ATTRIBUTES} more"
+        if len(resolver.capped) > _MAX_EXTRA_ATTRIBUTES
+        else ""
+    )
+    context.notices.append(
+        f"This run spent its {resolver.max_attribute_calls} attribute lookup(s) and "
+        f"stopped asking about {len(resolver.capped)} more: {shown}{more}. Nothing was "
+        "refused and nothing failed because of it; the checks that needed those names "
+        "report separately that they could not be evaluated. Recording the spellings "
+        "in the attribute dictionary removes the lookups altogether."
+    )
+    _LOG.info(
+        "run %s: %d attribute name(s) not looked up; the cap of %d was spent",
+        context.run_id,
+        len(resolver.capped),
+        resolver.max_attribute_calls,
+    )
 
 
 def _check_anomalies(context: RunContext, resolver: LayoutResolver) -> None:
@@ -362,7 +411,7 @@ def _read_shape(context: RunContext) -> None:
         )
 
 
-def _run_field_constraints(context: RunContext) -> None:
+def _run_field_constraints(context: RunContext, resolver: LayoutResolver) -> None:
     """Check the per-attribute rules a reviewer wrote in plain words (ADR-021).
 
     The sentence was the input to synthesis; what runs here is structured data
@@ -370,6 +419,8 @@ def _run_field_constraints(context: RunContext) -> None:
 
     Args:
         context: The run context, whose ``findings`` this appends to.
+        resolver: The run's resolver, so a field the dictionary knows is found under
+            the spelling this delivery uses (Phase 6.22d).
     """
     specs = [
         spec for spec in context.admin.field_constraints if isinstance(spec, FieldConstraintSpec)
@@ -377,7 +428,7 @@ def _run_field_constraints(context: RunContext) -> None:
     if not specs:
         return
 
-    for outcome in evaluate_constraints(specs, context.reports, context.aliases):
+    for outcome in evaluate_constraints(specs, context.reports, context.aliases, resolver):
         if outcome.passed is not None:
             context.coverage_record.checked("", outcome.report_kind)
         if outcome.passed is True:

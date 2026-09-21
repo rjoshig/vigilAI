@@ -23,6 +23,7 @@ from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from greenlight_ai.parsers.record_layout import RecordLayoutDocument
 from greenlight_ai.rules.normalize import AliasTable
+from greenlight_ai.resolve.dictionary import AttributeDictionary
 from greenlight_ai.rules.product_codes import ProductCatalogue
 from greenlight_ai.rules.schema import ConfigElement, Finding, Rule, Trace
 
@@ -198,6 +199,8 @@ class RunContext:
             (ADR-020). Empty by default, in which case prompts are unchanged.
         aliases: The attribute alias table, from the admin-ui in later phases.
         product_codes: The product-code catalogue this run expands against.
+        dictionary: The attribute dictionary this run resolves names against.
+        max_attribute_calls: The run's soft cap on attribute locate calls.
         credit_date_labels: What this delivery calls its credit date, resolved from
             the scoped label table (Phase 6.14b).
         examples: The administrator's worked examples, by stage, already scoped to
@@ -237,6 +240,16 @@ class RunContext:
     #: deployment that defines no codes, and checks exactly as it did before they
     #: existed.
     product_codes: ProductCatalogue = field(default_factory=ProductCatalogue)
+    #: The attribute dictionary in force (Phase 6.22d): one canonical attribute, a
+    #: spelling per artifact. It is the ladder's fourth rung for attribute names, and
+    #: what narrows the shortlist the fifth is shown. Empty is the ordinary state and
+    #: leaves every check answering exactly as it did before the dictionary existed.
+    dictionary: AttributeDictionary = field(default_factory=AttributeDictionary)
+    #: How many model calls this run may spend asking which column an attribute is.
+    #: A **soft** limit inside the existing token ceiling: past it the run stops asking
+    #: and says what it did not look for. Nothing is refused (the precedent is
+    #: ``s6_reverse._may_locate``).
+    max_attribute_calls: int = 0
     examples: Mapping[str, tuple[LibraryExample, ...]] = field(default_factory=dict)
     masked_columns: tuple[str, ...] = ()
     #: What this delivery calls its credit date, most specific scope first
