@@ -2206,3 +2206,84 @@ measure that has sat at 4.0% ± 0.2% for eight deliveries **is** eight deviation
 and firing on it is right. What counts as a nudge is relative to how much that measure
 normally moves, which is the whole reason this compares against a spread rather than a
 fixed percentage.
+
+## ADR-059 — An attribute name code cannot resolve is "could not evaluate", not a violation
+
+**Status:** accepted · 2026-09-21 · Phase 6.22a
+
+**Context.** `checks/reports.py` answered "does the DIRT carry this attribute?" in two
+places and gave two different answers when it did not know. `_check_fields_present`
+tested `resolve(name) not in stats` and, on a miss, returned `passed=False` — which
+stage 7 publishes as `report_violates_rule` at **high** severity. `_check_bound`, for
+the very same miss, returned `passed=None` and became `could_not_evaluate` at `review`.
+A third copy of the test sat in `checks/field_constraints.py`.
+
+The louder of the two was wrong. An OSL that asks for `AT01` against a DIRT column
+named `debsc_burs_atyrt_at01_1` describes a delivery that is entirely correct, and the
+tool asserted as fact, at the top of the severity scale, that it was missing an
+attribute it had in fact delivered. Because `stats` was non-empty the check never
+degraded, so the finalize gate (ADR-035, ADR-036) then required a person to acknowledge
+something untrue. Measured on the `attribute_renamed` fixture: **one high-severity
+finding naming all ten delivered attributes as missing.**
+
+Nothing recorded it either. The suggest-then-accept loop built for exactly this problem
+(ADR-054, Phase 6.21b) is driven by `LayoutResolver`, which is never consulted for
+attribute names — so the false finding recurred on every run of that delivery forever.
+
+**Decision.** Two states that shared a code path are told apart by evidence, in one
+place: `resolve/attributes.py`.
+
+- **Missing** — nothing in the artifact resembles the wanted name. Still `passed=False`,
+  still a high-severity violation. This is the finding the old code was written for.
+- **Unresolved** — the ladder failed but candidates resemble the name. `passed=None`,
+  plus an `attribute_not_resolved` record at `review` severity naming the closest
+  candidates, so a reviewer can settle it.
+
+Resemblance is three deterministic tests, all reproducible by a person reading the
+workbook: the whole wanted name standing as one of the candidate's words, one squashed
+name containing the other above a four-character floor, or a shared word of at least
+three characters. The floor is not cosmetic — without it `ST` resembles `INCOME_EST`
+(`st` sits inside `incomeest`) and a genuinely undelivered attribute would be softened
+into a review record, trading a false positive for the far worse false negative. The
+whole-word test is what carries a short name: `ST` standing alone inside
+`debsc_burs_atyrt_st_1` is evidence where two buried letters are not.
+
+**The shortlist only ever narrows.** It never picks: choosing between two plausible
+candidates is the comparison ADR-001 keeps out of a guess's hands, and in 6.22d it is
+what the model is shown.
+
+**A second change this brought, which was not the stated goal.** Routing the three
+callers through one helper routes attribute names through **the ladder**, which they had
+never reached: they resolved on the alias table and `normalize_field_name` alone.
+ADR-054 says one ladder resolves every name, and attribute names were the surface it was
+never pointed at. So more resolves now than before, in code and with no configuration:
+an OSL saying *score* reaches `SCORE_V3` on the token rung and *open trades* reaches
+`OPEN_TRADES` on the squashed rung, where both previously needed a hand-written alias.
+Nothing that matched before stops matching — the legacy lookup is tried first and still
+wins — but the claim "only the severity changed" would be false, and the widening is
+recorded here rather than discovered later.
+
+What still needs an alias is what always did: a name no normalisation bridges, such as
+the OSL's *revolving utilization* against a column called `REV_UTIL`. That is now the
+case `tests/api/test_admin.py` uses to demonstrate the reference-data screen, because
+the old demonstration resolves by itself.
+
+**Consequences.** `attribute_renamed` goes from one high-severity violation to zero,
+and `attributes_missing_in_report` still reports its genuinely absent attribute at high.
+One helper answers "does this artifact carry this attribute" for all three callers, so
+tolerance added for one reaches the others — which is how the three copies drifted apart
+in the first place.
+
+A run whose attribute names cannot be resolved still validates nothing about those
+attributes; it is merely honest about it now rather than wrong. Resolving them is
+Phase 6.22d, where the dictionary supplies the fourth rung and the model the fifth.
+
+Two things this changed that were not the point. The `.gitignore` blocked `*.docx` and
+`*.xlsx` outside `tests/fixtures/` but not `*.csv`, which ADR-003 plainly intends —
+closed here because a record layout is exactly the file somebody drops in a working tree
+to test with. And `scripts/seed_demo.py` appeared to write its alias rows transposed; it
+does not. `canonical_by_alias` maps alias to canonical, so the loop's variable names
+were simply the wrong way round and the stored data was always correct. The names are
+fixed so the next reader does not reach the same wrong conclusion.
+
+---

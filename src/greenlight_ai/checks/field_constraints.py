@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Final, Iterable, Mapping, Sequence
 
 from greenlight_ai.parsers.base import ReportDocument, ReportKind
+from greenlight_ai.resolve import attributes as attribute_match
 from greenlight_ai.rules.normalize import AliasTable
 
 __all__ = ["FieldConstraintSpec", "ConstraintOutcome", "evaluate", "CONSTRAINT_KINDS"]
@@ -105,11 +106,13 @@ def _columns(
     """
     found: list[tuple[str, tuple[Any, ...]]] = []
     for sheet in document.sheets:
-        for header in sheet.header:
-            if aliases.resolve(header) != aliases.resolve(field):
-                continue
-            found.append((sheet.name, tuple(cell.value for cell in sheet.column(header))))
-            break
+        # The third copy of "does this artifact carry this attribute", and the reason
+        # it now goes through one helper: tolerance added for the DIRT used to leave
+        # this one matching on equality alone (Phase 6.22a).
+        match = attribute_match.present(field, tuple(sheet.header), canonical=aliases.resolve)
+        if not match.resolved or match.found is None:
+            continue
+        found.append((sheet.name, tuple(cell.value for cell in sheet.column(match.found))))
     return found
 
 

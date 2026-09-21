@@ -154,6 +154,24 @@ class Case:
     #: it ships a report whose layout drifted, which is what a real delivery does and
     #: what every fixture before 6.21 quietly assumed never happens.
     layout: Mapping[str, str] = field(default_factory=dict)
+    #: What the DIRT calls each attribute, where that differs from the name the OSL
+    #: uses (Phase 6.22a). Every case before this one spelled an attribute identically
+    #: in the OSL and the DIRT, so nothing exercised the case a real delivery is full
+    #: of: the OSL names a bureau attribute ``AT01`` and the delivered column is
+    #: ``debsc_burs_atyrt_at01_1``. `layout` renames the *structure*; this renames the
+    #: attribute itself, which is a different defect and was never covered.
+    attribute_spellings: Mapping[str, str] = field(default_factory=dict)
+
+    def delivered(self, name: str) -> str:
+        """What the DIRT calls one attribute.
+
+        Args:
+            name: The attribute as the OSL names it.
+
+        Returns:
+            The delivery's own spelling, or ``name`` unchanged.
+        """
+        return self.attribute_spellings.get(name, name)
 
     def called(self, name: str) -> str:
         """What this delivery calls ``name``.
@@ -281,6 +299,42 @@ CASES: Final[tuple[Case, ...]] = (
         input_count=1_000_000,
         step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
         expected_findings=("report_violates_rule",),
+    ),
+    Case(
+        name="attribute_renamed",
+        description=(
+            "A correct delivery whose DIRT spells every attribute the long way the "
+            "source system does. Nothing is wrong with it."
+        ),
+        customer=CUSTOMERS[2],
+        order_number="ORD-10011",
+        configuration_id="CFG-SYNTH-RENAME-11",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:10],
+        config_attributes=ATTRIBUTES[:10],
+        report_attributes=ATTRIBUTES[:10],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        # Every attribute is delivered, under the name the source system gives it.
+        # Before Phase 6.22a this produced one high-severity "the reports are missing
+        # this attribute" per attribute, about a delivery that was entirely correct.
+        attribute_spellings={
+            name: f"debsc_burs_atyrt_{name.lower()}_1" for name in ATTRIBUTES[:10]
+        },
+        expected_findings=("attribute_not_resolved",),
+        # Five requirements stay unevidenced, and that is the correct answer: until the
+        # dictionary of 6.22d exists, the tool genuinely cannot prove which DIRT column
+        # is which attribute. It says so instead of guessing, and the coverage picture
+        # shows the gap rather than hiding it behind a false pass.
+        expected_unevidenced=5,
+        notes=(
+            "The case Phase 6.22a exists for: an unresolved attribute name is a "
+            "review record, never a high-severity violation."
+        ),
     ),
     Case(
         name="counts_do_not_reconcile",
@@ -831,11 +885,13 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
     )
     by_field = {c.field_name: c for c in case.criteria}
     for name in case.report_attributes:
+        # The delivered spelling, which for most cases is the OSL's own (Phase 6.22a).
+        spelled = case.delivered(name)
         criterion = by_field.get(name)
         if criterion is not None:
             attributes.append(
                 [
-                    name,
+                    spelled,
                     "number",
                     0,
                     criterion.delivered_min,
@@ -844,7 +900,7 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
                 ]
             )
         else:
-            attributes.append([name, "number", 0, 0, 100, 50])
+            attributes.append([spelled, "number", 0, 0, 100, 50])
 
     sample = workbook.create_sheet("Sample")
     sample.append(["ROW", "ST", "SCORE_V3", "AGE", "SSN_LAST4", "FIRST_NAME"])

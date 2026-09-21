@@ -44,8 +44,12 @@ data/
 tests/fixtures/real/
 *.docx
 *.xlsx
+# A record layout or an attribute dictionary arrives as a spreadsheet, and a
+# CSV export of one is derived from a real customer file (ADR-003).
+*.csv
 !tests/fixtures/**/*.docx
 !tests/fixtures/**/*.xlsx
+!tests/fixtures/**/*.csv
 
 # IDE / OS
 .vscode/
