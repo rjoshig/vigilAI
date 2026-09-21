@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, Mapping, Sequence
 
+from greenlight_ai.checks.attribute_suggestions import AttributeSuggestion
 from greenlight_ai.checks.definitions import AdminConfig
 from greenlight_ai.llm.client import LLMClient
 from greenlight_ai.llm.examples import LibraryExample
@@ -21,7 +22,10 @@ from greenlight_ai.checks.profile import AttributeProfile
 from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
+from greenlight_ai.parsers.record_layout import RecordLayoutDocument
 from greenlight_ai.rules.normalize import AliasTable
+from greenlight_ai.resolve.dictionary import AttributeDictionary
+from greenlight_ai.rules.product_codes import ProductCatalogue
 from greenlight_ai.rules.schema import ConfigElement, Finding, Rule, Trace
 
 if TYPE_CHECKING:  # pragma: no cover - the import exists for the annotation only
@@ -182,6 +186,7 @@ class RunContext:
         config_path: The ETL config.
         report_paths: Report kind to its first file, kept because most checks want
             exactly one workbook.
+        record_layout_path: The uploaded record layout, when the delivery carried one.
         report_parts: Report kind to every uploaded file of that kind, each with its
             label. One entry per kind is the ordinary case.
         client: The LLM adapter. The only route to a model (ADR-004).
@@ -194,6 +199,9 @@ class RunContext:
             delivery programme, its standing instructions, and per-artifact guidance
             (ADR-020). Empty by default, in which case prompts are unchanged.
         aliases: The attribute alias table, from the admin-ui in later phases.
+        product_codes: The product-code catalogue this run expands against.
+        dictionary: The attribute dictionary this run resolves names against.
+        max_attribute_calls: The run's soft cap on attribute locate calls.
         credit_date_labels: What this delivery calls its credit date, resolved from
             the scoped label table (Phase 6.14b).
         examples: The administrator's worked examples, by stage, already scoped to
@@ -202,6 +210,7 @@ class RunContext:
         masked_columns: Header patterns masked at parse time (ADR-003).
         osl: The parsed OSL, set by stage 1.
         config: The parsed config, set by stage 1.
+        record_layout: The record layout in force, set by stage 1.
         reports: The parsed reports, set by stage 1.
         rules: Canonical requirements from the OSL, set by stage 2.
         elements: Config elements in requirement vocabulary, set by stage 3.
@@ -219,9 +228,29 @@ class RunContext:
     report_paths: Mapping[ReportKind, Path]
     client: LLMClient
     customer: str = ""
+    #: The uploaded record layout, or ``None`` when this delivery uploaded none
+    #: (Phase 6.22b). Optional by design: a run without one is checked exactly as it
+    #: was before the slot existed.
+    record_layout_path: Path | None = None
     admin: AdminConfig = field(default_factory=AdminConfig)
     guidance: RunGuidance = field(default_factory=RunGuidance)
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
+    #: The product codes in force for this run, as they stood at submission
+    #: (Phase 6.22c). A requirement that names a code is expanded against this, in
+    #: code and never by the model (ADR-061). Empty is the ordinary state on a
+    #: deployment that defines no codes, and checks exactly as it did before they
+    #: existed.
+    product_codes: ProductCatalogue = field(default_factory=ProductCatalogue)
+    #: The attribute dictionary in force (Phase 6.22d): one canonical attribute, a
+    #: spelling per artifact. It is the ladder's fourth rung for attribute names, and
+    #: what narrows the shortlist the fifth is shown. Empty is the ordinary state and
+    #: leaves every check answering exactly as it did before the dictionary existed.
+    dictionary: AttributeDictionary = field(default_factory=AttributeDictionary)
+    #: How many model calls this run may spend asking which column an attribute is.
+    #: A **soft** limit inside the existing token ceiling: past it the run stops asking
+    #: and says what it did not look for. Nothing is refused (the precedent is
+    #: ``s6_reverse._may_locate``).
+    max_attribute_calls: int = 0
     examples: Mapping[str, tuple[LibraryExample, ...]] = field(default_factory=dict)
     masked_columns: tuple[str, ...] = ()
     #: What this delivery calls its credit date, most specific scope first
@@ -231,6 +260,12 @@ class RunContext:
 
     osl: OslDocument | None = None
     config: ConfigDocument | None = None
+    #: The record layout this run is checked against, set by stage 1 (Phase 6.22b).
+    #: Either the one this delivery uploaded or, when it uploaded none, the one the
+    #: configuration's last finalized run promoted — in which case ``borrowed`` is
+    #: true and every finding resting on it names the run and the date it came from.
+    #: An empty document is the ordinary state and changes no check's answer.
+    record_layout: RecordLayoutDocument = field(default_factory=RecordLayoutDocument)
     reports: dict[ReportKind, ReportDocument] = field(default_factory=dict)
     #: Every uploaded file per report kind, in upload order, with the label the
     #: submitter gave it. A campaign can deliver the same report type several times,
@@ -247,6 +282,11 @@ class RunContext:
     #: offered to an administrator, who decides whether they belong in the word list.
     #: Nothing activates without a person (ADR-021).
     keyword_suggestions: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: What this delivery appears to call each attribute the checks could not locate
+    #: (Phase 6.22f). Proposed by code from the record layout where it settles the
+    #: question, and by the ladder's fifth rung where it does not. Never applied by the
+    #: run: somebody accepts it into the dictionary, or does not (ADR-021).
+    attribute_suggestions: list["AttributeSuggestion"] = field(default_factory=list)
     summary: str = ""
     top_issues: tuple[str, ...] = ()
 

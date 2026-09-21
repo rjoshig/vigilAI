@@ -4,11 +4,13 @@
 
 ## Summary
 
-The system reconciles three things automatically: the requirement spec (OSL, Word), the ETL configuration (JSON), and the output reports (Excel). It replaces the manual review of DIRT and distribution reports, which today can mean scanning a few thousand attributes by eye.
+The system reconciles four things automatically: the requirement spec (OSL, Word), the ETL configuration (JSON), the output reports (Excel), and the record layout — the delivered file's own schema, one row per field with its name, data type and size (ADR-060). It replaces the manual review of DIRT and distribution reports, which today can mean scanning a few thousand attributes by eye.
+
+The record layout is the only optional one of the four. It is uploaded per run and remembered per configuration, so a delivery that carries none is checked against whichever layout that order's last finalized run promoted — and a deployment that has never seen one is checked exactly as it was before the artifact existed.
 
 The core principle is **the LLM reads, code checks**. The LLM extracts requirements, judges whether a config element means the same thing as an OSL requirement, and writes the explanation. All value comparisons (sets, ranges, counts, report numbers) are deterministic Python, so results are exact, repeatable, and auditable.
 
-The OSL is the source of truth. The system checks that every OSL requirement made it into the config, and then into the results, so nothing slips between the three.
+The OSL is the source of truth. The system checks that every OSL requirement made it into the config, and then into the results, so nothing slips between them.
 
 A user fills a short web form, uploads the files, and submits. The run is queued and processed by a worker. The user then reviews the findings, marks each one OK or Not OK with comments, and generates a final one-page interactive HTML report that can be downloaded as PDF. Runs, configs, and tool stats are kept for 90 days.
 
@@ -176,6 +178,7 @@ A finding is one potential issue with a type, a severity, and links to its evide
 | Raised by a lens | One reader saw something in the same evidence the finding does not mention | Review |
 | Coverage gap | A requirement no report evidenced that reads like an obligation | Review |
 | Could not resolve attribute name | The OSL asks for `AT01`; the DIRT carries `debsc_burs_atyrt_at01_1` and nothing proves they are the same field | Review |
+| Attributes beyond the product code | The OSL asks for all attributes from `ABC`; the delivery carries fields `ABC` does not list. Never a failure — but the extract may have pulled more than the order asked for, and a field nobody asked for may be personal data | Low |
 
 **Three-way findings.** A finding names which leg of the reconciliation broke: OSL vs config, config vs reports, or OSL vs reports. For set types it lists the exact members, for example "TX in config, not in OSL" and "NV in state distribution, not in OSL or config".
 

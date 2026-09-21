@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 6.21.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 6.22.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -509,13 +509,54 @@ changed what and from what.
 
 ## Reference data
 
-**Aliases** map the names an attribute goes by across the OSL, the configuration, and
-the reports; a missing alias is the usual reason a check "could not evaluate".
+**The attribute dictionary** is the one to keep filled. One entry per attribute — the
+name the OSL uses — and one **spelling** for each way an artifact writes it. When a
+check goes looking for `AT01` and the DIRT carries `debsc_burs_atyrt_at01_1`, a spelling
+recorded here resolves it in code, on that run and every run after it, at no cost.
+Without one the tool is honest rather than wrong — it says it could not tell which
+column is which and names the closest — but a requirement it cannot resolve is a
+requirement nothing checked.
+
+One name means one attribute. If you try to record a spelling another entry already
+claims, the screen refuses and tells you what to do instead: the two are usually the
+same attribute written two ways, so record the second wording as another **spelling** of
+the first entry rather than as an entry of its own.
+
+**Attribute suggestions** is where the filling actually happens, and it costs you almost
+nothing. After a run, the screen lists what the tool worked out that delivery calls each
+attribute it could not locate. Most of those come from the **record layout** the
+delivery uploaded, read in code with no AI involved — the layout declared exactly one
+field resembling what the order asked for, so it said so. The rest come from the AI,
+asked only where the layout was silent, and those carry the reasoning so you can judge
+them. Nothing is in force until you click. Each suggestion shows how many runs met it: a
+mapping seen on every delivery from a customer is that customer's vocabulary; one seen
+once may be a one-off workbook. Accept it and the tool stops asking.
+
+By default accepting records the spelling **for every artifact**, not only the one it
+was seen in, and that default is deliberate: a customer who calls a field one thing in
+their DIRT calls it that in their record layout too, and narrowing it would leave every
+other check still asking the question you just answered. You can narrow it when you have
+reason to.
+
+**Product codes** are for orders written as *"deliver all attributes from ABC"* rather
+than as a list. Record the code and the attributes it contains, and the tool expands it
+itself — in code, never by asking the AI what a code contains, because an AI asked that
+answers plausibly and would be believed. A code the OSL names and this screen does not
+define produces a **high-severity finding**, not a silent pass: an undefined code would
+otherwise expand to no attributes and the delivery would pass because the tool could not
+say what was asked for. An attribute two codes share is one attribute with one output
+name, and the screen refuses a save that would make two codes disagree about it.
+
+**Aliases** are the dictionary's predecessor. They still work and are still read on every
+run beside the dictionary, so nothing that matched before stops matching. When you want
+to tidy up there is a **copy into the dictionary** button that shows you exactly what it
+would write before it writes anything, and it only ever adds.
+
 **Masked columns** name the report columns whose values are replaced before anything
 reaches the model. Add to it whenever a new layout carries personal data. This card is
-**administrators only**, and a reviewer sees the screen without it: the aliases and field
-labels are theirs, and naming a masked column is the one control here whose failure is
-invisible.
+**administrators only**, and a reviewer sees the screen without it: the aliases, the
+dictionary and field labels are theirs, and naming a masked column is the one control
+here whose failure is invisible.
 
 ## Usage
 
@@ -734,21 +775,27 @@ account that everything is attributed to, it holds every role, and nothing is ga
 <!-- guide 3: What improves the QC, in the order it pays off -->
 ## What improves the QC, in the order it pays off
 
-Five things are worth your time, and they are not equally worth it. In order:
+Six things are worth your time, and they are not equally worth it. In order:
 
-1. **Worked examples.** One example of a judgement the tool got wrong, at the stage it
-   got it wrong, changes its answers on every run afterwards. Nothing else you can do has
-   that reach for that little effort.
-2. **Artifact guidance and AI context.** Telling the tool how to read a workbook — which
+1. **Accepting attribute suggestions.** After a run, Reference data lists what the tool
+   worked out that delivery calls each attribute it could not locate — mostly read
+   straight out of the uploaded record layout, in code, with no AI involved. Each one you
+   accept resolves that name in code on every later run of that configuration, and turns
+   a requirement nothing checked into a requirement that is checked. It is clicking, not
+   writing, which is why it is first.
+2. **Worked examples.** One example of a judgement the tool got wrong, at the stage it
+   got it wrong, changes its answers on every run afterwards. Nothing else you *write*
+   has that reach for that little effort.
+3. **Artifact guidance and AI context.** Telling the tool how to read a workbook — which
    tab is what, which heading row to trust — fixes a whole class of "could not evaluate"
    at once, because a check that cannot find its column is not a check.
-3. **Programme keywords in the customer's own vocabulary.** The keyword check is what
+4. **Programme keywords in the customer's own vocabulary.** The keyword check is what
    confirms a delivery is the programme it claims to be. It matches text, so it only
    works in words the customer actually uses: add *their* phrase, not the industry's.
-4. **Standing instructions on a programme.** Background the tool should carry into every
+5. **Standing instructions on a programme.** Background the tool should carry into every
    run of that programme. Useful, bounded, and read as background rather than as a rule —
-   which is also why it is fourth: it informs answers rather than deciding them.
-5. **Masked columns**, whenever a new layout arrives carrying personal data. This one is
+   which is also why it is fifth: it informs answers rather than deciding them.
+6. **Masked columns**, whenever a new layout arrives carrying personal data. This one is
    not about quality at all; it is the control that has to be right regardless.
 
 What is *not* on that list: writing more rules. A noisy rule costs a reviewer attention
@@ -795,3 +842,8 @@ environment configuration, changed where the service is deployed and nowhere els
 4. Check the change history on Settings for anything you did not expect.
 5. Confirm the artifact types still match what customers actually send; add a sample
    for any layout that surprised the detector.
+6. Clear the attribute suggestions. Each one is a name the tool had to work out and
+   will have to work out again on the next delivery. Watch **attribute lookups per run**
+   on Usage while you do it: if that number is not falling, the suggestions are not the
+   ones the runs actually need, and the thing to look at is which attributes keep coming
+   back rather than the number itself.

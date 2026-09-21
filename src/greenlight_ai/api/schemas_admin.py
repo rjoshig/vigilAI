@@ -45,6 +45,16 @@ __all__ = [
     "AliasOut",
     "MaskedColumnIn",
     "MaskedColumnOut",
+    "AliasCopyPreview",
+    "AttributeAcceptIn",
+    "AttributeSuggestionOut",
+    "AttributeSuggestionsOut",
+    "AttributeSpellingIn",
+    "AttributeTermIn",
+    "AttributeTermOut",
+    "ProductCodeIn",
+    "ProductCodeMemberIn",
+    "ProductCodeOut",
     "UsageOut",
 ]
 
@@ -59,7 +69,10 @@ class ArtifactTypeIn(BaseModel):
 
     key: str = Field(min_length=2, max_length=60)
     label: str = Field(min_length=1, max_length=120)
-    kind: Literal["osl", "config", "report"] = "report"
+    #: A record layout is a fourth kind (Phase 6.22b). Only reports may be added or
+    #: removed; the other three are built in and their keys are fixed, because the
+    #: pipeline reads each with a dedicated parser.
+    kind: Literal["osl", "config", "record_layout", "report"] = "report"
     description: str = ""
     #: What the model should pay attention to, in plain language. Empty means the
     #: prompts are exactly what they were before this existed.
@@ -354,6 +367,121 @@ class AnnouncementOut(AnnouncementIn):
     #: Whether it is showing at this moment, so the console can say so rather than
     #: leaving an administrator to compare dates in their head.
     showing_now: bool = False
+
+
+class AttributeSpellingIn(BaseModel):
+    """One way an artifact writes an attribute (Phase 6.22d)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    spelling: str = Field(min_length=1, max_length=200)
+    #: Which artifact writes it this way, e.g. ``dirt``. Empty means anywhere, which is
+    #: the ordinary case and what an administrator writes by hand.
+    artifact: str = Field(default="", max_length=60)
+    #: admin · record_layout · model · observation · alias. Provenance sits on the
+    #: spelling rather than the term, because it is the spelling somebody vouched for.
+    origin: str = Field(default="admin", max_length=30)
+    origin_run_id: int = 0
+
+
+class AttributeTermIn(BaseModel):
+    """One attribute and every name it goes by, as the admin-ui submits it (6.22d).
+
+    The dictionary the project has carried an open question about since Phase 0. It is
+    the ladder's **fourth rung** for attribute names: a lookup for any spelling reaches
+    the term, and the term's other spellings become the alternates the ladder is given.
+    It never picks — the ladder still refuses to answer when two candidates tie.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    canonical: str = Field(min_length=1, max_length=200)
+    label: str = Field(default="", max_length=200)
+    description: str = ""
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    spellings: list[AttributeSpellingIn] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class AttributeTermOut(AttributeTermIn):
+    """A stored term."""
+
+    id: int
+    scope_label: str = ""
+    created_by: str = ""
+    spelling_count: int = 0
+
+
+class AliasCopyPreview(BaseModel):
+    """What copying the legacy alias table into the dictionary would do (6.22d).
+
+    Shown before anything is written. The aliases are **read** alongside the dictionary
+    whether or not anybody copies them (ADR-062), so this is a tidying step somebody
+    chooses rather than a migration that happens behind their back.
+    """
+
+    #: Terms that would be created, with the spellings each would gain.
+    creates: list[AttributeTermIn] = Field(default_factory=list)
+    #: Terms that already exist and would gain spellings.
+    extends: list[AttributeTermIn] = Field(default_factory=list)
+    #: Aliases already in the dictionary, which would be skipped.
+    already_known: int = 0
+    #: What was actually written, on a copy. Zero on a preview.
+    written: int = 0
+
+
+class ProductCodeMemberIn(BaseModel):
+    """One attribute a product code contains (Phase 6.22c)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The attribute as the catalogue names it, which is what the OSL is expected to
+    #: say and what the checks ask for.
+    attribute: str = Field(min_length=1, max_length=200)
+    #: What the delivered file calls it, when that differs. Empty means it is
+    #: delivered under its own name, which is the ordinary case.
+    output_name: str = Field(default="", max_length=200)
+
+
+class ProductCodeIn(BaseModel):
+    """A product code, as the admin-ui submits it (Phase 6.22c).
+
+    An OSL says either *"deliver AT01, AT02, ST"* or *"deliver all attributes from
+    ABC"*, and this is what makes the second mean the first. The model reads that a
+    requirement names a code; **code** looks up what the code contains and checks that
+    it exists at all (ADR-061).
+
+    Scoped with the one scope vocabulary (ADR-029, ADR-037), because one customer's
+    ``ABC`` is not another's.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=60)
+    label: str = Field(default="", max_length=200)
+    description: str = ""
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    members: list[ProductCodeMemberIn] = Field(default_factory=list)
+    is_active: bool = True
+    sort_order: int = 100
+    notes: str = ""
+
+
+class ProductCodeOut(ProductCodeIn):
+    """A stored product code."""
+
+    id: int
+    scope_label: str = ""
+    created_by: str = ""
+    #: How many attributes it contains, so a list does not have to count them.
+    member_count: int = 0
+    #: Attributes this code shares with another under a **different** delivered name.
+    #: A shared attribute is one term with one output name, so a disagreement is a
+    #: defect in the catalogue rather than two opinions to choose between; naming it is
+    #: what lets an administrator fix it.
+    conflicts: list[str] = Field(default_factory=list)
 
 
 class FieldLabelIn(BaseModel):
@@ -666,6 +794,65 @@ class LayoutAcceptIn(BaseModel):
     #: for a report type only one customer delivers and the wrong one otherwise — so
     #: the console offers the run's programme first.
     scope: str = ""
+
+
+class AttributeSuggestionOut(BaseModel):
+    """What a delivery appears to call one attribute, offered to a person (6.22f)."""
+
+    artifact: str = ""
+    wanted: str = ""
+    found: str = ""
+    #: ``record_layout`` for a mapping code read out of the delivered file's own
+    #: schema, at no model call; ``model`` for one the ladder's fifth rung reached.
+    origin: str = "model"
+    #: The model's own number for a reading; ``1.0`` for a record layout, which is a
+    #: claim about provenance rather than certainty — a person still decides.
+    confidence: float = 0.0
+    reason: str = ""
+    #: How many runs met it. A mapping seen on every delivery from a customer is that
+    #: customer's vocabulary; one seen once may be a one-off workbook.
+    seen: int = 0
+    run_ids: list[int] = Field(default_factory=list)
+    #: True when the dictionary already holds it, so an accepted mapping stops asking
+    #: to be accepted.
+    already_listed: bool = False
+
+
+class AttributeSuggestionsOut(BaseModel):
+    """Every pending attribute mapping."""
+
+    suggestions: list[AttributeSuggestionOut] = Field(default_factory=list)
+
+
+class AttributeAcceptIn(BaseModel):
+    """Record one mapping in the attribute dictionary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    wanted: str = Field(min_length=1, max_length=200)
+    found: str = Field(min_length=1, max_length=200)
+    #: Which artifact writes it this way. **Empty by default, meaning anywhere**, and
+    #: that default is deliberate: a suggestion carries the artifact it was *seen* in,
+    #: but a customer who calls a field ``debsc_burs_atyrt_at01_1`` in their DIRT calls
+    #: it that in their record layout and their field distribution too. Narrowing it to
+    #: the one artifact it was seen in would leave every other check still asking the
+    #: model the question a person has just answered. A console offers the narrowing;
+    #: it does not impose it.
+    artifact: str = Field(default="", max_length=60)
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    #: Where the mapping came from, carried onto the spelling as its provenance.
+    origin: str = Field(default="model", max_length=30)
+    #: The run it was learned from, so the spelling can be traced back to a delivery.
+    origin_run_id: int = 0
+
+    def spelling_key(self) -> str:
+        """The name being claimed, for the one-name-one-attribute check.
+
+        Returns:
+            The delivery's spelling, which is what another term must not already hold.
+        """
+        return self.found
 
 
 class ArtifactReadingOut(BaseModel):

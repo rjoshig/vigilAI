@@ -193,6 +193,22 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "remaining findings are left unverified and the run says so.",
     ),
     SettingSpec(
+        key="llm.max_attribute_calls_per_run",
+        env="LLM_MAX_ATTRIBUTE_CALLS_PER_RUN",
+        label="Attribute lookups per run",
+        group="Model",
+        kind="int",
+        default=20,
+        minimum=0,
+        maximum=1000,
+        help="How many times a run may ask the model which column an attribute is, "
+        "when four deterministic rungs and the dictionary could not say. A soft "
+        "limit: past it the run stops asking and names what it did not look for, and "
+        "nothing is refused. Every answer a person accepts becomes a dictionary "
+        "spelling, so this number should fall to zero as the dictionary fills. Zero "
+        "means never ask, and the tool reports the names it could not resolve.",
+    ),
+    SettingSpec(
         key="llm.guided_json",
         env="LLM_GUIDED_JSON",
         label="Ask the endpoint for JSON",

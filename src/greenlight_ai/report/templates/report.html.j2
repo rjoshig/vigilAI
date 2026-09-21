@@ -428,8 +428,13 @@
       <p class="small"><b>Configuration paths that changed ({{ drift.config|length }}):</b>
         {% for c in drift.config %}<span class="mono">{{ c.path }}</span> {{ c.change }}{% if c.change == "changed" %} {{ c.before }} → {{ c.after }}{% elif c.after %} {{ c.after }}{% elif c.before %} {{ c.before }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</p>
       {% endif %}
-      {% if not drift.new and not drift.resolved and not drift.requirements and not drift.config %}
-      <p class="small muted">Nothing changed: same findings, same requirements, same configuration.</p>
+      {% if drift.record_layout %}
+      <p class="small"><b>Record layout changes ({{ drift.record_layout|length }}):</b>
+        {% for c in drift.record_layout %}<span class="mono">{{ c.name }}</span> {{ c.change }}{% if c.before and c.after %} {{ c.before }} &rarr; {{ c.after }}{% elif c.after %} {{ c.after }}{% elif c.before %} {{ c.before }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</p>
+      {% endif %}
+      {% if not drift.new and not drift.resolved and not drift.requirements and not drift.config and not drift.record_layout %}
+      <p class="small muted">Nothing changed: same findings, same requirements, same configuration,
+        same record layout.</p>
       {% endif %}
       {% endif %}
 

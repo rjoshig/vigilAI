@@ -6,10 +6,12 @@ on purpose, it points at the durable context in `docs/` and `standards/`.
 
 ## Project in one paragraph
 
-Greenlight AI automates QC validation for a credit-data fulfillment process. It reconciles three
-things: the requirement spec (**OSL**, a Word document), the ETL config (JSON), and the
-output reports (Excel: DIRT, distributions, counts). **The LLM reads and judges meaning;
-code does every comparison.** Every OSL requirement is traced into the config and then into
+Greenlight AI automates QC validation for a credit-data fulfillment process. It reconciles
+**four** things: the requirement spec (**OSL**, a Word document), the ETL config (JSON),
+the output reports (Excel: DIRT, distributions, counts), and — optionally, from Phase
+6.22 — the **record layout**, the delivered file's own schema of field names, types and
+sizes (ADR-060). A delivery that carries no record layout is checked exactly as it was
+before the slot existed. **The LLM reads and judges meaning; code does every comparison.** Every OSL requirement is traced into the config and then into
 the reports; findings are reviewed by a person (OK / Not OK), then a frozen one-page HTML
 report with PDF download is generated. Five containers: `user-ui`, `admin-ui` (its own
 URL), `api`, `worker`, `postgres`. **The full design is `docs/design.md` — it is the source
@@ -88,7 +90,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.19 | Say what helps, and teach it in the product: the "Helps the AI" marker on every field that reaches the model or decides what it is shown, what a failed run will not say, usage counted per person, and a Guide in each app's sidebar | `docs/phase-6.19.md` | 🟡 all built; criterion 5 needs a person (stage 2 of the rollout) |
 | 6.20 | Three roles — user, reviewer, admin — with capabilities rather than role checks, several roles per person, and a console that shows each person only their own job | `docs/phase-6.20.md` | ✅ complete |
 | 6.21 | When the shape is wrong, keep going: one resolver that widens in code then asks the model where a sheet, column or label went; report layout as admin data; anomalies no rule covers; spend made visible; guided decoding | `docs/phase-6.21.md` | 🟡 all six parts built; criterion 5 needs a real endpoint (phase 7) |
-| 6.22 | Product codes, the record layout, and attribute resolution: the delivered file's schema as a fourth artifact; a product code the OSL can name instead of listing attributes; one dictionary of what each attribute is called in each artifact | `docs/phase-6.22.md` | 🟡 in progress — **6.22a complete** (an unresolved attribute name is a review record, not a high-severity violation) |
+| 6.22 | Product codes, the record layout, and attribute resolution: the delivered file's schema as a fourth artifact; a product code the OSL can name instead of listing attributes; one dictionary of what each attribute is called in each artifact | `docs/phase-6.22.md` | 🟡 in progress — **a, b, d, e, f, g complete; c built with two items open** (a bulk master-file upload, and how a code reads in real OSL prose, which is phase 7's) |
 | 6.23 | The draft that can be finished, and the button that did nothing: a clone leaves an editable draft the New run form completes, drafts expire on a console-set window, the undocumented Re-check control goes | `docs/phase-6.23.md` | 🟡 in progress — **6.23a complete** (the status set, the re-check guard, the finalize gate, the summary a re-check used to erase) |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 | 8 | Ask the frozen report: an optional chat box on the final report page, scoped to one run — the global rules, the previous run of that configuration id, the findings of the last three runs, this run's findings, and an inventory of its artifacts; the prose streams and the citations are checked before they are shown | `docs/phase-8.md` | ⬜ not started — **queued behind 6.21 and the `v0.6.20` release** |

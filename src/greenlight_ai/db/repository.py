@@ -35,13 +35,23 @@ from greenlight_ai.llm import examples as example_library
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext, StageRecord
+from greenlight_ai.resolve.dictionary import (
+    AttributeDictionary,
+    AttributeSpellingEntry,
+    AttributeTermEntry,
+)
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.config.store import resolve
+from greenlight_ai.rules.product_codes import ProductCatalogue, ProductCodeEntry, ProductMember
 from greenlight_ai.rules.schema import ConfigElement, Evidence, Finding, Rule, Trace
 
 __all__ = [
     "load_admin_config",
     "load_aliases",
+    "load_attribute_dictionary",
+    "load_product_codes",
+    "product_code_snapshot",
+    "catalogue_from_snapshot",
     "load_masked_columns",
     "load_prompt_examples",
     "save_context",
@@ -185,6 +195,12 @@ def load_admin_config(
         else tuple(DEFAULT_CATEGORIES)
     )
 
+    # The dictionary fills ``label_alternates``, which has been threaded from the
+    # pointer to ``ReportSheet.lookup`` since Phase 6.15 with nothing ever putting a
+    # value in it (Phase 6.22d). A pointer whose label names an attribute the
+    # dictionary knows now finds it under whatever this delivery calls it, without
+    # anybody writing the alternates out a second time.
+    dictionary = load_attribute_dictionary(session, customer, configuration_id, programme_code)
     named_values = tuple(
         NamedValue(
             name=row.name,
@@ -193,6 +209,10 @@ def load_admin_config(
             kind=(row.locator or {}).get("kind", "label"),
             cell=(row.locator or {}).get("cell", ""),
             label=(row.locator or {}).get("label", ""),
+            label_alternates=tuple((row.locator or {}).get("label_alternates", ()))
+            or dictionary.alternates(
+                str((row.locator or {}).get("label", "")), str(row.report_type or "")
+            ),
             label_column=(row.locator or {}).get("label_column", 0),
             value_column=(row.locator or {}).get("value_column", 1),
             description=row.description,
@@ -373,6 +393,239 @@ def load_aliases(session: Session, customer: str = "") -> AliasTable:
     return AliasTable.from_mapping(mapping)
 
 
+def load_attribute_dictionary(
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
+) -> AttributeDictionary:
+    """Build the attribute dictionary in force for one run (Phase 6.22d).
+
+    Two sources, read together and in this order (ADR-062):
+
+    1. **The dictionary itself**, narrowest scope first, so a configuration's own
+       spelling of ``SCORE`` wins over a customer's and a customer's over a global one.
+    2. **The legacy ``attribute_aliases`` rows**, behind it. A deployment that seeded
+       aliases before the dictionary existed keeps resolving exactly as it did; nothing
+       that matched before stops matching, which is the promise every rung of the
+       ladder has made since 6.21a.
+
+    Args:
+        session: An open session.
+        customer: The run's customer, so a customer-scoped term applies.
+        configuration_id: The run's ETL configuration.
+        programme_code: The run's delivery programme.
+
+    Returns:
+        The dictionary. Empty on a deployment that has neither, which leaves the ladder
+        stopping at rung 3 exactly as it did before this existed.
+    """
+    rows = list(
+        session.execute(
+            sa.select(models.AttributeTerm)
+            .where(models.AttributeTerm.is_active.is_(True))
+            .order_by(models.AttributeTerm.canonical, models.AttributeTerm.id)
+        ).scalars()
+    )
+    rank = {"configuration": 0, "customer": 1, "programme": 2, "everywhere": 3}
+    in_scope = [
+        row
+        for row in rows
+        if scopes.parse(row.scope).covers(
+            customer=customer,
+            programme_code=programme_code,
+            configuration_id=configuration_id,
+        )
+    ]
+    in_scope.sort(key=lambda row: rank.get(scopes.parse(row.scope).kind, 9))
+
+    dictionary = AttributeDictionary.from_terms(
+        AttributeTermEntry(
+            canonical=row.canonical,
+            label=row.label,
+            description=row.description,
+            scope=scopes.token(row.scope),
+            spellings=tuple(
+                AttributeSpellingEntry(
+                    spelling=spelling.spelling,
+                    artifact=spelling.artifact,
+                    origin=spelling.origin,
+                    origin_run_id=int(spelling.origin_run_id or 0),
+                )
+                for spelling in row.spellings
+            ),
+        )
+        for row in in_scope
+    )
+    return dictionary.merged(_alias_terms(session, customer))
+
+
+def _alias_terms(session: Session, customer: str = "") -> AttributeDictionary:
+    """The legacy ``attribute_aliases`` rows, read as dictionary terms (ADR-062).
+
+    Read rather than migrated. A table somebody seeded is not a reason to rewrite their
+    rows behind their back (ADR-037 says the same about scope strings), and the admin
+    console offers an explicit, previewed copy for whoever wants one.
+
+    Args:
+        session: An open session.
+        customer: Rows scoped to this customer are included alongside global ones.
+
+    Returns:
+        One term per canonical name, its aliases as spellings offered everywhere.
+    """
+    rows = session.execute(
+        sa.select(models.AttributeAlias).where(
+            sa.or_(
+                models.AttributeAlias.customer_name.is_(None),
+                models.AttributeAlias.customer_name == customer,
+            )
+        )
+    ).scalars()
+    aliases: dict[str, list[str]] = {}
+    for row in rows:
+        aliases.setdefault(row.canonical_name, []).append(row.alias)
+    return AttributeDictionary.from_terms(
+        AttributeTermEntry(
+            canonical=canonical,
+            spellings=tuple(
+                AttributeSpellingEntry(spelling=alias, origin="alias")
+                for alias in sorted(set(spellings))
+            ),
+        )
+        for canonical, spellings in sorted(aliases.items())
+    )
+
+
+def load_product_codes(
+    session: Session,
+    customer: str = "",
+    configuration_id: str = "",
+    programme_code: str = "",
+) -> ProductCatalogue:
+    """Build the product-code catalogue in force for one run (Phase 6.22c).
+
+    Args:
+        session: An open session.
+        customer: The run's customer, so a customer-scoped code applies.
+        configuration_id: The run's ETL configuration.
+        programme_code: The run's delivery programme.
+
+    Returns:
+        The catalogue, narrowest scope first so a configuration's own definition of
+        ``ABC`` wins over a customer's and a customer's over a global one. Empty on a
+        deployment that defines no codes, which checks exactly as it did before they
+        existed.
+    """
+    rows = list(
+        session.execute(
+            sa.select(models.ProductCode)
+            .where(models.ProductCode.is_active.is_(True))
+            .order_by(models.ProductCode.sort_order, models.ProductCode.id)
+        ).scalars()
+    )
+
+    #: Narrowest first, so ``ProductCatalogue.from_entries`` — which keeps the first
+    #: definition of a code — resolves the collision the way every other scoped
+    #: definition in the product resolves it (ADR-037).
+    rank = {"configuration": 0, "customer": 1, "programme": 2, "everywhere": 3}
+    in_scope = [
+        row
+        for row in rows
+        if scopes.parse(row.scope).covers(
+            customer=customer,
+            programme_code=programme_code,
+            configuration_id=configuration_id,
+        )
+    ]
+    in_scope.sort(key=lambda row: rank.get(scopes.parse(row.scope).kind, 9))
+
+    return ProductCatalogue.from_entries(
+        ProductCodeEntry(
+            code=row.code,
+            label=row.label,
+            description=row.description,
+            scope=scopes.token(row.scope),
+            members=tuple(
+                ProductMember(
+                    attribute=member.attribute_name,
+                    output_name=member.output_name,
+                    sort_order=member.sort_order,
+                )
+                for member in row.members
+            ),
+        )
+        for row in in_scope
+    )
+
+
+def product_code_snapshot(catalogue: ProductCatalogue) -> dict[str, Any]:
+    """The catalogue as a run stores it (Phase 6.22c).
+
+    The catalogue keeps no history, so this snapshot is what makes a finalized report
+    reproduce: a re-check next year expands the codes exactly as this run did, and says
+    so where the live catalogue has since moved.
+
+    Args:
+        catalogue: The catalogue in force at submission.
+
+    Returns:
+        ``{"codes": {code: [{"attribute": …, "output": …}]}}``, empty when no codes
+        are defined.
+    """
+    if not catalogue.entries:
+        return {}
+    return {
+        "codes": {
+            entry.code: [
+                {"attribute": member.attribute, "output": member.output_name}
+                for member in entry.members
+            ]
+            for entry in catalogue.entries.values()
+        }
+    }
+
+
+def catalogue_from_snapshot(stored: object) -> ProductCatalogue:
+    """Rebuild the catalogue a run was checked against.
+
+    Tolerant on purpose, the same as the record layout's snapshot: a stored value that
+    has gone strange gives an empty catalogue, which is the ordinary state and changes
+    no check's answer.
+
+    Args:
+        stored: What :func:`product_code_snapshot` wrote, as read back from JSON.
+
+    Returns:
+        The catalogue.
+    """
+    if not isinstance(stored, dict):
+        return ProductCatalogue()
+    codes = stored.get("codes")
+    if not isinstance(codes, dict):
+        return ProductCatalogue()
+
+    entries: list[ProductCodeEntry] = []
+    for code, members in codes.items():
+        if not isinstance(members, list):
+            continue
+        read: list[ProductMember] = []
+        for index, member in enumerate(members, start=1):
+            if not isinstance(member, dict):
+                continue
+            attribute = str(member.get("attribute") or "").strip()
+            if attribute:
+                read.append(
+                    ProductMember(
+                        attribute=attribute,
+                        output_name=str(member.get("output") or "").strip(),
+                        sort_order=index,
+                    )
+                )
+        entries.append(ProductCodeEntry(code=str(code), members=tuple(read)))
+    return ProductCatalogue.from_entries(entries)
+
+
 def load_prompt_examples(
     session: Session,
     customer: str = "",
@@ -483,6 +736,28 @@ def save_context(
         run.attribute_profile = {
             name: entry.model_dump() for name, entry in context.profile.items()
         }
+    # The layout this run was actually checked against, snapshotted rather than
+    # pointed at (Phase 6.22b): the promoted one moves on with the next delivery, and
+    # a finalized report has to keep reproducing. Written unconditionally, because a
+    # re-check of a run whose layout was removed must clear it rather than keep the
+    # old one.
+    run.record_layout = context.record_layout.as_rows()
+    run.record_layout_run_id = context.record_layout.source_run_id
+    run.record_layout_source_date = context.record_layout.source_date
+
+    # What the run spent reaching for an attribute name (Phase 6.22d). Counted so the
+    # cap can be measured rather than claimed, and so the second run of a configuration
+    # whose suggestions were accepted can be *shown* to have spent none.
+    if context.resolver is not None:
+        run.attribute_locate_calls = context.resolver.attribute_calls
+
+    # What this delivery appears to call each attribute the checks could not locate
+    # (Phase 6.22f). A suggestion, never an application — somebody accepts it into the
+    # dictionary, or does not (ADR-021).
+    run.attribute_suggestions = [
+        suggestion.model_dump() for suggestion in context.attribute_suggestions
+    ]
+
     # Names the ladder's fifth rung had to read, kept where the evidence for them is
     # (Phase 6.21b). A suggestion, never an application — an administrator records
     # them on the artifact type, or does not (ADR-021).

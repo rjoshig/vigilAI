@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 6.21.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 6.22.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -12,9 +12,11 @@ here, the document is wrong and should be fixed in the same change as the screen
 ## What the tool does, in one paragraph
 
 You upload the order's requirement spec (the **OSL**, a Word document), the ETL
-configuration (JSON), and the output reports (Excel). The tool reads the OSL, works
-out what it requires, traces each requirement into the configuration and then into
-the reports, and shows you a list of **findings**: places where the three disagree.
+configuration (JSON), and the output reports (Excel). You may also upload the
+**record layout** — the delivered file's own schema, one row per field with its name,
+data type and size — and it is worth doing, for reasons below. The tool reads the OSL,
+works out what it requires, traces each requirement into the configuration and then
+into the reports, and shows you a list of **findings**: places where they disagree.
 The model reads and judges meaning; every comparison of values, counts, and ranges is
 done by code, so a finding is exact and repeatable. You decide each finding, OK or Not
 OK, and generate a frozen one-page report with a PDF.
@@ -222,6 +224,21 @@ knows the product; the markers under the form fields are not help and never disa
 4. **Input files.** The OSL (Word or PDF) and the configuration are required. Upload at least one
    report. The report slots you see are whatever an administrator has enabled; a
    type that is switched off simply does not appear.
+   - **The record layout is optional, and worth uploading.** It is the delivered
+     file's own schema: one row per field, with the field's name, its data type and
+     its size. Two things come of it. The tool can say that a field the order asked
+     for is declared in the layout and never reported on in the DIRT — the file ships
+     a column nothing measured, which no other artifact can show you. And where the
+     tool cannot work out what your DIRT calls an attribute, the layout usually tells
+     it, at no cost, and your administrator can accept that answer so the tool never
+     has to ask again.
+     Its column headings do not have to match anything: `Field name` / `Data type` /
+     `Size`, `Column Name` / `Type` / `Length` and several other spellings all read
+     the same. A cover sheet before the layout is skipped.
+     If you upload none, the tool uses whichever layout the last finalized run of the
+     same Configuration ID supplied, and every finding that rests on it says which run
+     and which date it came from. If there has never been one, nothing changes: the
+     run is checked exactly as it was before the slot existed.
    - **Several files for one report type.** Some campaigns deliver one field
      distribution per segment. Use **Add another file** on the slot and give each
      file a short label, such as "north" or "segment B". A finding names the file it
@@ -320,7 +337,20 @@ The run page shows the **traceability matrix** and the **findings**, worst first
   row label by name, so the AI was shown the names this delivery carries and asked
   which was meant. The check then ran against its answer. Confirm the reading is
   right; if it is, your administrator can record it so the next delivery needs no
-  asking. And an **anomaly** — "the null rate for X is unlike this configuration's
+  asking. **"Could not tell what the report calls…"** is its cousin for an attribute
+  name: the OSL asks for `AT01`, the DIRT carries something like
+  `debsc_burs_atyrt_at01_1`, and nothing proves they are the same field. That is not a
+  fault in your delivery and it is never a high-severity finding — it means the tool
+  could not prove which column is which, so it says so instead of guessing. It names
+  the closest columns. Your administrator records the answer once, after which every
+  later run of that configuration resolves the name in code. Uploading the record
+  layout usually supplies the answer for them.
+  **"The delivery carries attributes the product code does not list"** appears when
+  the OSL named a product code rather than listing fields. It is low severity and never
+  a failure — a delivery may legitimately carry a technical field — but it is worth two
+  looks: the extract may have pulled more than the order asked for, and a field nobody
+  asked for may be personal data that should not have left.
+  And an **anomaly** — "the null rate for X is unlike this configuration's
   previous deliveries" — is the one finding no rule covers. It is a comparison against
   this delivery's own history, reported because it is unusual, **which is not the same
   as being wrong**. Confirm it is expected, or say what it should have been.

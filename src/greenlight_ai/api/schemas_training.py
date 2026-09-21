@@ -9,7 +9,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from greenlight_ai import scopes
 from greenlight_ai.api.schemas import ScopeToken
@@ -29,6 +29,7 @@ __all__ = [
     "ConfigNoteIn",
     "FrontDoorIn",
     "FrontDoorOut",
+    "AttributeMapping",
 ]
 
 AnchorKind = Literal[
@@ -58,14 +59,42 @@ class Anchor(BaseModel):
     value: str = ""
 
 
+class AttributeMapping(BaseModel):
+    """What this delivery calls one attribute (Phase 6.22f).
+
+    The substance of an ``attribute_mapping`` observation rather than a pointer to
+    where it was seen, which is why it is its own object: a reviewer approving one is
+    agreeing to exactly these two strings.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The attribute as the OSL asks for it, and as a check will ask for it.
+    attribute: str = Field(min_length=1, max_length=200)
+    #: What this delivery calls it.
+    spelling: str = Field(min_length=1, max_length=200)
+    #: Which artifact writes it this way, e.g. ``dirt``. Empty means anywhere.
+    artifact: str = Field(default="", max_length=60)
+
+
 class ObservationIn(BaseModel):
     """Something a reviewer knows, in their own words."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["reconciliation", "field_constraint", "correction", "note", "config_note"] = (
-        "reconciliation"
-    )
+    kind: Literal[
+        "reconciliation",
+        "field_constraint",
+        "correction",
+        "note",
+        "config_note",
+        #: What this delivery calls one attribute (Phase 6.22f). **Any** user may
+        #: propose one while Train AI mode is on — the person who reads the DIRT every
+        #: week is the one who knows — and a reviewer or an administrator approves it.
+        "attribute_mapping",
+    ] = "reconciliation"
+    #: Required for ``attribute_mapping`` and refused for every other kind.
+    mapping: AttributeMapping | None = None
     anchors: list[Anchor] = Field(default_factory=list)
     statement: str = Field(min_length=3, max_length=4000)
     expectation: str = ""
@@ -75,6 +104,24 @@ class ObservationIn(BaseModel):
     scope_hint: Literal["global", "customer", "programme"] = "customer"
     run_id: int | None = None
     finding_id: int | None = None
+
+    @model_validator(mode="after")
+    def _mapping_matches_the_kind(self) -> "ObservationIn":
+        """Reject a mapping on the wrong kind, and a mapping kind with no mapping.
+
+        Returns:
+            The validated observation.
+
+        Raises:
+            ValueError: When the two disagree. An ``attribute_mapping`` with nothing to
+                map is an empty approval waiting to happen, and a mapping on a
+                ``note`` is a field nothing reads.
+        """
+        if self.kind == "attribute_mapping" and self.mapping is None:
+            raise ValueError("kind 'attribute_mapping' requires 'mapping'")
+        if self.kind != "attribute_mapping" and self.mapping is not None:
+            raise ValueError(f"kind {self.kind!r} takes no 'mapping'")
+        return self
 
 
 class ObservationOut(ObservationIn):

@@ -60,6 +60,7 @@ from greenlight_ai.checks.expressions import (
     referenced_names,
     validate,
 )
+from greenlight_ai.checks import attribute_suggestions as attribute_rail
 from greenlight_ai.checks import guides, layout
 from greenlight_ai.resolve import squashed
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
@@ -330,7 +331,7 @@ def _artifact_out(
                 sheets.append(name)
     # The column is a plain string so a future kind needs no migration; the wire model
     # narrows it, and an unrecognised value would be a bug in whatever wrote the row.
-    kind = cast(Literal["osl", "config", "report"], row.kind)
+    kind = cast(Literal["osl", "config", "record_layout", "report"], row.kind)
     return wire.ArtifactTypeOut(
         id=row.id,
         key=row.key,
@@ -1957,6 +1958,511 @@ def delete_announcement(
         session,
         "admin.announcement_deleted",
         detail=row.message[:80],
+        user_id=user.id,
+        actor=user.name,
+    )
+
+
+def _term_out(row: models.AttributeTerm) -> wire.AttributeTermOut:
+    """Render one attribute term for the console.
+
+    Args:
+        row: The stored term, with its spellings loaded.
+
+    Returns:
+        The wire model.
+    """
+    return wire.AttributeTermOut(
+        id=row.id,
+        canonical=row.canonical,
+        label=row.label,
+        description=row.description,
+        scope=scopes.token(row.scope),
+        scope_label=scopes.label(row.scope),
+        spellings=[
+            wire.AttributeSpellingIn(
+                spelling=spelling.spelling,
+                artifact=spelling.artifact,
+                origin=spelling.origin,
+                origin_run_id=int(spelling.origin_run_id or 0),
+            )
+            for spelling in row.spellings
+        ],
+        is_active=row.is_active,
+        created_by=row.created_by,
+        spelling_count=len(row.spellings),
+    )
+
+
+@router.get("/attribute-terms", response_model=list[wire.AttributeTermOut])
+def list_attribute_terms(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.AttributeTermOut]:
+    """List the attribute dictionary (Phase 6.22d).
+
+    One canonical attribute, a spelling per artifact. It is the ladder's fourth rung
+    for attribute names, and every spelling recorded here is a model call the next run
+    does not make.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The terms, alphabetically.
+    """
+    rows = session.execute(
+        sa.select(models.AttributeTerm).order_by(
+            models.AttributeTerm.canonical, models.AttributeTerm.id
+        )
+    ).scalars()
+    return [_term_out(row) for row in rows]
+
+
+@router.post(
+    "/attribute-terms", response_model=wire.AttributeTermOut, status_code=status.HTTP_201_CREATED
+)
+def save_attribute_term(
+    payload: wire.AttributeTermIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.AttributeTermOut:
+    """Create or update one attribute term and its spellings.
+
+    Upserted on ``(canonical, scope)``, and the spellings are replaced wholesale: a
+    term *is* its spellings, and keeping a stale one would go on offering a name this
+    delivery no longer uses.
+
+    Args:
+        payload: The term and its spellings.
+        session: The request's session.
+        user: The caller, recorded against the row.
+
+    Returns:
+        The stored term.
+
+    Raises:
+        HTTPException: 422 when a spelling already belongs to a different term. One
+            name means one attribute: two terms claiming it would make the rung that
+            reads them ambiguous, and the ladder would have to refuse the answer it
+            was given the dictionary to settle.
+    """
+    scope = scopes.token(payload.scope)
+    wanted = {squashed(payload.canonical)} | {
+        squashed(s.spelling) for s in payload.spellings if s.spelling.strip()
+    }
+    for other in session.execute(
+        sa.select(models.AttributeTerm).where(models.AttributeTerm.is_active.is_(True))
+    ).scalars():
+        if other.canonical == payload.canonical and other.scope == scope:
+            continue
+        theirs = {squashed(other.canonical)} | {squashed(s.spelling) for s in other.spellings}
+        clash = sorted(wanted & theirs)
+        if clash:
+            raise HTTPException(
+                HTTP_422,
+                f"{clash[0]!r} already belongs to {other.canonical!r}. One name means "
+                "one attribute: two terms claiming it would leave the ladder unable to "
+                "say which was meant. Remove it from one of them.",
+            )
+
+    row = session.execute(
+        sa.select(models.AttributeTerm).where(
+            models.AttributeTerm.canonical == payload.canonical,
+            models.AttributeTerm.scope == scope,
+        )
+    ).scalar_one_or_none()
+    created = row is None
+    if row is None:
+        row = models.AttributeTerm(
+            canonical=payload.canonical.strip(),
+            scope=scope,
+            created_by=user.name,
+            created_by_user_id=user.id,
+        )
+        session.add(row)
+
+    row.label = payload.label.strip()
+    row.description = payload.description
+    row.is_active = payload.is_active
+    row.spellings.clear()
+    session.flush()
+    for spelling in payload.spellings:
+        if not spelling.spelling.strip():
+            continue
+        row.spellings.append(
+            models.AttributeSpelling(
+                spelling=spelling.spelling.strip(),
+                artifact=spelling.artifact.strip().lower(),
+                origin=spelling.origin.strip() or "admin",
+                origin_run_id=spelling.origin_run_id or None,
+                created_by=user.name,
+            )
+        )
+    session.flush()
+
+    repository.audit(
+        session,
+        "admin.attribute_term_created" if created else "admin.attribute_term_saved",
+        detail=f"{row.canonical} @ {scope} ({len(row.spellings)} spelling(s))",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _term_out(row)
+
+
+@router.delete("/attribute-terms/{term_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_attribute_term(
+    term_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+    _confirmed: None = Depends(require_delete_word),
+) -> None:
+    """Delete an attribute term and its spellings.
+
+    Args:
+        term_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.AttributeTerm, term_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"attribute term {term_id} not found")
+    canonical, scope = row.canonical, row.scope
+    session.delete(row)
+    repository.audit(
+        session,
+        "admin.attribute_term_deleted",
+        detail=f"{canonical} @ {scope}",
+        user_id=user.id,
+        actor=user.name,
+    )
+
+
+def _alias_copy(session: Session, apply: bool, actor: str = "") -> wire.AliasCopyPreview:
+    """What copying the legacy alias table into the dictionary would do, or does.
+
+    The aliases are **read** alongside the dictionary whether or not anybody copies
+    them (ADR-062), so nothing here is required and nothing that matched before stops
+    matching. This is a tidying step somebody chooses, previewed first, because
+    rewriting a table an administrator seeded is not something to do behind their back
+    — the same reasoning ADR-037 gives for not rewriting stored scope strings.
+
+    Args:
+        session: The request's session.
+        apply: Whether to write, or only describe.
+        actor: Who asked, recorded on what is written.
+
+    Returns:
+        The preview, with ``written`` filled on a copy.
+    """
+    aliases: dict[str, list[str]] = {}
+    for row in session.execute(sa.select(models.AttributeAlias)).scalars():
+        aliases.setdefault(row.canonical_name, []).append(row.alias)
+
+    existing = {
+        row.canonical: row for row in session.execute(sa.select(models.AttributeTerm)).scalars()
+    }
+    known = {squashed(spelling.spelling) for row in existing.values() for spelling in row.spellings}
+
+    creates: list[wire.AttributeTermIn] = []
+    extends: list[wire.AttributeTermIn] = []
+    already = 0
+    written = 0
+    for canonical, spellings in sorted(aliases.items()):
+        wanted = [s for s in sorted(set(spellings)) if squashed(s) != squashed(canonical)]
+        new = [s for s in wanted if squashed(s) not in known]
+        already += len(wanted) - len(new)
+        if not new:
+            continue
+        entry = wire.AttributeTermIn(
+            canonical=canonical,
+            spellings=[wire.AttributeSpellingIn(spelling=s, origin="alias") for s in new],
+        )
+        term = existing.get(canonical)
+        (extends if term is not None else creates).append(entry)
+        if not apply:
+            continue
+        if term is None:
+            term = models.AttributeTerm(canonical=canonical, created_by=actor)
+            session.add(term)
+            existing[canonical] = term
+            session.flush()
+        for spelling in new:
+            term.spellings.append(
+                models.AttributeSpelling(spelling=spelling, origin="alias", created_by=actor)
+            )
+            written += 1
+    if apply:
+        session.flush()
+        repository.audit(session, "admin.alias_copy", detail=f"{written} spelling(s)", actor=actor)
+    return wire.AliasCopyPreview(
+        creates=creates, extends=extends, already_known=already, written=written
+    )
+
+
+@router.get("/attribute-terms/alias-copy", response_model=wire.AliasCopyPreview)
+def preview_alias_copy(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.AliasCopyPreview:
+    """Show what copying the legacy alias table into the dictionary would do (6.22d).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The preview. Nothing is written.
+    """
+    return _alias_copy(session, apply=False)
+
+
+@router.post("/attribute-terms/alias-copy", response_model=wire.AliasCopyPreview)
+def apply_alias_copy(
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.AliasCopyPreview:
+    """Copy the legacy alias table into the dictionary (Phase 6.22d).
+
+    The alias rows are left alone. They are read alongside the dictionary either way,
+    so this adds and never removes — and a second copy writes nothing, because every
+    alias is already a spelling by then.
+
+    Args:
+        session: The request's session.
+        user: The caller.
+
+    Returns:
+        What was written.
+    """
+    return _alias_copy(session, apply=True, actor=user.name)
+
+
+def _product_code_out(
+    row: models.ProductCode, conflicts: Mapping[str, list[str]] | None = None
+) -> wire.ProductCodeOut:
+    """Render one product code for the console.
+
+    Args:
+        row: The stored code, with its members loaded.
+        conflicts: Attribute to the lines describing its disagreements, when the caller
+            has computed them for the whole catalogue. Passed in rather than computed
+            per row, because a conflict is by definition between two codes.
+
+    Returns:
+        The wire model.
+    """
+    found = conflicts or {}
+    return wire.ProductCodeOut(
+        id=row.id,
+        code=row.code,
+        label=row.label,
+        description=row.description,
+        scope=scopes.token(row.scope),
+        scope_label=scopes.label(row.scope),
+        members=[
+            wire.ProductCodeMemberIn(attribute=m.attribute_name, output_name=m.output_name)
+            for m in row.members
+        ],
+        is_active=row.is_active,
+        sort_order=row.sort_order,
+        notes=row.notes,
+        created_by=row.created_by,
+        member_count=len(row.members),
+        conflicts=sorted(
+            {line for m in row.members for line in found.get(squashed(m.attribute_name), [])}
+        ),
+    )
+
+
+def _conflicts_by_attribute(session: Session) -> dict[str, list[str]]:
+    """Which attributes two codes deliver under different names (Phase 6.22c).
+
+    A shared attribute is **one** term with one output name, so a disagreement is a
+    defect in the catalogue rather than two opinions to choose between. This names it;
+    choosing between them would be the comparison ADR-001 keeps out of a guess's hands.
+
+    Args:
+        session: The request's session.
+
+    Returns:
+        The squashed attribute name to the lines describing its disagreements.
+    """
+    catalogue = repository.load_product_codes(session)
+    out: dict[str, list[str]] = {}
+    for line in catalogue.conflicts():
+        attribute = line.split(":", 1)[0]
+        out.setdefault(squashed(attribute), []).append(line)
+    return out
+
+
+@router.get("/product-codes", response_model=list[wire.ProductCodeOut])
+def list_product_codes(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> list[wire.ProductCodeOut]:
+    """List the product codes (Phase 6.22c).
+
+    A product code names a set of attributes delivered together, so an OSL saying
+    *"deliver all attributes from ABC"* states as much as one that lists them. What a
+    code contains is looked up by code and never read by the model (ADR-061), which is
+    what makes this table worth keeping accurate.
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        The codes in display order, each carrying any disagreement it has with another
+        code about what a shared attribute is delivered as.
+    """
+    conflicts = _conflicts_by_attribute(session)
+    rows = session.execute(
+        sa.select(models.ProductCode).order_by(
+            models.ProductCode.sort_order, models.ProductCode.code
+        )
+    ).scalars()
+    return [_product_code_out(row, conflicts) for row in rows]
+
+
+@router.post(
+    "/product-codes", response_model=wire.ProductCodeOut, status_code=status.HTTP_201_CREATED
+)
+def save_product_code(
+    payload: wire.ProductCodeIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.ProductCodeOut:
+    """Create or update a product code and everything it contains.
+
+    Upserted on ``(code, scope)``: saving the same code for the same scope replaces its
+    members wholesale, because a code is its member list and keeping stale rows would
+    make a delivery be checked against attributes nobody asks for any more.
+
+    Args:
+        payload: The code and its attributes.
+        session: The request's session.
+        user: The caller, recorded against the row.
+
+    Returns:
+        The stored code.
+
+    Raises:
+        HTTPException: 422 when the code names the same attribute twice, or when it
+            would deliver a shared attribute under a different name from another code.
+    """
+    scope = scopes.token(payload.scope)
+    seen: dict[str, str] = {}
+    for member in payload.members:
+        key = squashed(member.attribute)
+        if not key:
+            continue
+        if key in seen:
+            raise HTTPException(
+                HTTP_422,
+                f"{payload.code} names {member.attribute!r} twice; an attribute appears "
+                "once in a code",
+            )
+        seen[key] = member.output_name or member.attribute
+
+    # A shared attribute is one term with one output name (ADR-061). Refused here, at
+    # the one moment a person can still fix it, rather than reported later as a
+    # catalogue defect that produces findings nobody can act on.
+    for other in session.execute(
+        sa.select(models.ProductCode).where(models.ProductCode.is_active.is_(True))
+    ).scalars():
+        if other.code == payload.code and other.scope == scope:
+            continue
+        for stored in other.members:
+            key = squashed(stored.attribute_name)
+            delivered = stored.output_name or stored.attribute_name
+            if key in seen and squashed(seen[key]) != squashed(delivered):
+                raise HTTPException(
+                    HTTP_422,
+                    f"{other.code} already delivers {stored.attribute_name!r} as "
+                    f"{delivered!r}; an attribute two codes share is one term with one "
+                    "output name. Change one of them, or give this code its own "
+                    "attribute.",
+                )
+
+    row = session.execute(
+        sa.select(models.ProductCode).where(
+            models.ProductCode.code == payload.code, models.ProductCode.scope == scope
+        )
+    ).scalar_one_or_none()
+    created = row is None
+    if row is None:
+        row = models.ProductCode(
+            code=payload.code.strip(),
+            scope=scope,
+            created_by=user.name,
+            created_by_user_id=user.id,
+        )
+        session.add(row)
+
+    row.label = payload.label.strip()
+    row.description = payload.description
+    row.is_active = payload.is_active
+    row.sort_order = payload.sort_order
+    row.notes = payload.notes
+    row.members.clear()
+    session.flush()
+    for order, member in enumerate(payload.members, start=1):
+        if not member.attribute.strip():
+            continue
+        row.members.append(
+            models.ProductCodeMember(
+                attribute_name=member.attribute.strip(),
+                output_name=member.output_name.strip(),
+                sort_order=order,
+            )
+        )
+    session.flush()
+
+    repository.audit(
+        session,
+        "admin.product_code_created" if created else "admin.product_code_saved",
+        detail=f"{row.code} @ {scope} ({len(row.members)} attribute(s))",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _product_code_out(row, _conflicts_by_attribute(session))
+
+
+@router.delete("/product-codes/{code_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_product_code(
+    code_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+    _confirmed: None = Depends(require_delete_word),
+) -> None:
+    """Delete a product code and its members.
+
+    Runs that already used it are unaffected: each snapshotted the catalogue at
+    submission, which is what makes a finalized report reproduce (Phase 6.22c).
+
+    Args:
+        code_id: The row id.
+        session: The request's session.
+        user: The caller.
+
+    Raises:
+        HTTPException: 404 when it does not exist.
+    """
+    row = session.get(models.ProductCode, code_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"product code {code_id} not found")
+    code, scope = row.code, row.scope
+    session.delete(row)
+    repository.audit(
+        session,
+        "admin.product_code_deleted",
+        detail=f"{code} @ {scope}",
         user_id=user.id,
         actor=user.name,
     )
@@ -3602,6 +4108,168 @@ def rehearsal(
         ],
         notes=list(result.notes),
     )
+
+
+@router.get("/attribute-suggestions", response_model=wire.AttributeSuggestionsOut)
+def attribute_suggestions(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.AttributeSuggestionsOut:
+    """What deliveries appear to call the attributes the tool could not locate (6.22f).
+
+    Each one comes from a run where the OSL asked for an attribute, the ladder's
+    deterministic rungs could not say which column it is, and something proposed an
+    answer: the uploaded record layout, in code and at no model call, or the ladder's
+    fifth rung where the layout was silent.
+
+    That is a gap in what the tool has been told about a customer's vocabulary rather
+    than a defect in the delivery, and it recurs on every delivery from that customer
+    until somebody closes it. Accepting a suggestion is what closes it: from then on
+    the fourth rung resolves the name in code and no call is made.
+
+    **Nothing here is in force.** A suggestion is a suggestion until somebody accepts
+    it (ADR-021).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        Every pending mapping, most-seen first, with the runs it came from.
+    """
+    # Already listed when the dictionary holds the spelling for that attribute, at any
+    # scope. Scope is deliberately ignored, for the reason 6.21b gives about the layout
+    # map: somebody who recorded it once has decided, and asking again on the next
+    # programme's delivery is how a console trains people to click past it.
+    listed: set[tuple[str, str]] = set()
+    for term in session.execute(sa.select(models.AttributeTerm)).scalars():
+        for spelling in term.spellings:
+            listed.add((squashed(term.canonical), squashed(spelling.spelling)))
+
+    seen: dict[tuple[str, str, str], list[int]] = {}
+    best: dict[tuple[str, str, str], wire.AttributeSuggestionOut] = {}
+    rows = session.execute(
+        sa.select(models.Run.id, models.Run.attribute_suggestions).where(
+            models.Run.attribute_suggestions.is_not(None)
+        )
+    ).all()
+    for run_id, suggestions in rows:
+        for raw in suggestions or []:
+            try:
+                read = attribute_rail.AttributeSuggestion.model_validate(raw)
+            except ValueError:
+                continue
+            key = read.key
+            seen.setdefault(key, []).append(int(run_id))
+            # A record layout's reading beats the model's, and between two of a kind
+            # the more confident one: it is the one worth judging.
+            current = best.get(key)
+            if (
+                current is None
+                or (current.origin != "record_layout" and read.origin == "record_layout")
+                or (current.origin == read.origin and read.confidence > current.confidence)
+            ):
+                best[key] = wire.AttributeSuggestionOut(
+                    artifact=read.artifact,
+                    wanted=read.wanted,
+                    found=read.found,
+                    origin=read.origin,
+                    confidence=read.confidence,
+                    reason=read.reason,
+                )
+
+    out: list[wire.AttributeSuggestionOut] = []
+    for key, run_ids in seen.items():
+        row_out = best[key]
+        row_out.seen = len(run_ids)
+        row_out.run_ids = sorted(run_ids)[-10:]
+        row_out.already_listed = (key[1], key[2]) in listed
+        out.append(row_out)
+    out.sort(key=lambda row: (row.already_listed, -row.seen, row.wanted, row.found))
+    return wire.AttributeSuggestionsOut(suggestions=out)
+
+
+@router.post("/attribute-suggestions/accept", response_model=wire.AttributeTermOut)
+def accept_attribute_suggestion(
+    payload: wire.AttributeAcceptIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.AttributeTermOut:
+    """Record one mapping in the attribute dictionary (Phase 6.22f).
+
+    The act that closes the loop: from here the ladder's fourth rung resolves this name
+    in code and the model is not asked again (ADR-062). The term is created when it
+    does not exist, because the first delivery to teach the tool an attribute is
+    usually the one that teaches it the attribute exists.
+
+    Args:
+        payload: The attribute, what this delivery calls it, and where that applies.
+        session: The request's session.
+        user: The caller, recorded on the spelling.
+
+    Returns:
+        The term, with its new spelling.
+
+    Raises:
+        HTTPException: 422 when the spelling already belongs to a different attribute.
+    """
+    scope = scopes.token(payload.scope)
+    wanted = squashed(payload.spelling_key())
+    for other in session.execute(sa.select(models.AttributeTerm)).scalars():
+        if squashed(other.canonical) == squashed(payload.wanted):
+            continue
+        if wanted in {squashed(s.spelling) for s in other.spellings} or wanted == squashed(
+            other.canonical
+        ):
+            raise HTTPException(
+                HTTP_422,
+                f"{payload.found!r} already belongs to {other.canonical!r}. One name "
+                f"means one attribute. If {payload.wanted!r} and {other.canonical!r} "
+                f"are the same attribute written two ways, record {payload.wanted!r} "
+                f"as another spelling of {other.canonical!r} instead of as a term of "
+                "its own.",
+            )
+
+    row = session.execute(
+        sa.select(models.AttributeTerm).where(
+            models.AttributeTerm.canonical == payload.wanted,
+            models.AttributeTerm.scope == scope,
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        row = models.AttributeTerm(
+            canonical=payload.wanted.strip(),
+            scope=scope,
+            created_by=user.name,
+            created_by_user_id=user.id,
+        )
+        session.add(row)
+        session.flush()
+
+    artifact = payload.artifact.strip().lower()
+    if not any(
+        squashed(s.spelling) == squashed(payload.found) and s.artifact == artifact
+        for s in row.spellings
+    ):
+        row.spellings.append(
+            models.AttributeSpelling(
+                spelling=payload.found.strip(),
+                artifact=artifact,
+                origin=payload.origin.strip() or "model",
+                origin_run_id=payload.origin_run_id or None,
+                created_by=user.name,
+            )
+        )
+    session.flush()
+
+    repository.audit(
+        session,
+        "admin.attribute_suggestion_accepted",
+        detail=f"{payload.wanted} = {payload.found} @ {scope} ({payload.origin})",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _term_out(row)
 
 
 @router.get("/layout-suggestions", response_model=wire.LayoutSuggestionsOut)

@@ -2,10 +2,15 @@
 
 Automated QC validation for a credit-data fulfillment process.
 
-The tool reconciles three things that today are checked by eye: the requirement spec
-(**OSL**, a Word document), the ETL configuration (JSON), and the output reports (Excel:
-DIRT, field / state / score distributions, counts, cross tabs). It checks that every OSL
-requirement made it into the config, and then into the results.
+The tool reconciles four things that today are checked by eye: the requirement spec
+(**OSL**, a Word document), the ETL configuration (JSON), the output reports (Excel:
+DIRT, field / state / score distributions, counts, cross tabs), and the **record
+layout** — the delivered file's own schema, one row per field with its name, data type
+and size. It checks that every OSL requirement made it into the config, and then into
+the results.
+
+The record layout is optional and stays optional: a delivery that uploads none is
+checked exactly as it was before the slot existed.
 
 **The LLM reads, code checks.** The LLM extracts requirements, judges whether a config
 element means the same thing as an OSL requirement, and writes the explanation. Every value

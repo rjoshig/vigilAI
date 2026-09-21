@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from greenlight_ai.checks import field_labels
 from greenlight_ai.checks.guides import GuideEntry, guide_lines
 from greenlight_ai.meaning.render import effective_entries, meaning_lines
-from greenlight_ai.db import catalog, models, repository, versions
+from greenlight_ai.db import catalog, models, record_layouts, repository, versions
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db.cache import DbCache, record_calls
 from greenlight_ai.db.session import session_scope
@@ -35,16 +35,20 @@ from greenlight_ai.pipeline.context import (
     RunContext,
     StageRecord,
 )
+from greenlight_ai.parsers.base import NON_REPORT_KINDS, RECORD_LAYOUT_KIND
 from greenlight_ai.pipeline.guidance import RunGuidance
+from greenlight_ai.rules.product_codes import ProductCatalogue
 from greenlight_ai.pipeline.run import PipelineError, run_pipeline
 
 __all__ = ["execute_run", "recheck_run", "build_context"]
 
 _LOG: Final = logging.getLogger(__name__)
 
-#: The two uploaded kinds that are not reports. Everything else a run carries is one,
-#: including report types an administrator defined (ADR-020).
-_NON_REPORT_KINDS: Final[frozenset[str]] = frozenset({"osl", "config"})
+#: The uploaded kinds that are not reports. Everything else a run carries is one,
+#: including report types an administrator defined (ADR-020). Defined once, in
+#: :mod:`greenlight_ai.parsers.base`, so adding a non-report artifact — the record
+#: layout was the first since Phase 0 — touches one line rather than three modules.
+_NON_REPORT_KINDS: Final[frozenset[str]] = NON_REPORT_KINDS
 
 
 def build_guidance(session: Session, run: models.Run) -> RunGuidance:
@@ -136,6 +140,41 @@ def _parts(session: Session, run: models.Run, data_dir: Path) -> dict[str, list[
     return grouped
 
 
+def _catalogue_for(session: Session, run: models.Run) -> tuple[ProductCatalogue, str]:
+    """The product codes this run expands against, and whether they have moved (6.22c).
+
+    The run's own snapshot when it has one, so a re-check a year later expands exactly
+    as the finalized report did; the live catalogue for a run submitted before the
+    snapshot existed, which is the only honest answer for one.
+
+    The catalogue keeps no history, so a re-check has no way to show *what* changed.
+    What it can do — and must — is say that something did, rather than quietly
+    reproducing an answer an administrator has since moved on from.
+
+    Args:
+        session: An open session.
+        run: The run row.
+
+    Returns:
+        The catalogue and a notice, empty when there is nothing to say.
+    """
+    snapshot = repository.catalogue_from_snapshot(run.product_code_attributes)
+    live = repository.load_product_codes(
+        session, run.customer_name, run.configuration_id, run.scope or ""
+    )
+    if not snapshot.entries:
+        return live, ""
+
+    if repository.product_code_snapshot(snapshot) != repository.product_code_snapshot(live):
+        return snapshot, (
+            "The product-code catalogue has changed since this run was submitted. This "
+            "run is checked against the codes as they stood then, which is what makes "
+            "its report reproduce; a delivery submitted today would be checked against "
+            "the current ones."
+        )
+    return snapshot, ""
+
+
 def build_context(
     session: Session,
     run: models.Run,
@@ -166,6 +205,8 @@ def build_context(
     if "osl" not in paths or "config" not in paths:
         raise ValueError(f"run {run.id} is missing its OSL or config file")
 
+    catalogue, catalogue_notice = _catalogue_for(session, run)
+
     cache = LLMCache(
         backend=DbCache(factory),
         model=llm_settings.model,
@@ -180,6 +221,11 @@ def build_context(
         config_path=paths["config"],
         report_paths={k: v for k, v in paths.items() if k not in _NON_REPORT_KINDS},
         report_parts=_parts(session, run, data_dir),
+        # Optional, and the only optional artifact (Phase 6.22b). A run that uploaded
+        # none gets whichever layout its configuration's last finalized run promoted,
+        # seeded below; a run whose configuration has none too is checked exactly as
+        # it was before the slot existed.
+        record_layout_path=paths.get(RECORD_LAYOUT_KIND),
         client=client,
         customer=run.customer_name,
         admin=repository.load_admin_config(
@@ -187,6 +233,7 @@ def build_context(
         ),
         guidance=build_guidance(session, run),
         aliases=repository.load_aliases(session, run.customer_name),
+        product_codes=catalogue,
         credit_date_labels=field_labels.resolve_labels(
             session,
             field_labels.CREDIT_DATE,
@@ -201,6 +248,13 @@ def build_context(
         rules_version=run.rules_version,
         verify_lenses=llm_settings.verify_lenses,
         max_lens_calls=llm_settings.max_lens_calls_per_run,
+        # The attribute dictionary is the ladder's fourth rung for attribute names,
+        # and the cap bounds what the fifth may cost (Phase 6.22d). Both empty and
+        # zero leave every check answering as it did before the dictionary existed.
+        dictionary=repository.load_attribute_dictionary(
+            session, run.customer_name, run.configuration_id, run.scope or ""
+        ),
+        max_attribute_calls=llm_settings.max_attribute_calls_per_run,
         # The delivery's own history, which is the only honest baseline for a finding
         # no rule covers (Phase 6.21c). Finalized runs only, and never this one.
         profile_history=repository.load_profile_history(
@@ -214,6 +268,16 @@ def build_context(
         anomaly_sensitivity=float(resolve(session, "anomaly.sensitivity_pct").value) / 100.0,
         anomaly_model=bool(resolve(session, "anomaly.model_reads_shape").value),
     )
+
+    if catalogue_notice:
+        context.notices.append(catalogue_notice)
+
+    # Seeded before stage 1 so that a run which uploaded no layout still has one to
+    # check against. Stage 1 overwrites this when the delivery did upload one.
+    if context.record_layout_path is None:
+        context.record_layout = record_layouts.run_layout(
+            session, run.customer_name, run.configuration_id, None
+        )
 
     for row in session.execute(
         sa.select(models.RunStage).where(models.RunStage.run_id == run.id)

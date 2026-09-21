@@ -148,6 +148,7 @@ export const FINDING_LABEL: Record<string, string> = {
   low_confidence_extraction: "Low-confidence extraction",
   could_not_evaluate: "Could not evaluate",
   attribute_not_resolved: "Could not resolve attribute name",
+  attributes_beyond_product_code: "Attributes beyond the product code",
 };
 
 /** Which leg of the reconciliation a finding names. */

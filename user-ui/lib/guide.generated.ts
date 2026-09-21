@@ -23,14 +23,21 @@ export const GUIDE: GuideSection[] = [
             "bold": true
           },
           {
-            "text": ", a Word document), the ETL configuration (JSON), and the output reports (Excel). The tool reads the OSL, works out what it requires, traces each requirement into the configuration and then into the reports, and shows you a list of "
+            "text": ", a Word document), the ETL configuration (JSON), and the output reports (Excel). You may also upload the "
+          },
+          {
+            "text": "record layout",
+            "bold": true
+          },
+          {
+            "text": " — the delivered file's own schema, one row per field with its name, data type and size — and it is worth doing, for reasons below. The tool reads the OSL, works out what it requires, traces each requirement into the configuration and then into the reports, and shows you a list of "
           },
           {
             "text": "findings",
             "bold": true
           },
           {
-            "text": ": places where the three disagree. The model reads and judges meaning; every comparison of values, counts, and ranges is done by code, so a finding is exact and repeatable. You decide each finding, OK or Not OK, and generate a frozen one-page report with a PDF."
+            "text": ": places where they disagree. The model reads and judges meaning; every comparison of values, counts, and ranges is done by code, so a finding is exact and repeatable. You decide each finding, OK or Not OK, and generate a frozen one-page report with a PDF."
           }
         ]
       }
@@ -279,7 +286,35 @@ export const GUIDE: GuideSection[] = [
               "bold": true
             },
             {
-              "text": " means the tool could not find a sheet, a column or a row label by name, so the AI was shown the names this delivery carries and asked which was meant. The check then ran against its answer. Confirm the reading is right; if it is, your administrator can record it so the next delivery needs no asking. And an "
+              "text": " means the tool could not find a sheet, a column or a row label by name, so the AI was shown the names this delivery carries and asked which was meant. The check then ran against its answer. Confirm the reading is right; if it is, your administrator can record it so the next delivery needs no asking. "
+            },
+            {
+              "text": "\"Could not tell what the report calls…\"",
+              "bold": true
+            },
+            {
+              "text": " is its cousin for an attribute name: the OSL asks for "
+            },
+            {
+              "text": "AT01",
+              "code": true
+            },
+            {
+              "text": ", the DIRT carries something like "
+            },
+            {
+              "text": "debsc_burs_atyrt_at01_1",
+              "code": true
+            },
+            {
+              "text": ", and nothing proves they are the same field. That is not a fault in your delivery and it is never a high-severity finding — it means the tool could not prove which column is which, so it says so instead of guessing. It names the closest columns. Your administrator records the answer once, after which every later run of that configuration resolves the name in code. Uploading the record layout usually supplies the answer for them. "
+            },
+            {
+              "text": "\"The delivery carries attributes the product code does not list\"",
+              "bold": true
+            },
+            {
+              "text": " appears when the OSL named a product code rather than listing fields. It is low severity and never a failure — a delivery may legitimately carry a technical field — but it is worth two looks: the extract may have pulled more than the order asked for, and a field nobody asked for may be personal data that should not have left. And an "
             },
             {
               "text": "anomaly",
