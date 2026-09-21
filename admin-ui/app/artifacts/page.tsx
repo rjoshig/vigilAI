@@ -644,6 +644,10 @@ function ArtifactEditor({
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
+          <FieldEffect
+            kind="reference"
+            note="Shown next to the upload box so people pick the right file. The AI never reads it — the box below is the one it reads."
+          />
         </div>
       </div>
       <div className="flex flex-col gap-1">
@@ -804,6 +808,11 @@ function SampleStrip({
                 {group.hint} {samples.length} of {MAX_SAMPLES}.
               </span>
             </div>
+            <FieldEffect
+              kind="reference"
+              className="mb-1.5"
+              note="The AI reads these example files while you set up: to work out which uploaded file is which, to fill in example values, and to suggest mappings on the Meaning screen. They are never opened when a delivery is checked. Use made-up files — never real customer data."
+            />
             <div className="flex flex-wrap items-start gap-2">
               {samples.map((sample) => (
                 <SampleCard

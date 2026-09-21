@@ -16,10 +16,13 @@ touchpoint: a commit that changes what reaches the model, what a stage reads, or
 updates this file, the field's marker in both apps, and the training documents, in that
 commit.
 
-## The five things a field can do
+## The six things a field can do
 
-Both apps mark every field a person can write with one of these, and the marker never
-hides — it is a fact about the run, not help text. Somebody writing a note deserves to
+Both apps mark every field a person can write with one of these. A marker is a fact
+about the run rather than help text, so `ui.tooltips` never hides one. The single
+exception is the setup marker, which an administrator may switch off because it says a
+field is *not* read during a run and so cannot mislead anybody about where their words
+go (ADR-046); the four that say where words **do** go cannot be switched off at all. Somebody writing a note deserves to
 know whether they are teaching the model, feeding a comparison, leaving a message for
 the next reviewer, or writing to themselves.
 
@@ -30,6 +33,7 @@ the next reviewer, or writing to themselves.
 | **Read by a person** | Shown to whoever reviews or signs off the run. Nothing automated acts on it. |
 | **Your own note** | Kept with the run for you and anyone looking later. Reaches no model and no check. |
 | **Identifies the run** | How the run is found, grouped, and compared with earlier ones — and checked against what the uploaded files declare. |
+| **Used for setup, not for runs** | The AI reads it while somebody sets the product up; no validation run reads it. What is built from it is what reaches a run. **The one marker an administrator can switch off** (`ui.setup_markers`, on by default) — ADR-046. |
 
 ## The one rule everything here obeys
 
@@ -112,7 +116,7 @@ produce a finding.
 | Field | What it is for |
 | --- | --- |
 | Artifact type **description** | Read by the person uploading the file. Reaches nothing. |
-| **Artifact samples** | Specimens other definitions resolve against: workbook type detection, named values, guide examples, and the mapping interview. **A sample's contents never enter a validation run** — `grep sample src/greenlight_ai/pipeline/` finds only ADR-003 comments. |
+| **Artifact samples** | Specimens other definitions resolve against: workbook type detection, named values, guide examples, and the mapping interview. **No sample is opened during a validation run** — `grep sample src/greenlight_ai/pipeline/` finds only ADR-003 comments, and nothing under `pipeline/` can reach `ArtifactSample`. The model reads a sample's layout in one place only: the mapping interview (`meaning/interview.py`), which is a setup activity an administrator starts by hand. **One value does travel**: where a guide entry's locator resolves on a sample, that cell's value is stored on the entry and quoted to the model as `e.g. label=value` at stages 4 and 8 (`checks/guides.py::guide_lines`). It is a single named value an administrator chose, not a row, and it is why samples must be synthetic (ADR-003). |
 | Sample **notes** | Read by the model during the mapping interview for that scope, not during a run. |
 | **Programme keywords** | Compared by code at stage 7 to confirm a run is the programme it claims. **They no longer only reach code:** when none of the declared programme's words match, the delivery's own words go to the model once, which says what programme they read like (Phase 6.18f). The keywords themselves are not sent — what they decide is *whether the call happens at all*. |
 | Programme **name** | Sent with the programme list in that one prompt, because a code on its own says nothing about what a programme is. |

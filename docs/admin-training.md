@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.18.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.19 parts A and C.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -148,6 +148,18 @@ typed word. A programme entry with the same key as a global one replaces it on t
 programme's runs. **By report cell** is the same guide editor as on Artifact types.
 Everything here reaches the model as background; code does the comparing.
 
+**Why this screen is worth an afternoon.** Without a mapping the model works out where
+every requirement lands *from scratch, on every run* — reading the OSL, then the
+configuration, then the reports, and deciding which part answers which. That is the step
+it is least certain about, and the one it can answer differently on two runs of the same
+delivery. One confirmed row does two things at once: **the AI reads it** at tracing and
+verification, so it stops deriving the answer and spends its attention on whether the
+delivery is right; and **code turns it into a check** it runs itself, with no model and
+no tokens, giving the same answer every time. What you get is fewer requirements coming
+back as *could not trace*, the same requirement resolving the same way every month, and a
+deterministic check you did not have to write. You confirm rather than the model because
+a wrong mapping is worse than none — it teaches the tool the wrong place to look.
+
 ### Correcting or removing what somebody submitted
 
 Feedback is submitted once: the author's form locks after they send it, so nothing
@@ -167,8 +179,14 @@ edit bumps the version, so the trail survives the convenience.
 ## What on each screen reaches the model
 
 Every field you can write carries a marker saying what it does to a run, in the same
-five words the user app uses. They are facts about the run rather than help, so they
+six words the user app uses. They are facts about the run rather than help, so they
 stay visible whatever **Explain each screen** is set to.
+
+One of the six can be turned off, and only one: **Settings → Appearance → Show
+setup-only markers** hides *Used for setup, not for runs*, which otherwise repeats under
+every sample workbook on the screen. The switch cannot hide the markers that say a field
+reaches the model or is checked by code — those say where your words end up, and you
+keep them whatever you set (ADR-046).
 
 | Marker | What it means for what you type |
 | --- | --- |
@@ -177,8 +195,9 @@ stay visible whatever **Explain each screen** is set to.
 | **Read by a person** | Shown to whoever reviews or signs off. Nothing automated acts on it. |
 | **Your own note** | Kept with the run. Reaches no model and no check. |
 | **Identifies the run** | How the run is found, grouped, and compared with earlier ones. |
+| **Used for setup, not for runs** | The AI reads it while you set things up. No run reads it; what you build from it is what a run uses. |
 
-Two places where the distinction is not obvious and is worth knowing:
+Three places where the distinction is not obvious and is worth knowing:
 
 - **A check is one or the other, and you choose which.** An *expression* check is a
   formula code evaluates at no token cost. A *judgment* check sends its instruction and
@@ -191,6 +210,17 @@ Two places where the distinction is not obvious and is worth knowing:
   "screens against the OFAC SDN list" — rather than only citing the policy that
   requires it. A rule described well is found under a name you never anticipated; one
   described only as a regulation reference is not.
+- **A sample workbook helps the AI, but never on a run.** This is the marker people
+  most often read as *nothing*, and that is the wrong reading. The AI and the tool use
+  your samples for four things while you set up: working out which uploaded file is
+  which, what a named value points at, the example values a validation guide shows, and
+  the suggestions on the **Meaning** screen — the one place the model reads a sample's
+  layout directly. None of it happens when a delivery is checked: the file is not
+  opened, and a better sample improves runs only through the definitions you build from
+  it. One thing does travel, so it is worth knowing: where a guide entry lands on a
+  sample, that cell's value is quoted to the model as an example on every run the guide
+  applies to. **That is why samples must be made-up files, never real customer data**
+  (ADR-003).
 
 The full register, derived from the code rather than from memory, is
 [`model-context.md`](model-context.md).

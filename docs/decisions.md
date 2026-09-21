@@ -1630,3 +1630,46 @@ The cost is one model call per delivery whose keywords missed, falling to zero f
 customer as their vocabulary is accepted. The benefit is that the last measured false
 high-severity finding in the classification check has an answer, and that a customer
 who writes about their work in their own words stops being asked about it every month.
+
+## ADR-046 — A marker may be switched off only where it says a field is *not* read in a run
+
+**Status:** accepted · 2026-09-20 · Phase 6.19
+
+**Context.** Every field a person can write carries a `<FieldEffect>` marker saying what
+it does to a run, and until now the rule was absolute: **markers never hide.** The
+reason is in `CLAUDE.md` — an administrator cannot see a prompt, so the label beside the
+box is the only account they get of where their words end up, and a console that stops
+giving that account once somebody ticks a box is a console that lies to its experienced
+users. `ui.tooltips` turns off *help*; it has never touched the markers.
+
+Phase 6.19 then added a sixth kind, `reference`, for material the AI reads **while
+somebody sets the product up and never during a validation run**: the sample workbooks,
+and an artifact type's description. On the Artifact types screen that marker repeats
+under every sample in every scope group, saying the same sentence each time.
+
+**Decision.** `reference` — *"Used for setup, not for runs"* — is switchable, with
+`ui.setup_markers`, on by default. The other four are not, and the asymmetry has a
+reason rather than being a convenience:
+
+- A marker that says a field **reaches the model** or **is checked by code** is
+  accountability. Hiding it leaves somebody writing a careful paragraph with no idea it
+  will be read, or no idea it will not. That is the defect the markers exist to prevent.
+- A marker that says a field is **not read during a run** cannot mislead anybody about
+  where their words go. Switching it off removes a repeated reassurance, not a fact
+  somebody needed.
+
+The distinction is the direction of the claim, not how useful the sentence is.
+
+**Consequences.** `FieldEffect` consults one setting, in one line, for one kind:
+`if (kind === "reference" && !setupMarkers) return null;`. It does not consult
+`ui.tooltips` at all. Two tests hold the line —
+`test_the_marker_cannot_be_switched_off` keeps help and markers apart, and
+`test_only_the_setup_marker_may_be_switched_off` asserts the *shape* of that guard, so
+widening the condition fails even though every rendering test would still pass. The way
+this decision would erode is somebody adding `|| kind === "notes"` to a line nobody is
+watching.
+
+The switch lives in Appearance beside **Explain each screen**, because the two are what
+an administrator reaches for when a console feels chatty — and the help text says
+plainly which markers it cannot touch, so nobody switches it expecting more silence than
+they get.

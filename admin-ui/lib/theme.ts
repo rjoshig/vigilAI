@@ -49,6 +49,11 @@ export interface Appearance {
    * run, not help text.
    */
   tooltips: boolean;
+  /**
+   * Whether the "used for setup, not for runs" markers show (Phase 6.19). The other
+   * markers are not optional — they say where somebody's words end up (ADR-046).
+   */
+  setupMarkers: boolean;
   /** The line under the mark in the sidebar (Phase 6.14h). */
   tagline: string;
   /** Whether the user app should show a maintenance page (Phase 6.14j). */
@@ -87,6 +92,7 @@ export function parseAppearance(body: unknown, fallback: Palette): Appearance {
     // Explanations are on unless the deployment says otherwise, so a page that cannot
     // reach the API still shows them rather than silently going quiet.
     tooltips: record.tooltips !== false,
+    setupMarkers: record.setup_markers !== false,
     tagline: typeof record.tagline === "string" ? record.tagline : "",
     // Default to available: a page that cannot reach the API should not tell
     // somebody the tool is down when it may simply be the page that is.
@@ -108,6 +114,7 @@ export async function fetchAppearance(): Promise<Appearance> {
     theme: configuredPalette(),
     locked: true,
     tooltips: true,
+    setupMarkers: true,
     tagline: "",
     maintenance: false,
     accepting: true,

@@ -518,6 +518,20 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "stay either way, because those are facts about the run rather than help.",
     ),
     SettingSpec(
+        key="ui.setup_markers",
+        env="GREENLIGHT_AI_UI_SETUP_MARKERS",
+        label="Show setup-only markers",
+        group="Appearance",
+        kind="bool",
+        default=True,
+        help="On by default: fields that are used while you set the product up, but "
+        "never when a delivery is checked, say so — the sample workbooks and an "
+        "artifact type's description. Switch it off to quieten those screens. It "
+        "cannot hide the markers that say a field reaches the model or is checked by "
+        "code: those state where somebody's words end up, and stay whatever this is "
+        "set to (ADR-046).",
+    ),
+    SettingSpec(
         key="ui.theme_locked",
         env="GREENLIGHT_AI_UI_THEME_LOCKED",
         label="Lock the theme",

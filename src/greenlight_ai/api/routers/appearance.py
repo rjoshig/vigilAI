@@ -38,6 +38,10 @@ class AppearanceOut(BaseModel):
     #: administrator who knows the product can switch it off. It never hides the
     #: markers that say which fields reach the model: those are facts about the run.
     tooltips: bool = True
+    #: Whether the "used for setup, not for runs" markers show (Phase 6.19). Only that
+    #: one kind is optional: it says a field is *not* read during a run, so hiding it
+    #: cannot mislead anybody about where their words go (ADR-046).
+    setup_markers: bool = True
     #: The line under the mark in both apps' sidebars (Phase 6.14h).
     tagline: str = ""
     #: Whether the user app should show a maintenance page instead of itself
@@ -66,6 +70,7 @@ def appearance(session: Session = Depends(get_session)) -> AppearanceOut:
         locked=bool(store.resolve(session, "ui.theme_locked").value),
         palettes=list(SETTINGS_BY_KEY["ui.theme"].choices),
         tooltips=bool(store.resolve(session, "ui.tooltips").value),
+        setup_markers=bool(store.resolve(session, "ui.setup_markers").value),
         tagline=str(store.resolve(session, "ui.tagline").value),
         maintenance=state.maintenance,
         accepting=state.accepting,

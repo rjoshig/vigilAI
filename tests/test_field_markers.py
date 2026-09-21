@@ -53,6 +53,19 @@ CODE_SURFACES: Final[tuple[tuple[str, str, str], ...]] = (
     ("admin-ui/components/field-labels-card.tsx", "code", "the credit-date label"),
 )
 
+#: Surfaces holding material the tool and the model resolve definitions against while
+#: somebody is setting the product up, and that no validation run opens. Marked because
+#: "does the AI read this?" has a different answer here than anywhere else — yes, but
+#: not during a run — and an administrator who assumes either extreme gets it wrong.
+REFERENCE_SURFACES: Final[tuple[tuple[str, str, str], ...]] = (
+    (
+        "admin-ui/app/artifacts/page.tsx",
+        "reference",
+        "the sample workbooks, and a type's description",
+    ),
+    ("admin-ui/app/meaning/page.tsx", "reference", "the samples the mapping interview reads"),
+)
+
 
 def _source(relative: str) -> str:
     path = REPO / relative
@@ -62,8 +75,8 @@ def _source(relative: str) -> str:
 
 @pytest.mark.parametrize(
     "relative,kind,field",
-    [*MODEL_SURFACES, *CODE_SURFACES],
-    ids=[f"{r}:{k}" for r, k, _ in (*MODEL_SURFACES, *CODE_SURFACES)],
+    [*MODEL_SURFACES, *CODE_SURFACES, *REFERENCE_SURFACES],
+    ids=[f"{r}:{k}" for r, k, _ in (*MODEL_SURFACES, *CODE_SURFACES, *REFERENCE_SURFACES)],
 )
 def test_a_surface_says_what_its_field_does(relative: str, kind: str, field: str) -> None:
     """Each screen carries the marker its field earns.
@@ -88,7 +101,7 @@ def test_both_apps_define_the_marker_identically() -> None:
     """
     admin = _source("admin-ui/components/explain.tsx")
     user = _source("user-ui/components/explain.tsx")
-    for kind in ("model", "code", "reviewer", "notes", "record"):
+    for kind in ("model", "code", "reviewer", "notes", "record", "reference"):
         assert f"{kind}: {{" in admin or f'"{kind}"' in admin
         assert f"{kind}: {{" in user or f'"{kind}"' in user
     assert 'label: "Helps the AI"' in admin
@@ -112,3 +125,28 @@ def test_the_marker_cannot_be_switched_off() -> None:
         assert (
             "tooltips" not in effect
         ), f"{app}: FieldEffect must not consult the tooltips setting — it never hides."
+
+
+def test_only_the_setup_marker_may_be_switched_off() -> None:
+    """One kind is optional and the other four are not (ADR-046).
+
+    `ui.setup_markers` exists because *used for setup, not for runs* is the same
+    sentence repeated down a screen of sample files, and hiding it cannot mislead
+    anybody: it says a field is **not** read during a run. The four that say where
+    somebody's words do end up are the account an administrator gets in place of seeing
+    the prompt, and no setting may take them away.
+
+    The check is on the shape of the guard rather than on behaviour, because the way
+    this would regress is somebody widening the condition while every rendering test
+    still passes.
+    """
+    for app in ("admin-ui", "user-ui"):
+        source = _source(f"{app}/components/explain.tsx")
+        effect = source[source.index("export function FieldEffect") :]
+        effect = effect[: effect.index("export function Explain")]
+        early_returns = [line.strip() for line in effect.splitlines() if "return null" in line]
+        assert early_returns == ['if (kind === "reference" && !setupMarkers) return null;'], (
+            f"{app}: FieldEffect hides something other than the setup marker. "
+            f"Found {early_returns!r}. A marker that says a field reaches the model or "
+            "is checked by code must not be switchable off (ADR-046)."
+        )
