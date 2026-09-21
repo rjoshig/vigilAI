@@ -31,6 +31,7 @@ import type {
   ProgrammeRule,
   ProgrammeRuleIn,
   ProviderTestResult,
+  RoleChoice,
   Rule,
   RuleActionWord,
   RuleStateChange,
@@ -42,6 +43,7 @@ import type {
   SettingGroup,
   TestResult,
   TrainingConfig,
+  UserRole,
   Usage,
   UsageByUser,
   ValueReport,
@@ -150,6 +152,16 @@ export const api = {
 
   /** List every account, active or not, including the placeholder. */
   listUsers: (): Promise<AdminUser[]> => request<AdminUser[]>("/users"),
+
+  /**
+   * The roles and what each is for. Fetched rather than hard-coded, so the console
+   * cannot say a role does something the server's matrix does not grant it (ADR-049).
+   */
+  listRoles: (): Promise<RoleChoice[]> => request<RoleChoice[]>("/users/roles"),
+
+  /** Change which roles an account holds. They add up, so this is the whole set. */
+  setUserRoles: (userId: number, roles: UserRole[]): Promise<AdminUser> =>
+    request<AdminUser>(`/users/${userId}/roles`, json("POST", { roles })),
 
   /** Create an account. The person must change this first password at sign-in. */
   createUser: (payload: NewUser): Promise<AdminUser> =>

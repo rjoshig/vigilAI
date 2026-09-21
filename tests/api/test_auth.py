@@ -242,7 +242,7 @@ def test_an_admin_creates_accounts_for_both_roles(admin_client: TestClient, api:
             "name": "John Doe",
             "email": "jdoe@example.com",
             "password": GOOD,
-            "role": "user",
+            "roles": ["user"],
         },
     )
     assert made.status_code == 201, made.text
@@ -258,7 +258,7 @@ def test_an_admin_creates_accounts_for_both_roles(admin_client: TestClient, api:
             "name": "Another",
             "email": "other@example.com",
             "password": GOOD,
-            "role": "user",
+            "roles": ["user"],
         },
     )
     assert clash.status_code == 422
@@ -270,7 +270,7 @@ def test_an_admin_creates_accounts_for_both_roles(admin_client: TestClient, api:
             "name": "S",
             "email": "s@example.com",
             "password": "short",
-            "role": "user",
+            "roles": ["user"],
         },
     )
     assert short.status_code == 422
@@ -314,7 +314,7 @@ def test_deactivating_an_account_ends_its_sessions_at_once(
             "name": "Temp",
             "email": "temp@example.com",
             "password": GOOD,
-            "role": "admin",
+            "roles": ["admin"],
         },
     ).json()
 
@@ -372,7 +372,7 @@ def test_an_admin_reset_forces_the_person_to_choose_their_own(
             "name": "Reset Me",
             "email": "reset@example.com",
             "password": GOOD,
-            "role": "user",
+            "roles": ["user"],
         },
     ).json()
     other = "another-long-password"

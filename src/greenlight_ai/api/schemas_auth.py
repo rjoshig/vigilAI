@@ -12,6 +12,8 @@ __all__ = [
     "AuthConfigOut",
     "ChangePasswordIn",
     "LoginIn",
+    "RoleOut",
+    "RolesIn",
     "UserIn",
     "UserOut",
     "ResetPasswordIn",
@@ -82,7 +84,27 @@ class UserIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=200)
-    role: str = "user"
+    #: Which roles the account holds (ADR-049). They add up rather than replacing one
+    #: another, which is why this is a list and the screen shows checkboxes: a senior
+    #: associate is a ``user`` *and* a ``reviewer``.
+    roles: list[str] = Field(default_factory=lambda: ["user"], max_length=8)
+
+
+class RolesIn(BaseModel):
+    """What roles an account should hold from now on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    roles: list[str] = Field(max_length=8)
+
+
+class RoleOut(BaseModel):
+    """One role and what it is for, as the Users screen shows it beside its checkbox."""
+
+    role: str
+    #: From ``auth/roles.py``, so the console and the code cannot describe a role
+    #: differently. There is one sentence per role and it lives with the grants.
+    description: str = ""
 
 
 class ResetPasswordIn(BaseModel):
@@ -100,7 +122,10 @@ class UserOut(BaseModel):
     username: str
     name: str
     email: str
+    #: The strongest role held. Stays until 6.20f, so nothing that still reads it breaks.
     role: str
+    #: Every role held, weakest first (ADR-049).
+    roles: list[str] = Field(default_factory=lambda: ["user"])
     is_active: bool
     is_placeholder: bool
     must_change_password: bool

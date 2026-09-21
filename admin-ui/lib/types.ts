@@ -491,7 +491,10 @@ export interface AdminUser {
   username: string;
   name: string;
   email: string;
+  /** The strongest role held. Kept until nothing reads it (phase 6.20f). */
   role: UserRole;
+  /** Every role held, weakest first. They add up rather than replacing one another. */
+  roles: UserRole[];
   is_active: boolean;
   is_placeholder: boolean;
   must_change_password: boolean;
@@ -506,7 +509,17 @@ export interface NewUser {
   name: string;
   email: string;
   password: string;
+  /**
+   * Which roles the account holds. A list and not a choice: they are not exclusive, and
+   * a dropdown would say they are — a senior associate is a user *and* a reviewer.
+   */
+  roles: UserRole[];
+}
+
+/** One role and the sentence the API gives for it, shown beside its checkbox. */
+export interface RoleChoice {
   role: UserRole;
+  description: string;
 }
 
 /* ---------------------------------------------------- Runtime settings (ADR-023) */

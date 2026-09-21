@@ -16,10 +16,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from greenlight_ai.api.deps import CurrentUser, get_auth_settings, get_session, require_users
-from greenlight_ai.api.schemas_auth import ResetPasswordIn, UserIn, UserOut
+from greenlight_ai.api.schemas_auth import (
+    ResetPasswordIn,
+    RoleOut,
+    RolesIn,
+    UserIn,
+    UserOut,
+)
 from greenlight_ai.auth import accounts
 from greenlight_ai.auth.passwords import PasswordTooShort, hash_password
-from greenlight_ai.auth.roles import Role, holds
+from greenlight_ai.auth.roles import ROLES, Role, describe, holds
 from greenlight_ai.auth.sessions import revoke_all_for_user
 from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.db import models, repository
@@ -51,6 +57,7 @@ def _out(row: models.User) -> UserOut:
         name=row.name,
         email=row.email,
         role=row.role,
+        roles=list(row.roles or []),
         is_active=row.is_active,
         is_placeholder=row.is_placeholder,
         must_change_password=row.must_change_password,
@@ -77,6 +84,18 @@ def _get(session: Session, user_id: int) -> models.User:
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"account {user_id} not found")
     return row
+
+
+@router.get("/roles", response_model=list[RoleOut])
+def list_roles() -> list[RoleOut]:
+    """The three roles and what each is for, weakest first.
+
+    Returns:
+        One entry per role. The wording comes from ``auth/roles.py``, beside the grants
+        it describes, so the console cannot say a role does something the matrix does
+        not give it.
+    """
+    return [RoleOut(role=role, description=describe(role)) for role in ROLES]
 
 
 @router.get("", response_model=list[UserOut])
@@ -121,7 +140,7 @@ def create_user(
         The new account, which must change its password at first sign-in.
 
     Raises:
-        HTTPException: 422 when the username or email is taken, the role is unknown,
+        HTTPException: 422 when the username or email is taken, a role is unknown,
             or the first password is too short.
     """
     try:
@@ -132,7 +151,7 @@ def create_user(
             name=payload.name,
             email=payload.email,
             password=payload.password,
-            role=payload.role,
+            roles=payload.roles,
             created_by=user.id,
         )
     except (accounts.AccountError, PasswordTooShort) as exc:
@@ -141,7 +160,7 @@ def create_user(
     repository.audit(
         session,
         "admin.user_created",
-        detail=f"{row.username} ({row.role})",
+        detail=f"{row.username} ({', '.join(row.roles or [])})",
         user_id=user.id,
         actor=user.name,
     )
@@ -252,4 +271,59 @@ def set_active(
         user_id=user.id,
         actor=user.name,
     )
+    return _out(row)
+
+
+@router.post("/{user_id}/roles", response_model=UserOut)
+def set_roles(
+    user_id: int,
+    payload: RolesIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_users),
+) -> UserOut:
+    """Change which roles an account holds.
+
+    Roles add up, so this is a set rather than a choice: saving ``user`` and
+    ``reviewer`` grants the union of both, and saving nothing at all still leaves a
+    plain ``user`` rather than an account locked out of everything.
+
+    Args:
+        user_id: The account.
+        payload: The roles it should hold from now on.
+        session: The request's session.
+        user: The calling administrator.
+
+    Returns:
+        The account, with its roles as stored.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 422 for the placeholder or an unknown
+            role, and 409 when the change would leave the deployment with no
+            administrator — including when it is the caller demoting themselves.
+    """
+    row = _get(session, user_id)
+    before = list(row.roles or [])
+    losing_admin = holds(before, Role.ADMIN) and not holds(payload.roles, Role.ADMIN)
+    if losing_admin and not accounts.other_active_admins(session, besides=row.id):
+        # Unrecoverable without a database edit, which is why it is refused rather than
+        # warned about. It catches the caller demoting themselves as much as anybody
+        # else: they are the last administrator either way.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "this is the last administrator; nobody could reach the console afterwards",
+        )
+
+    try:
+        held = accounts.set_roles(session, row, payload.roles)
+    except accounts.AccountError as exc:
+        raise HTTPException(HTTP_422, str(exc)) from exc
+
+    repository.audit(
+        session,
+        "admin.user_roles_changed",
+        detail=f"{row.username}: {', '.join(before) or 'nothing'} -> {', '.join(held)}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    _LOG.info("account %s now holds %s", row.id, ", ".join(held))
     return _out(row)

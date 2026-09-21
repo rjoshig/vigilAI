@@ -1,12 +1,18 @@
 "use client";
 
 /**
- * Accounts (ADR-022). An administrator creates every account, for both roles; there is
- * no self-registration. Accounts are deactivated rather than deleted, so what a person
- * did stays attributed to them.
+ * Accounts (ADR-022, ADR-049). An administrator creates every account; there is no
+ * self-registration. Accounts are deactivated rather than deleted, so what a person did
+ * stays attributed to them.
+ *
+ * Roles are **checkboxes, not a dropdown**, because they are not exclusive: a senior
+ * associate is a user *and* a reviewer, and capabilities are the union of what is
+ * ticked. A dropdown would state the opposite. Each one carries the sentence the API
+ * gives for it, so this screen cannot describe a role in words the matrix does not
+ * support.
  */
 
-import { KeyRound, Plus } from "lucide-react";
+import { KeyRound, Plus, UserCog } from "lucide-react";
 import * as React from "react";
 
 import { Explain } from "@/components/explain";
@@ -22,7 +28,6 @@ import {
   Input,
   Label,
   PageHeader,
-  Select,
   Skeleton,
   TD,
   TH,
@@ -30,15 +35,69 @@ import {
   Table,
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
-import type { AdminUser, NewUser, UserRole } from "@/lib/types";
+import type { AdminUser, NewUser, RoleChoice, UserRole } from "@/lib/types";
 
 const NEW_USER: NewUser = {
   username: "",
   name: "",
   email: "",
   password: "",
-  role: "user",
+  roles: ["user"],
 };
+
+/**
+ * The roles an account holds, as a set of checkboxes.
+ *
+ * Nothing ticked is allowed and means a plain user: the API normalises it that way, so
+ * saving an empty form is a mistake rather than a way to lock somebody out of
+ * everything.
+ */
+function RoleChoices({
+  id,
+  choices,
+  held,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  choices: RoleChoice[];
+  held: UserRole[];
+  disabled?: boolean;
+  onChange: (roles: UserRole[]) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2" role="group" aria-label="Roles">
+      {choices.map((choice) => (
+        <label
+          key={choice.role}
+          className="flex items-start gap-2 text-sm"
+          htmlFor={`${id}-${choice.role}`}
+        >
+          <input
+            id={`${id}-${choice.role}`}
+            type="checkbox"
+            className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
+            disabled={disabled}
+            checked={held.includes(choice.role)}
+            onChange={(event) =>
+              onChange(
+                event.target.checked
+                  ? [...held, choice.role]
+                  : held.filter((role) => role !== choice.role)
+              )
+            }
+          />
+          <span>
+            <span className="font-medium capitalize">{choice.role}</span>
+            <span className="block text-[0.7rem] leading-snug text-muted-foreground">
+              {choice.description}
+            </span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
 
 function when(value: string | null): string {
   if (!value) return "never";
@@ -56,6 +115,10 @@ function StateBadge({ user }: { user: AdminUser }) {
 
 export default function UsersPage() {
   const [users, setUsers] = React.useState<AdminUser[] | null>(null);
+  const [choices, setChoices] = React.useState<RoleChoice[]>([]);
+  // Which row's roles are open for editing, and what is ticked there so far.
+  const [editing, setEditing] = React.useState<number | null>(null);
+  const [draftRoles, setDraftRoles] = React.useState<UserRole[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [fresh, setFresh] = React.useState<NewUser>({ ...NEW_USER });
@@ -63,7 +126,9 @@ export default function UsersPage() {
 
   const load = React.useCallback(async () => {
     try {
-      setUsers(await api.listUsers());
+      const [nextUsers, nextChoices] = await Promise.all([api.listUsers(), api.listRoles()]);
+      setUsers(nextUsers);
+      setChoices(nextChoices);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
@@ -82,8 +147,9 @@ export default function UsersPage() {
       await load();
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
-        // The API refuses to leave the console with nobody who can administer it.
-        setError("This is the last active administrator, so it cannot be deactivated.");
+        // The API refuses to leave the console with nobody who can administer it, and
+        // says which of the two ways it was about to happen.
+        setError(caught.detail);
       } else {
         setError(caught instanceof ApiError ? caught.detail : `Could not ${what}.`);
       }
@@ -165,16 +231,14 @@ export default function UsersPage() {
                 onChange={(event) => setFresh({ ...fresh, email: event.target.value })}
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="nu-role">Role</Label>
-              <Select
-                id="nu-role"
-                value={fresh.role}
-                onChange={(event) => setFresh({ ...fresh, role: event.target.value as UserRole })}
-              >
-                <option value="user">User</option>
-                <option value="admin">Administrator</option>
-              </Select>
+            <div className="flex flex-col gap-1.5 sm:col-span-2 sm:row-span-2">
+              <Label htmlFor="nu-roles">Roles</Label>
+              <RoleChoices
+                id="nu-roles"
+                choices={choices}
+                held={fresh.roles}
+                onChange={(roles) => setFresh({ ...fresh, roles })}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="nu-password">First password</Label>
@@ -223,7 +287,7 @@ export default function UsersPage() {
                   <TH>Username</TH>
                   <TH>Name</TH>
                   <TH>Email</TH>
-                  <TH>Role</TH>
+                  <TH>Roles</TH>
                   <TH>State</TH>
                   <TH>Last sign-in</TH>
                   <TH>Password</TH>
@@ -245,7 +309,55 @@ export default function UsersPage() {
                     </TD>
                     <TD className="text-muted-foreground">{user.email}</TD>
                     <TD>
-                      <Badge tone={user.role === "admin" ? "info" : "outline"}>{user.role}</Badge>
+                      {editing === user.id ? (
+                        <div className="flex flex-col items-start gap-2">
+                          <RoleChoices
+                            id={`roles-${user.id}`}
+                            choices={choices}
+                            held={draftRoles}
+                            disabled={busy}
+                            onChange={setDraftRoles}
+                          />
+                          <div className="flex gap-1.5">
+                            <Button
+                              size="xs"
+                              disabled={busy}
+                              onClick={() =>
+                                void act("change the roles", async () => {
+                                  await api.setUserRoles(user.id, draftRoles);
+                                  setEditing(null);
+                                })
+                              }
+                            >
+                              Save roles
+                            </Button>
+                            <Button size="xs" variant="outline" onClick={() => setEditing(null)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {(user.roles ?? []).map((role) => (
+                            <Badge key={role} tone={role === "admin" ? "info" : "outline"}>
+                              {role}
+                            </Badge>
+                          ))}
+                          {user.is_placeholder ? null : (
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              aria-label={`Change the roles for ${user.username}`}
+                              onClick={() => {
+                                setEditing(user.id);
+                                setDraftRoles([...(user.roles ?? [])]);
+                              }}
+                            >
+                              <UserCog className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </TD>
                     <TD>
                       <StateBadge user={user} />

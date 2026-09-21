@@ -23,13 +23,14 @@ from __future__ import annotations
 from typing import Any, Callable, Iterator
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from greenlight_ai.api.app import API_PREFIX, create_app
 from greenlight_ai.auth.passwords import hash_password
 from greenlight_ai.auth.roles import Capability, capabilities_of
-from greenlight_ai.auth.settings import AuthSettings
+from greenlight_ai.auth.settings import BOOTSTRAP_USERNAME, AuthSettings
 from greenlight_ai.db import models
 from greenlight_ai.db.settings import DbSettings
 
@@ -303,3 +304,225 @@ def test_with_login_off_nothing_is_gated(client: TestClient, capability: Capabil
     """ADR-022: with both switches off the behaviour is exactly what it was before
     login existed, and the placeholder holding `user` and `admin` is what keeps it so."""
     assert _call(client, capability) != 403, capability.value
+
+
+# --- assigning roles (6.20e) ---------------------------------------------------------
+
+
+def test_the_roles_catalogue_carries_the_wording_from_the_matrix(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """One sentence per role, from beside the grants, so the screen cannot invent one."""
+    client = sign_in("user", "admin")
+
+    body = client.get(f"{API_PREFIX}/admin/users/roles").json()
+
+    assert [entry["role"] for entry in body] == ["user", "reviewer", "admin"]
+    assert all(entry["description"] for entry in body)
+
+
+def test_roles_are_a_set_and_the_union_takes_effect_at_once(
+    sign_in: Callable[..., TestClient], locked_client: TestClient
+) -> None:
+    """Saving two roles grants both; the account's next request has the capabilities."""
+    admin = sign_in("user", "admin")
+    created = admin.post(
+        f"{API_PREFIX}/admin/users",
+        json={
+            "username": "senior",
+            "name": "A senior associate",
+            "email": "senior@localhost",
+            "password": PASSWORD,
+            "roles": ["user"],
+        },
+    ).json()
+
+    promoted = admin.post(
+        f"{API_PREFIX}/admin/users/{created['id']}/roles",
+        json={"roles": ["user", "reviewer"]},
+    )
+
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["roles"] == ["user", "reviewer"]
+    assert promoted.json()["role"] == "reviewer", "the legacy field holds the strongest"
+
+
+def test_nothing_ticked_still_leaves_a_plain_user(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """Saving an empty form is a mistake, not a way to lock somebody out of everything."""
+    admin = sign_in("user", "admin")
+    created = admin.post(
+        f"{API_PREFIX}/admin/users",
+        json={
+            "username": "nobody",
+            "name": "Nobody",
+            "email": "nobody@localhost",
+            "password": PASSWORD,
+            "roles": ["reviewer"],
+        },
+    ).json()
+
+    response = admin.post(f"{API_PREFIX}/admin/users/{created['id']}/roles", json={"roles": []})
+
+    assert response.status_code == 200
+    assert response.json()["roles"] == ["user"]
+
+
+def test_the_last_administrator_cannot_demote_themselves(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """Unrecoverable without a database edit, so it is refused rather than warned about.
+
+    A deployment with admin login on has a bootstrap administrator from the start, so
+    being the last one takes deactivating it first — which is the realistic way somebody
+    arrives here: they made their own account, retired the shipped one, and then tried
+    to hand their console access back.
+    """
+    admin = sign_in("user", "admin")
+    me = admin.get(f"{API_PREFIX}/auth/me").json()
+    bootstrap = next(
+        row
+        for row in admin.get(f"{API_PREFIX}/admin/users").json()
+        if row["username"] == BOOTSTRAP_USERNAME
+    )
+    retired = admin.post(f"{API_PREFIX}/admin/users/{bootstrap['id']}/active?is_active=false")
+    assert retired.status_code == 200, retired.text
+
+    response = admin.post(
+        f"{API_PREFIX}/admin/users/{me['id']}/roles", json={"roles": ["user", "reviewer"]}
+    )
+
+    assert response.status_code == 409
+    assert "last administrator" in response.json()["detail"]
+    assert admin.get(f"{API_PREFIX}/auth/me").json()["roles"] == ["user", "admin"]
+
+
+def test_the_last_administrator_cannot_be_deactivated_either(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """The other half of the same rule, and the one that was already there."""
+    admin = sign_in("user", "admin")
+    me = admin.get(f"{API_PREFIX}/auth/me").json()
+    bootstrap = next(
+        row
+        for row in admin.get(f"{API_PREFIX}/admin/users").json()
+        if row["username"] == BOOTSTRAP_USERNAME
+    )
+    admin.post(f"{API_PREFIX}/admin/users/{bootstrap['id']}/active?is_active=false")
+
+    response = admin.post(f"{API_PREFIX}/admin/users/{me['id']}/active?is_active=false")
+
+    assert response.status_code == 409
+
+
+def test_an_administrator_may_be_demoted_once_there_is_another(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """The rule protects the deployment, not any particular person."""
+    admin = sign_in("user", "admin")
+    me = admin.get(f"{API_PREFIX}/auth/me").json()
+    created = admin.post(
+        f"{API_PREFIX}/admin/users",
+        json={
+            "username": "second",
+            "name": "A second administrator",
+            "email": "second@localhost",
+            "password": PASSWORD,
+            "roles": ["user", "admin"],
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    response = admin.post(
+        f"{API_PREFIX}/admin/users/{me['id']}/roles", json={"roles": ["user", "reviewer"]}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["roles"] == ["user", "reviewer"]
+
+
+def test_the_placeholders_roles_are_not_editable(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """They are what makes the product work with login off (ADR-022)."""
+    admin = sign_in("user", "admin")
+    placeholder = next(
+        row for row in admin.get(f"{API_PREFIX}/admin/users").json() if row["is_placeholder"]
+    )
+
+    response = admin.post(
+        f"{API_PREFIX}/admin/users/{placeholder['id']}/roles", json={"roles": ["user"]}
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_unknown_role_is_refused_rather_than_stored(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """A typo must not become a role nobody can see in the matrix."""
+    admin = sign_in("user", "admin")
+    created = admin.post(
+        f"{API_PREFIX}/admin/users",
+        json={
+            "username": "typo",
+            "name": "Typo",
+            "email": "typo@localhost",
+            "password": PASSWORD,
+            "roles": ["user"],
+        },
+    ).json()
+
+    response = admin.post(
+        f"{API_PREFIX}/admin/users/{created['id']}/roles", json={"roles": ["superuser"]}
+    )
+
+    assert response.status_code == 422
+
+
+def test_a_role_change_is_attributed_like_everything_else(
+    sign_in: Callable[..., TestClient], factory: sessionmaker[Session]
+) -> None:
+    """Who widened somebody's access, and from what to what (ADR-022)."""
+    admin = sign_in("user", "admin")
+    created = admin.post(
+        f"{API_PREFIX}/admin/users",
+        json={
+            "username": "audited",
+            "name": "Audited",
+            "email": "audited@localhost",
+            "password": PASSWORD,
+            "roles": ["user"],
+        },
+    ).json()
+    admin.post(
+        f"{API_PREFIX}/admin/users/{created['id']}/roles",
+        json={"roles": ["user", "reviewer"]},
+    )
+
+    with factory() as session:
+        entry = (
+            session.execute(
+                sa.select(models.AuditLog)
+                .where(models.AuditLog.action == "admin.user_roles_changed")
+                .order_by(models.AuditLog.id.desc())
+            )
+            .scalars()
+            .first()
+        )
+
+    assert entry is not None
+    assert "user -> user, reviewer" in entry.detail
+
+
+def test_a_reviewer_cannot_assign_roles_at_all(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """The obvious escalation: granting yourself what you were not given."""
+    reviewer = sign_in("user", "reviewer")
+
+    assert (
+        reviewer.post(f"{API_PREFIX}/admin/users/1/roles", json={"roles": ["admin"]}).status_code
+        == 403
+    )
