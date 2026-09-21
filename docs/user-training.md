@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-20, after Phase 6.19 parts A and C.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phases 6.19b and 6.20.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -155,8 +155,14 @@ otherwise, and each carries a small **Train AI** tag. Everything you type into a
 control is recorded and reviewed by an administrator before it changes anything. See
 "Train AI mode" below.
 
-The **Admin console** link opens the administrator app in a new tab. If you are not an
-administrator you can still open it, but nothing in it will let you change anything.
+**Guide** opens this document's essentials on a screen: what the tool is doing for you,
+what matters most from you, how to read a finding, and what it will not catch. It is built
+from this document, so the two always say the same thing, and an administrator can switch
+it off under Appearance if training is delivered another way.
+
+The **Admin console** link opens the administrator app in a new tab, and it is there only
+if your account includes the console — see "Why the Admin console link may not be there"
+below.
 
 ## Messages, and when the tool is away
 

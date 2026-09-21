@@ -1,11 +1,10 @@
 # Phase 6.20 — Three roles, and a console that shows you only your own job
 
-**Status:** 🟡 **in progress** — specified 2026-09-21. **6.20a is built** (the capability
-table and its tests) and **6.20b is mostly built** (several roles stored per account, and
-the placeholder holding `user` and `admin`). Nothing is enforced yet: no router and
-neither console consults a capability. Written as a hand-off: the
-thinking that needed doing is done and written down, and the wiring is listed in the
-order it is worth doing.
+**Status:** ✅ **complete** — 2026-09-21. Specified and built the same day, in the order
+below: the capability table, roles on an account, **the API enforcing them**, then the
+consoles, then assigning roles, then dropping the column the list replaced. The
+enforcement came before the hiding, deliberately, because a hidden link is not a closed
+door.
 
 ## Why
 
@@ -116,7 +115,7 @@ starts producing findings without having run silently first.
 **Nothing consumes this yet.** It is deliberately a leaf: pure, typed, no imports from
 the rest of the package, so the wiring below can be done in any order without a rewrite.
 
-### 6.20b — Several roles on an account · 🟡 in progress
+### 6.20b — Several roles on an account · ✅ complete
 
 The storage and the reporting landed early, because the placeholder needed both roles
 before the gating arrives — an account that behaves as an administrator while its row
@@ -136,69 +135,108 @@ says `user` is a disagreement waiting to lock somebody out.
       role instead of the literal `"user"` it used to return while behaving as an
       administrator.
 - [x] `GET /auth/me` returns `roles`, so neither console has to infer them.
-- [ ] `accounts.py` queries `User.role == "admin"` in SQL to answer *is there an
-      administrator?*. JSON membership is not portable across SQLite and Postgres
-      (ADR-017), so that check moves into Python over what is a very small table. It
-      still reads the legacy field, which is correct until 6.20f.
-- [ ] `CurrentUser` resolves `capabilities` and the routers stop consulting `is_admin`.
+- [x] `accounts.py` no longer asks SQL *is there an administrator?*. JSON membership is
+      not portable across SQLite and Postgres (ADR-017), so `_real_admins` and
+      `other_active_admins` read the list in Python over what is the smallest table in
+      the schema. `users.py` counts the last active administrator the same way.
+- [x] `CurrentUser` resolves `capabilities`, and the routers consult those rather than
+      `is_admin`. With admin login off the placeholder still holds every capability,
+      which is what ADR-022 promises; with it on, an unauthenticated caller on an open
+      path is granted nothing rather than inheriting the placeholder's roles.
 
-### 6.20c — The API enforces it · ⬜ not started
+### 6.20c — The API enforces it · ✅ complete
 
 **This is the part that matters.** Hiding a link is not access control, and anything done
 in the UI first is a door that looks shut.
 
-- [ ] `require_capability(Capability.X)` beside the existing `require_admin`, which
-      becomes `require_capability(VIEW_ADMIN)`.
-- [ ] Each router gets the capability its endpoints actually need:
-      `settings.py` → `MANAGE_SETTINGS`, `users.py` → `MANAGE_USERS`, `meaning.py` →
-      `MANAGE_MEANING`, `training.py` → `APPROVE_TRAINING`. `admin.py` is mixed and needs
-      it per endpoint — artifacts and programmes to their own capabilities, usage and the
-      keyword queue to `VIEW_ADMIN`, the masked-column routes to `MANAGE_PRIVACY`.
-- [ ] A test per capability that a reviewer's session is refused a 403 and an
-      administrator's is not, **with login on**. No existing test runs with the switches
-      on, so this is new scaffolding rather than a new assertion on old scaffolding.
-- [ ] 403 rather than 404: the screen exists and is not theirs, and pretending otherwise
-      makes support conversations impossible.
+- [x] `require_capability(Capability.X)` builds a guard per capability, and
+      `require_admin` is now that guard for `VIEW_ADMIN`. `assert_capability` refuses
+      from inside a handler for the two routes whose capability depends on a path
+      parameter.
+- [x] Each router gets the capability its endpoints actually need: `settings.py` →
+      `MANAGE_SETTINGS`, `users.py` → `MANAGE_USERS`, `meaning.py` → `MANAGE_MEANING`.
+      `training.py` splits: the observation queue and the candidates to
+      `APPROVE_TRAINING`, the rule surfaces to `MANAGE_RULES`, the front door to
+      `TEACH_MODEL`. `admin.py` is per endpoint — forty of them — with the bulk delete
+      and a definition revert reading their parameter first.
+- [x] Twenty-five in-body `require_admin(user)` re-checks went with it. Each sat in an
+      endpoint whose own guard is now stricter, so they said something weaker than the
+      truth.
+- [x] `tests/api/test_capabilities.py`: every capability from an administrator's side, a
+      reviewer's and a plain user's, **with both login switches on** — new scaffolding
+      rather than a new assertion on old scaffolding.
+- [x] 403 rather than 404, and the refusal names what was missing: the screen exists and
+      is not theirs, and a bare refusal makes a support conversation impossible.
+- [x] **One deliberate exception, recorded in ADR-049.** `GET /admin/scopes` stays on the
+      console floor: four screens a reviewer works on scope what they are editing to a
+      delivery programme, so all four fetch the list. Reading it is not *managing
+      programmes*; writing one is, and that is refused.
 
-### 6.20d — The consoles show each person their own job · ⬜ not started
+### 6.20d — The consoles show each person their own job · ✅ complete
 
-- [ ] `GET /auth/me` returns `roles` and `capabilities`, so neither app has to know the
-      matrix. The matrix lives in one place and the apps read it.
-- [ ] **user-ui:** the *Admin console* link renders only with `VIEW_ADMIN`. This is the
-      thing that prompted the phase.
-- [ ] **admin-ui:** every nav item is gated on its capability, and a screen reached by
-      URL without it shows *"This screen is for administrators"* rather than a broken
-      page or an empty one. An empty screen reads as a bug and generates a support call.
-- [ ] Reference data shows aliases and field labels to a reviewer and hides the
-      masked-column card, rather than hiding the whole screen.
+- [x] `GET /auth/me` returns `roles` and `capabilities`, so neither app has to know the
+      matrix. A console that recomputed it would disagree with the API the first time a
+      grant moved, and would disagree by offering a screen that then refuses.
+- [x] **user-ui:** the *Admin console* link renders only with `VIEW_ADMIN`. This is the
+      thing that prompted the phase. Two cases are still shown it deliberately: login
+      off, and admin login on while this app's is off — there the app does not know who
+      is looking, and a link to a console that asks for its own sign-in beats no link.
+- [x] **admin-ui:** one table carries each screen's capability and is read twice, for the
+      rail and for what a typed URL may render. A screen that is not this person's says
+      *"This screen is for administrators"* rather than rendering empty, because an empty
+      screen reads as a bug and generates a support call. Somebody with valid credentials
+      but no console at all is told once instead of meeting an empty rail.
+- [x] Reference data shows aliases and field labels to a reviewer and drops the
+      masked-column card, which is not even fetched without the capability, rather than
+      hiding the whole screen — that would take a reviewer's own work away to protect one
+      card on it.
 
-### 6.20e — Assigning roles · ⬜ not started
+### 6.20e — Assigning roles · ✅ complete
 
-- [ ] The Users screen offers the three roles as checkboxes with `describe()` beside
-      each, not a dropdown: they are not exclusive and a dropdown would say they are.
-- [ ] **An administrator cannot remove their own last `admin` role**, and the last
-      administrator in the deployment cannot be demoted or deactivated. Locking everybody
-      out of the console is unrecoverable without a database edit.
-- [ ] Every change is attributed and audited like the rest of the product (ADR-022).
+- [x] The Users screen offers the three roles as checkboxes, with each one's sentence
+      from `GET /admin/users/roles` beside it — `describe()`, fetched rather than
+      hard-coded, so the console cannot describe a role in words the matrix does not
+      support. Not a dropdown: they are not exclusive and a dropdown would say they are.
+- [x] Nothing ticked still leaves a plain `user`. Saving an empty form is a mistake, not
+      a way to lock somebody out of everything.
+- [x] **An administrator cannot remove their own last `admin` role**, and the last
+      administrator cannot be demoted or deactivated. Unrecoverable without a database
+      edit, so it is a 409 rather than a warning, and the screen shows the API's wording
+      so it says which of the two ways it was about to happen.
+- [x] Every change is attributed and audited like the rest of the product (ADR-022),
+      from what to what. The placeholder's roles are refused: they are what makes the
+      product behave as it did before login existed.
 
-### 6.20f — Removing the old field · ⬜ not started
+### 6.20f — Removing the old field · ✅ complete
 
-- [ ] Drop `User.role` once nothing reads it, in its own commit, after 6.20b–e have
-      been running.
+- [x] Dropped in its own commit, once nothing read it. `d2f4a6b8c0e1` removes it inside
+      `batch_alter_table`, which is how a column goes portably: older SQLite has no
+      DROP COLUMN and alembic rebuilds the table (ADR-017). The downgrade puts it back
+      and refills it from the list, so a rollback lands on a schema the previous revision
+      can work with; both directions were run before the commit.
+- [x] `CurrentUser`, `WhoAmIOut` and `UserOut` lose `role`; the Users screen and the
+      usage export show every role held. `tests/db/test_migration_chain.py` compares a
+      migrated database with the models column for column, so the drop had to land in
+      both.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · ✅ complete
 
-- [ ] With **login off**, behaviour is byte-for-byte what it is today: one placeholder
-      who can do everything, the admin link visible, nothing gated (ADR-022).
-- [ ] With **login on**, a `user` gets no admin link and a 403 from every admin route.
-- [ ] With **login on**, a `reviewer` can approve a training observation, activate the
-      rule it became, and edit an attribute alias; and is refused programmes, artifact
-      types, meaning, users, settings and masked columns.
-- [ ] A person holding `user` and `reviewer` has exactly a reviewer's capabilities.
-- [ ] The last administrator cannot be demoted or deactivated.
-- [ ] `docs/admin-training.md` gains a section on what each role may do, and
-      `docs/user-training.md` says why the admin link may not be there.
-- [ ] An ADR records the capability model and the two judgement calls above.
+- [x] With **login off**, behaviour is what it was: one placeholder who can do
+      everything, the admin link visible, nothing gated (ADR-022). Asserted per
+      capability, and the 1,672-test suite was green before and after each commit.
+- [x] With **login on**, a `user` gets no admin link, is told once if they sign in to the
+      console anyway, and is refused every admin route.
+- [x] With **login on**, a `reviewer` reaches the training queue, the rule surfaces, the
+      worked examples, the figures and the reference data; and is refused programmes,
+      artifact types, meaning, users, settings and masked columns.
+- [x] A person holding `user` and `reviewer` has exactly a reviewer's capabilities.
+- [x] The last administrator cannot be demoted or deactivated, by either route.
+- [x] `docs/admin-training.md` has *Who may do what: the three roles*, and
+      `docs/user-training.md` has *Why the Admin console link may not be there*. Both are
+      in their app's Guide (6.19b), so they are read where the question comes up.
+- [x] ADR-049 records the capability model and now three judgement calls: masked columns
+      on the admin side, reviewers getting the rule surfaces, and the programme list
+      staying on the console floor.
 
 ## What this phase deliberately does not do
 

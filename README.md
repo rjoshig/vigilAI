@@ -53,7 +53,7 @@ greenlight-ai/
 ├── .github/               # PR template, manual-only CI workflow
 ├── standards/             # canonical coding standards: python, frontend, git
 ├── docs/                  # design doc, architecture, phase docs, ADRs, session log
-├── scripts/               # developer tooling (docs check; fixture generator from Phase 2)
+├── scripts/               # developer tooling (docs check, Guide builder; fixture generator from Phase 2)
 ├── src/greenlight_ai/           # the Python package: api + worker + pipeline
 ├── tests/                 # pytest suite; synthetic fixtures only
 ├── mock/                  # static clickable mock: shared/, user-ui/, admin-ui/ (Phase 1)

@@ -11,9 +11,40 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev`, pushed; merged to `main` through PRs #55 and #56. Phases 6.17, 6.18a and 6.18f complete; **6.19 parts A and C complete**; **6.20 specified, with 6.20a built and 6.20b mostly built** — the placeholder now holds `user` and `admin`. **Next concrete action: 6.20c**, the API guards — several roles on an account — which the user is picking up from Claude Code on mobile. 6.19 part B (the in-app Guide) and 6.18b still open; 6.18b waits on [`phase-7.1.md`](phase-7.1.md) |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `claude/next-steps-pending-jr9tne`, pushed. **Phase 6.20 is complete** — three roles, capabilities enforced by the API, both consoles gated, roles assigned as a set, and the single `role` column dropped. **6.19 part B is built**: each app has a Guide in its sidebar, generated from that audience's training document, switchable with `GREENLIGHT_AI_UI_GUIDE`. 6.14 and 6.17 were closed: both were complete and their tables said otherwise. **Next concrete action: 6.18b**, the maturity level, which waits on real verdicts ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
+
+**What is left, and who it needs.** Nothing in the product is half-built. Three things
+are open and each needs somebody other than a session:
+
+- **6.19 criterion 5** — the user Guide read by somebody who has never seen the tool, who
+  then submits and reviews an order without asking. A person's job, and it belongs to
+  stage 2 of [`gd-rollout-plan.md`](gd-rollout-plan.md), where the focus group is.
+- **6.18b–e** — the maturity level, trustworthiness as a number, the demotion record and
+  the honest sample. All four want real verdicts to measure against
+  ([`phase-7.1.md`](phase-7.1.md)).
+- **The three items under "Outstanding, needs the user"** at the foot of this block: the
+  retention decision and sign-off, a model for the golden-set benchmark, and a sanitized
+  shape reference.
+
+**A branch note.** `CLAUDE.md` says a branch never carries an agent or model name and a
+tool-assigned `claude/*` name is renamed before its first push. This branch was named and
+pushed by the harness before the rule could apply, and the session was told to push
+nowhere else. Rename it, or merge it through a `feature/*` branch, before it reaches
+`main`.
+
+**When login is switched on, decide the roles first.** Three roles now exist and the API
+enforces them (ADR-049). With login off nothing changes: the placeholder holds `user` and
+`admin`, so every capability is granted and no screen is hidden. The moment
+`GREENLIGHT_AI_ADMIN_AUTH` goes on, a `user` loses the console entirely — which is the
+point, and which is also the first thing somebody will report as a bug if nobody decided
+who holds what. A senior associate who approves what the tool learned is a `reviewer`,
+not an administrator.
+
+**Editing a training document is now two steps.** The Guide in each app is generated from
+it (ADR-050). Edit the document, run `python scripts/build_guides.py`, commit both.
+`scripts/check_docs.sh` fails if you forget, and so does `tests/docs/test_guides.py`.
 
 **A column added nullable is the defect to watch for in this schema.** Five columns on
 `runs` were added by migrations without a backfill while the model declared them NOT
@@ -123,6 +154,105 @@ validates, a replay tests, and a person approves into shadow.
 - Whether a data dictionary exists to seed the alias table from.
 
 ---
+
+## Session: 2026-09-21 (three roles enforced, a Guide in each sidebar, two phases closed)
+
+**Branch:** `claude/next-steps-pending-jr9tne`, pushed · **Phase:** 6.20 complete, 6.19
+part B complete · **Status:** green at 1,672 Python tests, 122 admin-ui and 117 user-ui,
+every gate clean.
+
+### Two phases were finished and their tables said otherwise
+
+Asked what was pending, and the first answer was that two phases were lying. **6.14's one
+open item — the live cap countdown — had been built as 6.17b**: `GET /admin/prompt-budget`
+and `<CapMeter>` both exist. And **6.17 was complete**: all three sections ticked, both
+standing touchpoints done, its own "What is left" saying nothing remained, and its status
+line plus both phase tables still reading 🟡. `check_docs.sh` did not catch it because it
+derives markers from checkboxes and does not police status prose. A phase table that is
+wrong about what is done is worse than no table: the next session plans around it.
+
+### 6.20 — the enforcement first, the hiding second
+
+Built in the order the phase doc asked for, which was the right order.
+
+**The API is where it happens.** Every admin route now names the capability its own act
+needs rather than asking whether somebody is an administrator. Opening the console is the
+floor; on top of it `settings.py`, `users.py` and `meaning.py` take one capability each,
+`training.py` splits three ways, and `admin.py` is per endpoint — forty of them. Two
+routes serve several resources, so they read the parameter and then ask. Twenty-five
+in-body `require_admin(user)` re-checks went with it: each sat in an endpoint whose own
+guard is now stricter, so they said something weaker than the truth.
+
+`tests/api/test_capabilities.py` is the first suite in the repository that runs with both
+login switches **on** — sixty-two checks, every capability from an administrator's side, a
+reviewer's and a plain user's. The doc was slightly wrong that nothing ran with login on:
+`test_auth.py` has an `admin_client`. It was right that nothing gated anything.
+
+**One deliberate exception, and it is in the ADR.** `GET /admin/scopes` stays on the
+console floor. Four screens a reviewer works on scope what they are editing to a delivery
+programme, so all four fetch the list; reading it is not *managing programmes*, and
+refusing it would take four of a reviewer's own screens away to protect a listing the
+console links to anyway. Writing a programme is refused.
+
+**Then the consoles.** `/auth/me` returns the resolved capabilities, so neither app knows
+the matrix — a console that recomputed it would disagree with the API the first time a
+grant moved, by offering a screen that then refuses. The admin rail and what a typed URL
+may render come off one table, so a hidden screen cannot stay reachable. A screen that is
+not yours says *"This screen is for administrators"*, because an empty page reads as a bug
+and generates a support call.
+
+**Then the roles themselves.** Checkboxes, not a dropdown: the roles are not exclusive and
+a dropdown would say they are. Each carries its sentence from `GET /admin/users/roles`,
+fetched rather than hard-coded. The last administrator cannot be removed by either route
+— unticking the box or deactivating the account, their own included.
+
+**Then the column went.** `User.role` was a second answer to a question with one answer,
+and a second answer is where the two get to disagree. `d2f4a6b8c0e1` drops it inside
+`batch_alter_table`, both directions run before the commit. The migration-chain test from
+the previous session earned its place here: it compares a migrated database with the
+models column for column, so the drop had to land in both.
+
+### 6.19 part B — a Guide that cannot drift
+
+The phase asked for a Guide "from the training document that already exists for that
+audience", and the obvious failure of a Guide screen is a second document: written once,
+drifting within two phases, nobody able to say which is right.
+
+So it is **generated**. The documents mark which sections belong in the Guide, at which
+position, under which title — a document heading is for somebody reading front to back, a
+Guide heading for somebody who arrived with a question. `scripts/build_guides.py` emits
+already-parsed blocks with emphasis resolved into spans, because neither app carries a
+markdown renderer and a regex one in the browser would be a new class of bug in a screen
+whose whole job is to be trustworthy. `check_docs.sh` and `tests/docs/test_guides.py` both
+fail when a document changes without a rebuild.
+
+**Its own test found the first bug.** Table cells reached the screen as `**user**`: they
+were the one thing not run through span resolution. The test that asserts no markdown
+survives is the reason that was caught before anybody saw it, and it is why single-asterisk
+italics are resolved too.
+
+**Switchable, as asked.** `GREENLIGHT_AI_UI_GUIDE`, on by default, with the console
+overriding it and both apps following on the next page load (ADR-023). It gates the link
+and the screen and nothing else — help is not a control, so turning it off cannot change
+what a run does, and the API never consults it.
+
+**The training documents gained what the phase's checklists wanted and they did not
+have:** what matters most from you, what the tool will not catch, why your disagreement is
+worth recording, what improves the QC in the order it pays off, how to read the numbers,
+what is never editable. Plus the two 6.20 owed: what each role may do, and why the Admin
+console link may not be there. Written into the documents rather than into the Guide,
+because that is where the one source is — and the people who train from the document get
+them too.
+
+### What is not done, and why
+
+**6.19 criterion 5** asks for the user Guide to be tested on somebody who has never seen
+the tool. That is a person's job, so it stays unticked and labelled outstanding rather
+than quietly ticked; it is now an item in stage 2 of the rollout plan, where the focus
+group is. The phase reads 🟡 for that one reason.
+
+**Pending:** 6.18b–e, which want real verdicts ([`phase-7.1.md`](phase-7.1.md)). Nothing
+else in the product is half-built.
 
 ## Session: 2026-09-21 (a 500 on every review screen, a compact PDF, and roles specified)
 

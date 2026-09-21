@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-20, after Phase 6.19 parts A and C.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phases 6.19b and 6.20.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -29,15 +29,26 @@ When admin login is on and no administrator exists, the tool creates one: userna
 a deployment that is not on a laptop refuses to serve at all until you do. Create your
 own account and a second administrator before you rely on the bootstrap one.
 
-**Users** is where accounts live, for both administrators and users. There is no
-self-registration: you create the account, give a first password, and the person
-changes it at first sign-in. Accounts are deactivated, never deleted, so what a
-person did stays attributed to them. You cannot deactivate the last administrator.
+**Users** is where accounts live. There is no self-registration: you create the account,
+tick the roles it holds, give a first password, and the person changes it at first
+sign-in. Accounts are deactivated, never deleted, so what a person did stays attributed to
+them. You cannot deactivate or demote the last administrator — see "Who may do what: the
+three roles" below.
 
 ## The sidebar
 
 The logo and the name sit at the top-left, with a small **Admin** chip, where the user app
 shows **User**, so the two are never mistaken. Clicking them goes home.
+
+At the foot of the menu, **Guide** opens the parts of this document you will come back
+to: which surface a thing belongs on, what improves the QC in the order it pays off, how
+to read the numbers, who may do what, and what is never editable. It is built from this
+document, so the two cannot drift, and **Show the Guide** under Appearance turns it off in
+both apps for a deployment that trains another way.
+
+Which items you see depends on what your account holds. A reviewer's menu is shorter than
+an administrator's — see "Who may do what: the three roles" below — and a screen reached by
+typing its URL says so rather than showing an empty page.
 
 ## The sidebar indicator
 
@@ -448,7 +459,10 @@ changed what and from what.
   retention asks for a second click: the next sweep deletes anything past the new
   window.
 - **Appearance.** The **default theme** every browser starts on, in both apps, and
-  **Lock the theme**, which hides the picker everywhere and applies the default.
+  **Lock the theme**, which hides the picker everywhere and applies the default. Also
+  **Explain each screen**, **Show setup-only markers**, and **Show the Guide** — the last
+  of which offers or withdraws the Guide in both sidebars and nothing else; no check, no
+  rule and no run is affected by it.
   **Locking is on by default**, so both apps start out looking the same for everyone;
   switch it off and each person's own choice wins for their browser. The change
   reaches open tabs within a minute, no redeploy.
@@ -461,7 +475,10 @@ changed what and from what.
 **Aliases** map the names an attribute goes by across the OSL, the configuration, and
 the reports; a missing alias is the usual reason a check "could not evaluate".
 **Masked columns** name the report columns whose values are replaced before anything
-reaches the model. Add to it whenever a new layout carries personal data.
+reaches the model. Add to it whenever a new layout carries personal data. This card is
+**administrators only**, and a reviewer sees the screen without it: the aliases and field
+labels are theirs, and naming a masked column is the one control here whose failure is
+invisible.
 
 ## Usage
 

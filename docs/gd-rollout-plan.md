@@ -3,7 +3,7 @@
 **Owner:** the product owner, named in section 2. **Referenced from:** `CLAUDE.md`.
 **Status:** plan; names and dates are filled in at the intake meeting (section 9).
 Revisit at every milestone in `docs/phase-plan.md`.
-**Last re-read against the code:** 2026-09-20, after Phase 6.18a.
+**Last re-read against the code:** 2026-09-21, after Phases 6.19b and 6.20.
 
 This is the **delivery** document, not the engineering one. It says how the tool
 reaches the Global Delivery teams and how it is owned, supported, and accepted once it
@@ -93,6 +93,11 @@ The platform team, with the administrator.
       retention and PII handling recorded as an ADR.
 - [ ] Throughput limits set for the expected load, and the load test run once at that
       load.
+- [ ] The **three roles** decided for this region before login is switched on: who is a
+      user, who is also a reviewer, and the one or two who are administrators (ADR-049).
+      A senior associate who will approve what the tool learned is a reviewer, not an
+      administrator. Recorded with names, because the console has no other record of who
+      was *meant* to hold what.
 - [ ] `docs/user-training.md` and `docs/admin-training.md` re-read against the
       deployed version and corrected.
 - [ ] **The Review load screen understood before stage 3, and left alone until then.**
@@ -126,6 +131,11 @@ tool works, not whether its rules are right.
       extraction (prompt work), a missing alias or masked column (reference data),
       a missing or wrong rule (goes to stage 3), or a defect (fix before stage 3).
 - [ ] Usability notes collected in one place and the top five fixed.
+- [ ] **The user Guide read by somebody who has never seen the tool**, who then submits
+      and reviews an order without asking anybody. This is the one acceptance criterion
+      of `docs/phase-6.19.md` a session cannot tick, and this stage is the first time
+      there are people to tick it with. What they had to ask about is a gap in the
+      training document, not in the Guide: fix it there and rebuild.
 
 **Gate:** precision above the agreed floor on every programme, no open defect that
 blocks a review, and the focus group willing to say so in writing.
@@ -182,11 +192,19 @@ the seniors have signed off.
 Region by region, or team by team, never all at once, so the first group's questions
 become the second group's training.
 
-- [ ] Training sessions from `docs/user-training.md`, delivered by the seniors from
-      stage 3 rather than by the platform team. An hour, with each attendee submitting
-      one order in the session.
-- [ ] A named administrator per region, trained from `docs/admin-training.md`, with
-      the weekly routine at its foot on their calendar.
+- [ ] Training sessions delivered by the seniors from stage 3 rather than by the
+      platform team. An hour, with each attendee submitting one order in the session.
+      **The hour teaches the screens; the sidebar's Guide is what they keep** — it is
+      generated from `docs/user-training.md`, so it says the same thing and is on the
+      screen they already have open (ADR-050). End the hour by opening it and walking
+      *What matters most from you* and *What it will not catch*, so people know it is
+      there and what it is for.
+- [ ] A named administrator per region, trained from the admin console's own Guide,
+      generated from `docs/admin-training.md`, with the weekly routine at its foot on
+      their calendar.
+- [ ] Confirm the Guide is switched on for the region (`GREENLIGHT_AI_UI_GUIDE`, on by
+      default) — or, if training is deliberately delivered another way and it has been
+      turned off, say who owns the substitute and where it lives.
 - [ ] For each group, two weeks running the tool alongside the manual check, then the
       manual check retired for that group when its precision matches stage 3.
 - [ ] Train AI mode stays on. New observations keep arriving from each group and the
@@ -416,15 +434,22 @@ response times halved and the product meeting weekly, then business as usual.
 ## 7. Training and communication
 
 - **Users** are trained from `user-training.md` by the senior associates, an hour with
-  one order submitted live. Refresher at each release that changes a screen.
+  one order submitted live. Refresher at each release that changes a screen. **Between
+  sessions the Guide in the app sidebar is the answer**, generated from that same
+  document (ADR-050), so pointing somebody at it is never pointing them at something
+  that has drifted.
 - **Administrators** are trained from `admin-training.md` by the technical owner, half
   a day, ending with the trainee working a seeded training queue and activating a
-  shadow rule.
+  shadow rule. The console's own Guide carries the parts they will come back to: which
+  surface a thing belongs on, what improves the QC in the order it pays off, and how to
+  read the numbers.
 - **Announcements**: a week before a release, from the product owner, saying what
   changes for users; the day of, from the administrator, saying it is live.
 - **A single page** users can reach from the tool's sidebar, or pinned in the team
   channel, with: the tier 1 names for their programme, the tier 2 mailbox, the current
-  version, and the last release note.
+  version, and the last release note. This is the one page the Guide does not cover, and
+  deliberately: who to call is per region and changes, while the Guide is generated from
+  a document in the repository.
 
 ## 8. What is measured
 

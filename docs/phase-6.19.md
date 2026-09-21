@@ -1,6 +1,11 @@
 # Phase 6.19 — Say what helps, and teach it in the product
 
-**Status:** 🟡 **Parts A and C complete** (2026-09-20), Part B not started. Specified
+**Status:** 🟡 **everything built; one criterion needs a person** — parts A and C on
+2026-09-20, **part B on 2026-09-21**. Criterion 5 asks for the user Guide to be tested on
+somebody who has never seen the tool, which is a person's job and not a session's, so it
+stays **outstanding** rather than ticked. It is carried in
+[`session-log.md`](session-log.md) and belongs to stage 2 of
+[`gd-rollout-plan.md`](gd-rollout-plan.md), where the focus group is. Specified
 from an audit the user asked for, and extended with what a session of use turned up.
 The parts belong together because they answer the same question from different
 distances: *what does what I type actually do, and how do I use this well?*
@@ -193,94 +198,111 @@ An hour teaches how to click. It cannot teach the things that actually decide wh
 tool is worth having: *which fields are worth writing carefully, what the tool is not
 looking at, when to disagree with it.*
 
-### What to build · ⬜ not started
+### What to build · ✅ complete
 
 **A `Guide` entry in the sidebar of each app**, reading from the training document that
 already exists for that audience, so there is one source and it cannot drift. Not a copy
 of the repository file rendered in a frame: a screen written for the person in front of
 it, from the same content, with the sections a non-technical reader needs first.
 
-- [ ] **User app → Guide.** Written for an associate on their first week.
-- [ ] **Admin console → Guide.** Written for an administrator, which is a different job
-      and a different set of worries.
-- [ ] One source per audience. If a session updates the training document, the Guide
-      updates; a guide that can drift from the training document is two documents.
-- [ ] Reachable from the sidebar, findable without being told it exists, and readable on
-      the screen somebody already has open — not a download.
+- [x] **User app → Guide** at `/guide`, written for an associate on their first week.
+- [x] **Admin console → Guide**, written for the job of running the deployment, which is
+      a different job from using it and a different set of worries.
+- [x] One source per audience, and it is enforced rather than remembered.
+      `scripts/build_guides.py` reads the sections each training document marks, in the
+      order the markers ask for, under the titles they give. `scripts/check_docs.sh` and
+      `tests/docs/test_guides.py` both fail when a document changes and its Guide is not
+      rebuilt.
+- [x] In the sidebar of each app, so it is found without being told it exists, and read
+      on the screen somebody already has open. Not a download and not a frame around a
+      repository file: the generator emits parsed blocks and each app draws them, because
+      neither app carries a markdown renderer and a regex one in the browser would be a
+      new class of bug in a screen whose whole job is to be trustworthy.
+- [x] **Switchable, on by default.** `GREENLIGHT_AI_UI_GUIDE`, with the admin console
+      overriding it and both apps following on the next page load (ADR-023). It gates the
+      link and the screen and nothing else: help is not a control, so turning it off
+      cannot change what a run does.
 
-### What each Guide must actually answer · ⬜ not started
+### What each Guide must actually answer · ✅ complete
 
 The audit's finding applies here too: people do not need more words, they need the
 **few things that change the outcome** said plainly and early.
 
-**The user Guide:** · ⬜ not started
+**The user Guide:** · ✅ complete
 
-- [ ] **What the tool is doing on your behalf**, in four sentences and without jargon.
+- [x] **What the tool is doing on your behalf**, in four sentences and without jargon.
       It reads the requirement, reads the configuration, reads the reports, and reports
       where they disagree. It does not fix anything and does not approve anything.
-- [ ] **What matters most from you**, ranked, and honestly:
+- [x] **What matters most from you**, ranked, and honestly:
       1. The **delivery programme** — it changes which rules apply and what the tool
          expects to see.
       2. The **delivery notes** — the single field where a sentence of context most
          improves what the tool finds.
       3. The **right files**, which the tool now checks before it starts.
       Everything else on the form is identification.
-- [ ] **How to read a finding**, with one worked example of each severity and what the
+- [x] **How to read a finding**, with one worked example of each severity and what the
       evidence panel is showing.
-- [ ] **How to decide, and that deciding is yours.** What OK and Not OK mean downstream,
+- [x] **How to decide, and that deciding is yours.** What OK and Not OK mean downstream,
       why high-severity findings cannot be bulk-decided, and why the report is frozen.
-- [ ] **When the tool is unsure, and what it says when it is.** "Could not evaluate",
+- [x] **When the tool is unsure, and what it says when it is.** "Could not evaluate",
       a programme it could not place, a coverage gap. A reader who understands that the
       tool distinguishes *wrong* from *unsure* will trust it correctly rather than
       uniformly.
-- [ ] **Why your disagreement is worth recording**, and what happens to it: the sentence
+- [x] **Why your disagreement is worth recording**, and what happens to it: the sentence
       goes to an administrator, becomes a candidate rule, runs silently until its
       precision is known, and then counts. With the outcome visible to the person who
       wrote it.
-- [ ] **What it will not catch**, said out loud. A tool whose limits are stated is
+- [x] **What it will not catch**, said out loud. A tool whose limits are stated is
       trusted more, not less, and a reviewer who believes it catches everything is the
       failure mode this whole product exists to prevent.
 
-**The admin Guide:** · ⬜ not started
+**The admin Guide:** · ✅ complete
 
-- [ ] **The five surfaces and which one to use**, since choosing well between them is the
+- [x] **The five surfaces and which one to use**, since choosing well between them is the
       main skill of the job — and *Tell the tool* exists precisely because the choice is
       hard.
-- [ ] **What improves the QC, in the order it pays off.** Worked examples, artifact
+- [x] **What improves the QC, in the order it pays off.** Worked examples, artifact
       guidance, programme keywords in the customer's own vocabulary, standing
       instructions, masked columns. With the reason each one works.
-- [ ] **What to do weekly**, which the training document already has at its foot and
+- [x] **What to do weekly**, which the training document already has at its foot and
       which nobody will find where it is.
-- [ ] **How to read the numbers**: fired and dismissed counts, what shadow is for, what
+- [x] **How to read the numbers**: fired and dismissed counts, what shadow is for, what
       precision means here, and the Review load screen — including that it is acting on
       nothing and why that is deliberate.
-- [ ] **What is never editable and why** — the database URL, the data directory, the
+- [x] **What is never editable and why** — the database URL, the data directory, the
       bind address, the master key.
-- [ ] **How to keep the tool honest**: the golden set after a prompt change, the
+- [x] **How to keep the tool honest**: the golden set after a prompt change, the
       benchmark after a rule change, the sample that keeps a mature configuration
       measured.
 
-### The tone it has to be written in · ⬜ not started
+### The tone it has to be written in · ✅ complete
 
-- [ ] **Factual.** No claim that is not true today. Where something is coming, say it is
+- [x] **Factual.** No claim that is not true today. Where something is coming, say it is
       coming. Where a number is a target rather than a measurement, say which.
-- [ ] **For a non-technical reader.** No JSON, no stage numbers, no ADR references. "The
+- [x] **For a non-technical reader.** No JSON, no stage numbers, no ADR references. "The
       configuration file" rather than "the ETL config", and never "the LLM".
-- [ ] **Short where it can be.** The parts that change behaviour come first; the
+- [x] **Short where it can be.** The parts that change behaviour come first; the
       reference material comes after and is skimmable.
-- [ ] **Honest about limits**, everywhere. This is the tone the rest of the product is
+- [x] **Honest about limits**, everywhere. This is the tone the rest of the product is
       already written in and the Guide should not be the place it slips.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · 🟡 in progress
 
-1. [ ] Every field in Part A's tables carries a marker that says what that field does.
-2. [ ] A test fails when a model-reaching field has no marker.
-3. [ ] `user-training.md`'s "every field says whether the model sees it" is true again.
-4. [ ] Both apps have a **Guide** in the sidebar, from one source per audience.
+1. [x] Every field in Part A's tables carries a marker that says what that field does.
+2. [x] A test fails when a model-reaching field has no marker.
+3. [x] `user-training.md`'s "every field says whether the model sees it" is true again.
+4. [x] Both apps have a **Guide** in the sidebar, from one source per audience, and a
+       check that fails when the two drift.
 5. [ ] A person who has never seen the tool can read the user Guide and submit and review
-       a run without asking anybody. **Tested on a person, not asserted.**
-6. [ ] Both Guides state what the tool does not do, and neither overstates a number.
-7. [ ] The rollout plan's training item points at the Guide rather than at a repository
+       a run without asking anybody. **Tested on a person, not asserted** — which is why
+       this stays open: it is not something a session can tick. **Outstanding**, and it
+       belongs to stage 2 of [`gd-rollout-plan.md`](gd-rollout-plan.md), where the focus
+       group is.
+6. [x] Both Guides state what the tool does not do, and neither overstates a number. The
+       user Guide has *What it will not catch*; the admin Guide says the Review load
+       screen acts on nothing and that a rule with four results has no precision worth
+       quoting.
+7. [x] The rollout plan's training item points at the Guide rather than at a repository
        file nobody will open.
 
 ## Why this is worth a phase

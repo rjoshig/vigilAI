@@ -1782,7 +1782,7 @@ deployment.** A reviewer decides whether a rule is right. An administrator decid
 programme is, who has an account, and what the tool may send to a model. Different jobs,
 different blast radius, and the second group is much smaller.
 
-Two judgement calls are recorded so they can be argued with rather than discovered:
+Three judgement calls are recorded so they can be argued with rather than discovered:
 
 - **Masked columns are admin-only although the rest of Reference data is not.** Naming a
   column there is what keeps personal data out of every prompt (ADR-003) — the strongest
@@ -1794,6 +1794,13 @@ Two judgement calls are recorded so they can be argued with rather than discover
   role a half-job that always needs an administrator. Shadow-then-activate (ADR-021) is
   what makes it safe: nothing activated starts producing findings without having run
   silently first.
+- **The delivery programme *list* stays on the console floor, although writing one does
+  not.** Four screens a reviewer works on — checks, compliance rules, worked examples and
+  reference data — scope what they are editing to a programme, so all four fetch the
+  list. Reading it is not *managing programmes*, and refusing it would take four of a
+  reviewer's own screens away to protect a listing the console links to anyway. Creating,
+  editing or deleting a programme, and its keywords and rules, need
+  `MANAGE_PROGRAMMES`.
 
 **Consequences.** This has **no effect until login is switched on**. ADR-022 ships it
 off, and with it off `deps.py` hands the placeholder `is_admin=True` — which must stay
@@ -1802,7 +1809,85 @@ it was before login existed. So the enforcement is built before the hiding, a hi
 is never mistaken for a closed door, and the acceptance criteria are tested with login
 **on**, which no existing UI test does.
 
+**How a route asks.** `require_capability(Capability.X)` builds one guard per
+capability, and a route names the act it performs rather than the role that may perform
+it. Two routes serve several resources — a bulk delete over five tables, a revert of any
+definition — so they take the console floor as a dependency and call `assert_capability`
+once the parameter says which capability actually applies. The refusal is **403, never
+404**, and it names what was missing: the screen exists and is not theirs, there is
+nothing secret in the name of an endpoint the console links to, and a bare refusal makes
+a support conversation impossible.
+
+**Neither console knows the matrix.** `GET /auth/me` returns the resolved capabilities and
+both apps read them. A console that recomputed the matrix would disagree with the API the
+first time a grant moved, and would disagree in the worst direction — by offering a screen
+that then refuses.
+
+**The role list is the only stored answer.** A single `role` column stood beside it while
+the callers were moved over and was dropped in `d2f4a6b8c0e1`. Two answers to one question
+is where the two get to disagree, and an account behaving as an administrator while its
+row says otherwise is how somebody gets locked out. Membership is tested in Python, not
+SQL: JSON containment is spelled differently on SQLite and Postgres (ADR-017) and the
+users table is the smallest in the schema.
+
+**The last administrator cannot be removed**, by unticking `admin` or by deactivating the
+account, including by the caller doing it to themselves. Locking everybody out of the
+console cannot be undone without editing the database, so it is refused rather than
+warned about.
+
 Refused, for now: **per-object permissions**. "Reviewer for programme AM only" would
 overload `scope`, which already means something specific (ADR-029), and make both harder
 to reason about. And **no permission editing in the console** — a console that lets
 somebody grant themselves `MANAGE_SETTINGS` has one role in it.
+
+## ADR-050 — The in-product Guide is generated from the training document, and can be switched off
+
+**Status:** accepted · 2026-09-21 · Phase 6.19b
+
+**Context.** The rollout plan asks the senior associates for an hour of training per
+region. An hour teaches where the buttons are. It cannot teach the things that decide
+whether the tool is worth having — which fields are worth writing carefully, what the tool
+is not looking at, when to disagree with it — and those are written down, in
+`docs/user-training.md` and `docs/admin-training.md`, where nobody using the product will
+ever see them.
+
+The obvious fix is a Guide screen in each app. The obvious failure of that fix is a second
+document: a Guide written once, drifting from the training document within two phases,
+and nobody able to say which of the two is right.
+
+**Decision.** Each app carries a **Guide** in its sidebar, and its content is
+**generated** from that audience's training document by `scripts/build_guides.py`. The
+documents declare what belongs in the Guide, where, and under what title:
+
+    <!-- guide 4: How to read a finding, and how to decide -->
+    ## Reviewing findings
+
+The title is stated separately because a document heading is written for somebody reading
+front to back and a Guide heading for somebody who arrived with a question. Selection and
+order are in the document, so the Guide stays "a screen written for the person in front of
+it" rather than the document in a frame — and there is still only one source.
+
+**It is enforced, not remembered.** `scripts/check_docs.sh` and
+`tests/docs/test_guides.py` both compare the generated file with what the document
+produces now, so a session that edits a training document and does not rebuild fails the
+gate it already runs.
+
+**The generator emits parsed blocks, not markdown.** Headings, paragraphs, lists and
+tables, with inline emphasis resolved into spans. Neither app carries a markdown renderer,
+and a regex one written in the browser would be a new class of bug in a screen whose whole
+job is to be trustworthy. Parsing once, in a checked script, is cheaper and safer — and
+the tests assert no markdown survives, because anything the parser leaves reaches a
+person's screen as punctuation. Mermaid diagrams are dropped: they are the document
+explaining a flow to somebody studying it.
+
+**It can be switched off**, by `GREENLIGHT_AI_UI_GUIDE` or from the admin console, on by
+default (ADR-023). Some deployments deliver training another way and would rather not keep
+a second copy current. The switch gates the link and the screen and nothing else: help is
+not a control, so turning it off cannot change what a run does, and the API does not
+consult it.
+
+**Consequences.** Editing a training document is now a two-step change — edit, rebuild,
+commit both — and the gate says so when it is forgotten. The Guide can only contain what
+the training document contains, which is the point: a section worth showing in the product
+is a section worth having in the training document, and writing it there first means the
+people who train from the document get it too.
