@@ -3,6 +3,10 @@
  */
 
 import type {
+  Rehearsal,
+  LayoutEntry,
+  LayoutKind,
+  LayoutSuggestions,
   AdminUser,
   Alias,
   Announcement,
@@ -215,6 +219,10 @@ export const api = {
   /** Replace a type's validation guide; the answer carries the examples filled in. */
   saveGuide: (key: string, entries: GuideEntry[]): Promise<ArtifactType> =>
     request<ArtifactType>(`/artifact-types/${key}/guide`, json("PUT", { entries })),
+
+  /** Replace a type's layout map: what this delivery calls each name (Phase 6.21b). */
+  saveLayout: (key: string, entries: LayoutEntry[]): Promise<ArtifactType> =>
+    request<ArtifactType>(`/artifact-types/${key}/layout`, json("PUT", { entries })),
 
   /** Relabel a sample, write notes on it, or move it to another programme. */
   updateSample: (
@@ -455,6 +463,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ scope_code: scopeCode, phrase }),
     }),
+
+  /** Try this setup against the stored samples (Phase 6.21f). Stores nothing. */
+  rehearse: (scope = ""): Promise<Rehearsal> =>
+    request<Rehearsal>(`/rehearsal${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`),
+
+  /** Names the AI read because four deterministic rungs could not (Phase 6.21b). */
+  getLayoutSuggestions: (): Promise<LayoutSuggestions> =>
+    request<LayoutSuggestions>("/layout-suggestions"),
+
+  /** Record one read name on its artifact type, so code resolves it from now on. */
+  acceptLayout: (
+    artifact: string,
+    kind: LayoutKind,
+    wanted: string,
+    found: string,
+    scope = ""
+  ): Promise<ArtifactType> =>
+    request<ArtifactType>(
+      "/layout-suggestions/accept",
+      json("POST", { artifact, kind, wanted, found, scope })
+    ),
 
   /** What demotion would do, while it still does nothing (Phase 6.18a). */
   getDemotionReport: (customer = "", scope = ""): Promise<DemotionReport> => {

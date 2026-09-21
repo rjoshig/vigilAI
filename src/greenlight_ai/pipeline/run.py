@@ -156,8 +156,17 @@ def recheck(context: RunContext) -> RunContext:
     """Rerun only the stages a user edit affects.
 
     Editing a requirement or a trace link changes what the comparisons see but not what
-    the model read, so stages 5 to 7 rerun and no call is made
+    the model read, so stages 5 to 7 rerun and the re-check is free
     (``docs/design.md`` "Re-check path").
+
+    **What "free" means, precisely** (ADR-054). Stages 6 and 7 each grew a model call
+    after this function was written: the compliance locator (6.15), the programme
+    reading (6.18f), a judgment check, and the name locator (6.21a). Every one of them
+    is asked only where code failed, and every one is keyed on the artifacts, which a
+    re-check does not touch — so on a re-check each is a cache hit (ADR-005). The
+    guard below therefore counts **tokens**, not rows: a cache hit is a row in the
+    call log and costs nothing, and a guard that counted rows fired on a re-check that
+    had behaved perfectly.
 
     Args:
         context: The run context, with edited rules or traces.
@@ -169,7 +178,7 @@ def recheck(context: RunContext) -> RunContext:
         PipelineError: When a rerun stage fails.
     """
     log = context.client.call_log  # type: ignore[attr-defined]
-    calls_before = len(log.records)
+    tokens_before = log.total_tokens
     context.findings = [f for f in context.findings if f.review_status != "undecided"]
     context.rules_version += 1
 
@@ -177,7 +186,10 @@ def recheck(context: RunContext) -> RunContext:
         context.record(name).status = "pending"
     run_pipeline(context, stages=RECHECK_STAGES)
 
-    made = len(log.records) - calls_before
-    if made:  # pragma: no cover - a guard against a future stage adding a call
-        _LOG.warning("re-check made %d LLM calls; it must make none", made)
+    spent = log.total_tokens - tokens_before
+    if spent:
+        # Not a cache hit, so something a re-check reran sent content the first pass
+        # did not. That is a defect wherever it comes from: the inputs have not
+        # changed, so neither should what is asked of the model.
+        _LOG.warning("re-check spent %d tokens; every call it makes must be cached", spent)
     return context

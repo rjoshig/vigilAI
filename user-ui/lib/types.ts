@@ -251,6 +251,14 @@ export interface RunStats {
   cache_hits: number;
   prompt_tokens: number;
   completion_tokens: number;
+  /** What this run cost at the configured rate (Phase 6.21d). Zero when nobody
+   * has set one, in which case the screen shows tokens and no currency. */
+  cost: number;
+  currency: string;
+  rate_per_million: number;
+  /** The per-run token ceiling — the only hard stop in the product — so a run can
+   * say how close it came rather than only reporting that it was stopped. */
+  budget_tokens: number;
   stages: StageInfo[];
 }
 
@@ -421,7 +429,7 @@ export interface DetectedSheet {
  * How sure the detector is. "I am not sure" has to be representable, because a wrong
  * silent assignment is worse than a question.
  */
-export type DetectionVerdict = "confident" | "ambiguous" | "unknown";
+export type DetectionVerdict = "confident" | "reasoned" | "ambiguous" | "unknown";
 
 /** What `POST /runs/detect-type` returns. It stores nothing. */
 export interface TypeDetection {

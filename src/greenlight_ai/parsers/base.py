@@ -13,8 +13,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 from typing import Final, Mapping, Protocol, Sequence
+
+from greenlight_ai.resolve import Resolution, resolve, squashed
 
 __all__ = [
     "BUILTIN_REPORT_KINDS",
@@ -282,21 +283,11 @@ class ReportCell:
     value: object
 
 
-#: Noise inside a report label: case aside, a customer writing "Delivered_count" or
-#: "Delivered  count" means the same cell as one writing "Delivered count".
-_LABEL_NOISE: Final = re.compile(r"[\s_\-]+")
-
-
-def _normalise_label(value: str) -> str:
-    """Reduce a report label to a comparable form.
-
-    Args:
-        value: The label as configured or as written in the workbook.
-
-    Returns:
-        Lowercased with runs of space, underscore and hyphen removed.
-    """
-    return _LABEL_NOISE.sub("", value.strip().lower())
+#: Reducing a name to a comparable form is one job with one implementation
+#: (Phase 6.21a). This module used to carry its own, subtly different from the three
+#: others in the codebase; it now uses the shared one and keeps the old name as a local
+#: alias so the call sites below read the way they always did.
+_normalise_label: Final = squashed
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,21 +306,40 @@ class ReportSheet:
     rows: tuple[tuple[ReportCell, ...], ...]
     masked_columns: frozenset[str] = frozenset()
 
-    def column(self, name: str) -> tuple[ReportCell, ...]:
+    def column(self, name: str, alternates: Sequence[str] = ()) -> tuple[ReportCell, ...]:
         """Return every cell in a named column.
 
         Args:
-            name: The header text, matched case-insensitively.
+            name: The header text. Matched up the deterministic ladder (Phase 6.21a):
+                exact, then separators-as-noise, then the same words, then an
+                administrator's alternates — so a report heading its field column
+                ``Attribute Name`` answers a lookup for ``Attribute``.
+            alternates: Other headings that also mean this one.
 
         Returns:
-            The column's cells in row order, empty when the header is absent.
+            The column's cells in row order, empty when no heading resolves.
         """
-        lowered = name.strip().lower()
-        try:
-            index = [h.strip().lower() for h in self.header].index(lowered)
-        except ValueError:
+        found = self.resolve_column(name, alternates)
+        if found is None:
             return ()
+        index = list(self.header).index(found.value)
         return tuple(row[index] for row in self.rows if index < len(row))
+
+    def resolve_column(self, name: str, alternates: Sequence[str] = ()) -> Resolution | None:
+        """Which header, if any, is the one asked for.
+
+        Separated from :meth:`column` so a caller that needs to *say* how a header was
+        recognised — because the answer was not exact and a reviewer should know — can
+        ask without reading the cells (Phase 6.21a).
+
+        Args:
+            name: The header text being looked for.
+            alternates: Other headings that also mean this one.
+
+        Returns:
+            The resolution, or ``None`` when no deterministic rung settles it.
+        """
+        return resolve(name, self.header, alternates)
 
     def lookup(
         self,
@@ -360,17 +370,54 @@ class ReportSheet:
         Returns:
             The value cell, or ``None`` when no label matches.
         """
-        wanted = {_normalise_label(label)} | {_normalise_label(a) for a in alternates}
-        wanted.discard("")
-        if not wanted:
+        found = self.resolve_label(label, label_column=label_column, alternates=alternates)
+        if found is None:
             return None
         for row in self.rows:
             if label_column >= len(row) or value_column >= len(row):
                 continue
             cell = row[label_column]
-            if isinstance(cell.value, str) and _normalise_label(cell.value) in wanted:
+            if isinstance(cell.value, str) and cell.value == found.value:
                 return row[value_column]
         return None
+
+    def labels(self, label_column: int = 0) -> tuple[str, ...]:
+        """Every label a column carries, in row order.
+
+        Args:
+            label_column: Zero-based index of the column holding the labels.
+
+        Returns:
+            The distinct non-empty text values, spelled as the workbook spells them.
+            This is the candidate list the ladder — and, where it fails, the model —
+            is offered (Phase 6.21a).
+        """
+        seen: list[str] = []
+        for row in self.rows:
+            if label_column >= len(row):
+                continue
+            value = row[label_column].value
+            if isinstance(value, str) and value.strip() and value not in seen:
+                seen.append(value)
+        return tuple(seen)
+
+    def resolve_label(
+        self,
+        label: str,
+        label_column: int = 0,
+        alternates: Sequence[str] = (),
+    ) -> Resolution | None:
+        """Which label in a column, if any, is the one asked for.
+
+        Args:
+            label: The label text being looked for.
+            label_column: Zero-based index of the column holding the labels.
+            alternates: Other labels that also count.
+
+        Returns:
+            The resolution, or ``None`` when no deterministic rung settles it.
+        """
+        return resolve(label, self.labels(label_column), alternates)
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,20 +434,57 @@ class ReportDocument:
     kind: ReportKind
     sheets: tuple[ReportSheet, ...]
 
-    def sheet(self, name: str) -> ReportSheet | None:
+    @property
+    def sheet_names(self) -> tuple[str, ...]:
+        """Every sheet's name, in workbook order and spelled as the workbook spells it.
+
+        Returns:
+            The names. This is the candidate list the ladder — and, where it fails, the
+            model — is offered (Phase 6.21a).
+        """
+        return tuple(sheet.name for sheet in self.sheets)
+
+    def named(self, name: str) -> ReportSheet | None:
+        """The sheet whose name is exactly ``name``.
+
+        Args:
+            name: A name taken from :attr:`sheet_names`, so it matches verbatim.
+
+        Returns:
+            The sheet, or ``None`` when the workbook has no sheet of that name.
+        """
+        return next((sheet for sheet in self.sheets if sheet.name == name), None)
+
+    def resolve_sheet(self, name: str, alternates: Sequence[str] = ()) -> Resolution | None:
+        """Which sheet, if any, is the one asked for.
+
+        Separated from :meth:`sheet` so a caller that needs to *say* how a sheet was
+        recognised can ask without reading it (Phase 6.21a).
+
+        Args:
+            name: The sheet name being looked for.
+            alternates: Other names that also mean this sheet.
+
+        Returns:
+            The resolution, or ``None`` when no deterministic rung settles it.
+        """
+        return resolve(name, self.sheet_names, alternates)
+
+    def sheet(self, name: str, alternates: Sequence[str] = ()) -> ReportSheet | None:
         """Look up a sheet by name.
 
         Args:
-            name: The sheet name, matched case-insensitively.
+            name: The sheet name. Matched up the deterministic ladder (Phase 6.21a):
+                exact, then separators-as-noise, then the same words, then an
+                administrator's alternates — so a workbook naming its per-field sheet
+                ``Attribute Summary`` answers a lookup for ``Attributes``.
+            alternates: Other names that also mean this sheet.
 
         Returns:
-            The sheet, or ``None`` when the workbook has no such sheet.
+            The sheet, or ``None`` when no name resolves.
         """
-        lowered = name.strip().lower()
-        for sheet in self.sheets:
-            if sheet.name.strip().lower() == lowered:
-                return sheet
-        return None
+        found = self.resolve_sheet(name, alternates)
+        return None if found is None else self.named(found.value)
 
 
 # --------------------------------------------------------------------------------------

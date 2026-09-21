@@ -1,6 +1,6 @@
 # What reaches the model, and what code decides
 
-**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i and 6.15).
+**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i, 6.15 and 6.21).
 
 An administrator cannot see a prompt. Everything they know about where their words end
 up comes from the label next to the box they typed them in, which makes that label the
@@ -61,6 +61,8 @@ prompts are byte-for-byte what they were before any of this existed.
 | **Programme rules** | Admin → Delivery programmes | Stage 8, with their strictness — which the model states and **code** grades | — |
 | **Worked examples** | Admin → Examples | Extraction, description, tracing, judgment, classification, synthesis (ADR-038) | 4 per stage |
 | **Judgment check named values** | Admin → Checks | Stage 7, as `name = value` lines for the named values that check lists | — |
+| **Attribute statistics** | Read from the delivery's own DIRT | Stage 7, only when `anomaly.model_reads_shape` is on: aggregates per attribute, never a row (Phase 6.21c) | 60 attributes |
+| **Artifact type layout map** | Admin → Artifact types → Layout | Only when four deterministic rungs have already failed: the *names* an artifact carries are shown so the model can say which is which (Phase 6.21a) | 80 names |
 
 **The stages that build a preamble** are 2 (extract), 3 (describe), 4 (trace),
 6 (reverse), 7 (reports), 8 (verify) and 9 (summarize). Stage 5 (compare) builds none
@@ -73,6 +75,30 @@ when the deterministic matcher has already failed. It never asks whether a deliv
 is compliant. Code checks the answer against the paths it offered, applies a
 confidence floor, and a located control becomes a review-severity finding for a
 person to confirm — never a pass.
+
+**Phase 6.21c added one more, and it is the only call in the product that happens on
+every run when it is switched on** — which is exactly why it ships **off**
+(`anomaly.model_reads_shape`). The model is shown this delivery's aggregate statistics
+— per attribute, how often the value was missing, the smallest and largest, and the
+average — and asked which look unusual. Never a row, never an individual value
+(ADR-003). It is not asked whether the delivery is correct, whether a requirement is
+met, or how serious anything is. Code checks every attribute it names was one it was
+shown, applies a confidence floor, and raises a **review** item — a question for a
+person, never a failure. The half of that check that runs by default makes no model
+call at all: it compares the delivery with the previous finalized deliveries of the
+same configuration, in arithmetic.
+
+**Phase 6.21a added a third, and it is the narrowest of them all.** Wherever the tool
+looks for a sheet, a column or a row label and four deterministic rungs have failed, the
+*names* that artifact carries go to the model once and it says which one was meant. It
+is never shown a cell, a row or a number — names only (ADR-003) — and it is never asked
+whether anything is correct. Code checks the answer was one of the names it offered,
+applies a confidence floor, and the check then runs against that name **and** raises a
+`layout_reasoned` review finding, so a reviewer can disagree with the reading rather
+than only with the finding. Accepting the reading onto the artifact type's layout map
+removes the call from every later run (ADR-054). The same call breaks a tie in artifact
+type detection, where it can only choose between candidates code already shortlisted
+(Phase 6.21e).
 
 **Stage 7 gained a second one in Phase 6.18f, built to the same shape.** When the
 keyword check finds none of the declared programme's words, the delivery's own words
@@ -106,10 +132,13 @@ produce a finding.
 | **Named values** | Admin → Artifact types | `checks/named_values.py`, resolved against the report |
 | **Attribute aliases** | Admin → Reference data | `rules/normalize.py`, applied at stages 4, 5 and 7 |
 | **Masked columns** | Admin → Reference data | `parsers/masking.py`, at parse time (ADR-003) |
+| **Anomaly sensitivity and history** | Admin → Settings → Anomalies | `checks/anomaly.py` at stage 7, against the configuration's previous finalized deliveries. No model (Phase 6.21c) |
 | **Submitted identity** | The new-run form | `checks/artifact_match.py`, before any model call (ADR-041) |
 | **Credit date** | The new-run form | `checks/artifact_match.py` before the run starts, against the cell `checks/field_labels.py` resolves; `pipeline/s7_reports.py` for whatever the pre-flight did not reach |
 | **Field labels** | Admin → Reference data | `checks/field_labels.py`, resolving what a delivery calls a checked field |
+| **Artifact type layout map** | Admin → Artifact types → Layout | `resolve/ladder.py`, as the fourth rung — an administrator's spelling resolves a name in code and costs no call (ADR-054) |
 | **Scheduled notices** | Admin → Settings → Notices | Nothing evaluates them; they are shown to people between their start and end (Phase 6.14g) |
+| **Cost per million tokens** | Admin → Settings → Availability | `spend.py`, over the `llm_calls` rows already stored. Reaches no prompt and refuses nothing: the per-run token budget stays the only hard stop (Phase 6.21d) |
 
 ## Fields that are reference only
 

@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phases 6.19b and 6.20.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 6.21.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -315,6 +315,15 @@ The run page shows the **traceability matrix** and the **findings**, worst first
   records anything, so nothing you typed is lost.
 - Low-severity findings can be marked OK in bulk, as false positives. High-severity
   ones never can: every one must be decided by hand before the report can be generated.
+- Two kinds are worth recognising because they read differently from the rest.
+  **"The layout was read as…"** means the tool could not find a sheet, a column or a
+  row label by name, so the AI was shown the names this delivery carries and asked
+  which was meant. The check then ran against its answer. Confirm the reading is
+  right; if it is, your administrator can record it so the next delivery needs no
+  asking. And an **anomaly** — "the null rate for X is unlike this configuration's
+  previous deliveries" — is the one finding no rule covers. It is a comparison against
+  this delivery's own history, reported because it is unusual, **which is not the same
+  as being wrong**. Confirm it is expected, or say what it should have been.
 - **Generate final report asks once**, showing the finding counts and reminding you
   that freezing is permanent: the report is stored once, never regenerated, and the
   findings can no longer be re-reviewed.
@@ -327,6 +336,9 @@ findings list cannot tell a clean delivery from one nobody examined, and that is
 compliance requirement slips through: nothing disagreed with it because nothing was
 compared against it.
 
+- A **bar across the top** shows the four states in proportion, so it is possible to
+  see whether this delivery was mostly checked before reading a single number. The
+  counts beside it are the same information in words.
 - Every requirement is in one of four states. **Checked against a report** means a
   check compared it with the delivery. **Traced, no report evidenced it** means it
   reached the configuration and no report shows it was applied. **Not traced** means

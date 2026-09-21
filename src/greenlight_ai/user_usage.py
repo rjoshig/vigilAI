@@ -37,6 +37,7 @@ from typing import Final, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from greenlight_ai import spend
 from greenlight_ai.db import models
 
 __all__ = ["PERIODS", "DEFAULT_DAYS", "DayCount", "UserUsage", "UsagePeriod", "build"]
@@ -86,6 +87,13 @@ class UserUsage:
         repeat_runs: ``runs − orders``: how often an order came back for another go.
         mismatch_runs: Runs that recorded at least one artifact disagreement, whether
             or not it was later accepted.
+        tokens: Tokens their runs actually sent, across calls the cache did not
+            serve. Counted here for the first time in 6.21d: this report has always
+            counted runs and never what they cost.
+        cost: Those tokens at the configured rate, or ``0.0`` when nobody has set
+            one — in which case the console shows tokens and no currency.
+        cached_calls: Calls the cache served, which cost nothing. Shown apart
+            rather than folded in, because folding them in flatters the total.
         high_findings: High-severity findings across their completed runs.
         completed_runs: Runs that produced findings at all, which is what
             `high_per_run` divides by.
@@ -112,6 +120,9 @@ class UserUsage:
     configurations: int
     repeat_runs: int
     mismatch_runs: int
+    tokens: int
+    cost: float
+    cached_calls: int
     high_findings: int
     completed_runs: int
     first_run_at: dt.datetime | None
@@ -239,6 +250,7 @@ def build(session: Session, days: int = DEFAULT_DAYS, today: dt.date | None = No
     run_ids = [run.id for run in runs]
     mismatched = _runs_with_a_mismatch(session, run_ids)
     highs = _high_findings_by_run(session, run_ids)
+    spent = spend.spend_for_runs(session, run_ids, spend.rate_for(session))
 
     by_user: dict[int, list[models.Run]] = {}
     for run in runs:
@@ -246,7 +258,7 @@ def build(session: Session, days: int = DEFAULT_DAYS, today: dt.date | None = No
             by_user.setdefault(run.user_id, []).append(run)
 
     rows = [
-        _one_user(session, user_id, theirs, mismatched, highs)
+        _one_user(session, user_id, theirs, mismatched, highs, spent)
         for user_id, theirs in by_user.items()
     ]
     # Busiest first: an administrator reading top-down is reading in the order the
@@ -315,6 +327,7 @@ def _one_user(
     theirs: Sequence[models.Run],
     mismatched: set[int],
     highs: dict[int, int],
+    spent: dict[int, "spend.Spend"],
 ) -> UserUsage:
     """Count one person's runs.
 
@@ -324,6 +337,7 @@ def _one_user(
         theirs: Their runs in the period.
         mismatched: Run ids that recorded an artifact disagreement.
         highs: High-severity finding counts by run id.
+        spent: What each run spent, by run id.
 
     Returns:
         Their row.
@@ -361,6 +375,9 @@ def _one_user(
         ),
         repeat_runs=max(0, len(theirs) - len(orders)),
         mismatch_runs=sum(1 for r in theirs if r.id in mismatched),
+        tokens=sum(spent[r.id].tokens for r in theirs if r.id in spent),
+        cost=sum(spent[r.id].cost for r in theirs if r.id in spent),
+        cached_calls=sum(spent[r.id].cached_calls for r in theirs if r.id in spent),
         high_findings=sum(highs.get(r.id, 0) for r in completed),
         completed_runs=len(completed),
         first_run_at=min(created) if created else None,

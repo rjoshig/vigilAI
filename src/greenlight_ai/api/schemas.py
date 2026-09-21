@@ -264,6 +264,11 @@ class FindingOut(BaseModel):
     review_note: str = ""
     verified: bool = False
     verify_agreed: Optional[bool] = None
+    #: How sure the tool is, 0–1, or absent where the question does not arise
+    #: (Phase 6.21f). **Not a severity**: a comparison code is certain about can be
+    #: trivial, and a reading the model was unsure of can be the thing that matters.
+    #: It is there so a reviewer with forty findings can read the least-sure first.
+    confidence: Optional[float] = None
     #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
     #: the single second opinion.
     lens_opinions: list[dict[str, Any]] = Field(default_factory=list)
@@ -356,6 +361,14 @@ class RunStats(BaseModel):
     findings_by_engine: dict[str, int] = Field(default_factory=dict)
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    #: What this run cost, and how much of its budget it used (Phase 6.21d). ``cost``
+    #: is zero when nobody has set a rate, in which case the screen shows tokens only.
+    #: ``budget_tokens`` is the per-run ceiling — the one hard stop in the product —
+    #: so a run can say how close it came rather than only reporting it was stopped.
+    cost: float = 0.0
+    currency: str = "USD"
+    rate_per_million: float = 0.0
+    budget_tokens: int = 0
     stages: list[StageInfo] = Field(default_factory=list)
 
 

@@ -244,6 +244,67 @@ class ComplianceLocation(BaseModel):
     confidence: Confidence = 0.5
 
 
+class NameLocation(BaseModel):
+    """Which of the offered names is the one the tool was looking for (Phase 6.21a).
+
+    Asked only when four deterministic rungs have already failed, which decides what
+    the prompt may claim: by the time this runs the honest prior is that the name is
+    absent, and a model told "find this" will find something.
+
+    The model is shown **names and nothing else** — never a cell value, never a row
+    (ADR-003) — and it never decides whether the delivery is correct. It says which
+    label on the shelf is the one asked for; code decides what that means (ADR-001).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: ``found`` when one offered name is the one asked for, ``absent`` when none is,
+    #: ``unsure`` when the names do not settle it. Prefer ``unsure`` to a guess: a
+    #: wrong ``found`` points a check at the wrong part of a report, which is worse
+    #: than the check not running.
+    verdict: Literal["found", "absent", "unsure"]
+    #: The name that matches, when ``found``. Must be one that appeared in the input;
+    #: code checks that it does before believing it.
+    name: str = ""
+    reason: str = ""
+    confidence: Confidence = 0.5
+
+
+class UnusualAttribute(BaseModel):
+    """One attribute the model read as unusual for this delivery (Phase 6.21c)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The attribute, quoted from the list it was shown. Code checks it was.
+    attribute: str = ""
+    #: Which of the numbers it is talking about, in its own words, so a reviewer can
+    #: see what was read rather than only that something was.
+    observation: str = ""
+    confidence: Confidence = 0.5
+
+
+class ShapeReading(BaseModel):
+    """What the aggregate statistics look like to the model (Phase 6.21c).
+
+    The narrowest kind of question this product asks. The model is shown counts and
+    averages — never a row, never a value that is not already an aggregate (ADR-003) —
+    and asked which of them look unusual for a credit-data delivery. It is **not**
+    asked whether the delivery is correct, whether a requirement is met, or how serious
+    anything is: those are comparisons and judgements that belong to code and to a
+    person (ADR-001).
+
+    Nothing it says becomes a failure. Code checks each attribute was one it was shown,
+    applies a confidence floor, and raises a review item.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The attributes worth a second look. Empty is the expected answer for a delivery
+    #: with nothing odd about it, and the prompt says so.
+    unusual: list[UnusualAttribute] = Field(default_factory=list, max_length=10)
+    reason: str = ""
+
+
 class SynthesizedRule(BaseModel):
     """One rule the model proposes from what people wrote (ADR-021).
 

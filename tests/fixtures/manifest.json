@@ -32,8 +32,11 @@
         "rejects": 820776,
         "input_count": 1000000,
         "reconciles": true,
-        "findings": []
-      }
+        "findings": [],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
     },
     {
       "name": "geography_extra_state",
@@ -73,8 +76,11 @@
         "findings": [
           "extra_rule_in_config",
           "report_violates_rule"
-        ]
-      }
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
     },
     {
       "name": "score_value_mismatch",
@@ -111,8 +117,11 @@
         "findings": [
           "value_mismatch",
           "report_violates_rule"
-        ]
-      }
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
     },
     {
       "name": "rule_missing_in_config",
@@ -148,8 +157,11 @@
         "reconciles": true,
         "findings": [
           "rule_missing_in_config"
-        ]
-      }
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
     },
     {
       "name": "attributes_missing_in_report",
@@ -185,8 +197,11 @@
         "reconciles": true,
         "findings": [
           "report_violates_rule"
-        ]
-      }
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
     },
     {
       "name": "counts_do_not_reconcile",
@@ -222,8 +237,405 @@
         "reconciles": false,
         "findings": [
           "count_does_not_reconcile"
-        ]
-      }
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "operator_boundary_drift",
+      "description": "Config uses > where the OSL says at least, so the boundary value differs.",
+      "customer": "Northwind Lending",
+      "order_number": "ORD-10007",
+      "configuration_id": "CFG-SYNTH-OPERATOR-07",
+      "osl": "cases/operator_boundary_drift/osl.docx",
+      "config": "cases/operator_boundary_drift/config.json",
+      "reports": {
+        "dirt": "cases/operator_boundary_drift/reports/dirt.xlsx",
+        "state_distribution": "cases/operator_boundary_drift/reports/state_distribution.xlsx",
+        "field_distribution": "cases/operator_boundary_drift/reports/field_distribution.xlsx",
+        "counts": "cases/operator_boundary_drift/reports/counts.xlsx",
+        "billing": "cases/operator_boundary_drift/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "operator_mismatch"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "extra_config_filter",
+      "description": "The config filters on an attribute the OSL never mentions.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10008",
+      "configuration_id": "CFG-SYNTH-EXTRA-08",
+      "osl": "cases/extra_config_filter/osl.docx",
+      "config": "cases/extra_config_filter/config.json",
+      "reports": {
+        "dirt": "cases/extra_config_filter/reports/dirt.xlsx",
+        "state_distribution": "cases/extra_config_filter/reports/state_distribution.xlsx",
+        "field_distribution": "cases/extra_config_filter/reports/field_distribution.xlsx",
+        "counts": "cases/extra_config_filter/reports/counts.xlsx",
+        "billing": "cases/extra_config_filter/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "extra_rule_in_config"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "report_violates_state_rule",
+      "description": "Config matches the OSL, but the delivered file contains an unlisted state.",
+      "customer": "Pinecrest Auto Finance",
+      "order_number": "ORD-10009",
+      "configuration_id": "CFG-SYNTH-REPORTONLY-09",
+      "osl": "cases/report_violates_state_rule/osl.docx",
+      "config": "cases/report_violates_state_rule/config.json",
+      "reports": {
+        "dirt": "cases/report_violates_state_rule/reports/dirt.xlsx",
+        "state_distribution": "cases/report_violates_state_rule/reports/state_distribution.xlsx",
+        "field_distribution": "cases/report_violates_state_rule/reports/field_distribution.xlsx",
+        "counts": "cases/report_violates_state_rule/reports/counts.xlsx",
+        "billing": "cases/report_violates_state_rule/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ",
+          "OH"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "report_violates_rule"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "missing_waterfall_step",
+      "description": "The OSL requires an exclusions step the config pipeline does not run.",
+      "customer": "Acme Card Services",
+      "order_number": "ORD-10010",
+      "configuration_id": "CFG-SYNTH-STEPS-10",
+      "osl": "cases/missing_waterfall_step/osl.docx",
+      "config": "cases/missing_waterfall_step/config.json",
+      "reports": {
+        "dirt": "cases/missing_waterfall_step/reports/dirt.xlsx",
+        "state_distribution": "cases/missing_waterfall_step/reports/state_distribution.xlsx",
+        "field_distribution": "cases/missing_waterfall_step/reports/field_distribution.xlsx",
+        "counts": "cases/missing_waterfall_step/reports/counts.xlsx",
+        "billing": "cases/missing_waterfall_step/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "rule_missing_in_config"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "reordered_waterfall",
+      "description": "The config runs the score step before geography; the OSL says otherwise.",
+      "customer": "Northwind Lending",
+      "order_number": "ORD-10011",
+      "configuration_id": "CFG-SYNTH-ORDER-11",
+      "osl": "cases/reordered_waterfall/osl.docx",
+      "config": "cases/reordered_waterfall/config.json",
+      "reports": {
+        "dirt": "cases/reordered_waterfall/reports/dirt.xlsx",
+        "state_distribution": "cases/reordered_waterfall/reports/state_distribution.xlsx",
+        "field_distribution": "cases/reordered_waterfall/reports/field_distribution.xlsx",
+        "counts": "cases/reordered_waterfall/reports/counts.xlsx",
+        "billing": "cases/reordered_waterfall/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "waterfall_order_mismatch"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "missing_state_in_config",
+      "description": "The OSL allows two states; the config filters to one of them.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10012",
+      "configuration_id": "CFG-SYNTH-NARROW-12",
+      "osl": "cases/missing_state_in_config/osl.docx",
+      "config": "cases/missing_state_in_config/config.json",
+      "reports": {
+        "dirt": "cases/missing_state_in_config/reports/dirt.xlsx",
+        "state_distribution": "cases/missing_state_in_config/reports/state_distribution.xlsx",
+        "field_distribution": "cases/missing_state_in_config/reports/field_distribution.xlsx",
+        "counts": "cases/missing_state_in_config/reports/counts.xlsx",
+        "billing": "cases/missing_state_in_config/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL"
+        ],
+        "report_states": [
+          "IL"
+        ],
+        "accepts": 142782,
+        "rejects": 857218,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "rule_missing_in_config"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "unevidenced_requirement",
+      "description": "Everything the checks can compare agrees, and the OSL carries a clause no check can express. A clean findings list over an incomplete check.",
+      "customer": "Acme Card Services",
+      "order_number": "ORD-10020",
+      "configuration_id": "CFG-SYNTH-UNEVIDENCED-20",
+      "osl": "cases/unevidenced_requirement/osl.docx",
+      "config": "cases/unevidenced_requirement/config.json",
+      "reports": {
+        "dirt": "cases/unevidenced_requirement/reports/dirt.xlsx",
+        "state_distribution": "cases/unevidenced_requirement/reports/state_distribution.xlsx",
+        "field_distribution": "cases/unevidenced_requirement/reports/field_distribution.xlsx",
+        "counts": "cases/unevidenced_requirement/reports/counts.xlsx",
+        "billing": "cases/unevidenced_requirement/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [],
+        "unevidenced": 1
+      },
+      "programme": "AS",
+      "credit_date": ""
+    },
+    {
+      "name": "report_nothing_checks",
+      "description": "A report type the tool accepts and no check covers, delivered alongside the usual set.",
+      "customer": "Northwind Lending",
+      "order_number": "ORD-10021",
+      "configuration_id": "CFG-SYNTH-UNCHECKED-REPORT-21",
+      "osl": "cases/report_nothing_checks/osl.docx",
+      "config": "cases/report_nothing_checks/config.json",
+      "reports": {
+        "dirt": "cases/report_nothing_checks/reports/dirt.xlsx",
+        "state_distribution": "cases/report_nothing_checks/reports/state_distribution.xlsx",
+        "field_distribution": "cases/report_nothing_checks/reports/field_distribution.xlsx",
+        "counts": "cases/report_nothing_checks/reports/counts.xlsx",
+        "billing": "cases/report_nothing_checks/reports/billing.xlsx",
+        "segment_summary": "cases/report_nothing_checks/reports/segment_summary.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [],
+        "unevidenced": 0
+      },
+      "programme": "AM",
+      "credit_date": ""
+    },
+    {
+      "name": "credit_date_not_in_reports",
+      "description": "The credit date appears in the OSL and in no report, which is a low-severity finding. Before this, no fixture produced one at all.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10022",
+      "configuration_id": "CFG-SYNTH-CREDIT-DATE-22",
+      "osl": "cases/credit_date_not_in_reports/osl.docx",
+      "config": "cases/credit_date_not_in_reports/config.json",
+      "reports": {
+        "dirt": "cases/credit_date_not_in_reports/reports/dirt.xlsx",
+        "state_distribution": "cases/credit_date_not_in_reports/reports/state_distribution.xlsx",
+        "field_distribution": "cases/credit_date_not_in_reports/reports/field_distribution.xlsx",
+        "counts": "cases/credit_date_not_in_reports/reports/counts.xlsx",
+        "billing": "cases/credit_date_not_in_reports/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "credit_date_missing"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": "2026-07-15"
+    },
+    {
+      "name": "layout_drift",
+      "description": "Baseline again, delivered by a customer who names their sheets, headers and totals differently. Nothing is wrong with the delivery.",
+      "customer": "Northwind Lending",
+      "order_number": "ORD-10007",
+      "configuration_id": "CFG-SYNTH-LAYOUT-07",
+      "osl": "cases/layout_drift/osl.docx",
+      "config": "cases/layout_drift/config.json",
+      "reports": {
+        "dirt": "cases/layout_drift/reports/dirt.xlsx",
+        "state_distribution": "cases/layout_drift/reports/state_distribution.xlsx",
+        "field_distribution": "cases/layout_drift/reports/field_distribution.xlsx",
+        "counts": "cases/layout_drift/reports/counts.xlsx",
+        "billing": "cases/layout_drift/reports/billing.xlsx"
+      },
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [],
+        "unevidenced": 1
+      },
+      "programme": "",
+      "credit_date": ""
     }
   ]
 }

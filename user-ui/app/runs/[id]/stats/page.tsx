@@ -76,6 +76,8 @@ export default function StatsPage() {
         <Stat label="Completion tokens" value={fmtInt(stats.completion_tokens)} />
       </div>
 
+      <BudgetMeter stats={stats} />
+
       <Card className="p-0">
         <Table>
           <thead>
@@ -127,5 +129,69 @@ export default function StatsPage() {
         Prompts and raw responses are not stored. These numbers are ids and counts only.
       </p>
     </>
+  );
+}
+
+/**
+ * What this run spent, against the one hard limit in the tool (Phase 6.21d).
+ *
+ * The per-run token budget is the only thing that stops a run in the product, and
+ * until this a person only learned about it by a run failing. Showing how close a run
+ * came turns a refusal into something somebody could have seen arriving.
+ *
+ * Cost is shown only where an administrator has set a rate. A cost built on a rate
+ * nobody supplied is a number that gets quoted back as fact, so its absence is stated
+ * rather than shown as a zero.
+ */
+function BudgetMeter({ stats }: { stats: RunStats }) {
+  const used = stats.prompt_tokens + stats.completion_tokens;
+  const budget = stats.budget_tokens;
+  if (budget <= 0) return null;
+
+  const share = Math.min(used / budget, 1);
+  const tight = share >= 0.8;
+  const costed = stats.rate_per_million > 0;
+
+  return (
+    <Card className="mb-4 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium">
+          {fmtInt(used)} of {fmtInt(budget)} tokens
+          {costed ? (
+            <>
+              {" "}
+              ·{" "}
+              <span className="tabular-nums">
+                {stats.cost.toLocaleString(undefined, {
+                  style: "currency",
+                  currency: stats.currency,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </>
+          ) : null}
+        </p>
+        <p className={tight ? "text-xs font-medium text-warn" : "text-xs text-muted-foreground"}>
+          {Math.round(share * 100)}% of this run&rsquo;s budget
+        </p>
+      </div>
+      <div
+        className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted"
+        role="img"
+        aria-label={`${Math.round(share * 100)} percent of this run's token budget used`}
+      >
+        <div
+          className={tight ? "h-full bg-warn" : "h-full bg-primary/70"}
+          style={{ width: `${Math.max(share * 100, 1)}%` }}
+        />
+      </div>
+      <p className="mt-2 text-[0.7rem] text-muted-foreground">
+        A run that reaches its budget stops and says so; nothing else in the tool refuses anything
+        over cost.{" "}
+        {stats.cache_hits > 0
+          ? `${fmtInt(stats.cache_hits)} call${stats.cache_hits === 1 ? "" : "s"} came from the cache and cost nothing.`
+          : ""}
+      </p>
+    </Card>
   );
 }

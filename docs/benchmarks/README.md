@@ -12,6 +12,7 @@ pipeline against the synthetic golden set: each case carries its own oracle in
 | `phase-2.md` | the in-house gateway, real files | **Not yet produced.** Deferred to the target environment (ADR-028) |
 | [`phase-6.11-single.md`](phase-6.11-single.md) | `synthetic` | Stage 8 as it ships: one second opinion (`--lenses single`) |
 | [`phase-6.11-lenses.md`](phase-6.11-lenses.md) | `synthetic` | Stage 8 with the three lenses (`--lenses delivery,compliance,requirements`) |
+| [`phase-6.21-anomaly.md`](phase-6.21-anomaly.md) | none | The anomaly check, which makes no model call at all. Produced by `scripts/anomaly_benchmark.py` |
 
 Regenerate:
 
@@ -66,3 +67,10 @@ The synthetic numbers being perfect is expected and is **not** evidence that ext
 works: the scripted stand-in reads the fixtures the way a competent model would, so a
 100% score means the pipeline draws the right conclusions from right answers. Only the
 real-model run measures whether a model gives right answers in the first place.
+
+The anomaly check is measured on its own, because it makes no model call and so has
+nothing to do with a prompt or a provider:
+
+```bash
+python scripts/anomaly_benchmark.py --out docs/benchmarks/phase-6.21-anomaly.md
+```

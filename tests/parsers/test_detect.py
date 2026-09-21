@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from greenlight_ai.db import models
+from greenlight_ai.llm.prompts.schemas import NameLocation
 from greenlight_ai.db.session import create_all, create_engine, session_factory
 from greenlight_ai.db.settings import DbSettings
 from greenlight_ai.parsers.detect import (
@@ -209,3 +210,110 @@ def test_a_workbook_fingerprint_pools_every_sheet(
     print_ = fingerprint_workbook(_report(fixtures_root, cases, "dirt"))
     assert {"summary", "attributes", "sample"} <= print_.sheets
     assert "attribute" in print_.headers
+
+
+# --- the tiebreak (Phase 6.21e) --------------------------------------------------------
+
+
+class _Chooser:
+    """Answers the locator with a fixed label, and keeps what it was shown."""
+
+    def __init__(self, name: str, confidence: float = 0.85) -> None:
+        self.name = name
+        self.confidence = confidence
+        self.user = ""
+        self.calls = 0
+
+    def complete(self, system: str, user: str, schema: Any, **kwargs: Any) -> Any:
+        self.calls += 1
+        self.user = user
+        answer = NameLocation(
+            verdict="found" if self.name else "unsure",
+            name=self.name,
+            reason="the sheet names read like that type.",
+            confidence=self.confidence,
+        )
+
+        class _Result:
+            def parsed(self, _schema: Any) -> Any:
+                return answer
+
+        return _Result()
+
+
+def _tie(session: Session, data_dir: Path, fixtures_root: Path, cases: dict[str, Any]) -> Path:
+    """Two types sharing one layout, which is what makes a tie."""
+    source = _report(fixtures_root, cases, "field_distribution")
+    _add_sample(session, data_dir, "field_distribution", source)
+    _add_sample(session, data_dir, "field_distribution_v2", source)
+    return source
+
+
+def test_a_tie_can_be_broken_by_the_model(
+    session: Session, data_dir: Path, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    """The tiebreak the phase doc allowed and 6.1d deliberately left unbuilt."""
+    source = _tie(session, data_dir, fixtures_root, cases)
+    client = _Chooser("field_distribution_v2")
+
+    result = detect(session, source, data_dir, client)
+
+    assert result.verdict == "reasoned"
+    assert result.best is not None and result.best.key == "field_distribution_v2"
+    assert "Check that before you submit" in result.reason
+
+
+def test_the_tiebreak_is_shown_sheet_names_and_type_labels_only(
+    session: Session, data_dir: Path, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    """ADR-003: it reads what the workbook is called, never what is in it."""
+    source = _tie(session, data_dir, fixtures_root, cases)
+    client = _Chooser("field_distribution_v2")
+    detect(session, source, data_dir, client)
+
+    # Labels, because a key says nothing about what a type is.
+    assert "Field Distribution V2" in client.user
+    assert "which report type this workbook is" in client.user
+    assert "its sheets are named" in client.user.lower()
+
+
+def test_the_tiebreak_can_only_narrow_the_shortlist(
+    session: Session, data_dir: Path, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    """A type code did not shortlist cannot be introduced by an answer."""
+    source = _tie(session, data_dir, fixtures_root, cases)
+    client = _Chooser("something else entirely")
+
+    result = detect(session, source, data_dir, client)
+    assert result.verdict == "ambiguous"
+
+
+def test_an_unsure_answer_leaves_the_question_with_the_person(
+    session: Session, data_dir: Path, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    source = _tie(session, data_dir, fixtures_root, cases)
+
+    result = detect(session, source, data_dir, _Chooser(""))
+    assert result.verdict == "ambiguous"
+    assert "pick the right one" in result.reason
+
+
+def test_a_confident_detection_never_costs_a_call(
+    session: Session, data_dir: Path, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    """The tiebreak attaches to ties only, so the ordinary upload is unchanged."""
+    source = _report(fixtures_root, cases, "dirt")
+    _add_sample(session, data_dir, "dirt", source)
+    client = _Chooser("dirt")
+
+    result = detect(session, source, data_dir, client)
+    assert result.verdict == "confident"
+    assert client.calls == 0
+
+
+def test_no_client_leaves_the_tie_a_tie(
+    session: Session, data_dir: Path, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    """Which is the behaviour before this phase, and is never an error."""
+    source = _tie(session, data_dir, fixtures_root, cases)
+    assert detect(session, source, data_dir, None).verdict == "ambiguous"

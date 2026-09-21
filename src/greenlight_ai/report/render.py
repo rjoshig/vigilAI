@@ -15,7 +15,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final, Sequence
+from typing import Any, Final, Mapping, Sequence
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
@@ -67,6 +67,44 @@ def environment() -> Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
+
+
+#: The order the coverage bar's segments sit in: best understood first, least last.
+_COVERAGE_ORDER: Final[tuple[str, ...]] = (
+    "checked",
+    "traced_unchecked",
+    "manual",
+    "untraced",
+)
+
+
+def _coverage_bar(attestation: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The coverage bar's slices (Phase 6.21f).
+
+    Computed here rather than in the template because Jinja arithmetic in a template
+    that has to render identically offline, on paper and in a PDF is somewhere nobody
+    should have to debug.
+
+    Args:
+        attestation: The frozen attestation, whose ``coverage`` holds the counts.
+
+    Returns:
+        One slice per non-empty state, in :data:`_COVERAGE_ORDER`, each with its
+        percentage. Empty when there are no requirements, so the template draws
+        nothing rather than an empty rule.
+    """
+    counts = dict(attestation.get("coverage") or {})
+    total = sum(int(counts.get(state, 0)) for state in _COVERAGE_ORDER)
+    if total <= 0:
+        return []
+    slices: list[dict[str, Any]] = []
+    for state in _COVERAGE_ORDER:
+        count = int(counts.get(state, 0))
+        if count:
+            # A floor, so one requirement out of two hundred is still visible — which
+            # matters most for the segment meaning "nothing checked this".
+            slices.append({"state": state, "percent": round(max(count / total * 100, 1.5), 2)})
+    return slices
 
 
 def verdict_for(findings: Sequence[models.Finding]) -> str:
@@ -274,7 +312,9 @@ def render_report(
             matched=sum(1 for row in matrix if row["status"] == "match"),
             counts=counts,
             evidence=evidence,
-            waterfall=[],
+            # Read at stage 7 and stored with the run, because by now the
+            # workbooks are gone (Phase 6.21f).
+            waterfall=list(run.waterfall or []),
             top_issues=list(run.top_issues or []),
             verdict=verdict_for(findings),
             generated_at=generated,
@@ -283,6 +323,7 @@ def render_report(
             reviewers=list(reviewers),
             drift=drift,
             attestation=attestation or {},
+            coverage_bar=_coverage_bar(attestation or {}),
             mismatches=list(mismatches),
             stats={
                 "duration": _duration(stages),

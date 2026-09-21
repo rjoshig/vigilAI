@@ -162,6 +162,11 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
 - [`docs/phase-6.20.md`](docs/phase-6.20.md) — **three roles**: user, reviewer and
   administrator, with capabilities rather than role checks, several roles per person,
   and a console that shows each person only their own job
+- [`docs/phase-6.21.md`](docs/phase-6.21.md) — **when the shape is wrong, keep going**: one
+  resolver that widens the match in code and then asks the model which sheet, column or
+  label was meant; the report layout as admin data rather than Python constants; anomalies
+  no rule covers; what a run cost; and the guided decoding the design has recommended
+  since Phase 2
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and

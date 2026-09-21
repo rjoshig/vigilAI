@@ -95,6 +95,8 @@ export interface ArtifactType extends ArtifactTypeIn {
   runs_using: number;
   /** The validation guide, examples filled from the samples. */
   guide: GuideEntry[];
+  /** What this delivery calls each name the fixed checks look for (Phase 6.21b). */
+  layout: LayoutEntry[];
   /** The newest definition version; zero before the first save (ADR-029). */
   version: number;
 }
@@ -336,6 +338,10 @@ export interface UserUsage {
   configurations: number;
   repeat_runs: number;
   mismatch_runs: number;
+  /** Tokens their runs sent, and what those cost (Phase 6.21d). */
+  tokens: number;
+  cost: number;
+  cached_calls: number;
   high_findings: number;
   completed_runs: number;
   failure_rate: number;
@@ -359,6 +365,10 @@ export interface UsageByUser {
   held_rate: number;
   repeat_rate: number;
   periods: number[];
+  /** The rate every row's cost was computed at, carried once (Phase 6.21d).
+   * Zero means no rate is set and the table shows tokens only. */
+  rate_per_million: number;
+  currency: string;
 }
 
 export interface Usage {
@@ -373,6 +383,8 @@ export interface Usage {
   json_failure_rate: number;
   false_positive_rate: number;
   findings_by_type: Record<string, number>;
+  /** What it all cost (Phase 6.21d). */
+  spend: Spend;
   decisions: Record<string, number>;
 }
 
@@ -987,4 +999,125 @@ export interface PromoteExample {
   rule_id?: string;
   scope?: string;
   note?: string;
+}
+
+/** What kind of name a layout entry covers. The same closed set the resolver uses. */
+export type LayoutKind = "sheet" | "column" | "label";
+
+/**
+ * One name a delivery spells differently (Phase 6.21b).
+ *
+ * Read by the ladder's *fourth* rung, which is the one a person writes: it is reached
+ * only after exact, separator-insensitive and same-words matching have all failed, and
+ * it never overrules the name actually asked for. Recording one turns a delivery the
+ * AI had to reason about into a delivery code resolves, and costs no model call.
+ */
+export interface LayoutEntry {
+  /** Which runs it covers. Empty, or `everywhere`, means all of them. */
+  scope: string;
+  kind: LayoutKind;
+  /** The name the fixed checks ask for, e.g. `Attributes`. */
+  wanted: string;
+  /** What this delivery calls it. Several, because customers word things differently. */
+  names: string[];
+  note: string;
+  added_by: string;
+}
+
+/** A name the AI read for a run, offered to an administrator (ADR-054). */
+export interface LayoutSuggestion {
+  artifact: string;
+  kind: LayoutKind;
+  wanted: string;
+  found: string;
+  /** The AI's own number, already past the floor code applies. */
+  confidence: number;
+  reason: string;
+  /** How many runs met it. Read on every delivery means it is that customer's layout. */
+  seen: number;
+  run_ids: number[];
+  /** True once the artifact type carries it, so an accepted offer stops asking. */
+  already_listed: boolean;
+}
+
+/** What `GET /admin/layout-suggestions` returns. */
+export interface LayoutSuggestions {
+  suggestions: LayoutSuggestion[];
+}
+
+/** One day's tokens and cost (Phase 6.21d). */
+export interface DayCost {
+  day: string;
+  tokens: number;
+  cost: number;
+}
+
+/**
+ * What some period cost (Phase 6.21d).
+ *
+ * `rate_per_million` of zero means nobody has set a rate, every money figure here is
+ * zero, and the console shows tokens only — a cost built on a rate nobody supplied is
+ * a number that gets quoted back as fact.
+ */
+export interface Spend {
+  rate_per_million: number;
+  currency: string;
+  tokens: number;
+  cost: number;
+  month_tokens: number;
+  month_cost: number;
+  /** Warn above this, per month. Never a refusal: the per-run token budget is the
+   * only hard stop in the product. Zero switches the band off. */
+  monthly_warning: number;
+  /** Calls the cache served. They cost nothing and are counted apart. */
+  cached_calls: number;
+  calls: number;
+  per_day: DayCost[];
+}
+
+/** What the tool made of one artifact type's samples (Phase 6.21f). */
+export interface ArtifactReading {
+  key: string;
+  label: string;
+  sample_count: number;
+  sheets: string[];
+  /** Names the fixed checks look for that code found, as wanted → what it is here. */
+  resolved: Record<string, string>;
+  /** Names it looked for and code could not settle. */
+  unresolved: string[];
+  error: string;
+}
+
+/** One pointer, resolved against the samples. */
+export interface NamedValueReading {
+  name: string;
+  description: string;
+  found: boolean;
+  value: string;
+}
+
+/** One check, evaluated over the samples. */
+export interface CheckReading {
+  name: string;
+  expression: string;
+  /** `null` when a value it needs was not found, which on a real run is a "could not
+   * evaluate" finding rather than a silent skip. */
+  passed: boolean | null;
+  detail: string;
+  shadow: boolean;
+}
+
+/**
+ * What a setup would do, as far as the samples can say (Phase 6.21f).
+ *
+ * A rehearsal, not a run: no model is called and nothing is stored, which is what
+ * makes it safe to press repeatedly while editing. It answers "is this wired up", not
+ * "does it ask the right question".
+ */
+export interface Rehearsal {
+  scope: string;
+  artifacts: ArtifactReading[];
+  named_values: NamedValueReading[];
+  checks: CheckReading[];
+  notes: string[];
 }

@@ -15,7 +15,7 @@ import * as React from "react";
 
 import { FileDrop } from "@/components/file-drop";
 import { Button, Input } from "@/components/ui/primitives";
-import type { ArtifactSlot, TypeDetection } from "@/lib/types";
+import type { DetectionVerdict, ArtifactSlot, TypeDetection } from "@/lib/types";
 
 /** One file inside a slot, with the name its uploader gives it. */
 export interface ReportPart {
@@ -168,12 +168,7 @@ function DetectionNote({ detection, slotKey, targets, onMove, onDismiss }: Detec
       ) : (
         <>
           <p>
-            <b>
-              {detection.verdict === "ambiguous"
-                ? "This could be more than one thing."
-                : "This did not match any known report type."}
-            </b>{" "}
-            {detection.reason}
+            <b>{headline(detection.verdict)}</b> {detection.reason}
           </p>
           {choices.length > 0 ? (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -208,6 +203,17 @@ function DetectionNote({ detection, slotKey, targets, onMove, onDismiss }: Detec
       ) : null}
     </div>
   );
+}
+
+function headline(verdict: DetectionVerdict): string {
+  if (verdict === "reasoned") {
+    // Never "this is": a tie the model broke is a reading, not a measurement, and the
+    // person still presses the button (Phase 6.21e).
+    return "Code could not tell these apart, so the AI read the sheet names.";
+  }
+  return verdict === "ambiguous"
+    ? "This could be more than one thing."
+    : "This did not match any known report type.";
 }
 
 /** The label of a slot by key, falling back to the key when the catalog has no label. */

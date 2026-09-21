@@ -13,6 +13,7 @@ import { Explain } from "@/components/explain";
 import { UserUsageCard } from "@/components/user-usage-card";
 import { ValueReportCard } from "@/components/value-report-card";
 import { Sparkline } from "@/components/sparkline";
+import { SpendCard } from "@/components/spend-card";
 import {
   Card,
   CardContent,
@@ -145,6 +146,10 @@ export default function UsagePage() {
                 .map(([status, count]) => `${count} ${status.replace("_", " ")}`)
                 .join(" · ")}
             />
+          </div>
+
+          <div className="mb-4">
+            <SpendCard spend={usage.spend} />
           </div>
 
           <div className="mb-4 grid gap-4 md:grid-cols-2">

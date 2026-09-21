@@ -108,6 +108,11 @@ FindingType = Literal[
     "lens_proposed",
     #: A requirement no report evidenced that reads like an obligation (Phase 6.11f).
     "coverage_gap",
+    #: A sheet, column or label the tool could not find by name, which the model read
+    #: as one the report does carry (Phase 6.21a). Always ``review`` severity: the
+    #: check it unblocked ran and reported separately, and this says the layout had to
+    #: be reasoned about so a reviewer can disagree with the reading itself.
+    "layout_reasoned",
 ]
 
 #: A reviewer's decision on a finding.
@@ -403,6 +408,13 @@ class Finding(BaseModel):
         verified: Whether stage 8 re-checked this finding.
         verify_agreed: Whether the second opinion agreed. Disagreement downgrades the
             severity to ``"review"`` rather than dropping the finding.
+        confidence: How sure the tool is, ``0``–``1``, or ``None`` where the
+            question does not arise (Phase 6.21f). A model's own number was consumed at
+            a floor and thrown away before this, so a reviewer with forty findings had
+            no way to read the least-sure ones first — which is the order a reviewer
+            actually wants. It is **not** a severity and must never be read as one: a
+            comparison code is certain about can be trivial, and a reading the model
+            was unsure of can be the thing that matters.
         lens_opinions: What each lens said, when several read the finding
             (Phase 6.11e). Empty for a run made with one second opinion.
     """
@@ -426,6 +438,7 @@ class Finding(BaseModel):
     review_note: str = ""
     verified: bool = False
     verify_agreed: bool | None = None
+    confidence: float | None = None
     #: What each of stage 8's lenses said, in order (Phase 6.11e): its name, whether
     #: it answered, whether it agreed, its reason and its confidence. Shown in the
     #: evidence panel so a reviewer reading a disputed finding sees the argument

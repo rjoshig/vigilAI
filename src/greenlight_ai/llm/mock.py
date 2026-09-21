@@ -14,8 +14,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Final, Mapping
 
+from pydantic import BaseModel
+
 from greenlight_ai.llm.base import BaseClient
-from greenlight_ai.llm.client import LLMResponseError
+from greenlight_ai.llm.client import LLMResponseError, Sent
 from greenlight_ai.llm.settings import LLMSettings
 
 __all__ = ["MockClient", "Responder", "canned_for_stage"]
@@ -69,6 +71,13 @@ def canned_for_stage(stage: str) -> str:
         # "absent" rather than "found": the mock must not invent a path, and
         # absence is what the deterministic matcher already concluded.
         "compliance_locate": '{"verdict": "absent", "json_path": "", '
+        '"reason": "mock client", "confidence": 0.0}',
+        # An empty list, because that is the expected answer and a mock that
+        # invented an anomaly would let a test pass on one nobody produced.
+        "shape_reading": '{"unusual": [], "reason": "mock client"}',
+        # "absent" rather than "found": the mock must not invent a name, and absence
+        # is what the four deterministic rungs already concluded (Phase 6.21a).
+        "name_locate": '{"verdict": "absent", "name": "", '
         '"reason": "mock client", "confidence": 0.0}',
         # "unclear" rather than a programme: the mock must not contradict a submitter,
         # and unfamiliar vocabulary is what the keyword check already concluded.
@@ -139,16 +148,19 @@ class MockClient(BaseClient):
         self._current_stage = str(kwargs.get("stage", ""))
         return super().complete(system, user, schema, **kwargs)
 
-    def _send(self, system: str, user: str) -> tuple[str, int, int]:
+    def _send(self, system: str, user: str, schema: type[BaseModel] | None = None) -> Sent:
         """Produce a canned answer.
 
         Args:
             system: The system prompt.
             user: The user prompt.
+            schema: Accepted and ignored. The schema is
+                        there is no endpoint to guide, and a mock that claimed otherwise
+                would let a test pass on a property the real clients have to earn.
 
         Returns:
-            A ``(text, prompt_tokens, completion_tokens)`` triple. Token counts are
-            estimated from length so budget behaviour can be exercised without a model.
+            What came back, with ``guided`` always false. Token counts are estimated
+            from length so budget behaviour can be exercised without a model.
 
         Raises:
             LLMResponseError: When a registered responder raises, which is how a test
@@ -163,7 +175,11 @@ class MockClient(BaseClient):
             raise
         except Exception as exc:  # noqa: BLE001 - a responder is test code; surface it
             raise LLMResponseError(f"mock responder for stage {stage!r} failed") from exc
-        return text, _estimate_tokens(system) + _estimate_tokens(user), _estimate_tokens(text)
+        return Sent(
+            text=text,
+            prompt_tokens=_estimate_tokens(system) + _estimate_tokens(user),
+            completion_tokens=_estimate_tokens(text),
+        )
 
 
 def _estimate_tokens(text: str) -> int:

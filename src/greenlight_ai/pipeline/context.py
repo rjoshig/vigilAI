@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Final, Literal, Mapping, Sequence
 from greenlight_ai.checks.definitions import AdminConfig
 from greenlight_ai.llm.client import LLMClient
 from greenlight_ai.llm.examples import LibraryExample
+from greenlight_ai.checks.profile import AttributeProfile
+from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
 from greenlight_ai.rules.normalize import AliasTable
@@ -270,6 +272,29 @@ class RunContext:
     #: that could not run, a stage that stopped early. Appended by the stages,
     #: surfaced beside the coverage panel and recorded in the attestation (6.11c).
     notices: list[str] = field(default_factory=list)
+    #: Which sheet, column or label the delivery means by each name the fixed checks
+    #: look for (Phase 6.21a). Built by stage 7 from the layout map and this run's
+    #: client, so a report whose layout drifted is still checked; what the model had to
+    #: reason about is read back off it afterwards and reported.
+    resolver: "LayoutResolver | None" = None
+    #: The counts report's step-by-step flow, read at stage 7 and stored with the
+    #: run so the frozen report can draw it (Phase 6.21f).
+    waterfall: list[dict[str, object]] = field(default_factory=list)
+    #: The shape of what this delivery carried, per attribute (Phase 6.21c). Filled by
+    #: stage 7 and stored on the run, so a later delivery of the same configuration has
+    #: something to be compared against. Aggregates only, never a row (ADR-003).
+    profile: dict[str, "AttributeProfile"] = field(default_factory=dict)
+    #: The same, from the previous finalized deliveries of this configuration, newest
+    #: first. Empty for a configuration's first runs, which is why the check says
+    #: nothing until there are enough.
+    profile_history: tuple[Mapping[str, "AttributeProfile"], ...] = ()
+    #: Whether to compare this delivery with its history at all, and how strictly.
+    anomalies: bool = True
+    anomaly_min_history: int = 3
+    anomaly_sensitivity: float = 4.0
+    #: Whether the model may read the aggregate statistics too. Off by default: it
+    #: spends a call on every run, including the ones with nothing wrong.
+    anomaly_model: bool = False
 
     def record(self, stage: StageName) -> StageRecord:
         """Get or create the record for a stage.

@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.training.lifecycle import RUNNING_STATES
+from greenlight_ai.checks import layout as layout_module
+from greenlight_ai.checks.profile import AttributeProfile
 from greenlight_ai.checks.definitions import (
     DEFAULT_CATEGORIES,
     AdminConfig,
@@ -245,6 +247,19 @@ def load_admin_config(
         ).scalars()
     }
 
+    # What this delivery calls each sheet, column and label the fixed checks look
+    # for (Phase 6.21b). Scoped like everything else, so a programme's spelling does
+    # not reach another programme's run.
+    layout = layout_module.load_map(
+        [
+            (row.key, tuple(row.layout_entries or ()))
+            for row in session.execute(sa.select(models.ArtifactType)).scalars()
+        ],
+        customer=customer,
+        programme_code=programme_code,
+        configuration_id=configuration_id,
+    )
+
     return AdminConfig(
         checks=checks,
         compliance_rules=compliance,
@@ -252,7 +267,68 @@ def load_admin_config(
         named_values=named_values,
         field_constraints=field_constraints,
         shadow_rule_refs=frozenset(shadow_refs),
+        layout_map=layout,
     )
+
+
+def load_profile_history(
+    session: Session,
+    configuration_id: str,
+    customer: str = "",
+    limit: int = 20,
+    exclude_run_id: int | None = None,
+) -> tuple[dict[str, AttributeProfile], ...]:
+    """The shape of the previous finalized deliveries of one configuration.
+
+    The baseline the anomaly check compares against (Phase 6.21c). **Finalized only**:
+    a run somebody abandoned or one still waiting for a reviewer has not been agreed to
+    be a normal delivery, and a baseline built from unreviewed runs would learn
+    whatever went wrong in them.
+
+    Args:
+        session: An open session.
+        configuration_id: The configuration whose history to read. Empty returns
+            nothing: two deliveries for different configurations are not the same thing
+            measured twice.
+        customer: The customer, so one customer's shape is not another's baseline.
+        limit: How many to read, newest first.
+        exclude_run_id: A run to leave out, so a re-check does not compare a delivery
+            with itself.
+
+    Returns:
+        The profiles, newest first. Runs that stored no profile are left out rather
+        than counted as empty.
+    """
+    if not configuration_id.strip():
+        return ()
+
+    statement = (
+        sa.select(models.Run.id, models.Run.attribute_profile)
+        .where(
+            models.Run.configuration_id == configuration_id,
+            models.Run.status == "finalized",
+        )
+        .order_by(models.Run.id.desc())
+        .limit(limit)
+    )
+    if customer.strip():
+        statement = statement.where(models.Run.customer_name == customer)
+    if exclude_run_id is not None:
+        statement = statement.where(models.Run.id != exclude_run_id)
+
+    history: list[dict[str, AttributeProfile]] = []
+    for _run_id, stored in session.execute(statement).all():
+        if not stored:
+            continue
+        read: dict[str, AttributeProfile] = {}
+        for name, raw in dict(stored).items():
+            try:
+                read[str(name)] = AttributeProfile.model_validate(raw)
+            except ValueError:
+                continue
+        if read:
+            history.append(read)
+    return tuple(history)
 
 
 def active_check_versions(session: Session) -> list[str]:
@@ -392,6 +468,27 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
         run.keyword_suggestions = {
             code: list(phrases) for code, phrases in context.keyword_suggestions.items()
         }
+    if context.waterfall:
+        run.waterfall = list(context.waterfall)
+    if context.profile:
+        run.attribute_profile = {
+            name: entry.model_dump() for name, entry in context.profile.items()
+        }
+    # Names the ladder's fifth rung had to read, kept where the evidence for them is
+    # (Phase 6.21b). A suggestion, never an application — an administrator records
+    # them on the artifact type, or does not (ADR-021).
+    if context.resolver is not None and context.resolver.reasoned:
+        run.layout_suggestions = [
+            layout_module.LayoutSuggestion(
+                artifact=reasoned.artifact,
+                kind=reasoned.kind,
+                wanted=reasoned.wanted,
+                found=reasoned.found,
+                confidence=reasoned.confidence,
+                reason=reasoned.reason,
+            ).model_dump()
+            for reasoned in context.resolver.reasoned
+        ]
 
 
 def _replace_rules(session: Session, run: models.Run, rules: Sequence[Rule]) -> None:
@@ -508,6 +605,7 @@ def _replace_findings(session: Session, run: models.Run, findings: Sequence[Find
                 engine=finding.engine,
                 verified=finding.verified,
                 verify_agreed=finding.verify_agreed,
+                confidence=finding.confidence,
                 lens_opinions=list(finding.lens_opinions),
             )
         )
@@ -577,6 +675,7 @@ def load_findings(session: Session, run_id: int) -> list[Finding]:
             review_note=row.review_note,
             verified=row.verified,
             verify_agreed=row.verify_agreed,
+            confidence=row.confidence,
             lens_opinions=tuple(row.lens_opinions or []),
         )
         for row in rows

@@ -24,6 +24,8 @@ import {
   Input,
   Skeleton,
 } from "@/components/ui/primitives";
+import { CoverageBar, SEGMENTS } from "@/components/coverage-bar";
+import { Explain } from "@/components/explain";
 import { api, ApiError } from "@/lib/api";
 import type { Coverage, CoverageState, RequirementCoverage } from "@/lib/types";
 
@@ -146,6 +148,24 @@ export function CoverageCard({ runId, onChange, editable = true, onObserve }: Co
           ) : (
             <Badge tone="success">nothing outstanding</Badge>
           )}
+          <Explain label="What does coverage mean?">
+            <p>
+              A finding tells you what disagreed. This tells you what was <b>compared</b>. The two
+              are different questions, and the dangerous answer is a clean findings list on a
+              delivery nothing examined — nothing was wrong because nothing was checked.
+            </p>
+            <p className="mt-2">
+              <b>Checked</b> means a report was read and compared against the requirement.{" "}
+              <b>Traced, no report evidenced it</b> means the configuration implements it and no
+              report showed the result. <b>Not traced</b> means nothing in the configuration appears
+              to implement it at all. <b>Verified by hand</b> is a requirement written in words no
+              check can express.
+            </p>
+            <p className="mt-2">
+              The middle two have to be acknowledged before the report can be frozen. That is not
+              saying they are fine — it is the record that somebody saw the gap.
+            </p>
+          </Explain>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-3 text-xs">
@@ -154,8 +174,10 @@ export function CoverageCard({ runId, onChange, editable = true, onObserve }: Co
           of a finding is not on its own a pass. Counted by code.
         </p>
 
+        <CoverageBar counts={counts} className="mb-2" />
+
         <div className="mb-3 flex flex-wrap gap-3">
-          {(Object.keys(STATE_LABEL) as CoverageState[]).map((state) => (
+          {SEGMENTS.map((state) => (
             <span key={state} className="flex items-center gap-1.5">
               <Badge tone={STATE_TONE[state]}>{counts[state] ?? 0}</Badge>
               <span className="text-muted-foreground">{STATE_LABEL[state]}</span>

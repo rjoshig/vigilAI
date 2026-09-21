@@ -56,6 +56,7 @@ class SettingSpec:
 #: The sections the console draws, in order.
 GROUPS: Final[tuple[str, ...]] = (
     "Model",
+    "Anomalies",
     "Training",
     "Login",
     "Throughput",
@@ -192,6 +193,21 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "remaining findings are left unverified and the run says so.",
     ),
     SettingSpec(
+        key="llm.guided_json",
+        env="LLM_GUIDED_JSON",
+        label="Ask the endpoint for JSON",
+        group="Model",
+        kind="enum",
+        default="auto",
+        choices=("off", "auto", "on"),
+        help="Whether to send the answer's schema with the request, so a serving stack "
+        "that supports guided decoding (vLLM does) cannot return anything that is not "
+        "that shape. `auto` sends it and, if the endpoint refuses the request, retries "
+        "once without it and stops trying until the next restart — so a gateway that "
+        "has never heard of it is not a broken deployment. `on` never stops trying; "
+        "`off` is the behaviour before this setting existed.",
+    ),
+    SettingSpec(
         key="llm.pii_tripwire",
         env="LLM_PII_TRIPWIRE",
         label="PII tripwire",
@@ -212,6 +228,56 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "logs hold ids and counts otherwise.",
     ),
     # --- training -------------------------------------------------------------------
+    # --- anomalies (Phase 6.21c) ------------------------------------------------------
+    SettingSpec(
+        key="anomaly.enabled",
+        env="GREENLIGHT_AI_ANOMALY",
+        label="Compare a delivery with its own history",
+        group="Anomalies",
+        kind="bool",
+        default=True,
+        help="Raise a low-severity finding when an attribute's null rate, range or "
+        "mean is unlike the previous finalized deliveries of the same configuration. "
+        "The only finding the tool makes that no rule covers. Costs no model call, and "
+        "says nothing until there is enough history.",
+    ),
+    SettingSpec(
+        key="anomaly.min_history",
+        env="GREENLIGHT_AI_ANOMALY_MIN_HISTORY",
+        label="Deliveries before it speaks",
+        group="Anomalies",
+        kind="int",
+        default=3,
+        minimum=2,
+        maximum=50,
+        help="How many previous finalized deliveries of a configuration are needed "
+        "before anything is compared. A baseline of one delivery is not a baseline.",
+    ),
+    SettingSpec(
+        key="anomaly.sensitivity_pct",
+        env="GREENLIGHT_AI_ANOMALY_SENSITIVITY_PCT",
+        label="How far is far",
+        group="Anomalies",
+        kind="int",
+        default=400,
+        minimum=100,
+        maximum=1000,
+        help="How far from the usual figure counts, as a percentage of how much this "
+        "configuration's deliveries normally vary. 400 means four times the usual "
+        "spread. Lower finds more and is wrong more often.",
+    ),
+    SettingSpec(
+        key="anomaly.model_reads_shape",
+        env="GREENLIGHT_AI_ANOMALY_MODEL",
+        label="Let the AI read the shape too",
+        group="Anomalies",
+        kind="bool",
+        default=False,
+        help="One extra model call per run. It is shown the aggregate statistics and "
+        "nothing else — never a row — and asked what looks unusual; code decides the "
+        "severity and it is always a question rather than a failure. Off by default "
+        "because it spends tokens on every run, including the ones with nothing wrong.",
+    ),
     SettingSpec(
         key="training.enabled",
         env="GREENLIGHT_AI_TRAIN_AI_MODE",
@@ -479,6 +545,45 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         ),
         help="Shown on the maintenance page and when a submission is refused. Say when "
         "you expect to be back, if you know.",
+    ),
+    SettingSpec(
+        key="cost.per_million_tokens",
+        env="GREENLIGHT_AI_COST_PER_MILLION_TOKENS",
+        label="Cost per million tokens",
+        group="Availability",
+        kind="int",
+        default=0,
+        minimum=0,
+        maximum=1_000_000,
+        help="What a million tokens costs, in whole currency units, so the token "
+        "counts the tool already keeps can be read as money. **Zero, the default, "
+        "means the figures stay in tokens and no number is invented** — which is the "
+        "right state until somebody who knows the contract fills this in.",
+    ),
+    SettingSpec(
+        key="cost.currency",
+        env="GREENLIGHT_AI_COST_CURRENCY",
+        label="Currency",
+        group="Availability",
+        kind="str",
+        default="USD",
+        help="What the cost figures are denominated in. Shown beside every amount, "
+        "because a number with no currency on it is a number somebody will read as "
+        "theirs.",
+    ),
+    SettingSpec(
+        key="cost.monthly_warning",
+        env="GREENLIGHT_AI_COST_MONTHLY_WARNING",
+        label="Warn above, per month",
+        group="Availability",
+        kind="int",
+        default=0,
+        minimum=0,
+        maximum=100_000_000,
+        help="Show a warning on the usage screen once this month's spend passes this "
+        "figure. **A warning, never a refusal**: the only hard stop in the product is "
+        "the per-run token budget, and adding a second one is a decision for after "
+        "somebody has looked at these numbers. Zero switches the band off.",
     ),
     SettingSpec(
         key="value.hours_per_order",

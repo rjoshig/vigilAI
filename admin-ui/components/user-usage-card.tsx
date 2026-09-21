@@ -27,6 +27,7 @@ import * as React from "react";
 
 import { Explain, FieldEffect } from "@/components/explain";
 import { Sparkline } from "@/components/sparkline";
+import { money } from "@/components/spend-card";
 import {
   Badge,
   Button,
@@ -83,6 +84,9 @@ const CSV_COLUMNS: { header: string; value: (row: UserUsage) => string | number 
   { header: "High findings", value: (row) => row.high_findings },
   { header: "Completed runs", value: (row) => row.completed_runs },
   { header: "High findings per completed run", value: (row) => row.high_per_run },
+  { header: "Tokens sent", value: (row) => row.tokens },
+  { header: "Cost", value: (row) => row.cost },
+  { header: "Calls served from the cache", value: (row) => row.cached_calls },
   { header: "First run", value: (row) => row.first_run_at ?? "" },
   { header: "Last run", value: (row) => row.last_run_at ?? "" },
 ];
@@ -258,6 +262,9 @@ export function UserUsageCard({ onError }: { onError: (message: string) => void 
                     <th className="py-1 pr-2 font-medium">Held</th>
                     <th className="py-1 pr-2 font-medium">Re-runs</th>
                     <th className="py-1 pr-2 font-medium">High / run</th>
+                    <th className="py-1 pr-2 font-medium">
+                      {usage.rate_per_million > 0 ? "Cost" : "Tokens"}
+                    </th>
                     <th className="py-1 pr-2 font-medium">Last run</th>
                     <th className="py-1 font-medium">Per day</th>
                   </tr>
@@ -313,6 +320,10 @@ export function UserUsageCard({ onError }: { onError: (message: string) => void 
 /** One person's row, with a link behind every count. */
 function Row({ row, deployment }: { row: UserUsage; deployment: UsageByUser }) {
   const comparable = row.runs >= MIN_RUNS_TO_COMPARE;
+  // Money only where somebody has set a rate. A cost built on a rate nobody
+  // supplied is a number that gets quoted back as fact (Phase 6.21d).
+  const costed = deployment.rate_per_million > 0;
+  const currency = deployment.currency;
 
   return (
     <tr className="border-b last:border-0">
@@ -355,6 +366,16 @@ function Row({ row, deployment }: { row: UserUsage; deployment: UsageByUser }) {
       </td>
       <td className="py-1.5 pr-2" title={`${row.high_findings} across ${row.completed_runs} runs`}>
         {row.high_per_run.toFixed(1)}
+      </td>
+      <td
+        className="py-1.5 pr-2 tabular-nums"
+        title={
+          row.cached_calls > 0
+            ? `${fmtInt(row.tokens)} tokens sent; ${fmtInt(row.cached_calls)} calls came from the cache and cost nothing`
+            : `${fmtInt(row.tokens)} tokens sent`
+        }
+      >
+        {costed ? money(row.cost, currency) : fmtInt(row.tokens)}
       </td>
       <td className="py-1.5 pr-2 text-muted-foreground">
         {row.last_run_at ? row.last_run_at.slice(0, 10) : "—"}

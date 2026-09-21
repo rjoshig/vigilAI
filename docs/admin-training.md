@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phases 6.19b and 6.20.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 6.21.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -100,6 +100,29 @@ separates them.
 | An artifact type's AI context, standing instructions, configuration notes | nothing, at the prompt — all three reach the model as background. Choose by how wide it is: one artifact type, one programme, one configuration |
 | An artifact type's AI context, a worked example | whether you are telling the model something about this work, or showing it a finished answer to copy the shape of. Neither is a rule |
 
+## Setting up a new delivery, and trying it
+
+Two cards at the top of Artifact types, which is the console's home.
+
+**Setting up a new delivery** is the order the screens are usually used in — say which
+reports exist, upload a sample of each, record what this delivery calls things, explain
+what the numbers mean, map the requirements, write the checks, set up the programmes —
+with a tick beside each step that is done. It is a checklist, not a wizard: it hides
+nothing, forces no order, and every step is a link to the screen that already does the
+job. Each step says *why* it matters, because a reason is what makes somebody do a step
+properly rather than tick it.
+
+**Try this setup** runs everything code can run against the sample workbooks already
+stored and says what happened: which sheets each sample carries and which of the names
+the checks look for resolved, what every named value found, and what every check would
+have done. **No AI is called and nothing is saved**, so press it as often as you like
+while you work.
+
+It answers *is this wired up*. It cannot tell you whether a check asks the right
+question, and it says so. And a check that does not hold **against a sample** has found
+nothing wrong with anything — the samples are specimens, not deliveries; it tells you
+the check runs.
+
 ## Artifact types
 
 What the tool accepts, in three tabs so the kinds are never confused: **Requirements
@@ -138,6 +161,20 @@ version as `v1.0`, `v1.1`, … (the first save is `v1.0`). For each type:
   shadow**, on the Rules screen with origin "from a validation guide": it runs, its
   findings are counted, and no reviewer sees them until you activate it there.
   Leave the guide empty and the model reads the report exactly as it always did.
+- **Layout.** What *this* delivery calls each sheet, column and row label the fixed
+  checks look for. You will usually need nothing here: spelling, separators and
+  plurals are already handled, so a report calling its per-field sheet `Attribute
+  Summary` when the checks ask for `Attributes` is read in code without being told.
+  Fill it in only where the **words themselves** differ — a report whose accepted
+  total is labelled `Records shipped` shares no word with `Accepts`, and no amount of
+  normalising reaches that.
+  On a real delivery the AI is asked which sheet was meant, shown the names that
+  workbook carries and nothing else. It answers, code checks the answer was one of
+  the names it offered, the check runs against it, **and the run carries a
+  review-severity finding saying the layout had to be reasoned about** — so a
+  reviewer can disagree with the reading rather than only with the finding. What it
+  read is then offered here with one button: recording it means the next delivery
+  from that customer is resolved in code and nothing is asked.
 - **Versions.** Every save of a type, its samples included, keeps a snapshot. The
   **Versions** button lists the last ten with who, when, and what changed; **Revert**
   puts one back, after you type `revert`, and appears as a new version so nothing is
@@ -484,9 +521,18 @@ invisible.
 
 Three tabs, because three different questions get asked of this screen.
 
-**Tool health** is runs per day, tokens, cache hit rate and the per-rule statistics. The
-cache hit rate is the number to watch: identical content is never sent to the model
-twice, and a rate that drops means something is changing prompts or inputs on every run.
+**Tool health** is runs per day, tokens, cache hit rate, **what it cost**, and the
+per-rule statistics. The cache hit rate is the number to watch: identical content is
+never sent to the model twice, and a rate that drops means something is changing prompts
+or inputs on every run.
+
+**What it cost** stays in tokens until somebody sets a **cost per million tokens** in
+Settings → Availability. That is deliberate: a cost built on a rate nobody supplied is a
+number that gets quoted back as fact, so until you fill it in the screen shows no
+currency at all rather than a zero. Set a **warn above, per month** figure and the card
+says when this month is over it — **and says plainly that nothing has been stopped**. The
+only hard limit in the tool is the token budget on a single run, on the Model settings.
+Cached calls cost nothing and are counted apart, so a re-check is visibly free.
 
 **By person** is who is using the tool and how it is going for them, over 7, 30, 90 or
 180 days. Three columns matter most and are deliberately kept apart, because they have
@@ -497,6 +543,9 @@ different causes and different fixes:
 | **Failed** | The pipeline raised. Usually the tool's problem — a layout, a parser. |
 | **Held** | What was uploaded disagreed with what was typed on the form. Usually something a person can be shown how to avoid: the wrong month's configuration, a customer name that does not match the file. |
 | **Re-runs** | The same order came back for another go. Something was wrong either way. |
+
+There is a **Cost** column too — **Tokens** until a rate is set — so it is possible to
+see who is spending as well as who is busy. Nothing about it refuses anything.
 
 A rate is flagged only when it is well above **this deployment's own average**, shown in
 the line under the tab, and never for somebody with fewer than five runs — over three
@@ -510,6 +559,33 @@ on it reaches a model. Use it to find where the tool is letting a group of peopl
 
 **What it displaced** is the hours report, over a date range you choose.
 
+
+## Anomalies — the one thing no rule covers (Phase 6.21c)
+
+Every other finding the tool makes traces back to a rule somebody wrote. This one does
+not. It asks a different question — *is this delivery shaped like the ones before it?* —
+and compares each attribute's null rate, range and average against the previous
+**finalized** deliveries of the same configuration.
+
+Four settings, under **Settings → Anomalies**:
+
+| Setting | What it does |
+| --- | --- |
+| **Compare a delivery with its own history** | On by default. Costs no AI call. |
+| **Deliveries before it speaks** | Three by default. Below this it says nothing at all, which is correct and will look like the feature being broken until somebody reads this line: a baseline of one delivery is not a baseline. |
+| **How far is far** | 400 means four times as far from the usual figure as this configuration's deliveries normally vary. Lower finds more and is wrong more often. |
+| **Let the AI read the shape too** | **Off** by default. One extra call on every run, including the ones with nothing wrong. It is shown the aggregate statistics and never a record. |
+
+Everything it raises is **low** severity, or **review** for the AI half. Code cannot
+know whether a mean moving three percent matters for this attribute in this business, so
+it does not pretend to: it says *look at this when you have a moment* and puts the
+numbers in the finding for a person to judge. The finding says so in as many words —
+being unusual is not the same as being wrong.
+
+It was measured before it shipped: 92.3% precision and 100% recall on synthetic
+histories (`docs/benchmarks/phase-6.21-anomaly.md`). Those numbers bound the arithmetic,
+not the product; whether real deliveries behave this way is something only real
+deliveries can say, which is why the sensitivity is a setting.
 
 ## Review load — what reviewers stop needing to see (Phase 6.18a)
 

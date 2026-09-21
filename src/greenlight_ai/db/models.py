@@ -180,6 +180,23 @@ class Run(Base):
     #: application: an administrator adds them to the word list, or does not. Kept on
     #: the run because that is where the evidence for them is.
     keyword_suggestions: Mapped[Any] = mapped_column(Json, default=dict)
+    #: The counts report's step-by-step flow, read while the workbooks were open
+    #: (Phase 6.21f). The frozen report has had a Waterfall section since Phase 5 and
+    #: was passed an empty list, so it has never been drawn: by render time the
+    #: workbooks are parsed and gone, and the flow has to be stored with the run.
+    waterfall: Mapped[Any] = mapped_column(Json, default=list)
+    #: The shape of what this delivery carried, per attribute: a null rate, a
+    #: minimum, a maximum and a mean (Phase 6.21c). **Aggregates only** — never a row,
+    #: never which record held the minimum (ADR-003). A later run of the same
+    #: configuration is compared against these, which is the only honest baseline for
+    #: a finding no rule covers.
+    attribute_profile: Mapped[Any] = mapped_column(Json, default=dict)
+    #: Names the model read for this run because four deterministic rungs could not
+    #: (Phase 6.21b, ADR-054): one entry per artifact, kind, wanted name and what was
+    #: used. A suggestion, never an application — an administrator records it on the
+    #: artifact type, or does not. Kept on the run, like the keyword suggestions
+    #: above, because that is where the evidence for it is.
+    layout_suggestions: Mapped[Any] = mapped_column(Json, default=list)
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
@@ -378,6 +395,10 @@ class Finding(Base):
     reviewed_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
     verified: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     verify_agreed: Mapped[Optional[bool]] = mapped_column(sa.Boolean, nullable=True)
+    #: How sure the tool is, 0–1, or NULL where the question does not arise
+    #: (Phase 6.21f). Not a severity: a comparison code is certain about can be
+    #: trivial, and a reading the model was unsure of can be the thing that matters.
+    confidence: Mapped[Optional[float]] = mapped_column(sa.Float, nullable=True)
     #: What each of stage 8's lenses said (Phase 6.11e). Empty for a run verified by
     #: the single second opinion.
     lens_opinions: Mapped[Any] = mapped_column(Json, default=list)
@@ -509,6 +530,15 @@ class ArtifactType(Base):
     #: answers to (Phase 6.8b). Empty means the model reads the report as it always
     #: did; a concrete entry also compiles into a shadow check.
     guide_entries: Mapped[Any] = mapped_column(Json, default=list)
+
+    #: What a delivery calls each sheet, column and row label the fixed checks look
+    #: for (Phase 6.21b). Ordered entries, each naming a scope, a kind, the name the
+    #: checks ask for, and the spellings that also mean it. Empty is the ordinary
+    #: state on a new deployment and stays empty for a delivery whose layout the
+    #: ladder resolves in code (ADR-054); it fills as administrators accept what the
+    #: ladder had to reason about, and every entry it gains removes a model call from
+    #: every later run.
+    layout_entries: Mapped[Any] = mapped_column(Json, default=list)
 
     #: Whether the upload slot appears on the new-run form.
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)

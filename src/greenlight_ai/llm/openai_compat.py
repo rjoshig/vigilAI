@@ -13,8 +13,10 @@ from typing import Any, Final
 
 import httpx
 
+from pydantic import BaseModel
+
 from greenlight_ai.llm.base import BaseClient
-from greenlight_ai.llm.client import LLMResponseError, LLMTimeoutError
+from greenlight_ai.llm.client import LLMResponseError, LLMTimeoutError, Sent
 from greenlight_ai.llm.settings import LLMSettings
 
 __all__ = ["OpenAIClient"]
@@ -52,20 +54,25 @@ class OpenAIClient(BaseClient):
             transport=transport,
         )
 
-    def _send(self, system: str, user: str) -> tuple[str, int, int]:
+    def _send(self, system: str, user: str, schema: type[BaseModel] | None = None) -> Sent:
         """Post one chat completion.
 
         Args:
             system: The system prompt.
             user: The user prompt.
+            schema: The answer's shape. Sent as ``response_format`` when guided
+                decoding is on, so a serving stack that supports it (vLLM does) cannot
+                return anything that is not that shape. ``docs/design.md`` has
+                recommended this since Phase 2 (Phase 6.21e).
 
         Returns:
-            A ``(text, prompt_tokens, completion_tokens)`` triple.
+            What came back, and whether the schema was sent.
 
         Raises:
             LLMTimeoutError: When the endpoint does not answer in time.
             LLMResponseError: When the status is not 2xx or the body is unusable.
         """
+        guided = self._guided_wanted(schema)
         payload: dict[str, object] = {
             "model": self.settings.model,
             "messages": [
@@ -75,12 +82,27 @@ class OpenAIClient(BaseClient):
             "max_tokens": self.settings.max_tokens,
             "temperature": self.settings.temperature,
         }
-        try:
-            response = self._client.post("/chat/completions", json=payload)
-        except httpx.TimeoutException as exc:
-            raise LLMTimeoutError(f"no response within {self.settings.timeout_s}s") from exc
-        except httpx.HTTPError as exc:
-            raise LLMResponseError(f"transport failed: {type(exc).__name__}") from exc
+        if guided and schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema.__name__,
+                    "schema": schema.model_json_schema(),
+                    "strict": True,
+                },
+            }
+
+        response = self._post(payload)
+        if guided and response.status_code == 400:
+            # A gateway that has never heard of ``response_format`` rejects the whole
+            # request. Which field it disliked is not knowable without reading a body
+            # that may echo the prompt (ADR-003), so the rule is the simple one: under
+            # ``auto``, drop the field, retry once, and stop offering it this process.
+            self._guided_refusal()
+            if self.settings.guided_json == "auto":
+                payload.pop("response_format", None)
+                guided = False
+                response = self._post(payload)
 
         if response.status_code >= 400:
             # The body may echo the prompt, so only the status is reported (ADR-003).
@@ -93,11 +115,33 @@ class OpenAIClient(BaseClient):
             raise LLMResponseError("response body was not a chat completion") from exc
 
         usage = body.get("usage") or {}
-        return (
-            str(choice),
-            int(usage.get("prompt_tokens", 0)),
-            int(usage.get("completion_tokens", 0)),
+        return Sent(
+            text=str(choice),
+            prompt_tokens=int(usage.get("prompt_tokens", 0)),
+            completion_tokens=int(usage.get("completion_tokens", 0)),
+            guided=guided,
         )
+
+    def _post(self, payload: dict[str, object]) -> httpx.Response:
+        """Send one request, turning transport failures into :class:`LLMError`.
+
+        Args:
+            payload: The chat-completion body.
+
+        Returns:
+            The response, whatever its status. The caller decides what a status means,
+            because a 400 has two readings when guided decoding is on.
+
+        Raises:
+            LLMTimeoutError: When the endpoint does not answer in time.
+            LLMResponseError: When the transport fails.
+        """
+        try:
+            return self._client.post("/chat/completions", json=payload)
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(f"no response within {self.settings.timeout_s}s") from exc
+        except httpx.HTTPError as exc:
+            raise LLMResponseError(f"transport failed: {type(exc).__name__}") from exc
 
     def close(self) -> None:
         """Close the underlying HTTP connection pool."""

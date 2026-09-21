@@ -20,6 +20,7 @@ __all__ = [
     "LLMResult",
     "LLMClient",
     "ModelT",
+    "Sent",
 ]
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -121,6 +122,10 @@ class CallRecord:
         retries: Retries needed.
         ok: Whether the call ultimately succeeded.
         cached: Whether the cache served it.
+        guided: Whether the request carried a JSON schema for the endpoint to decode
+            against (Phase 6.21e). Recorded rather than assumed, so the golden set can
+            measure what guided decoding bought on a given serving stack instead of
+            taking the setting's word for it.
         error: The exception class name when it failed, never a message body.
     """
 
@@ -133,7 +138,27 @@ class CallRecord:
     retries: int = 0
     ok: bool = True
     cached: bool = False
+    guided: bool = False
     error: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Sent:
+    """What one provider request came back with, before any validation.
+
+    Attributes:
+        text: The model's answer, verbatim.
+        prompt_tokens: Tokens consumed by the prompt.
+        completion_tokens: Tokens produced.
+        guided: Whether the request asked the endpoint to decode against the schema
+            (Phase 6.21e). ``False`` when the provider does not offer it, when the
+            setting is off, or when it was tried and the endpoint refused.
+    """
+
+    text: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    guided: bool = False
 
 
 class LLMClient(Protocol):

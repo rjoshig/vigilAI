@@ -44,8 +44,9 @@ closing it is what an administrator's added keyword does, and what the model is 
 
 from __future__ import annotations
 
-import re
 from typing import Final, Iterable, Mapping, Sequence
+
+from greenlight_ai.resolve.normalize import MIN_FOLD, fold, padded, tokens
 
 __all__ = [
     "WINDOW",
@@ -57,65 +58,20 @@ __all__ = [
     "tokens",
 ]
 
-#: Anything that is not a letter or a digit separates words. Hyphens, underscores,
-#: slashes and punctuation all become the same thing, so ``invitation-to-apply`` and
-#: ``invitation to apply`` normalise alike.
-_NOISE: Final = re.compile(r"[^a-z0-9]+")
-
 #: How far apart a multi-word keyword's words may sit and still count as that keyword.
 #: Six tokens covers the connectives English puts between them — *ongoing review **of
 #: the** portfolio* — without reaching into the next sentence's subject.
 WINDOW: Final[int] = 6
 
-#: Below this length a trailing ``s`` is more likely to be part of the word than a
-#: plural, so the fold leaves it alone.
-_MIN_FOLD: Final[int] = 4
+#: Kept as a name this module's tests and docstrings refer to; the rule lives in
+#: :mod:`greenlight_ai.resolve.normalize`.
+_MIN_FOLD: Final[int] = MIN_FOLD
 
 
-def fold(token: str) -> str:
-    """Reduce one word to a form that compares across singular and plural.
-
-    Deliberately not a stemmer. A stemmer would also fold tense and derivation, which
-    this check does not need and which would make a false match harder to explain to
-    the person reading the finding.
-
-    Args:
-        token: One normalised word.
-
-    Returns:
-        The word with a plural ending removed, or unchanged when removing one would be
-        a guess. ``accounts`` folds to ``account``; ``across`` and ``is`` do not fold.
-    """
-    if len(token) >= _MIN_FOLD + 1 and token.endswith("ies"):
-        return token[:-3] + "y"
-    if len(token) >= _MIN_FOLD and token.endswith("s") and not token.endswith("ss"):
-        return token[:-1]
-    return token
-
-
-def tokens(value: str) -> tuple[str, ...]:
-    """Split text into normalised, folded words.
-
-    Args:
-        value: Any text — a document's prose, a configuration path, a column header.
-
-    Returns:
-        The words, lowercased, stripped of punctuation, and singular-folded.
-    """
-    return tuple(fold(word) for word in _NOISE.sub(" ", value.lower()).split() if word)
-
-
-def _normalized(value: str) -> str:
-    """Text with punctuation folded to single spaces, for the substring test.
-
-    Args:
-        value: Any text.
-
-    Returns:
-        Lowercased with every run of non-alphanumeric characters replaced by one space,
-        padded with a space at each end so a substring test cannot straddle the ends.
-    """
-    return " " + " ".join(_NOISE.sub(" ", value.lower()).split()) + " "
+#: Reducing a word to a comparable form is one job with one implementation
+#: (Phase 6.21a). ``fold`` and ``tokens`` moved to :mod:`greenlight_ai.resolve.normalize`
+#: when the report side needed exactly the same singular fold; they are re-exported here
+#: because this module's ``__all__`` has named them since 6.17a.
 
 
 def _near(wanted: Sequence[str], where: Mapping[str, Sequence[int]]) -> bool:
@@ -144,14 +100,14 @@ def found(keyword: str, haystack: str, folded: Sequence[str]) -> bool:
 
     Args:
         keyword: A programme's keyword, as an administrator wrote it.
-        haystack: The delivery's text, already through :func:`_normalized`.
+        haystack: The delivery's text, already through :func:`padded`.
         folded: The delivery's text, already through :func:`tokens`.
 
     Returns:
         True when any of the three tests finds it. See the module docstring for why
         there are three and why the substring test comes first.
     """
-    normalized = _normalized(keyword).strip()
+    normalized = padded(keyword).strip()
     if not normalized:
         return False
 
@@ -191,7 +147,7 @@ def normalized_key(keyword: str) -> str:
     Returns:
         Lowercased with punctuation folded to single spaces, and trimmed.
     """
-    return _normalized(keyword).strip()
+    return padded(keyword).strip()
 
 
 def discriminating(code: str, keywords: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
@@ -235,6 +191,6 @@ def hits(haystack_parts: Iterable[str], keywords: Sequence[str]) -> list[str]:
         The keywords found, in the order the programme lists them.
     """
     joined = " ".join(haystack_parts)
-    haystack = _normalized(joined)
+    haystack = padded(joined)
     folded = tokens(joined)
     return [word for word in keywords if found(word, haystack, folded)]

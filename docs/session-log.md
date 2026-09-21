@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `claude/next-steps-pending-jr9tne`, pushed. **Phase 6.20 is complete** — three roles, capabilities enforced by the API, both consoles gated, roles assigned as a set, and the single `role` column dropped. **6.19 part B is built**: each app has a Guide in its sidebar, generated from that audience's training document, switchable with `GREENLIGHT_AI_UI_GUIDE`. 6.14 and 6.17 were closed: both were complete and their tables said otherwise. **Phase 8 is now specified** ([`phase-8.md`](phase-8.md)): an optional chat box on the frozen report page, scoped to one run, answering from a context pack code assembles. It is documentation only — no product code — and it is queued behind 6.21. Phase 8 is merged to `main` and the **`v0.6.20` release is cut** (milestone 8a), so the gate is satisfied and phase 8 may begin once 6.21 lands. **Next concrete action: 6.18b**, the maturity level, which waits on real verdicts ([`phase-7.1.md`](phase-7.1.md)) |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
+| Branch | `feature/phase-6.21`, pushed. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)): the ladder, the layout map, anomalies, spend, guided decoding and the dress rehearsal. **Phase 8 is specified** ([`phase-8.md`](phase-8.md)) and queued behind 6.21 — documentation only, and the `v0.6.20` release gate is satisfied, so it may begin now that 6.21 has landed. **Next concrete action: nothing in 6.21 needs a session.** Its one open criterion — what guided decoding buys — can only be measured against a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After that, **phase 8**, or **6.18b** (the maturity level) once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -27,12 +27,16 @@ are open and each needs somebody other than a session:
 - **The three items under "Outstanding, needs the user"** at the foot of this block: the
   retention decision and sign-off, a model for the golden-set benchmark, and a sanitized
   shape reference.
+- **Phase 6.21 criterion 5** — what guided decoding actually buys. The mock has no
+  endpoint to guide, so the number can only be read the first time this runs against a
+  real model. Every call already records whether the schema was sent; it belongs to
+  [`phase-7.md`](phase-7.md)'s bootstrap, where the baseline is taken anyway.
 
 **A branch note.** `CLAUDE.md` says a branch never carries an agent or model name and a
-tool-assigned `claude/*` name is renamed before its first push. This branch was named and
-pushed by the harness before the rule could apply, and the session was told to push
-nowhere else. Rename it, or merge it through a `feature/*` branch, before it reaches
-`main`.
+tool-assigned `claude/*` name is renamed before its first push. Phase 6.21 was built on a
+harness-assigned `claude/*` branch, which the rule could not reach; it was merged to `main`
+through `feature/phase-6.21`, so the name is not in `main`'s history. Do the same for any
+branch a harness names.
 
 **When login is switched on, decide the roles first.** Three roles now exist and the API
 enforces them (ADR-049). With login off nothing changes: the placeholder holds `user` and
@@ -152,6 +156,203 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (phase 6.21 built, all six parts)
+
+**Branch:** `claude/llm-validation-gaps-assessment-4qpv7y`, pushed · **Phase:** 6.21
+built · **Status:** 1,821 Python tests, 141 admin-ui, 123 user-ui; every gate clean.
+
+Built in the order the phase doc set: a and e first, because they are what Phase 7 hits
+on its first afternoon, then b, c, d, f.
+
+### 6.21a — one ladder for every name
+
+`src/greenlight_ai/resolve/`. Exact, then separators-as-noise, then the same words
+singular-or-plural in order, then an administrator's alternates, then the model shown
+names and nothing else. Two rules make it defensible and both are tested: **a rung that
+ties is a rung that failed**, and **a later rung never overrules an earlier one** — which
+is what guarantees nothing that matched before stops matching.
+
+The fifth rung follows 6.15 exactly and produces a `layout_reasoned` review finding, so
+a reviewer can disagree with the *reading* rather than only with the finding. Four
+normalisers became one.
+
+The `layout_drift` fixture is `baseline_match` delivered by a customer who names
+everything differently. Nine of its eleven renamed names resolve in code; two need the
+fifth rung, which is what the rung is for.
+
+**Found while building:** the counts report carries a waterfall step called `input` and
+a total called `Input`. Different rows, and the old lookup took whichever openpyxl
+returned first. Rung 1 settles it by spelling now.
+
+### 6.21e — the model call itself
+
+Guided decoding, which `design.md` has recommended since Phase 2 and nothing sent.
+`llm.guided_json` defaults to `auto`; a refusal is handled **without reading the body**
+(ADR-003), so any 400 on a guided request means drop the field, retry once, and stop
+offering it this process. One wasted call per process, not one per stage.
+
+Also the artifact-detection tiebreak `detect.py`'s own docstring said was deliberately
+unbuilt — it can only *narrow* the shortlist code produced, and gets its own verdict,
+`reasoned` — and PDF OSL tables, which were being flattened into paragraphs. That one
+mattered more than it looks: most `criteria` requirements live in a table, so the same
+specification delivered as a PDF yielded fewer requirements than as Word, and fewer
+requirements reads downstream as nothing wrong.
+
+**The re-check guard was stale in a way worth recording.** It counted rows in the call
+log and a cache hit is a row; stages 6 and 7 both gained model calls after it was
+written, every one cached on a re-check. It would have fired on a re-check that behaved
+perfectly. It counts tokens now, which is what "the re-check is free" has always meant.
+
+### 6.21b — the layout as admin data
+
+Entries on the artifact type, read by the ladder's fourth rung, with the suggestions on
+the same screen: what the AI read, how sure, why, how many runs met it, one button.
+
+Two things the tests caught rather than the author. The migration adds both columns
+nullable, backfills, then makes them NOT NULL — `test_migration_chain.py` refused the
+first version, which is exactly the defect it was written for. And the editor's
+spellings box derived its value from the parsed list, so every keystroke re-joined the
+list and ate the space just typed: "Accepted total" became "Acceptedtotal".
+
+### 6.21c — the tool may report what no rule covers
+
+`profile_anomaly` has been declared since Phase 2, labelled in the UI, used in a prompt
+example, and constructed nowhere. Now it is produced by code: the median and median
+absolute deviation of the configuration's previous finalized deliveries, not the mean
+and standard deviation, because one odd delivery drags a mean far enough to hide the
+next one — and there is a test for that.
+
+Three things make it safe: it says nothing below three deliveries of history, code
+grades it **low** because code cannot know what matters here, and it was measured before
+shipping — 92.3% precision, 100% recall, with a floor asserted in the suite.
+
+**The benchmark corrected an assumption while it was being written.** A scenario
+asserted a null rate up 40% should not fire. It fired every time and was right: on a
+measure that has sat at 4.0% ± 0.2% for eight deliveries, 5.6% is eight deviations out.
+
+### 6.21d — spend, visible everywhere
+
+Arithmetic over the `llm_calls` rows already stored. **No rate means no money** — the
+figures stay in tokens and no currency appears, because a zero with a currency on it
+reads as "this cost nothing", which is a different and wrong claim. **Nothing new
+refuses anything**, asserted by reading the module's own source for a `raise`.
+
+### 6.21f — show it, and lead somebody through it
+
+The dress rehearsal is the piece that matters: until it, the only way to learn whether a
+definition fired was for somebody else to submit a real delivery, so the feedback loop
+ran through another person's working day.
+
+**The waterfall turned out not to be cosmetic.** It could not be filled at render time
+at all — by then the workbooks are parsed and gone — which is why it had sat empty since
+Phase 5. It is read at stage 7 and stored with the run.
+
+And writing the rehearsal found that reporting every sheet name against every report
+type lists the state sheet as missing from the DIRT: true, useless, and a screen full of
+true-and-useless is one nobody reads.
+
+Plus the coverage bar, confidence on a finding, the setup checklist, and `<Explain>` in
+the user app, which had none.
+
+### What is open, and why
+
+**One acceptance criterion**, and it is not work a session can do: what guided decoding
+buys can only be measured against a real endpoint. Every call records whether the schema
+was sent; the number waits for [`phase-7.md`](phase-7.md)'s bootstrap, where the baseline
+is taken anyway.
+
+### Next concrete action
+
+Nothing in 6.21. The branch still carries a `claude/*` name the harness assigned before
+`CLAUDE.md`'s rule could apply — rename it or merge through a `feature/*` branch before
+it reaches `main`.
+
+---
+
+## Session: 2026-09-21 (a gap assessment against the real-file goal, and phase 6.21)
+
+**Branch:** `claude/llm-validation-gaps-assessment-4qpv7y` · **Phase:** 6.21 specified,
+not started · **Status:** documentation only. No code changed, no gate moved.
+
+### What was asked
+
+An objective assessment of whether the product does the thing it exists to do: read an
+OSL, a configuration and a set of reports whose format is *slightly off*, notice what
+ordinary code cannot, and hand a person a validation report they can trust — with the
+whole of it driven from the admin console so getting smarter never needs a deploy.
+
+### What the assessment found
+
+**Most of it is built.** Artifact types with scoped samples, the example library, the
+mapping interview, validation guides, scoped rules, the six field markers, the Guides —
+all there, all admin-editable. On the "teach it without engineering" axis this is ahead
+of the commercial document-AI products it was compared against, and the piece those
+products market as their differentiator — a reviewer's correction becoming a worked
+example — has existed here since 6.13.
+
+**The gap is one surface: the report side.** `checks/reports.py` names its sheets and
+columns as Python constants and matches them exactly. A real DIRT whose attribute sheet
+is called anything else produces one `could_not_evaluate` finding per requirement and
+validates nothing. The finalize gate means nothing is silently missed — but a reviewer
+meets a page of non-answers on their first real delivery.
+
+**And the fix is already in the repository, in the wrong two places.** 6.15 built
+"widen in code, then ask the model names-only, then code checks the answer, and it is
+never a pass" for compliance rules; 6.17a and 6.18f repeated it for programme
+classification. Nothing like it exists for sheets, columns or report labels, which is
+where drift actually lands. 6.16d looked at exactly this and left it, correctly, because
+named values fail at *review* severity rather than high. That reasoning holds right up
+until the moment a real file arrives, when the cost stops being a false alarm and becomes
+a tool that says nothing at all.
+
+Four other things, all verified against the call sites rather than remembered:
+
+- **`profile_anomaly` is a dead finding type.** Declared in `rules/schema.py:89` since
+  Phase 2, labelled in `user-ui/lib/display.ts`, used as an example in
+  `llm/prompts/s9_summarize.py` — and constructed nowhere in `src/`. The design doc
+  promises it. Every finding the tool makes traces back to a rule somebody authored.
+- **Nobody can see what a run costs.** Tokens are counted per call, per stage and per
+  day; there is no cost figure, no per-person token accounting, and no meter.
+- **Guided decoding was never wired up.** `design.md` has recommended it since Phase 2.
+  `llm/openai_compat.py` posts `model`, `messages`, `max_tokens`, `temperature` and
+  nothing else. Phase 7 runs on a 20–40B model, where this is the largest reliability
+  lever available for the smallest change.
+- **The PDF OSL flattens tables into paragraphs.** Most `criteria` requirements live in
+  tables, so a PDF OSL yields fewer requirements — and fewer requirements reads as
+  nothing wrong.
+
+Also noted and carried into the phase doc: four separate implementations of "lower, strip
+separators"; `pipeline/run.py:181` asserting a re-check makes no model calls while stages
+6 and 7 are both in `RECHECK_STAGES` and both can; `report/render.py` passing
+`waterfall=[]` so that section of the frozen report has always been empty;
+`<Explain>` used thirteen times in the admin console and never in the user one; and
+`Finding` carrying no confidence, so the model's own number is consumed at a floor and
+thrown away.
+
+### The four decisions the phase rests on
+
+Put to the user, answered the same day: **widen in code then ask the model** when a name
+is not found; **show spend, do not block** — the per-run ceiling stays the only refusal;
+**find anomalies both ways**, code against the configuration's own history and one capped
+model call reading the aggregate shape; and **the OSL may be a PDF and its tables
+matter**, while reports stay Excel and OCR stays out.
+
+### What was written
+
+[`phase-6.21.md`](phase-6.21.md), six lettered parts — one resolver, the layout as admin
+data, anomalies, spend made visible, the model call itself, and showing it — with eight
+acceptance criteria. Registered in both phase tables, the README index and this log.
+
+**No code was written.** The user asked for the phase document first.
+
+### Next concrete action
+
+**6.21a** — `src/greenlight_ai/resolve/`, the one ladder, and the renamed-layout fixture
+that proves it. Then 6.21e, which is a day's work for the largest reliability gain
+available before Phase 7.
 
 ---
 

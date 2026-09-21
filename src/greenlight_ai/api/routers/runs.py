@@ -35,7 +35,7 @@ from greenlight_ai.api.deps import (
     get_data_dir,
     get_session,
 )
-from greenlight_ai import availability
+from greenlight_ai import availability, spend
 from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.checks import artifact_match, field_labels
 from greenlight_ai.api.uploads import UploadError, store_upload
@@ -43,6 +43,8 @@ from greenlight_ai.config.store import resolve
 from greenlight_ai.db import catalog, models, repository, drift
 from greenlight_ai.db.queue import JobQueue
 from greenlight_ai.db.types import utcnow
+from greenlight_ai.llm.factory import build_client
+from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.parsers import detect
 from greenlight_ai.parsers.base import ParseError
 from greenlight_ai.parsers.reports import parser_for
@@ -1430,6 +1432,8 @@ def run_stats(
         ).all()
     }
 
+    rate = spend.rate_for(session)
+    tokens = int(totals[2]) + int(totals[3])
     return schemas.RunStats(
         run_id=run_id,
         total_duration_ms=sum(s.duration_ms for s in stages),
@@ -1438,6 +1442,10 @@ def run_stats(
         findings_by_engine=by_engine,
         prompt_tokens=int(totals[2]),
         completion_tokens=int(totals[3]),
+        cost=round(spend.cost_of(tokens, rate), 4),
+        currency=rate.currency,
+        rate_per_million=rate.per_million,
+        budget_tokens=resolved_llm_settings(session).max_tokens_per_run,
         stages=stages,
     )
 
@@ -1502,7 +1510,11 @@ def detect_type(
         with scratch.open("wb") as handle:
             shutil.copyfileobj(file.file, handle)
         try:
-            result = detect.detect(session, scratch, data_dir)
+            # A model may break a tie code could not, choosing only from the shortlist
+            # code produced (Phase 6.21e). Built here rather than held open, because
+            # this route is called once per upload and most uploads never tie.
+            client = build_client(resolved_llm_settings(session))
+            result = detect.detect(session, scratch, data_dir, client)
             per_sheet = detect.detect_sheets(session, scratch, data_dir)
         except ParseError as exc:
             raise HTTPException(

@@ -10,7 +10,7 @@ compliance rules and stage 7 the checks (:mod:`greenlight_ai.pipeline.s6_reverse
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from typing import Literal, Mapping, Sequence
 
 from greenlight_ai import scopes
 from greenlight_ai.rules.schema import Severity
@@ -185,6 +185,11 @@ class AdminConfig:
         shadow_rule_refs: Which rules are still in shadow, as ``kind:id``. Their
             findings are recorded and counted but shown to nobody, so a new rule's
             precision can be measured before it interrupts a reviewer.
+        layout_map: What this delivery calls each sheet, column and label the fixed
+            checks look for, keyed by
+            :func:`greenlight_ai.resolve.layout.alternates_key` (Phase 6.21b). Empty
+            on a new deployment, and empty is the ordinary state: it fills as
+            administrators accept what the ladder had to reason about.
     """
 
     checks: tuple[CheckDefinition, ...] = ()
@@ -193,3 +198,4 @@ class AdminConfig:
     named_values: tuple[object, ...] = field(default_factory=tuple)
     field_constraints: tuple[object, ...] = field(default_factory=tuple)
     shadow_rule_refs: frozenset[str] = frozenset()
+    layout_map: Mapping[str, tuple[str, ...]] = field(default_factory=dict)

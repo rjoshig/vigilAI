@@ -1892,6 +1892,8 @@ the training document contains, which is the point: a section worth showing in t
 is a section worth having in the training document, and writing it there first means the
 people who train from the document get it too.
 
+---
+
 ## ADR-051 — The report chat is run-scoped, read-only, and keeps nothing
 
 **Status:** accepted · 2026-09-21 · Phase 8
@@ -2053,3 +2055,154 @@ history, so the transcript is capped in turns and the cap is a setting rather th
 constant. And the prompt must hold the model to prose without ids, which is a real
 instruction-following burden — the citation check is what makes a lapse harmless rather
 than embarrassing.
+
+---
+
+## ADR-054 — One ladder resolves every name, code first and the model last
+
+**Status:** accepted · 2026-09-21 · Phase 6.21a
+
+**Context.** Every comparison this product makes eventually reaches a *name* somebody
+else chose: a worksheet, a column heading, a row label, a configuration key. Four
+modules reduced a name to a comparable form with four slightly different rules, and
+every one of them stopped at exact-after-lowercasing. `checks/reports.py` named its
+sheets as Python constants and matched them exactly, so a delivery whose attribute
+sheet is called `Attribute Summary` matched nothing and every check that needed it
+became a `could_not_evaluate` finding. The run was honest — the finalize gate refuses
+to freeze a report over an unacknowledged gap (ADR-035) — and it validated nothing.
+
+Phase 6.15 had already solved the same problem for compliance rules, and 6.17a for
+programme classification. The shape was proven; it was simply not pointed at the
+surface where drift lands.
+
+**Decision.** `src/greenlight_ai/resolve/` is the only place that answers *which name
+was meant*, as a ladder tried in order: **exact** (case and surrounding space aside),
+**squashed** (separators are noise), **tokens** (the same words, singular or plural, in
+order, with at most two more besides), **alternate** (a synonym a person wrote down),
+then **the model**, shown names and nothing else.
+
+Two rules make the result defensible:
+
+- **A rung that ties is a rung that failed.** Two candidates matching equally well is
+  the case a person or the model should settle; picking one would be a comparison
+  nobody could reproduce. The ladder falls through with every candidate still on the
+  table.
+- **A later rung never overrules an earlier one.** The rungs are ordered by how much
+  they assume, so nothing that matched before this package existed stops matching.
+
+The fifth rung obeys the discipline 6.15 established and this ADR restates: the model's
+answer must be one of the names it was offered, a confidence floor of 0.6 applies, and
+**it is never a pass**. What it resolves produces a `layout_reasoned` review finding
+naming what was wanted, what was used and how sure it was, so a reviewer can disagree
+with the *reading* rather than only with the finding. A run with no client, or one
+whose budget is spent, gets the deterministic answer.
+
+**Consequences.** Report layout stops being a reason a run reports nothing. The cost is
+one model call per distinct unresolved name per run, cached like any other, and it
+falls to zero once an administrator accepts the answer onto the artifact type
+(Phase 6.21b). Four normalisers became one, and a fifth would be the defect this
+decision exists to prevent.
+
+Two things this changed that were not the point. A counts report can carry a waterfall
+step called `input` *and* a total called `Input`; they are different rows and the old
+lookup picked whichever the workbook listed first, so rung 1 now settles it by spelling
+and falls back to first-wins only when spelling does not decide. And `recheck()`'s
+guard that a re-check makes no model calls counted **rows** in the call log, which
+includes cache hits — so it would have fired on a re-check that behaved perfectly. It
+counts tokens now, which is what "the re-check is free" has always meant.
+
+---
+
+## ADR-055 — The answer's schema is sent with the request, and the endpoint may refuse it
+
+**Status:** accepted · 2026-09-21 · Phase 6.21e
+
+**Context.** `docs/design.md` has said since Phase 2 that *"if the serving stack
+supports guided or JSON-schema decoding (vLLM does), turn it on — it removes most
+format errors"*, and nothing sent it: both clients posted only the model, the messages,
+`max_tokens` and `temperature`. Recovery from a malformed answer was one retry with the
+validation error appended. Phase 7 runs on a 20–40B in-house model, which is exactly
+where format errors are common and where this is the largest reliability gain available
+for the smallest change.
+
+**Decision.** `llm.guided_json` takes `off`, `auto` or `on`, defaulting to **`auto`**.
+Where there is a schema and the mode allows it, the OpenAI-compatible client sends
+`response_format: {type: json_schema, …}` and the Anthropic client requires a single
+tool whose `input_schema` is the same shape — the Messages API has no `response_format`,
+and a forced tool is how an answer is constrained there.
+
+**A refusal is handled without reading the body.** Which field an endpoint disliked is
+not knowable without parsing an error that may echo the prompt (ADR-003), so the rule is
+the simple one: under `auto`, **any** 400 on a guided request means drop the field,
+retry once, and stop offering it for the rest of the process. A gateway that has never
+heard of it therefore costs one wasted call per process rather than one per stage, and
+is not a broken deployment. Under `on`, an administrator has said they want it: nothing
+is latched and the refusal surfaces as the error it is.
+
+Every call record carries `guided`, so what the setting bought on a given serving stack
+can be measured rather than assumed.
+
+**Consequences.** `_send` gained the schema and now returns a `Sent` value object rather
+than a tuple, which is the only change any provider had to make. A 500 is still an
+ordinary failure: only a 400 reads as a refusal of the field, because only a 400 means
+the request itself was rejected.
+
+---
+
+## ADR-056 — The tool may report what no rule covers, at the bottom of the severity scale
+
+**Status:** accepted · 2026-09-21 · Phase 6.21c
+
+**Context.** Every finding this product made traced back to a rule somebody authored: an
+OSL requirement, a compliance control, an administrator's check. That is the right
+default — a finding nobody can explain is a finding nobody acts on — but it means the
+tool could only ever find what it had been told to look for. `docs/design.md` has
+promised a `profile_anomaly` finding since Phase 2 ("unexpected nulls, wrong type, mean
+far from prior runs"). The type was declared in `rules/schema.py`, labelled in the user
+interface, used as an example in the stage-9 prompt, and **constructed nowhere**.
+
+**Decision.** Each finalized run stores the shape of what it delivered — per attribute,
+a null rate, a minimum, a maximum and a mean — and a later run of the same configuration
+is compared against them. Two halves:
+
+- **Code, by default.** The median and median absolute deviation of the previous
+  finalized deliveries, not the mean and standard deviation: with a handful of runs a
+  single odd delivery drags a mean far enough to hide the next one, and the median does
+  not move. A perfectly flat history has no spread to be a multiple of, so a relative
+  threshold applies there instead.
+- **The model, off by default.** One call, shown the same aggregates, asked what looks
+  unusual on its own terms. It is the only call the product makes on *every* run, which
+  is why it ships off.
+
+**Three constraints make this safe to ship.**
+
+1. **It says nothing until it has enough history** (three deliveries by default). A
+   baseline of one delivery is not a baseline, and a tool that invented one would teach
+   reviewers to ignore the whole category in its first week.
+2. **Code grades it, and grades it low.** Code cannot know whether a mean moving three
+   percent matters for this attribute in this business, and severity is code's to set
+   (ADR-001) — so it sets the one that means *look when you have a moment* and puts the
+   numbers in the finding for a person to judge. The model half is **review**, because
+   it has a reading behind it rather than arithmetic.
+3. **It is measured.** `scripts/anomaly_benchmark.py` and
+   `docs/benchmarks/phase-6.21-anomaly.md`: 92.3% precision, 100% recall on synthetic
+   histories. An anomaly detector nobody measured is a false-positive generator, and the
+   failure that matters is not a wrong finding but a reviewer learning the category is
+   noise.
+
+**Aggregates only** (ADR-003). A null *rate*, not which rows were null; a minimum, not
+the record that held it. That is what makes the profile safe to store for the retention
+window and safe to show the model.
+
+**Consequences.** A configuration's first few deliveries get no anomaly findings, which
+is correct and will read as the feature being broken until somebody reads this. The
+stored profile is one more thing the retention purge removes with a run. And the
+thresholds are console settings rather than constants, because the number that survives
+contact with real deliveries is a Phase 7 question — the benchmark bounds the
+arithmetic, not the product.
+
+Building the benchmark corrected an assumption worth recording: a null rate up 40% on a
+measure that has sat at 4.0% ± 0.2% for eight deliveries **is** eight deviations out,
+and firing on it is right. What counts as a nudge is relative to how much that measure
+normally moves, which is the whole reason this compares against a spread rather than a
+fixed percentage.
