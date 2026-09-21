@@ -30,6 +30,7 @@ import {
   TR,
   Table,
 } from "@/components/ui/primitives";
+import { useAuth } from "@/components/auth-gate";
 import { BulkBar } from "@/components/bulk-bar";
 import { FieldEffect } from "@/components/explain";
 import { FieldLabelsCard } from "@/components/field-labels-card";
@@ -38,6 +39,13 @@ import { api, ApiError } from "@/lib/api";
 import type { Alias, MaskedColumn, Scope } from "@/lib/types";
 
 export default function ReferencePage() {
+  // A reviewer keeps the aliases and the field labels -- knowing what a delivery calls
+  // a field is part of judging one -- but not the masked columns, which are the single
+  // control that keeps personal data out of every prompt (ADR-003, ADR-049). The card
+  // goes rather than the screen: hiding the whole screen would take a reviewer's own
+  // work away to protect one card on it.
+  const { can } = useAuth();
+  const maySeeMasked = can("manage_privacy");
   const [aliases, setAliases] = React.useState<Alias[] | null>(null);
   const [masked, setMasked] = React.useState<MaskedColumn[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -55,7 +63,9 @@ export default function ReferencePage() {
     try {
       const [nextAliases, nextMasked, nextProgrammes] = await Promise.all([
         api.listAliases(),
-        api.listMaskedColumns(),
+        // Not even asked for without the capability: the API would answer 403 and the
+        // screen would report a failure for something it was never going to show.
+        maySeeMasked ? api.listMaskedColumns() : Promise.resolve([]),
         api.listScopes(),
       ]);
       setAliases(nextAliases);
@@ -65,7 +75,7 @@ export default function ReferencePage() {
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not reach the API.");
     }
-  }, []);
+  }, [maySeeMasked]);
 
   React.useEffect(() => {
     void load();
@@ -234,79 +244,81 @@ export default function ReferencePage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle className="flex items-center gap-1.5">
-              <EyeOff className="h-4 w-4 text-primary" /> Masked columns
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-3">
-            <p className="mb-3 text-xs text-muted-foreground">
-              Matched against report column names. A trailing <span className="mono">*</span> makes
-              it a prefix. There is no unmask control in v1.
-            </p>
-            <FieldEffect
-              kind="code"
-              className="mb-3"
-              note="This list is what keeps personal data out of every prompt. A column named here is replaced as the workbook is read, so an unmasked value never exists downstream — not in a prompt, not in a log, not in the database. Naming a column here is the strongest control you have."
-            />
-
-            {!masked ? (
-              <Skeleton className="h-32" />
-            ) : (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {masked.map((column) => (
-                  <span
-                    key={`${column.id}-${column.pattern}`}
-                    className="mono inline-flex items-center gap-1 rounded border bg-card px-1.5 py-0.5 text-[0.7rem]"
-                  >
-                    {column.pattern}
-                    {column.is_default ? (
-                      <Badge tone="muted" className="ml-0.5">
-                        default
-                      </Badge>
-                    ) : (
-                      <DeleteButton
-                        compact
-                        label={`masked column ${column.pattern}`}
-                        busy={busy}
-                        onDelete={async (confirm) => {
-                          await api.deleteMaskedColumn(column.id, confirm);
-                          await load();
-                        }}
-                      />
-                    )}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Input
-                placeholder="ACCT_*"
-                className="mono"
-                aria-label="New masked column pattern"
-                value={patternDraft}
-                onChange={(event) => setPatternDraft(event.target.value)}
+        {maySeeMasked ? (
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-1.5">
+                <EyeOff className="h-4 w-4 text-primary" /> Masked columns
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-3">
+              <p className="mb-3 text-xs text-muted-foreground">
+                Matched against report column names. A trailing <span className="mono">*</span>{" "}
+                makes it a prefix. There is no unmask control in v1.
+              </p>
+              <FieldEffect
+                kind="code"
+                className="mb-3"
+                note="This list is what keeps personal data out of every prompt. A column named here is replaced as the workbook is read, so an unmasked value never exists downstream — not in a prompt, not in a log, not in the database. Naming a column here is the strongest control you have."
               />
-              <Button
-                disabled={!patternDraft.trim() || busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await api.createMaskedColumn(patternDraft.trim());
-                    setPatternDraft("");
-                    await load();
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                Add
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+
+              {!masked ? (
+                <Skeleton className="h-32" />
+              ) : (
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {masked.map((column) => (
+                    <span
+                      key={`${column.id}-${column.pattern}`}
+                      className="mono inline-flex items-center gap-1 rounded border bg-card px-1.5 py-0.5 text-[0.7rem]"
+                    >
+                      {column.pattern}
+                      {column.is_default ? (
+                        <Badge tone="muted" className="ml-0.5">
+                          default
+                        </Badge>
+                      ) : (
+                        <DeleteButton
+                          compact
+                          label={`masked column ${column.pattern}`}
+                          busy={busy}
+                          onDelete={async (confirm) => {
+                            await api.deleteMaskedColumn(column.id, confirm);
+                            await load();
+                          }}
+                        />
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Input
+                  placeholder="ACCT_*"
+                  className="mono"
+                  aria-label="New masked column pattern"
+                  value={patternDraft}
+                  onChange={(event) => setPatternDraft(event.target.value)}
+                />
+                <Button
+                  disabled={!patternDraft.trim() || busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await api.createMaskedColumn(patternDraft.trim());
+                      setPatternDraft("");
+                      await load();
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </>
   );

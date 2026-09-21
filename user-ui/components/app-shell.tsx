@@ -122,7 +122,7 @@ function ThemeToggle() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // Null while login is off, which is the shipped default, so the footer stays as it was.
-  const { user, signOut } = useAuth();
+  const { user, canViewAdmin, signOut } = useAuth();
   const trainingEnabled = useTrainingEnabled();
   const { tagline } = usePalette();
   const nav = trainingEnabled ? [...NAV, EXPLORE_NAV, TRAINING_NAV] : [...NAV, EXPLORE_NAV];
@@ -176,16 +176,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
-          <a
-            href={ADMIN_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 flex items-center gap-3 rounded-md border border-dashed px-2.5 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-          >
-            <ShieldCheck className="h-[1.125rem] w-[1.125rem]" />
-            <span>Admin console</span>
-            <ExternalLink className="ml-auto h-3.5 w-3.5" />
-          </a>
+          {/* Only for somebody whose account includes the console (ADR-049). Inviting
+              everybody into a console they cannot change anything in is what prompted
+              the three roles; while login is off there is one account that holds
+              everything, so the link is there exactly as it was. */}
+          {canViewAdmin ? (
+            <a
+              href={ADMIN_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 flex items-center gap-3 rounded-md border border-dashed px-2.5 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+            >
+              <ShieldCheck className="h-[1.125rem] w-[1.125rem]" />
+              <span>Admin console</span>
+              <ExternalLink className="ml-auto h-3.5 w-3.5" />
+            </a>
+          ) : null}
         </nav>
 
         {user ? (

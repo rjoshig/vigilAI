@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Layers,
   Lightbulb,
+  Lock,
   LogOut,
   Moon,
   Scale,
@@ -33,30 +34,88 @@ import { Logo } from "@/components/logo";
 import { PalettePicker } from "@/components/theme-picker";
 import { Button } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
+import type { Capability } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  /**
+   * What a person must be able to do for this screen to be theirs (ADR-049). One
+   * table, read twice: once to decide what appears in the rail, and once to decide
+   * what a typed URL is allowed to render. Keeping both off the same list is what
+   * stops a hidden screen from staying reachable.
+   */
+  capability: Capability;
 }
 
 const NAV: NavItem[] = [
-  { href: "/tell", label: "Tell the tool", icon: Lightbulb },
-  { href: "/artifacts", label: "Artifact types", icon: BookMarked },
-  { href: "/scopes", label: "Delivery programmes", icon: Layers },
-  { href: "/meaning", label: "Meaning", icon: Waypoints },
-  { href: "/checks", label: "Checks", icon: ClipboardCheck },
-  { href: "/compliance", label: "Compliance rules", icon: ShieldCheck },
-  { href: "/rules", label: "Rules", icon: Scale },
-  { href: "/training", label: "Training", icon: GraduationCap },
-  { href: "/examples", label: "Examples", icon: BookOpen },
-  { href: "/reference", label: "Reference data", icon: Settings },
-  { href: "/demotion", label: "Review load", icon: EyeOff },
-  { href: "/usage", label: "Usage", icon: Gauge },
-  { href: "/users", label: "Users", icon: UserCog },
-  { href: "/settings", label: "Settings", icon: SlidersHorizontal },
+  { href: "/tell", label: "Tell the tool", icon: Lightbulb, capability: "teach_model" },
+  {
+    href: "/artifacts",
+    label: "Artifact types",
+    icon: BookMarked,
+    capability: "manage_artifacts",
+  },
+  {
+    href: "/scopes",
+    label: "Delivery programmes",
+    icon: Layers,
+    capability: "manage_programmes",
+  },
+  { href: "/meaning", label: "Meaning", icon: Waypoints, capability: "manage_meaning" },
+  { href: "/checks", label: "Checks", icon: ClipboardCheck, capability: "manage_rules" },
+  {
+    href: "/compliance",
+    label: "Compliance rules",
+    icon: ShieldCheck,
+    capability: "manage_rules",
+  },
+  { href: "/rules", label: "Rules", icon: Scale, capability: "manage_rules" },
+  {
+    href: "/training",
+    label: "Training",
+    icon: GraduationCap,
+    capability: "approve_training",
+  },
+  { href: "/examples", label: "Examples", icon: BookOpen, capability: "teach_model" },
+  // Reference data is not hidden from a reviewer: aliases and field labels are theirs,
+  // and the masked-column card inside it is what asks for the stronger capability.
+  { href: "/reference", label: "Reference data", icon: Settings, capability: "manage_reference" },
+  { href: "/demotion", label: "Review load", icon: EyeOff, capability: "view_admin" },
+  { href: "/usage", label: "Usage", icon: Gauge, capability: "view_admin" },
+  { href: "/users", label: "Users", icon: UserCog, capability: "manage_users" },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: SlidersHorizontal,
+    capability: "manage_settings",
+  },
 ];
+
+/**
+ * What a screen reached by URL says when it is not this person's.
+ *
+ * Not an empty page and not a broken one: an empty screen reads as a bug and generates
+ * a support call, and a 404 would deny that the screen exists at all. The API refuses
+ * the same request with a 403 whatever this renders — hiding a link is not access
+ * control, and this is only the courtesy on top of it.
+ */
+function NotYours() {
+  return (
+    <div className="grid place-items-center py-24">
+      <div className="max-w-md text-center">
+        <Lock className="mx-auto mb-3 h-7 w-7 text-muted-foreground" aria-hidden="true" />
+        <h1 className="text-lg font-semibold">This screen is for administrators</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Your account does not include it. Everything you can reach is in the menu on the left; an
+          administrator can widen what you hold on the Users screen.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 const TRAINING_MODE_HINT =
   "Reviewers can record observations while this is on; nothing they write changes anything until it is approved here.";
@@ -167,6 +226,14 @@ function SidebarFooter() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { tagline } = usePalette();
+  const { can } = useAuth();
+
+  const nav = NAV.filter((item) => can(item.capability));
+  // The longest matching prefix, so `/rules` does not answer for `/reference`.
+  const screen = [...NAV]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((item) => pathname.startsWith(item.href));
+  const allowed = !screen || can(screen.capability);
 
   return (
     <div className="flex min-h-screen">
@@ -202,7 +269,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-2 pb-1 text-[0.625rem] font-semibold uppercase tracking-wider text-muted-foreground">
             Menu
           </div>
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
@@ -229,7 +296,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="h-screen min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[84rem] px-6 pb-12 pt-5">
           <NoticeBar audience="admin" />
-          {children}
+          {allowed ? children : <NotYours />}
         </div>
       </main>
     </div>

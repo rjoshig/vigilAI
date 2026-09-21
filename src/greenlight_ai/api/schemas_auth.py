@@ -38,9 +38,16 @@ class WhoAmIOut(BaseModel):
     email: str = ""
     role: str = "user"
     #: Every role held, weakest first (ADR-049). ``role`` is the strongest of them and
-    #: stays until everything reads this list. Both consoles will gate on capabilities
-    #: derived from here rather than on the single field.
+    #: stays until everything reads this list.
     roles: list[str] = Field(default_factory=lambda: ["user"])
+    #: What this caller may actually do, so **neither app has to know the matrix**
+    #: (ADR-049). The matrix lives in one place and the apps read the answer: a console
+    #: that reimplemented it would disagree with the API the first time a grant moved,
+    #: and would disagree by showing a screen that then refuses.
+    #:
+    #: Empty for a plain user, and — while login is off — everything, because the
+    #: placeholder holds `user` and `admin` and nothing is being enforced.
+    capabilities: list[str] = Field(default_factory=list)
     is_admin: bool = False
     #: True when login is off and this is the stand-in every action is attributed to.
     is_placeholder: bool = False

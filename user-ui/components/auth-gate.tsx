@@ -34,11 +34,23 @@ import type { CurrentUser } from "@/lib/types";
 interface AuthState {
   /** Null while login is off, so a component can ask "is anyone signed in" with one test. */
   user: CurrentUser | null;
+  /**
+   * Whether to offer the admin console (ADR-049).
+   *
+   * True while login is off, which is the shipped default and keeps the sidebar exactly
+   * as it was. Once we know who somebody is, it is what the API said they may do —
+   * never worked out here from their roles.
+   *
+   * Hiding the link is a courtesy, not a control: with admin login off the console is
+   * open to anyone with its URL, which is why the API enforces capabilities first.
+   */
+  canViewAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthState>({
   user: null,
+  canViewAdmin: true,
   signOut: async () => undefined,
 });
 
@@ -261,7 +273,17 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const value = React.useMemo<AuthState>(() => ({ user, signOut }), [user, signOut]);
+  // `user` is non-null only once login is on and somebody has signed in, so a null
+  // user means the app does not know who this is -- and offering the link, which leads
+  // to a console that asks for its own sign-in, is more use than hiding it.
+  const value = React.useMemo<AuthState>(
+    () => ({
+      user,
+      canViewAdmin: user === null || user.capabilities.includes("view_admin"),
+      signOut,
+    }),
+    [user, signOut]
+  );
 
   // Nothing is drawn until the switch is known, so a page never flashes behind a login
   // screen that is about to replace it.

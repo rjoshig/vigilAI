@@ -436,7 +436,25 @@ export interface DemotionReport {
 
 /* ------------------------------------------------------------ Accounts and login */
 
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "reviewer" | "user";
+
+/**
+ * One thing a person may do (ADR-049). Named for the act rather than the screen,
+ * because screens get renamed and the question does not change with them. The strings
+ * are the API's; the console only ever asks whether one is present.
+ */
+export type Capability =
+  | "view_admin"
+  | "approve_training"
+  | "manage_rules"
+  | "teach_model"
+  | "manage_reference"
+  | "manage_privacy"
+  | "manage_artifacts"
+  | "manage_programmes"
+  | "manage_meaning"
+  | "manage_users"
+  | "manage_settings";
 
 /** Which of the two independent switches are on (ADR-022). Both default to off. */
 export interface AuthConfig {
@@ -453,6 +471,15 @@ export interface CurrentUser {
   name: string;
   email: string;
   role: UserRole;
+  /** Every role held, weakest first (ADR-049). Capabilities are the union. */
+  roles: UserRole[];
+  /**
+   * What this person may do, as the API resolved it. Never derived here from the
+   * roles: the matrix lives on the server, and a console that reimplemented it would
+   * disagree with the API the first time a grant moved — and would disagree by
+   * offering a screen that then refuses.
+   */
+  capabilities: Capability[];
   is_admin: boolean;
   is_placeholder: boolean;
   must_change_password: boolean;

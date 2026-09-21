@@ -192,6 +192,37 @@ def test_holding_user_and_reviewer_is_exactly_a_reviewer(
     assert _call(client, Capability.MANAGE_SETTINGS) == 403
 
 
+# --- what the consoles read, so they do not reimplement the matrix -------------------
+
+
+def test_whoami_reports_the_capabilities_not_just_the_roles(
+    sign_in: Callable[..., TestClient],
+) -> None:
+    """Neither app has to know the matrix; it reads the answer (6.20d).
+
+    A console that derived capabilities from role names would disagree with the API the
+    first time a grant moved — and would disagree in the worst direction, by offering a
+    screen that then refuses.
+    """
+    client = sign_in("user", "reviewer")
+
+    me = client.get(f"{API_PREFIX}/auth/me").json()
+
+    assert me["capabilities"] == sorted(
+        capability.value for capability in capabilities_of(["user", "reviewer"])
+    )
+    assert "manage_settings" not in me["capabilities"]
+    assert me["is_admin"] is False
+
+
+def test_the_placeholder_reports_everything_while_login_is_off(client: TestClient) -> None:
+    """Which is what keeps both sidebars exactly as they were (ADR-022)."""
+    me = client.get(f"{API_PREFIX}/auth/me").json()
+
+    assert me["is_placeholder"] is True
+    assert me["capabilities"] == sorted(capability.value for capability in Capability)
+
+
 # --- the refusal says the right thing ------------------------------------------------
 
 
