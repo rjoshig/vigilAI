@@ -200,6 +200,40 @@ def test_a_failed_run_does_not_block_a_resubmission(
     assert submit().json()["run_id"] is not None
 
 
+def test_the_failure_detail_is_on_the_run_and_never_in_the_list(
+    submit: Submit, client: TestClient, api: str, factory: sessionmaker[Session]
+) -> None:
+    """Two accounts of one failure, each where it is wanted (Phase 6.19).
+
+    The list answers *what went wrong* in a line that must not stretch a row. The run
+    answers *where*, at whatever length tracing it takes.
+    """
+    run_id = submit().json()["run_id"]
+    with factory() as session:
+        run = session.get(models.Run, run_id)
+        run.status = "failed"
+        run.current_stage = "s4_trace"
+        run.error = "s4_trace: 3 requirements did not resolve"
+        run.error_detail = "Run 1\nStage: s4_trace\n\nTraceback (most recent call last):\n …"
+        session.commit()
+
+    listed = client.get(f"{api}/runs").json()[0]
+    assert listed["error"] == "s4_trace: 3 requirements did not resolve"
+    assert "error_detail" not in listed, "a traceback has no business in a list payload"
+
+    detail = client.get(f"{api}/runs/{run_id}").json()
+    assert detail["error"] == "s4_trace: 3 requirements did not resolve"
+    assert "Traceback (most recent call last)" in detail["error_detail"]
+
+
+def test_a_run_that_has_not_failed_carries_no_failure_detail(
+    submit: Submit, client: TestClient, api: str
+) -> None:
+    """An empty string rather than a missing key, so the UI has nothing to guard."""
+    run_id = submit().json()["run_id"]
+    assert client.get(f"{api}/runs/{run_id}").json()["error_detail"] == ""
+
+
 # --- reading runs ---------------------------------------------------------------------------
 
 

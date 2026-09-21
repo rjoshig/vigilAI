@@ -149,7 +149,14 @@ class Run(Base):
     #: disagreement rather than being thrown away and re-uploaded.
     status: Mapped[str] = mapped_column(sa.String(30), default="queued", index=True)
     current_stage: Mapped[str] = mapped_column(sa.String(30), default="")
+    #: One line, shown in the runs list and at the top of the run: what went wrong.
     error: Mapped[str] = mapped_column(sa.Text, default="")
+    #: The same failure at length, for somebody trying to trace it: which stage, which
+    #: attempt, and the traceback through this codebase. Shown only on the run itself,
+    #: behind a disclosure, and never in the list. It carries frames and an exception
+    #: message — never a row from a delivery, which is ADR-003 and is why the pipeline
+    #: raises with counts and ids rather than with values.
+    error_detail: Mapped[str] = mapped_column(sa.Text, default="")
 
     #: sha256 over every input file plus the active check versions. A matching submission
     #: shows the existing report first (``docs/design.md`` "LLM cost controls").

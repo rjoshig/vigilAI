@@ -317,3 +317,6 @@ producing findings anyone sees. You will hear back either way.
 Your administrator can see every setting, every rule, and every observation in the
 admin console. If a finding surprises you, the **Rules** screen there says what made
 it fire.
+
+If a run **failed**, open it and copy the **Technical detail** block into your message.
+It names the stage and carries the traceback, and it saves the first round of questions.

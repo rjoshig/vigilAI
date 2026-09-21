@@ -226,6 +226,7 @@ def _detail(
     return schemas.RunDetail(
         **base.model_dump(),
         pdf_available=renderer_available(),
+        error_detail=run.error_detail,
         notes=run.notes,
         rules_version=run.rules_version,
         model_used=run.model_used,

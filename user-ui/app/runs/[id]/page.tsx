@@ -287,6 +287,7 @@ export default function ReviewPage() {
       {run.status === "failed" ? (
         <div className="mb-4">
           <ErrorState message={`The run failed at ${run.current_stage}: ${run.error}`} />
+          {run.error_detail ? <FailureDetail detail={run.error_detail} /> : null}
         </div>
       ) : null}
 
@@ -871,5 +872,45 @@ function FindingCard({
         </p>
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * The failure at length, for somebody trying to trace it (Phase 6.19).
+ *
+ * Closed by default and never in the runs list: the line above answers *what went
+ * wrong*, and this answers *where*, which almost nobody needs and the one person who
+ * does needs badly. It is selectable text with a copy button, because what actually
+ * happens next is that somebody pastes it into a ticket.
+ */
+function FailureDetail({ detail }: { detail: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(detail);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // A browser that refuses the clipboard is not an error worth a banner: the text
+      // is on the screen and can be selected.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <details className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
+      <summary className="cursor-pointer text-xs text-destructive">
+        Technical detail — what to send if you are reporting this
+      </summary>
+      <div className="mt-2 flex justify-end">
+        <Button variant="outline" size="xs" onClick={() => void copy()}>
+          <Copy className="h-3 w-3" /> {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <pre className="mono mt-1 max-h-80 overflow-auto whitespace-pre-wrap break-words text-[0.7rem] leading-relaxed text-muted-foreground">
+        {detail}
+      </pre>
+    </details>
   );
 }

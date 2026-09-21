@@ -1673,3 +1673,38 @@ The switch lives in Appearance beside **Explain each screen**, because the two a
 an administrator reaches for when a console feels chatty — and the help text says
 plainly which markers it cannot touch, so nobody switches it expecting more silence than
 they get.
+
+## ADR-047 — A failed run stores a traceback, and it is shown on the run rather than in the list
+
+**Status:** accepted · 2026-09-20 · Phase 6.19
+
+**Context.** A failed run carried one string. The runs list truncated it to forty
+characters and the run page showed the whole of it, which sounds like two views of one
+failure and is really one view twice: *"PipelineError: s4_trace: 3 requirements did not
+resolve"* says what happened and nothing about where it came from. Anybody reporting the
+failure had to be told to go and read a worker log they cannot reach.
+
+**Decision.** Two fields, answering different questions. `Run.error` stays one line —
+*what* — and is what the list shows. `Run.error_detail` is *where*: the stage, the
+attempt, and the traceback through this codebase, written by
+`worker/diagnostics.py::describe_failure` on both failure paths. It appears on the run
+behind a closed disclosure with a copy button, and **never in the list payload**, which
+a test asserts.
+
+**Why a traceback is allowed at all.** ADR-003 keeps delivery content out of logs and
+prompts, and a traceback is where that could be broken by accident, because a frame's
+message can quote whatever was being parsed. It is safe here because of how the pipeline
+raises: `PipelineError` carries a stage and a reason written in counts and ids, never a
+value from a workbook, and nothing formats local variables. What is stored is frames, an
+exception type, and that reason.
+
+**Consequences.** It is bounded at both ends: the whole text is capped at 8,000
+characters, dropping the **oldest** frames because the innermost call and the exception
+are at the end, and saying so rather than showing a trimmed traceback that looks
+complete. The header's copy of the exception message is capped separately at 500 — a
+parser that quotes what it choked on can raise something enormous, and the header would
+otherwise consume the whole budget and leave a detail with no frames in it. Both caps
+are tested against a deliberately vast message.
+
+The detail is written for a run awaiting a retry too, not only a dead one: the attempt
+that failed is what somebody wants to see, and the next attempt overwrites it.
