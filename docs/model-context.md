@@ -1,6 +1,6 @@
 # What reaches the model, and what code decides
 
-**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i, 6.15, 6.21 and 6.22).
+**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i, 6.15, 6.21, 6.22 and 6.23).
 
 An administrator cannot see a prompt. Everything they know about where their words end
 up comes from the label next to the box they typed them in, which makes that label the
@@ -143,6 +143,7 @@ produce a finding.
 | **Masked columns** | Admin → Reference data | `parsers/masking.py`, at parse time (ADR-003) |
 | **Anomaly sensitivity and history** | Admin → Settings → Anomalies | `checks/anomaly.py` at stage 7, against the configuration's previous finalized deliveries. No model (Phase 6.21c) |
 | **Submitted identity** | The new-run form | `checks/artifact_match.py`, before any model call (ADR-041) |
+| **A trace-link correction** | User → Review → the matrix row's *Fix link* | Nothing reads it as a prompt. The element a reviewer picks is stored on the trace and the reason with it, and the correction queues the re-check that rebuilds the findings in code (Phase 6.23b). The reason is required: a correction with none is indistinguishable months later from a misclick |
 | **Credit date** | The new-run form | `checks/artifact_match.py` before the run starts, against the cell `checks/field_labels.py` resolves; `pipeline/s7_reports.py` for whatever the pre-flight did not reach |
 | **Field labels** | Admin → Reference data | `checks/field_labels.py`, resolving what a delivery calls a checked field |
 | **Artifact type layout map** | Admin → Artifact types → Layout | `resolve/ladder.py`, as the fourth rung — an administrator's spelling resolves a name in code and costs no call (ADR-054) |

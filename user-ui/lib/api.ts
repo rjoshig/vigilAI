@@ -264,7 +264,14 @@ export const api = {
     return request<Requirements>(`/runs/${runId}/requirements`);
   },
 
-  /** Edit requirements or trace links; the server bumps the version and re-checks. */
+  /**
+   * Edit requirements or trace links; the server bumps the version and re-checks.
+   *
+   * This is the only way a re-check is asked for (Phase 6.23b). The standalone
+   * Re-check button was removed: it re-ran the comparison stages against inputs
+   * nobody had changed, and because a re-check changes no status the screen did not
+   * move. `POST /runs/{id}/recheck` stays on the API, which `design.md` documents.
+   */
   editRequirements(
     runId: number,
     edits: {
@@ -280,11 +287,6 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ edits }),
     });
-  },
-
-  /** Queue a re-check without editing anything. */
-  recheck(runId: number): Promise<RecheckResult> {
-    return request<RecheckResult>(`/runs/${runId}/recheck`, { method: "POST" });
   },
 
   /** Create a draft run prefilled from an existing one. */

@@ -475,14 +475,35 @@ export const GUIDE: GuideSection[] = [
         "items": [
           [
             {
-              "text": "If a requirement was extracted wrongly, edit it and press "
+              "text": "If a requirement is traced to the wrong part of the configuration, press "
             },
             {
-              "text": "Re-check",
+              "text": "Fix link",
               "bold": true
             },
             {
-              "text": ". Only the comparison stages re-run; nothing is re-asked of the model that has not changed."
+              "text": " on its row in the matrix, pick the right element — or "
+            },
+            {
+              "text": "Linked to nothing",
+              "italic": true
+            },
+            {
+              "text": ", when the configuration genuinely does not implement it — and say why. "
+            },
+            {
+              "text": "The comparison stages re-run by themselves",
+              "bold": true
+            },
+            {
+              "text": "; there is no button to press afterwards. The screen says "
+            },
+            {
+              "text": "Re-checking",
+              "italic": true
+            },
+            {
+              "text": " while it happens and refreshes the findings when it finishes. Nothing is re-asked of the model, nothing you have already decided is lost, and it costs nothing. A frozen run cannot be corrected this way, because its report would then describe a run that no longer existed underneath it."
             }
           ],
           [

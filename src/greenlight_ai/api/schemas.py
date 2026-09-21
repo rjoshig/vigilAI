@@ -112,6 +112,11 @@ class RunSummary(BaseModel):
     #: The run this was cloned from, when it was. Stored since Phase 3 and read by
     #: nothing until 6.23c: a draft could not say where it came from.
     cloned_from: Optional[int] = None
+    #: The frozen report's verdict — ``"ok"``, ``"not_ok"``, or empty when no report
+    #: has been generated (Phase 6.23e). The list could previously only infer
+    #: *"frozen"* from the status, so the outcome of a finished run — the one thing
+    #: anybody scanning the history is looking for — was a click away on every row.
+    report_verdict: str = ""
 
 
 class RunFileOut(BaseModel):
@@ -198,6 +203,10 @@ class RunDetail(RunSummary):
     #: (ADR-041). Shown above the findings, because a mismatch says the findings may
     #: have been computed against the wrong premise.
     mismatches: list["ArtifactMismatchOut"] = Field(default_factory=list)
+    #: Whether a re-check of this run is queued or running (Phase 6.23b). A re-check
+    #: leaves the status at ``needs_review``, so without this the screen had no way to
+    #: know one was happening and the findings changed under a manual reload.
+    rechecking: bool = False
 
 
 class RequirementCoverageOut(BaseModel):

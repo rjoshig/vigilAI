@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **6.23a and 6.23c complete**; **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 6.22 is complete** ([`phase-6.22.md`](phase-6.22.md), ADR-059 to ADR-062): the record layout as an optional fourth artifact, product codes expanded in code, the attribute dictionary as the ladder's fourth rung with a soft cap on the fifth, one alarm between the DIRT and the layout, and a suggestion rail that closes the loop. 6.22c keeps two items open and says why under its heading — a bulk master-file upload, and how a code reads in real OSL prose, which is [`phase-7.md`](phase-7.md)'s. **6.19d landed after it**: the *Setting up a new delivery* checklist now marks each of its seven steps with what that step does to a run — three **Helps the AI**, three **Checked by code**, one setup-only — and says of itself that it reaches nothing, because the card was built in 6.21f and so was never held against Part A's marker audit. **Next concrete action: 6.23b** (remove the Re-check control, make the automatic re-check visible) and **6.23e** (the report column), which is where `main` was. After that, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**, **6.23**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
+| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 6.23 is complete** ([`phase-6.23.md`](phase-6.23.md), ADR-063 to ADR-067): the closed status set and its guards, the New run form finishing a cloned draft, a five-day draft window an administrator sets — with `retention.days` and `uploads.max_mb` finally read at all — the Re-check button gone and **the edit that queues a re-check built at last** (it had been documented since Phase 2 with no caller in either app), visible while it runs, and a Report column carrying the frozen verdict. **6.19d** landed before it: the *Setting up a new delivery* checklist marks each of its seven steps with what that step does to a run. **Next concrete action: phase 8** (ask the frozen report), or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -3433,3 +3433,65 @@ is in the product rather than only in a file.
 
 **Next concrete action:** 6.23b — remove the Re-check control and make the automatic
 re-check visible — then 6.23e, the report column.
+
+---
+
+## 2026-09-21 — Phase 6.23 closed: 6.23b, 6.23d, 6.23e, 6.23f
+
+| Field | Value |
+| --- | --- |
+| Branch | `claude/eager-turing-8ay4w6` |
+| Phase | 6.23 — ✅ complete, ADR-067 added |
+| Status | ✅ all six parts, twelve acceptance criteria, 2072 tests green |
+
+**6.23b was planned as subtractive and was not.** Removing the undocumented Re-check
+button exposed that `PUT /runs/{id}/requirements` — the endpoint that queues a re-check as
+part of an edit — **had no caller in either app**. `design.md` has promised *"Edit a
+requirement or a link, then Re-check"* since Phase 2 and `user-training.md` told people to
+do it; `grep editRequirements user-ui` found the client method and its unit test and
+nothing else. Removing the button without building the edit would have left no way to ask
+for a re-check at all, so the matrix row gained **Fix link**: pick the right configuration
+element, or *Linked to nothing*, and say why. The reason is required.
+
+**Visibility is the queue's answer, not a ninth status.** A re-check leaves the run in
+`needs_review`, so nothing about it changes shape while it happens. A `rechecking` status
+would have made the fact visible in a vocabulary `RUN_STATUSES`, the TypeScript union,
+every status filter and both label and tone maps would then have to learn, for a job that
+takes seconds. `JobQueue.pending_for` asks the queue; `RunDetail.rechecking` carries it;
+the screen polls on it and reloads its findings on the edge where it clears.
+
+**Three defects found on the way, none of them the phase's subject.**
+
+- **A failed re-check took a reviewable run away from its reviewer**, marking it `failed`
+  — or `queued`, while a retry was pending. A re-check rebuilds findings from rows that
+  are already stored, so the run still held everything it had. The status is left alone
+  for that one task now; the job is still marked failed and the error still recorded.
+  Confirmed to fail before the fix by reverting the condition.
+- **The ADR-054 token guard had been applied to the wrong copy.** `pipeline/run.py::recheck`
+  counts tokens and nothing in production calls it; `worker/runner.py::recheck_run` is the
+  path the worker runs and it counted call-log **rows**, so every correctly-cached re-check
+  logged a warning saying it had spent something.
+- **`retention.days` and `uploads.max_mb` were dead settings**, which 6.23c had already
+  repaired — this session proved it by measurement rather than by grep: change the number,
+  read the date, and drive the purge until an expired draft is a 404 while the run it was
+  cloned from is untouched.
+
+**6.23e reads the verdict once.** The Report column carries the frozen report's own
+verdict rather than a fresh count of the findings — the report is the artifact of record,
+and a second count beside it is how two numbers come to disagree. Read in one statement for
+the whole page, with a test pinning the statement count so the column cannot quietly become
+N+1 later. `_detail` reads the same row, so the finalized flag is now that read rather than
+a second `COUNT`.
+
+**Two criteria ticked with a correction stated, not quietly passed.** Criterion 7 said
+*editing a requirement*; the screen that would have done that did not exist, and building
+the correction is what 6.23b did — the substance (an edit, a visible re-check, no reload)
+is what is proved. And 6.23e's *`draft` added to the status filter* was superseded by
+6.23c, which took drafts out of the history and gave them their own toggle with a count;
+putting *Draft* back in the dropdown would be a second control for the same thing.
+
+**Pending / blockers:** none new. The three standing items (6.19 criterion 5, 6.18b–e, and
+6.21 criterion 5) all still need a person or a real endpoint.
+
+**Next concrete action:** phase 8 — the chat box on the frozen report — or 6.18b once real
+verdicts exist.

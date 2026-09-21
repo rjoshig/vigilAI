@@ -298,6 +298,11 @@ the configuration id and **who submitted it**, and the box beside it filters to 
 person. If you arrived from a link in the admin console the list is already showing one
 person's runs and says so — *Show everyone* clears it.
 
+**The Report column** carries the frozen report's own verdict — **OK** or **Not OK** —
+and opens it in one click. A run with no report shows a dash rather than a guess: *no
+verdict yet* and *it passed* are not near enough to blur. The verdict is what the report
+says, not a fresh count of the findings, so the row and the report can never disagree.
+
 **When a run fails.** The list gives you the first few words, because a whole message
 would stretch the row. Open the run for the rest, and for **Technical detail** — the
 stage it failed at, which attempt it was, and the traceback. That block exists to be
@@ -393,8 +398,14 @@ compared against it.
 If several readers looked at a finding, the evidence panel shows **how it was read**:
 each reader, whether it agreed, and why. They each saw the same evidence and none saw
 the others.
-- If a requirement was extracted wrongly, edit it and press **Re-check**. Only the
-  comparison stages re-run; nothing is re-asked of the model that has not changed.
+- If a requirement is traced to the wrong part of the configuration, press **Fix link**
+  on its row in the matrix, pick the right element — or *Linked to nothing*, when the
+  configuration genuinely does not implement it — and say why. **The comparison stages
+  re-run by themselves**; there is no button to press afterwards. The screen says
+  *Re-checking* while it happens and refreshes the findings when it finishes. Nothing is
+  re-asked of the model, nothing you have already decided is lost, and it costs nothing.
+  A frozen run cannot be corrected this way, because its report would then describe a
+  run that no longer existed underneath it.
 - **Configuration notes given to the model** appear above the findings when the
   configuration had any. This is what the model was told as background; it is
   shown so you can judge a finding knowing the context behind it.

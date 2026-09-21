@@ -2700,3 +2700,52 @@ while it waited for somebody to accept the disagreement, which would have purged
 from under them.
 
 ---
+
+## ADR-067 — A re-check is asked for by an edit, and the queue is what says it is running
+
+**Status:** accepted · 2026-09-21 · Phase 6.23b
+
+**Context.** The Review screen had a **Re-check** button that re-ran stages 5–7. Nothing
+documented it — no tooltip, no Guide entry, no phase note; its own docstring was the only
+description of it in the repository — and every document that mentions a re-check describes
+exactly one case: *edit a requirement or a trace link, then re-check*. Pressing it with no
+edit behind it re-compared inputs nobody had changed, and because a re-check changes no
+status, the screen did not move: the user clicked, the button flickered, and the rebuilt
+findings appeared only on a manual reload.
+
+Removing it exposed something worse. `PUT /runs/{id}/requirements`, the endpoint that queues
+the re-check *as part of the edit*, **had no caller in either app**. `design.md` has promised
+*"Edit a requirement or a link, then Re-check"* since Phase 2 and `user-training.md` told
+people to do it. Nobody could.
+
+**Decision.** A re-check is asked for by an edit and by nothing else in the product.
+
+**The edit exists now.** A matrix row offers **Fix link**: choose the right configuration
+element, or *Linked to nothing* when the configuration genuinely does not implement the
+requirement, and give a reason. The reason is required — a correction without one is
+indistinguishable months later from a misclick, and the trace stores who made it. A
+finalized run refuses it under the same guard as the re-check (ADR-066), because it is the
+same act.
+
+**`POST /runs/{id}/recheck` stays on the API.** `design.md` documents it and 6.23a guards it.
+Removing a documented endpoint to delete a button is a different change, and an operator
+re-running the comparison stages deliberately is not the confused click the button invited.
+
+**Visibility is the queue's answer, not a ninth status.** A re-check leaves the run in
+`needs_review` by design: it rebuilds findings and changes nothing else. A `rechecking`
+status would have made the fact visible in a vocabulary that `RUN_STATUSES`, the TypeScript
+union, every status filter, both label maps and both tone maps would have to learn — for a
+job that takes seconds and for a state no report, gate or audit line needs to distinguish.
+`JobQueue.pending_for(run_id, task)` asks the queue instead; `RunDetail.rechecking` carries
+the answer; the screen polls on it and reloads its findings on the edge where it clears.
+
+**Consequences.** A failed re-check leaves the run's status alone. Its findings are rebuilt
+from rules and traces that are already stored, so a run awaiting review still holds
+everything it had when the job was claimed — marking it `failed`, or `queued` while a retry
+was pending, took a reviewable run away from the person reviewing it and no retry gave it
+back. The job is still marked failed and the error is still recorded on the run, so nothing
+is silent; only the status is untouched, and only for this one task.
+
+The ADR-054 guard moved to the path that runs. `worker/runner.py::recheck_run` counted rows
+in the call log, so every correctly-cached re-check logged a warning; it counts tokens now,
+as the unreached copy in `pipeline/run.py` already did.
