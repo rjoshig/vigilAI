@@ -100,6 +100,7 @@ separates them.
 | An artifact type's AI context, standing instructions, configuration notes | nothing, at the prompt — all three reach the model as background. Choose by how wide it is: one artifact type, one programme, one configuration |
 | An artifact type's AI context, a worked example | whether you are telling the model something about this work, or showing it a finished answer to copy the shape of. Neither is a rule |
 
+<!-- guide 3: Setting up a new delivery, and which steps help the AI -->
 ## Setting up a new delivery, and trying it
 
 Two cards at the top of Artifact types, which is the console's home.
@@ -111,6 +112,32 @@ with a tick beside each step that is done. It is a checklist, not a wizard: it h
 nothing, forces no order, and every step is a link to the screen that already does the
 job. Each step says *why* it matters, because a reason is what makes somebody do a step
 properly rather than tick it.
+
+**The card itself does nothing to a run.** It is a path through screens: it reads what
+already exists to work out which steps are done, and it reaches no prompt, feeds no
+comparison, and is stored nowhere. Asking whether the checklist helps the AI is asking
+about the signpost rather than the road.
+
+**The seven steps are not alike, and each one now says which it is,** with the same
+marker the screen it links to already carries:
+
+| Step | Marker | Because |
+| --- | --- | --- |
+| Say which reports the delivery has | Checked by code | Code matches each uploaded workbook against the list. Only where two types score alike is the model shown their labels, and only from the shortlist code already made. |
+| Upload a sample of each | Used for setup, not for runs | The AI reads samples while you set up — type detection, example values, the mapping interview. No sample is opened when a delivery is checked. |
+| Record what this delivery calls things | Checked by code | A spelling recorded here resolves the name in code, before any model call. |
+| Explain what the numbers mean | **Helps the AI** | Guide entries are read at tracing and verification, so the model knows what a cell is for rather than guessing from its label. |
+| Map the requirements to the configuration | **Helps the AI** | Meaning entries are read at tracing and verification as background — and a confirmed row with a configuration path also compiles into a comparison code makes itself. |
+| Write the checks a formula can express | Checked by code | Evaluated on every run in scope at no token cost, and the same inputs always give the same answer. |
+| Set up the delivery programmes | **Helps the AI** | Standing instructions are background on every run in the programme, and the model reads each programme rule and says whether it holds — code sets how serious that is. |
+
+So three of the seven change what the model is shown, three are code and reach no
+prompt at all, and one is read only while you are setting up. That is worth knowing
+before you decide where an afternoon goes: the three marked **Helps the AI** are the
+ones that change what a run *finds*, and the three marked **Checked by code** are the
+ones that change what it can *measure*. Neither is better; they answer different
+questions. `docs/model-context.md` is the register these markers quote, and the
+marker on the samples is the one you can switch off in Settings (ADR-046).
 
 **Try this setup** runs everything code can run against the sample workbooks already
 stored and says what happened: which sheets each sample carries and which of the names
@@ -736,7 +763,7 @@ Three things about it are worth knowing before you turn it on.
 
 Who approved, when, and what they covered are recorded on the frozen report.
 
-<!-- guide 5: Who may do what: the three roles -->
+<!-- guide 6: Who may do what: the three roles -->
 ## Who may do what: the three roles
 
 An account holds any of three roles, and it can hold several. **What somebody may do is
@@ -772,7 +799,7 @@ console cannot be undone without editing the database.
 None of this applies until login is switched on. With it off there is one placeholder
 account that everything is attributed to, it holds every role, and nothing is gated.
 
-<!-- guide 3: What improves the QC, in the order it pays off -->
+<!-- guide 4: What improves the QC, in the order it pays off -->
 ## What improves the QC, in the order it pays off
 
 Six things are worth your time, and they are not equally worth it. In order:
@@ -801,7 +828,7 @@ Six things are worth your time, and they are not equally worth it. In order:
 What is *not* on that list: writing more rules. A noisy rule costs a reviewer attention
 on every run, forever. Sort Rules by dismissal rate before you add another one.
 
-<!-- guide 4: How to read the numbers -->
+<!-- guide 5: How to read the numbers -->
 ## How to read the numbers
 
 - **Fired and dismissed**, per rule. Fired is how often it produced a finding; dismissed
@@ -822,7 +849,7 @@ on every run, forever. Sort Rules by dismissal rate before you add another one.
 - **Usage** counts runs per person and per period. It is there to show where the work
   actually is, not to rank anybody.
 
-<!-- guide 6: What is never editable, and why -->
+<!-- guide 7: What is never editable, and why -->
 ## What is never editable, and why
 
 Four settings are shown read-only on the Settings screen, and no console anywhere can
@@ -832,7 +859,7 @@ database URL that lived in the database could be pointed somewhere else and then
 read back; a master key stored under its own encryption cannot decrypt itself. They are
 environment configuration, changed where the service is deployed and nowhere else.
 
-<!-- guide 7: A weekly routine that keeps the tool honest -->
+<!-- guide 8: A weekly routine that keeps the tool honest -->
 ## A weekly routine that keeps the tool honest
 
 1. Read the training queue. Reject what cannot be a rule, with reasons; synthesize

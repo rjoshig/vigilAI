@@ -1,6 +1,6 @@
 # What reaches the model, and what code decides
 
-**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i, 6.15 and 6.21).
+**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i, 6.15, 6.21 and 6.22).
 
 An administrator cannot see a prompt. Everything they know about where their words end
 up comes from the label next to the box they typed them in, which makes that label the
@@ -164,6 +164,7 @@ produce a finding.
 | **Programme keywords** | Compared by code at stage 7 to confirm a run is the programme it claims. **They no longer only reach code:** when none of the declared programme's words match, the delivery's own words go to the model once, which says what programme they read like (Phase 6.18f). The keywords themselves are not sent — what they decide is *whether the call happens at all*. |
 | Programme **name** | Sent with the programme list in that one prompt, because a code on its own says nothing about what a programme is. |
 | **Attribute suggestions** | What a run proposed that a delivery calls an attribute it could not locate (Phase 6.22f). Read by whoever accepts or ignores them; nothing evaluates them and nothing is in force until somebody clicks. Accepting writes a dictionary spelling, which is the row that then does the work. |
+| The **Setting up a new delivery** checklist | Navigation, not a field: it reads what already exists to say which steps are done, and reaches no prompt, feeds no comparison, and is stored nowhere. Each step carries the marker of the thing it sets up — three **Helps the AI**, three **Checked by code**, one **Used for setup, not for runs** — so the card answers "which of these changes what the AI finds" without claiming anything for itself (Phase 6.19d). |
 
 ## What never reaches a prompt, under any setting
 

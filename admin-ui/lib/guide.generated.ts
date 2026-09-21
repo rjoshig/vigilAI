@@ -251,6 +251,291 @@ export const GUIDE: GuideSection[] = [
   },
   {
     "id": "s3",
+    "title": "Setting up a new delivery, and which steps help the AI",
+    "blocks": [
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "Two cards at the top of Artifact types, which is the console's home."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "Setting up a new delivery",
+            "bold": true
+          },
+          {
+            "text": " is the order the screens are usually used in — say which reports exist, upload a sample of each, record what this delivery calls things, explain what the numbers mean, map the requirements, write the checks, set up the programmes — with a tick beside each step that is done. It is a checklist, not a wizard: it hides nothing, forces no order, and every step is a link to the screen that already does the job. Each step says "
+          },
+          {
+            "text": "why",
+            "italic": true
+          },
+          {
+            "text": " it matters, because a reason is what makes somebody do a step properly rather than tick it."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "The card itself does nothing to a run.",
+            "bold": true
+          },
+          {
+            "text": " It is a path through screens: it reads what already exists to work out which steps are done, and it reaches no prompt, feeds no comparison, and is stored nowhere. Asking whether the checklist helps the AI is asking about the signpost rather than the road."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "The seven steps are not alike, and each one now says which it is,",
+            "bold": true
+          },
+          {
+            "text": " with the same marker the screen it links to already carries:"
+          }
+        ]
+      },
+      {
+        "kind": "table",
+        "head": [
+          [
+            {
+              "text": "Step"
+            }
+          ],
+          [
+            {
+              "text": "Marker"
+            }
+          ],
+          [
+            {
+              "text": "Because"
+            }
+          ]
+        ],
+        "rows": [
+          [
+            [
+              {
+                "text": "Say which reports the delivery has"
+              }
+            ],
+            [
+              {
+                "text": "Checked by code"
+              }
+            ],
+            [
+              {
+                "text": "Code matches each uploaded workbook against the list. Only where two types score alike is the model shown their labels, and only from the shortlist code already made."
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "text": "Upload a sample of each"
+              }
+            ],
+            [
+              {
+                "text": "Used for setup, not for runs"
+              }
+            ],
+            [
+              {
+                "text": "The AI reads samples while you set up — type detection, example values, the mapping interview. No sample is opened when a delivery is checked."
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "text": "Record what this delivery calls things"
+              }
+            ],
+            [
+              {
+                "text": "Checked by code"
+              }
+            ],
+            [
+              {
+                "text": "A spelling recorded here resolves the name in code, before any model call."
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "text": "Explain what the numbers mean"
+              }
+            ],
+            [
+              {
+                "text": "Helps the AI",
+                "bold": true
+              }
+            ],
+            [
+              {
+                "text": "Guide entries are read at tracing and verification, so the model knows what a cell is for rather than guessing from its label."
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "text": "Map the requirements to the configuration"
+              }
+            ],
+            [
+              {
+                "text": "Helps the AI",
+                "bold": true
+              }
+            ],
+            [
+              {
+                "text": "Meaning entries are read at tracing and verification as background — and a confirmed row with a configuration path also compiles into a comparison code makes itself."
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "text": "Write the checks a formula can express"
+              }
+            ],
+            [
+              {
+                "text": "Checked by code"
+              }
+            ],
+            [
+              {
+                "text": "Evaluated on every run in scope at no token cost, and the same inputs always give the same answer."
+              }
+            ]
+          ],
+          [
+            [
+              {
+                "text": "Set up the delivery programmes"
+              }
+            ],
+            [
+              {
+                "text": "Helps the AI",
+                "bold": true
+              }
+            ],
+            [
+              {
+                "text": "Standing instructions are background on every run in the programme, and the model reads each programme rule and says whether it holds — code sets how serious that is."
+              }
+            ]
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "So three of the seven change what the model is shown, three are code and reach no prompt at all, and one is read only while you are setting up. That is worth knowing before you decide where an afternoon goes: the three marked "
+          },
+          {
+            "text": "Helps the AI",
+            "bold": true
+          },
+          {
+            "text": " are the ones that change what a run "
+          },
+          {
+            "text": "finds",
+            "italic": true
+          },
+          {
+            "text": ", and the three marked "
+          },
+          {
+            "text": "Checked by code",
+            "bold": true
+          },
+          {
+            "text": " are the ones that change what it can "
+          },
+          {
+            "text": "measure",
+            "italic": true
+          },
+          {
+            "text": ". Neither is better; they answer different questions. "
+          },
+          {
+            "text": "docs/model-context.md",
+            "code": true
+          },
+          {
+            "text": " is the register these markers quote, and the marker on the samples is the one you can switch off in Settings (ADR-046)."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "Try this setup",
+            "bold": true
+          },
+          {
+            "text": " runs everything code can run against the sample workbooks already stored and says what happened: which sheets each sample carries and which of the names the checks look for resolved, what every named value found, and what every check would have done. "
+          },
+          {
+            "text": "No AI is called and nothing is saved",
+            "bold": true
+          },
+          {
+            "text": ", so press it as often as you like while you work."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "It answers "
+          },
+          {
+            "text": "is this wired up",
+            "italic": true
+          },
+          {
+            "text": ". It cannot tell you whether a check asks the right question, and it says so. And a check that does not hold "
+          },
+          {
+            "text": "against a sample",
+            "bold": true
+          },
+          {
+            "text": " has found nothing wrong with anything — the samples are specimens, not deliveries; it tells you the check runs."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "s4",
     "title": "What improves the QC, in the order it pays off",
     "blocks": [
       {
@@ -352,7 +637,7 @@ export const GUIDE: GuideSection[] = [
     ]
   },
   {
-    "id": "s4",
+    "id": "s5",
     "title": "How to read the numbers",
     "blocks": [
       {
@@ -422,7 +707,7 @@ export const GUIDE: GuideSection[] = [
     ]
   },
   {
-    "id": "s5",
+    "id": "s6",
     "title": "Who may do what: the three roles",
     "blocks": [
       {
@@ -589,7 +874,7 @@ export const GUIDE: GuideSection[] = [
     ]
   },
   {
-    "id": "s6",
+    "id": "s7",
     "title": "What is never editable, and why",
     "blocks": [
       {
@@ -631,7 +916,7 @@ export const GUIDE: GuideSection[] = [
     ]
   },
   {
-    "id": "s7",
+    "id": "s8",
     "title": "A weekly routine that keeps the tool honest",
     "blocks": [
       {
