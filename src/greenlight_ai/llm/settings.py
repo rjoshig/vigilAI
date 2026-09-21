@@ -253,9 +253,11 @@ def _temperature(get: Callable[[str], str], environ: Mapping[str, str]) -> float
     legacy = environ.get("LLM_TEMPERATURE", "").strip()
     if legacy and not environ.get("LLM_TEMPERATURE_PCT", "").strip():
         _LOG.warning(
-            "LLM_TEMPERATURE is deprecated and is read here only; the API and the "
-            "worker read LLM_TEMPERATURE_PCT (whole percent). Set LLM_TEMPERATURE_PCT "
-            "to %s instead.",
+            "LLM_TEMPERATURE is deprecated. It is read only where settings are built "
+            "from the environment — the CLI, and any fallback that has no console to "
+            "resolve through; a run started by the API or the worker reads "
+            "LLM_TEMPERATURE_PCT (whole percent) through the settings layers. Set "
+            "LLM_TEMPERATURE_PCT to %s instead.",
             int(float(legacy) * 100) if _is_number(legacy) else "the value you want",
         )
         if not _is_number(legacy):

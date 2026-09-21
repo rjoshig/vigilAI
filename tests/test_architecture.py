@@ -65,9 +65,27 @@ def _imports(path: pathlib.Path) -> Iterator[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 yield alias.name
-        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            for alias in node.names:
-                yield f"{node.module}.{alias.name}"
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                # `from . import s4_trace` inside api/ would have been invisible: the
+                # rule would hold for the import style the code happens to use today
+                # and not for the one somebody writes tomorrow. Resolved against the
+                # file's own package so a relative import is judged like any other.
+                package = _package_of(path)
+                if node.level > 1:
+                    package = ".".join(package.split(".")[: -(node.level - 1)] or ["greenlight_ai"])
+                base = f"{package}.{node.module}" if node.module else package
+                for alias in node.names:
+                    yield f"{base}.{alias.name}"
+            elif node.module:
+                for alias in node.names:
+                    yield f"{node.module}.{alias.name}"
+
+
+def _package_of(path: pathlib.Path) -> str:
+    """The dotted package a module file belongs to, for resolving relative imports."""
+    parts = path.relative_to(SRC).parts[:-1]
+    return ".".join(("greenlight_ai", *parts))
 
 
 def _pipeline_module(dotted: str) -> str:
@@ -120,6 +138,23 @@ def test_every_allowed_leaf_is_really_a_leaf(leaf: str) -> None:
         f"pipeline/{leaf}.py is on the API's allow-list but imports a stage: "
         f"{sorted(reached & STAGE_MODULES)}"
     )
+
+
+def test_a_relative_import_is_judged_like_any_other(tmp_path: pathlib.Path) -> None:
+    """The rule must hold for the import style somebody writes tomorrow.
+
+    `_imports` read only absolute `from x import y`. A router written as
+    `from ..pipeline import s4_trace` would have been invisible to every check in this
+    module, so the rule was enforced against a convention rather than against the
+    dependency.
+    """
+    module = SRC / "api" / "routers" / "__relimport_probe__.py"
+    module.write_text("from ..  .pipeline import s4_trace\n".replace("  .", "."), encoding="utf-8")
+    try:
+        reached = {_pipeline_module(dotted) for dotted in _imports(module)}
+        assert "s4_trace" in reached, f"a relative stage import was not seen: {reached}"
+    finally:
+        module.unlink()
 
 
 def test_the_pipeline_never_imports_the_api_or_the_worker() -> None:

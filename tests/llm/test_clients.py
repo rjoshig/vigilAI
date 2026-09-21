@@ -462,6 +462,37 @@ def test_a_stream_that_dies_mid_answer_is_still_recorded() -> None:
     assert record.completion_tokens > 0, "what it managed to send is what it spent"
 
 
+def test_a_reader_that_walks_away_is_still_recorded() -> None:
+    """The hole ADR-072 closed, reopened through a different door.
+
+    A caller that stops reading closes the generator, which raises **GeneratorExit** —
+    and `GeneratorExit` does not derive from `Exception`. An `except Exception` around
+    the streaming loop therefore caught nothing, appended nothing, and never reached the
+    success-path record either. Zero `llm_calls` rows.
+
+    That matters because ADR-072 moved the chat's per-run cap onto exactly those rows,
+    on the grounds that the transcript was the client's own account and these are the
+    server's. A client that asks a question, reads one piece and hangs up spends nothing
+    against either cap and appears on no spend screen, while the provider was called and
+    the tokens were spent.
+    """
+
+    class TwoPiece(MockClient):
+        def _send_stream(self, system: str, user: str):  # type: ignore[no-untyped-def]
+            yield "hello "
+            yield "world"
+
+    client = TwoPiece(LLMSettings())
+    stream = client.stream("s", "u", stage="chat_answer")
+    assert next(stream) == "hello "
+    stream.close()
+
+    (record,) = client.call_log.records
+    assert record.ok is False
+    assert record.error == "GeneratorExit"
+    assert record.stage == "chat_answer"
+
+
 def test_a_stream_that_dies_caches_nothing() -> None:
     """Recording the failure must not also store the half answer."""
 

@@ -144,6 +144,48 @@ def test_a_fresh_claim_is_not_reclaimed(queue: JobQueue) -> None:
     assert queue.reclaim_stale(older_than_seconds=3600) == 0
 
 
+def test_a_heartbeat_keeps_a_slow_job_from_looking_dead(queue: JobQueue, session: Session) -> None:
+    """A slow job and a dead one looked identical, and one of them gets failed.
+
+    `locked_at` was stamped once at claim time, so `reclaim_stale` was really asking
+    "how long ago was this claimed", not "is anybody still working on it". A delivery
+    with a long OSL against an endpoint answering near its timeout can hold a claim
+    past the window legitimately. That was survivable while being reclaimed meant being
+    run again; it stopped being survivable when reclaiming learned to give up on a job
+    and fail its run.
+    """
+    run = models.Run(
+        customer_name="Acme",
+        order_number="ORD-SLOW",
+        configuration_id="CFG-SLOW",
+        status="running",
+    )
+    session.add(run)
+    session.flush()
+    job = queue.enqueue("run_pipeline", run_id=run.id, max_attempts=1)
+    queue.claim()
+
+    # Still working: the worker says so, and the claim stops looking abandoned.
+    assert queue.touch(job.id) is True
+    assert queue.reclaim_stale(older_than_seconds=3600) == 0
+
+    session.refresh(run)
+    assert run.status == "running", "a job being worked on must not have its run failed"
+    session.refresh(job)
+    assert job.status == "running"
+
+
+def test_a_heartbeat_for_a_job_somebody_else_took_reports_it(
+    queue: JobQueue, session: Session
+) -> None:
+    """Losing the claim is worth knowing about rather than writing over."""
+    job = queue.enqueue("run_pipeline", run_id=1)
+    queue.claim()
+    queue.finish(job.id)
+
+    assert queue.touch(job.id) is False
+
+
 def test_a_job_that_outlives_its_workers_is_given_up_on(queue: JobQueue, session: Session) -> None:
     """A job that kills the worker holding it must stop being retried, like any other.
 

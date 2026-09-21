@@ -226,6 +226,73 @@ validates, a replay tests, and a person approves into shadow.
 
 ---
 
+## Session: 2026-09-21 (what the adversarial review found in the review)
+
+**Branch:** `claude/kind-sagan-g0liu3` · **Status:** nine findings survived refutation;
+the two that mattered were **regressions introduced by this session's own fixes**, and
+both had already reached `main`.
+
+**A slow job and a dead one looked identical, and one of them got failed.** `locked_at`
+is stamped once at claim time, so `reclaim_stale` was really asking *how long ago was
+this claimed*, not *is anybody still working on it*. That was survivable while being
+reclaimed meant being run again. It stopped being survivable the moment this session
+taught `reclaim_stale` to give up on a job **and fail its run**: a delivery with a long
+OSL against an endpoint answering near its timeout can hold a claim past the
+fifteen-minute window legitimately, and the guess became a wrong, user-visible verdict on
+a run still being validated. `JobQueue.touch` and a daemon heartbeat in the worker now
+make the window mean what it says.
+
+**`GeneratorExit` is not an `Exception`.** The fix that made a dying stream record an
+`ok=False` row used `except Exception`, and a caller that stops reading closes the
+generator — which raises `GeneratorExit`, a `BaseException`. Nothing was caught, nothing
+recorded. Since ADR-072 had just moved the chat's per-run cap onto exactly those rows,
+a client could ask a question, read one piece, hang up, and pay nothing against either
+cap while the provider was called and the tokens spent. **The same commit had used
+`except BaseException` in `uploads.py`, with a comment explaining why.** Probed before
+and after: 0 rows, then 1.
+
+**ADR-071's rule is right and its stated reason was wrong.** The ADR justified "a leaf,
+never a stage" on the grounds that a stage drags the prompt registry and the adapter in
+behind it. Measured, importing `pipeline/context.py` alone loads 320 modules including
+the whole of `llm/`. An allow-listed leaf pulls in as much as a stage does; it costs
+nothing only because `api/` already depends on `llm/` for the chat and the check drafter.
+The ADR now says the rule is about **ownership**, not import weight, and says that if
+`api/` ever stops importing `llm/`, `context` comes off the allow-list.
+
+**And the enforcement test enforced a convention rather than a dependency.** It read only
+absolute imports, so `from ..pipeline import s4_trace` would have been invisible to every
+check in it. Relative imports are resolved now, with a test that plants one.
+
+**Smaller, all confirmed:** `docs/design.md` still advertised the retired
+`LLM_TEMPERATURE` in its canonical `.env` block; the deprecation warning, ADR-073 and
+`.env.example` all said it was "read by the CLI alone" when `from_env` is the fallback
+wherever settings are built without a session (`llm/factory.py`, `worker/runner.py`);
+`api/__init__.py` still stated the superseded absolute rule; and ADR-072 did not say that
+a failed question spends the cap, which it does and should.
+
+**The lesson worth keeping.** Every one of these was in code written *during* a review
+whose whole purpose was catching this class of defect, and every gate was green over all
+of it. Reviewing your own fixes with the same adversarial pass you applied to the
+original code is not optional — three of the nine were wrong precisely because the person
+writing them already believed they were right.
+
+**One defect left for the user, because it is an authorization decision rather than a
+bug to fix quietly.** `_observation_out` sets `editable = row.status == "new" or
+row.kind == "config_note"` and its docstring says the flag is "what the form uses to
+decide whether **the author** may still change it". `edit_observation` requires
+`require_training`, which an ordinary submitter does not hold. So an author looking at
+their own still-Waiting observation is shown an **Edit** pencil that opens a locked,
+read-only form — and the dialog then says "Change anything and press Save changes to
+reword it" beside a save button it has already removed. Either the endpoint should let an
+author edit their own un-queued observation, as the docstring intends, or `editable`
+should account for the viewer's capabilities. **Both are defensible and they are not the
+same product.** Not changed here.
+
+**Next concrete action:** unchanged — 6.18b once real verdicts exist
+([`phase-7.1.md`](phase-7.1.md)); the 6.22 console screens still ahead of it.
+
+---
+
 ## Session: 2026-09-21 (the documents, audited against the code)
 
 **Branch:** `claude/kind-sagan-g0liu3`, pushed · **Status:** the three prose documents
