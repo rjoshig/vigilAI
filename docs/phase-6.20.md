@@ -1,7 +1,9 @@
 # Phase 6.20 — Three roles, and a console that shows you only your own job
 
 **Status:** 🟡 **in progress** — specified 2026-09-21. **6.20a is built** (the capability
-table and its tests); everything that consumes it is not. Written as a hand-off: the
+table and its tests) and **6.20b is mostly built** (several roles stored per account, and
+the placeholder holding `user` and `admin`). Nothing is enforced yet: no router and
+neither console consults a capability. Written as a hand-off: the
 thinking that needed doing is done and written down, and the wiring is listed in the
 order it is worth doing.
 
@@ -114,16 +116,31 @@ starts producing findings without having run silently first.
 **Nothing consumes this yet.** It is deliberately a leaf: pure, typed, no imports from
 the rest of the package, so the wiring below can be done in any order without a rewrite.
 
-### 6.20b — Several roles on an account · ⬜ not started
+### 6.20b — Several roles on an account · 🟡 in progress
 
-- [ ] `User.roles` as a JSON list, replacing the single `role` string. A migration
-      backfills `roles = [role]` and **leaves `role` in place until 6.20f**, so a
-      half-deployed version still works.
-- [ ] `accounts.py:112` queries `User.role == "admin"` in SQL to answer *is there an
+The storage and the reporting landed early, because the placeholder needed both roles
+before the gating arrives — an account that behaves as an administrator while its row
+says `user` is a disagreement waiting to lock somebody out.
+
+- [x] `User.roles` as a JSON list beside the single `role`, which **stays until 6.20f**
+      holding the strongest role held, so code that still asks `role == "admin"` keeps
+      giving the right answer. Added NOT NULL with a server default, so a migrated
+      schema matches what `create_all` builds (`c9e1f3a5b7d0`).
+- [x] Every existing account keeps exactly what it had, as a list of one. Nothing is
+      granted a role it did not have.
+- [x] **The placeholder holds `user` and `admin`.** While login is off it is the only
+      account there is and `deps.py` already hands it `is_admin=True`, so the stored
+      roles now say what the behaviour already is. Seeded that way for a new deployment
+      and migrated that way for an existing one.
+- [x] `CurrentUser` carries `roles`, and the placeholder branch reports the row's own
+      role instead of the literal `"user"` it used to return while behaving as an
+      administrator.
+- [x] `GET /auth/me` returns `roles`, so neither console has to infer them.
+- [ ] `accounts.py` queries `User.role == "admin"` in SQL to answer *is there an
       administrator?*. JSON membership is not portable across SQLite and Postgres
-      (ADR-017), so that check moves into Python over what is a very small table.
-- [ ] `CurrentUser` carries `roles` and a resolved `capabilities`, not `is_admin`.
-- [ ] The placeholder is seeded with `["user", "admin"]`.
+      (ADR-017), so that check moves into Python over what is a very small table. It
+      still reads the legacy field, which is correct until 6.20f.
+- [ ] `CurrentUser` resolves `capabilities` and the routers stop consulting `is_admin`.
 
 ### 6.20c — The API enforces it · ⬜ not started
 

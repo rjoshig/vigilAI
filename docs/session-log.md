@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `dev`, pushed; merged to `main` through PRs #55 and #56. Phases 6.17, 6.18a and 6.18f complete; **6.19 parts A and C complete**; **6.20 specified, with 6.20a built**. **Next concrete action: 6.20b** — several roles on an account — which the user is picking up from Claude Code on mobile. 6.19 part B (the in-app Guide) and 6.18b still open; 6.18b waits on [`phase-7.1.md`](phase-7.1.md) |
+| Branch | `dev`, pushed; merged to `main` through PRs #55 and #56. Phases 6.17, 6.18a and 6.18f complete; **6.19 parts A and C complete**; **6.20 specified, with 6.20a built and 6.20b mostly built** — the placeholder now holds `user` and `admin`. **Next concrete action: 6.20c**, the API guards — several roles on an account — which the user is picking up from Claude Code on mobile. 6.19 part B (the in-app Guide) and 6.18b still open; 6.18b waits on [`phase-7.1.md`](phase-7.1.md) |
 | Last updated | 2026-09-21 |
 
 **A column added nullable is the defect to watch for in this schema.** Five columns on
@@ -172,7 +172,23 @@ switches are on, which is why the doc says build the enforcement first and the h
 second, and why its acceptance criteria have to be tested with login on — which no
 existing UI test does.
 
-**Pending:** 6.20b onwards, being picked up from Claude Code on mobile. 6.19 part B (the
+### The placeholder holds both roles, ahead of the gating
+
+Asked for while the rest of 6.20 was being handed over, and worth doing early rather
+than with the gating: **John Doe is the placeholder** — `__placeholder__`, no password,
+the account the code says can never be signed in as — and while login is off it is the
+only account there is, with `deps.py` handing it `is_admin=True`. Its row said `user`.
+An account that behaves as an administrator while its row says otherwise is a
+disagreement that only gets found by reading the code, and it would have locked the only
+account out of the console the moment 6.20c starts gating.
+
+`c9e1f3a5b7d0` adds `roles` as a list, backfills every account with exactly what it had,
+and gives the placeholder `["user", "admin"]`. `role` stays, holding the strongest role
+held, so nothing that still asks `role == "admin"` changes answer. `/auth/me` returns
+`roles` and the placeholder branch now reports the row's own role rather than the literal
+`"user"` it used to return while behaving as an administrator.
+
+**Pending:** 6.20c onwards, being picked up from Claude Code on mobile. 6.19 part B (the
 in-app Guide) still deferred.
 
 ## Session: 2026-09-20 (the demo database, the sixth marker, failure detail, usage per person)
