@@ -123,3 +123,98 @@ def test_migrations_apply_to_an_empty_database(
 
     expected = {table.name for table in models.Base.metadata.sorted_tables}
     assert expected - tables == set(), f"migrations do not create {sorted(expected - tables)}"
+
+
+#: Columns where a migrated database and the models already disagreed before this test
+#: existed. Each is the same defect `b8d0f2a4c6e9` fixed on ``runs``: added nullable,
+#: declared NOT NULL, so a migrated row can hold a NULL the model says is impossible.
+#:
+#: They are listed rather than fixed because none of them is breaking anything today and
+#: two are ``created_at`` timestamps — the only honest backfill for a creation time
+#: nobody recorded is not "now", and inventing one to satisfy a constraint is worse than
+#: the NULL. Each wants its own decision.
+#:
+#: **This list may only ever shrink.** A new entry means somebody has added a column the
+#: same way and the test is telling them so.
+KNOWN_SCHEMA_DRIFT: frozenset[str] = frozenset(
+    {
+        "coverage_acknowledgements.created_at",
+        "final_reports.attestation",
+        "findings.lens_opinions",
+        "rule_candidates.critique",
+        "rule_candidates.redraft",
+        "second_approvals.covered",
+        "second_approvals.created_at",
+    }
+)
+
+
+@pytest.mark.filterwarnings("ignore:No path_separator found in configuration:DeprecationWarning")
+def test_a_migrated_schema_matches_the_models_column_for_column(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Table names were never enough, and the gap cost a 500 on the review screen.
+
+    The suite builds its schema with ``create_all``; an operator builds theirs with
+    ``alembic upgrade``. Nothing compared the two below the level of table names, so a
+    column the migrations created **nullable** while the model declared it NOT NULL was
+    invisible: a test database could not hold the NULL that a migrated one was full of.
+    ``Run.error_detail`` did exactly that and failed validation on the way out.
+
+    Columns and nullability, both directions. A column the model has and the migrations
+    do not is a 500 waiting to happen; one the migrations have and the model does not is
+    a column nothing maintains.
+    """
+    alembic = pytest.importorskip("alembic.command")
+    from alembic.config import Config
+
+    root = Path(__file__).resolve().parents[2]
+    database = tmp_path / "parity.db"
+    url = f"sqlite+pysqlite:///{database}"
+    monkeypatch.setenv("DATABASE_URL", url)
+
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "src/greenlight_ai/db/migrations"))
+    alembic.upgrade(config, "head")
+
+    from greenlight_ai.db import models
+
+    engine = sa.create_engine(url)
+    inspector = sa.inspect(engine)
+    migrated = {
+        name: {column["name"]: column["nullable"] for column in inspector.get_columns(name)}
+        for name in inspector.get_table_names()
+    }
+    engine.dispose()
+
+    missing: list[str] = []
+    mismatched: list[str] = []
+    for table in models.Base.metadata.sorted_tables:
+        columns = migrated.get(table.name, {})
+        for column in table.columns:
+            if column.name not in columns:
+                missing.append(f"{table.name}.{column.name}")
+            elif (
+                columns[column.name] != column.nullable
+                and f"{table.name}.{column.name}" not in KNOWN_SCHEMA_DRIFT
+            ):
+                mismatched.append(
+                    f"{table.name}.{column.name}: migrations say "
+                    f"{'NULL' if columns[column.name] else 'NOT NULL'}, "
+                    f"the model says {'NULL' if column.nullable else 'NOT NULL'}"
+                )
+
+    assert not missing, f"migrations do not create these columns: {sorted(missing)}"
+    stale = sorted(
+        entry
+        for entry in KNOWN_SCHEMA_DRIFT
+        if (lambda parts: migrated.get(parts[0], {}).get(parts[1]) is False)(entry.split("."))
+    )
+    assert not stale, (
+        "these were fixed but are still listed as known drift; remove them from "
+        f"KNOWN_SCHEMA_DRIFT so it keeps shrinking: {stale}"
+    )
+    assert not mismatched, (
+        "a migrated database and the models disagree, so the suite is testing a schema "
+        "nobody runs:\n  " + "\n  ".join(sorted(mismatched))
+    )

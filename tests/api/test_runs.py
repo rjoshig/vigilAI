@@ -282,6 +282,34 @@ def test_a_search_covers_what_somebody_remembers_a_run_by(
     assert found("nothing-matches-this") == []
 
 
+def test_the_columns_a_migration_added_are_never_null(
+    submit: Submit, client: TestClient, api: str, factory: sessionmaker[Session]
+) -> None:
+    """The shape of the bug that answered 500 on the review screen.
+
+    ``Run.error_detail`` was added nullable while the model declared it NOT NULL, so
+    every row older than the migration held a NULL that failed validation on the way
+    out. It could not be reproduced here: this suite builds its schema with
+    ``create_all``, which reads the model and writes NOT NULL, so a test database could
+    not hold the NULL a migrated one was full of. That divergence is what
+    ``tests/db/test_migration_chain.py`` now asserts against, by migrating a real
+    database and comparing it with the models column for column.
+
+    What is left to check here is the other half: that the schema really does forbid it,
+    so the two halves together leave nowhere for a NULL to come from.
+    """
+    submit()
+    with factory() as session:
+        for column in ("error_detail", "keyword_suggestions", "coverage", "notices"):
+            nullable = session.execute(
+                sa.text("SELECT [notnull] FROM pragma_table_info('runs') WHERE name = :c"),
+                {"c": column},
+            ).scalar_one()
+            assert nullable == 1, f"runs.{column} must be NOT NULL, or a row can hold None"
+
+    assert client.get(f"{api}/runs").status_code == 200
+
+
 def test_a_run_that_has_not_failed_carries_no_failure_detail(
     submit: Submit, client: TestClient, api: str
 ) -> None:

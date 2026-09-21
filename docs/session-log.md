@@ -12,8 +12,16 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.13**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/pending-items-review-f35uek`, **not pushed — this session's work is uncommitted**. Phase 6.17 complete; 6.18a and 6.18f built; **6.19 parts A and C complete** — every field says what it does (now six markers, the sixth switchable per ADR-046), a failed run says *where* it failed (ADR-047), and usage is counted per person (ADR-048). **Next concrete action: commit and push this session's work**, then 6.19 part B — the Guide in each app's sidebar, which the user has deferred. 6.18b still waits on [`phase-7.1.md`](phase-7.1.md) |
-| Last updated | 2026-09-20 |
+| Branch | `dev`, pushed; merged to `main` through PRs #55 and #56. Phases 6.17, 6.18a and 6.18f complete; **6.19 parts A and C complete**; **6.20 specified, with 6.20a built**. **Next concrete action: 6.20b** — several roles on an account — which the user is picking up from Claude Code on mobile. 6.19 part B (the in-app Guide) and 6.18b still open; 6.18b waits on [`phase-7.1.md`](phase-7.1.md) |
+| Last updated | 2026-09-21 |
+
+**A column added nullable is the defect to watch for in this schema.** Five columns on
+`runs` were added by migrations without a backfill while the model declared them NOT
+NULL. `create_all` builds the test schema from the model and writes NOT NULL, so a test
+database cannot hold the NULL a migrated one is full of — the suite was green while the
+review screen answered 500. `tests/db/test_migration_chain.py` now compares a migrated
+database with the models **column for column**, and carries a list of seven older
+divergences that may only shrink.
 
 **Before starting the demo, migrate the demo database.** `scripts/seed_demo.py` builds
 its schema with `create_all`, which creates missing *tables* and never alters an
@@ -115,6 +123,57 @@ validates, a replay tests, and a person approves into shadow.
 - Whether a data dictionary exists to seed the alias table from.
 
 ---
+
+## Session: 2026-09-21 (a 500 on every review screen, a compact PDF, and roles specified)
+
+**Branch:** `dev`, pushed and merged to `main` · **Phase:** 6.19 closing, 6.20 specified ·
+**Status:** green.
+
+### A 500 on every review screen, and why 1,559 tests missed it
+
+`Run.error_detail` was added **nullable** while the model declares it NOT NULL, so every
+row older than the migration held a NULL and `RunDetail` rejected it. The review screen
+was down for every run.
+
+The tests could not have caught it. They build their schema with `create_all`, which
+reads `Mapped[str]` and writes NOT NULL — **a test database cannot hold the NULL that a
+migrated one is full of.** The migrated schema and the models had drifted apart and
+nothing compared them below the level of table names.
+
+Five columns on `runs` had it: `coverage`, `report_coverage`, `notices`,
+`keyword_suggestions`, `error_detail`. Only the last was breaking; the rest were waiting
+for the first code to read one without an `or []` beside it. `b8d0f2a4c6e9` backfills all
+five and makes them NOT NULL. The chain test now compares a migrated database with the
+models **column for column**, proved by removing the fix and watching it name them.
+
+It found seven older divergences in other tables, listed rather than fixed: none breaks
+anything and two are `created_at` timestamps, where the only honest backfill for a
+creation time nobody recorded is not "now". The list may only shrink.
+
+### The PDF's first page
+
+Five headline figures took a sixth of page one, because A4 at 96dpi is 794px and that
+trips the 900px breakpoint the screen layout uses — so they stacked into three rows of
+two in every PDF. Print lays them out as one strip now. Measured through the real
+renderer: one demo report drops from two pages to one, the rest gain about a quarter page
+of headroom, and every file is smaller. A test asserts all five figures survive, because
+the other way to make this fit is to delete one.
+
+### Roles, specified rather than built
+
+[`phase-6.20.md`](phase-6.20.md) carries the design: three roles, a capability matrix,
+several roles per account, and the line between **judging the work** and **defining the
+deployment**. 6.20a is built — the capability table and eighteen tests, one per line of
+the matrix — and deliberately consumes nothing, so the wiring can be done in any order.
+
+**The thing to know before building the rest:** login ships off (ADR-022), and with it
+off the placeholder is handed `is_admin=True`. None of the phase has any effect until the
+switches are on, which is why the doc says build the enforcement first and the hiding
+second, and why its acceptance criteria have to be tested with login on — which no
+existing UI test does.
+
+**Pending:** 6.20b onwards, being picked up from Claude Code on mobile. 6.19 part B (the
+in-app Guide) still deferred.
 
 ## Session: 2026-09-20 (the demo database, the sixth marker, failure detail, usage per person)
 

@@ -495,3 +495,46 @@ def test_the_filed_copy_hides_what_belongs_only_on_screen(
     assert ".print-hide { display: none !important; }" in html
     assert 'class="print-hide">Input fingerprint' in html
     assert 'class="print-hide">Generated' in html
+
+
+def test_the_printed_report_keeps_every_headline_number(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    """Compacting the PDF must not be done by dropping a number.
+
+    The five headline figures took a sixth of the first page, because A4 is 794px at
+    96dpi and that tripped the 900px breakpoint the screen layout uses — so five values
+    stacked into three rows of two. The fix is a one-line strip on paper. The failure
+    this guards is the other fix somebody reaches for, which is deleting a figure.
+    """
+    client.post(f"{api}/runs/{reviewed}/finalize")
+    html = client.get(f"{api}/runs/{reviewed}/report").text
+
+    for label in (
+        "Requirements traced",
+        "High",
+        "Medium",
+        "Low",
+        "Requirements matching",
+    ):
+        assert f'<div class="l">{label}</div>' in html, f"the {label} figure is gone"
+
+
+def test_the_print_stylesheet_lays_the_figures_out_on_one_line(
+    reviewed: int, client: TestClient, api: str
+) -> None:
+    """The rule that does the compacting, asserted where it cannot silently be lost.
+
+    `.kpis` is a five-column grid on screen with a two-column fallback. Print has to
+    override both, or the fallback wins on A4 and the strip becomes three rows again —
+    which is the bug, not the layout.
+    """
+    client.post(f"{api}/runs/{reviewed}/finalize")
+    html = client.get(f"{api}/runs/{reviewed}/report").text
+
+    print_block = html[html.index("@media print {") :]
+    assert "grid-template-columns: none;" in print_block, (
+        "print must cancel the screen grid, or the 900px fallback applies on A4 "
+        "and the figures stack into three rows again"
+    )
+    assert ".kpi .v { font-size: 0.92rem; }" in print_block
