@@ -15,7 +15,7 @@ from greenlight_ai.llm.prompts.schemas import ExtractResponse
 __all__ = ["EXTRACT_PROMPT", "VERSION"]
 
 #: Bump on any wording change: the version is part of the cache key (ADR-005).
-VERSION: Final[str] = "3"
+VERSION: Final[str] = "4"
 
 _SYSTEM: Final = """\
 You read one section of an Order Specification Letter (OSL) and report the requirements \
@@ -34,7 +34,11 @@ Requirement types:
 - criteria: a numeric threshold on an attribute, e.g. score at least 755.
 - geography: which states are in or out of scope.
 - value_set: which values of some attribute are allowed or excluded.
-- attributes: which fields must be delivered.
+- attributes: which fields must be delivered. A section may name the fields one by \
+one, or name a product code that stands for a set of them ("all attributes from ABC", \
+"the ABC package", "product code ABC"). When it names a code, put the code in \
+product_codes and leave values empty; do not try to list what the code contains. What \
+a code contains is looked up, not read.
 - waterfall: the order in which processing steps run.
 - quantity: how many records must be delivered. The size of the input population, \
 the pull date, and other background about where the data comes from are context, \
@@ -58,6 +62,8 @@ A requirement has only these keys:
 - conditions: a list of {"field_name": str, "operator": str, "value": number or string \
 or list}; the operator is one of <, <=, >, >=, =, !=, in, not_in, between, is_null, not_null
 - values: a list of strings (the states, allowed values, or delivered field names)
+- product_codes: a list of strings (attributes only; the codes the section names \
+instead of listing fields). Omit it when the section lists fields directly.
 - mode: "include" or "exclude", or omit it
 - steps: a list of strings, in order (waterfall only)
 - quantity: a number, or omit it
@@ -65,6 +71,8 @@ or list}; the operator is one of <, <=, >, >=, =, !=, in, not_in, between, is_nu
 - applies_to: one of all, accepts, rejects
 - source_text: a string
 - confidence: a number between 0 and 1
+Never invent what a product code contains, and never put a code in values. A code is \
+an identifier the section quotes; the attributes behind it are looked up elsewhere.
 Do not add description, name, field, fields, id, or any other key. A field the \
 requirement is about goes inside a condition as field_name; delivered field names go in \
 values. A section with no requirements answers {"requirements": []}.
@@ -115,6 +123,16 @@ Answer:
 "action": "accept", "applies_to": "accepts", \
 "source_text": "Deliver the following fields for every accepted record: account_id, \
 score, state.", "confidence": 0.95}]}
+
+Example 4b
+Section:
+5.1 Output attributes
+Deliver all attributes from product code ABC for every accepted record.
+Answer:
+{"requirements": [{"req_type": "attributes", "product_codes": ["ABC"], \
+"action": "accept", "applies_to": "accepts", \
+"source_text": "Deliver all attributes from product code ABC for every accepted \
+record.", "confidence": 0.93}]}
 
 Example 5
 Section:

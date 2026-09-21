@@ -113,6 +113,12 @@ FindingType = Literal[
     #: check it unblocked ran and reported separately, and this says the layout had to
     #: be reasoned about so a reviewer can disagree with the reading itself.
     "layout_reasoned",
+    #: The delivery carries attributes the named product code does not list
+    #: (Phase 6.22c). Always **low**: a delivery may legitimately carry a technical
+    #: field, so this is never a failure. It is raised for two reasons rather than one
+    #: — the extract may have pulled more than the order asked for, and a field nobody
+    #: asked for may be personal data that should not have left (ADR-003).
+    "attributes_beyond_product_code",
     #: An attribute the OSL asked for that the tool could not locate in the report,
     #: although the report carries names resembling it (Phase 6.22a). Always ``review``
     #: severity, and deliberately **not** ``report_violates_rule``: a delivery whose
@@ -192,6 +198,10 @@ class Rule(BaseModel):
         conditions: Field comparisons, for numeric types.
         logic: How the conditions combine.
         values: The payload for set types (states, value sets, attribute names).
+        product_codes: Product codes an ``attributes`` requirement names instead of, or
+            beside, listing attributes (Phase 6.22c). The model reads that a
+            requirement names a code; **code** looks up what the code contains and code
+            checks that it exists at all (ADR-061).
         mode: For set types, whether ``values`` is an allow-list or a deny-list.
         steps: Ordered step names, for ``waterfall``.
         quantity: The number, for ``quantity``.
@@ -214,6 +224,7 @@ class Rule(BaseModel):
     conditions: tuple[Condition, ...] = ()
     logic: Logic = "AND"
     values: tuple[str, ...] = ()
+    product_codes: tuple[str, ...] = ()
     mode: Mode | None = None
     steps: tuple[str, ...] = ()
     quantity: float | None = None
@@ -254,8 +265,15 @@ class Rule(BaseModel):
             ValueError: When the payload does not fit the type.
         """
         if self.req_type in SET_TYPES:
-            if not self.values:
-                raise ValueError(f"req_type {self.req_type!r} requires 'values'")
+            # An ``attributes`` requirement may name product codes instead of listing
+            # attributes: "deliver everything in ABC" states exactly as much as a list
+            # does, and refusing it would drop the requirement rather than expand it
+            # (Phase 6.22c). Every other set type still needs its values.
+            if not self.values and not (self.req_type == "attributes" and self.product_codes):
+                raise ValueError(
+                    f"req_type {self.req_type!r} requires 'values'"
+                    + (" or 'product_codes'" if self.req_type == "attributes" else "")
+                )
             if self.mode is None:
                 raise ValueError(f"req_type {self.req_type!r} requires 'mode'")
         elif self.req_type == "criteria":

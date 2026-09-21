@@ -153,7 +153,15 @@ class TestTheRules:
             for index in range(an.MAX_ACTIVE):
                 _add(session, message=f"notice {index}")
             with pytest.raises(an.AnnouncementError, match="skimmed"):
-                an.validate(session, "one more", "info", "both", NOW, NOW + dt.timedelta(days=1))
+                an.validate(
+                    session,
+                    "one more",
+                    "info",
+                    "both",
+                    NOW,
+                    NOW + dt.timedelta(days=1),
+                    now=NOW,
+                )
 
     def test_an_expired_notice_does_not_count_against_the_limit(
         self, factory: sessionmaker[Session]
@@ -167,7 +175,51 @@ class TestTheRules:
                     starts=NOW - dt.timedelta(days=9),
                     ends=NOW - dt.timedelta(days=8),
                 )
-            an.validate(session, "a new one", "info", "both", NOW, NOW + dt.timedelta(days=1))
+            an.validate(
+                session,
+                "a new one",
+                "info",
+                "both",
+                NOW,
+                NOW + dt.timedelta(days=1),
+                now=NOW,
+            )
+
+    def test_the_limit_is_counted_against_the_moment_it_is_given(
+        self, factory: sessionmaker[Session]
+    ) -> None:
+        """The clock is an argument, so this test does not pass or fail by the hour.
+
+        The three tests above seeded notices whose window sits around ``NOW`` and then
+        asked :func:`~greenlight_ai.announcements.validate` to count them. It read the
+        wall clock, so once the real time passed ``NOW``'s window every seeded notice
+        counted as expired and the limit test stopped raising — green on the morning it
+        was written and red that afternoon. The moment is injected now, the same as
+        :func:`~greenlight_ai.announcements.showing_now` has always done.
+        """
+        with factory() as session:
+            for index in range(an.MAX_ACTIVE):
+                _add(
+                    session,
+                    message=f"notice {index}",
+                    starts=NOW - dt.timedelta(hours=1),
+                    ends=NOW + dt.timedelta(hours=1),
+                )
+            # Standing inside the window, all five count and a sixth is refused.
+            with pytest.raises(an.AnnouncementError, match="skimmed"):
+                an.validate(
+                    session, "one more", "info", "both", NOW, NOW + dt.timedelta(days=1), now=NOW
+                )
+            # Standing after it, none of them does.
+            an.validate(
+                session,
+                "one more",
+                "info",
+                "both",
+                NOW,
+                NOW + dt.timedelta(days=1),
+                now=NOW + dt.timedelta(days=1),
+            )
 
     def test_editing_a_notice_does_not_count_itself(self, factory: sessionmaker[Session]) -> None:
         """Otherwise the fifth notice could never be edited."""
@@ -181,4 +233,5 @@ class TestTheRules:
                 NOW,
                 NOW + dt.timedelta(days=1),
                 exclude_id=rows[0].id,
+                now=NOW,
             )

@@ -20,7 +20,9 @@ from greenlight_ai.resolve import Resolution, resolve, squashed
 __all__ = [
     "BUILTIN_REPORT_KINDS",
     "CONFIG_KIND",
+    "NON_REPORT_KINDS",
     "OSL_KIND",
+    "RECORD_LAYOUT_KIND",
     "ParseError",
     "ReportKind",
     "OslTable",
@@ -55,10 +57,17 @@ BUILTIN_REPORT_KINDS: tuple[str, ...] = (
     "billing",
 )
 
-#: The two inputs that are not reports. Their keys are fixed because the pipeline
-#: reads them with dedicated parsers.
+#: The inputs that are not reports. Their keys are fixed because the pipeline reads
+#: them with dedicated parsers. The record layout is the fourth artifact the tool
+#: reconciles (Phase 6.22b) and, unlike the other two, it is optional: a delivery that
+#: uploads none is checked exactly as it was before the slot existed.
 OSL_KIND: str = "osl"
 CONFIG_KIND: str = "config"
+RECORD_LAYOUT_KIND: str = "record_layout"
+
+#: Every artifact the pipeline does not read as a report workbook. The worker groups a
+#: run's files by this, so a new non-report artifact is added here and nowhere else.
+NON_REPORT_KINDS: frozenset[str] = frozenset({OSL_KIND, CONFIG_KIND, RECORD_LAYOUT_KIND})
 
 
 class ParseError(Exception):

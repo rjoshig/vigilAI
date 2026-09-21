@@ -234,6 +234,43 @@ class Run(Base):
     #: artifact type, or does not. Kept on the run, like the keyword suggestions
     #: above, because that is where the evidence for it is.
     layout_suggestions: Mapped[Any] = mapped_column(Json, default=list)
+    #: The record layout this run was checked against, snapshotted at stage 1
+    #: (Phase 6.22b): one entry per delivered field with its name, data type and
+    #: size. Empty when the delivery uploaded none and no earlier run of this
+    #: configuration had promoted one, which is the ordinary state and checks exactly
+    #: as it did before the slot existed. A snapshot rather than a pointer, for the
+    #: same reason the configuration notes are copied here: the promoted layout moves
+    #: on, and a finalized report has to keep reproducing.
+    record_layout: Mapped[Any] = mapped_column(Json, default=list)
+    #: Which run supplied that layout, when it was not this one. Zero means this run
+    #: uploaded its own. Every finding resting on a borrowed layout names the run and
+    #: the date, because a layout one delivery out of date is exactly what a reviewer
+    #: needs told.
+    record_layout_run_id: Mapped[int] = mapped_column(sa.Integer, default=0)
+    #: When that run was finalized, as an ISO date. Stored beside the id rather than
+    #: looked up, so a finding still reads correctly after the source run is purged —
+    #: the same reasoning as ``configs.created_by`` being kept beside its user id.
+    record_layout_source_date: Mapped[str] = mapped_column(sa.String(10), default="")
+    #: The product-code catalogue this run was checked against, snapshotted at
+    #: submission (Phase 6.22c): ``{"codes": {"ABC": [{"attribute": …}]}, "used": [...]}``.
+    #: The catalogue itself keeps no history, so this snapshot is what makes a
+    #: finalized report reproduce — and what lets a re-check say that the catalogue has
+    #: moved since. Empty is the ordinary state on a deployment that defines no codes.
+    product_code_attributes: Mapped[Any] = mapped_column(Json, default=dict)
+    #: How many model calls this run spent asking which column an attribute is
+    #: (Phase 6.22d). Counted so the cap can be measured rather than claimed, and so
+    #: the second run of a configuration whose suggestions were accepted can be shown
+    #: to have spent none. A **soft** limit inside the existing token ceiling: past it
+    #: the run stops asking and says so, and nothing is refused.
+    attribute_locate_calls: Mapped[int] = mapped_column(sa.Integer, default=0)
+    #: What this delivery appears to call each attribute the checks could not locate
+    #: (Phase 6.22f): one entry per artifact, wanted name, spelling and origin. Read
+    #: out of the uploaded record layout in code where it settles the question, and
+    #: from the ladder's fifth rung where it does not. A suggestion, never an
+    #: application — somebody accepts it into the dictionary, or does not (ADR-021).
+    #: Kept on the run, like the keyword and layout suggestions, because that is where
+    #: the evidence for it is.
+    attribute_suggestions: Mapped[Any] = mapped_column(Json, default=list)
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
@@ -507,6 +544,183 @@ class AttributeAlias(Base):
     canonical_name: Mapped[str] = mapped_column(sa.String(200), index=True)
     alias: Mapped[str] = mapped_column(sa.String(200), index=True)
     customer_name: Mapped[Optional[str]] = mapped_column(sa.String(200), nullable=True)
+
+
+class AttributeTerm(Base):
+    """One attribute, and the name the tool uses for it (Phase 6.22d).
+
+    The dictionary the project has carried an open question about since Phase 0:
+    *"Is there an attribute data dictionary to seed the alias table?"* This is where the
+    answer lives once somebody has one, and where the tool writes down what it learned
+    when nobody does.
+
+    A term is the canonical name; :class:`AttributeSpelling` holds the ways artifacts
+    write it. Tables rather than a JSON column because a credit bureau's vocabulary runs
+    to thousands of attributes, each with a spelling per artifact and provenance on each
+    spelling — which is why `checks/layout.py`'s JSON entries stay for sheets, columns
+    and row labels and do not grow an `attribute` kind (ADR-062).
+    """
+
+    __tablename__ = "attribute_terms"
+    __table_args__ = (sa.UniqueConstraint("canonical", "scope", name="uq_attribute_term_scope"),)
+
+    id: Mapped[int] = _pk()
+    #: The one name the tool uses: what the OSL is expected to say, and what a check
+    #: asks for.
+    canonical: Mapped[str] = mapped_column(sa.String(200), index=True)
+    label: Mapped[str] = mapped_column(sa.String(200), default="")
+    description: Mapped[str] = mapped_column(sa.Text, default="")
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: Mapped[str] = mapped_column(sa.String(200), default="everywhere", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+
+    spellings: Mapped[list["AttributeSpelling"]] = relationship(
+        back_populates="term",
+        cascade="all, delete-orphan",
+        order_by="AttributeSpelling.id",
+    )
+
+
+class AttributeSpelling(Base):
+    """One way an artifact writes an attribute (Phase 6.22d).
+
+    Provenance sits here rather than on the term, because it is the *spelling* somebody
+    vouched for: an administrator typed it, a record layout declared it, the ladder's
+    fifth rung reached it and a person confirmed it, or a reviewer proposed it. A
+    spelling with no artifact is offered everywhere, which is the ordinary case and what
+    an administrator writes by hand.
+    """
+
+    __tablename__ = "attribute_spellings"
+    __table_args__ = (
+        sa.UniqueConstraint("term_id", "spelling", "artifact", name="uq_attribute_spelling"),
+    )
+
+    id: Mapped[int] = _pk()
+    term_id: Mapped[int] = mapped_column(
+        sa.ForeignKey("attribute_terms.id", ondelete="CASCADE"), index=True
+    )
+    spelling: Mapped[str] = mapped_column(sa.String(200), index=True)
+    #: Which artifact writes it this way, e.g. ``dirt``. Empty means anywhere.
+    artifact: Mapped[str] = mapped_column(sa.String(60), default="", index=True)
+    #: admin · record_layout · model · observation · alias.
+    origin: Mapped[str] = mapped_column(sa.String(30), default="admin", index=True)
+    #: The run it was learned from, when it was learned from one.
+    origin_run_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("runs.id"), nullable=True, index=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+
+    term: Mapped[AttributeTerm] = relationship(back_populates="spellings")
+
+
+class ProductCode(Base):
+    """A product code: a name for a set of attributes delivered together (6.22c).
+
+    An OSL says either *"deliver AT01, AT02, ST"* or *"deliver all attributes from
+    ABC"*. This is what makes the second mean the first. Expansion is code and never
+    the model (ADR-061): the model's only job is reading that a requirement names a
+    code, and this table is what decides whether that string names anything.
+
+    Scoped with the ADR-037 vocabulary, because one customer's ``ABC`` is not
+    another's.
+    """
+
+    __tablename__ = "product_codes"
+    __table_args__ = (sa.UniqueConstraint("code", "scope", name="uq_product_code_scope"),)
+
+    id: Mapped[int] = _pk()
+    code: Mapped[str] = mapped_column(sa.String(60), index=True)
+    label: Mapped[str] = mapped_column(sa.String(200), default="")
+    description: Mapped[str] = mapped_column(sa.Text, default="")
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: Mapped[str] = mapped_column(sa.String(200), default="everywhere", index=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+    notes: Mapped[str] = mapped_column(sa.Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    created_by: Mapped[str] = mapped_column(sa.String(200), default="")
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("users.id"), nullable=True
+    )
+
+    members: Mapped[list["ProductCodeMember"]] = relationship(
+        back_populates="product_code",
+        cascade="all, delete-orphan",
+        order_by="ProductCodeMember.sort_order, ProductCodeMember.id",
+    )
+
+
+class ProductCodeMember(Base):
+    """One attribute a product code contains (Phase 6.22c).
+
+    An attribute two codes share is **one** term with one output name. The catalogue
+    does not enforce that with a constraint — the two rows are legitimately separate —
+    but :meth:`greenlight_ai.rules.product_codes.ProductCatalogue.conflicts` names any
+    disagreement rather than picking a winner, and the console refuses a save that
+    would create one.
+    """
+
+    __tablename__ = "product_code_members"
+    __table_args__ = (
+        sa.UniqueConstraint("product_code_id", "attribute_name", name="uq_product_member"),
+    )
+
+    id: Mapped[int] = _pk()
+    product_code_id: Mapped[int] = mapped_column(
+        sa.ForeignKey("product_codes.id", ondelete="CASCADE"), index=True
+    )
+    #: The attribute as the catalogue names it, which is what the OSL is expected to
+    #: say and what the checks ask for.
+    attribute_name: Mapped[str] = mapped_column(sa.String(200), index=True)
+    #: What the delivered file calls it, when that differs. Empty means it is
+    #: delivered under its own name, which is the ordinary case.
+    output_name: Mapped[str] = mapped_column(sa.String(200), default="")
+    sort_order: Mapped[int] = mapped_column(sa.Integer, default=100)
+
+    product_code: Mapped[ProductCode] = relationship(back_populates="members")
+
+
+class RecordLayoutRow(Base):
+    """The record layout a configuration is known to deliver (Phase 6.22b).
+
+    A record layout is uploaded **per run** and remembered **for the configuration**:
+    the run that finalizes promotes its layout here, and a later run of the same
+    configuration that uploads none borrows it. One row per customer and
+    configuration id; promoting replaces it, and the version history
+    (:mod:`greenlight_ai.db.versions`, kind ``record_layout``) keeps the previous ten
+    so a promotion can be reverted like any other definition.
+
+    Borrowing is never silent. The borrowing run stores ``record_layout_run_id``, and
+    every finding that rests on the borrowed layout names the run it came from and the
+    date that run was finalized.
+    """
+
+    __tablename__ = "record_layouts"
+    __table_args__ = (
+        sa.UniqueConstraint("customer_name", "configuration_id", name="uq_record_layout_config"),
+    )
+
+    id: Mapped[int] = _pk()
+    customer_name: Mapped[str] = mapped_column(sa.String(200), index=True)
+    configuration_id: Mapped[str] = mapped_column(sa.String(200), index=True)
+    #: One entry per delivered field: name, data type, size, ordinal.
+    fields: Mapped[Any] = mapped_column(Json, default=list)
+    #: The run whose finalize promoted it, and when that run was finalized. Both are
+    #: what a borrowing run's findings quote.
+    source_run_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("runs.id"), nullable=True, index=True
+    )
+    source_finished_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    source_filename: Mapped[str] = mapped_column(sa.String(500), default="")
+    promoted_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    promoted_by: Mapped[str] = mapped_column(sa.String(200), default="")
 
 
 class MaskedColumn(Base):
@@ -944,8 +1158,15 @@ class TrainingObservation(Base):
     author_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
     author: Mapped[str] = mapped_column(sa.String(200), default="")
 
-    #: reconciliation · field_constraint · correction · note · config_note
+    #: reconciliation · field_constraint · correction · note · config_note ·
+    #: attribute_mapping
     kind: Mapped[str] = mapped_column(sa.String(30), default="reconciliation", index=True)
+    #: For an ``attribute_mapping``: what this delivery calls one attribute
+    #: (Phase 6.22f), as ``{"attribute", "spelling", "artifact"}``. Empty for every
+    #: other kind. It is here rather than folded into an anchor because the two names
+    #: are the substance of the observation, not a pointer to where it was seen — and
+    #: a reviewer approving it is agreeing to exactly these two strings.
+    mapping: Mapped[Any] = mapped_column(Json, default=dict)
     #: For a ``config_note``: the ETL configuration it follows (ADR-024). A note is
     #: guidance for every run of that configuration until it is switched off, and an
     #: observation in the queue at the same time.

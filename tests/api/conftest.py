@@ -91,6 +91,20 @@ def submit(
                 ("config.json", (fixtures_root / case["config"]).read_bytes(), "application/json"),
             ),
         ]
+        # The fourth artifact, when the case ships one (Phase 6.22b). Most do not:
+        # a delivery without a record layout is the ordinary case and has to keep
+        # working exactly as it did before the slot existed.
+        if case.get("record_layout"):
+            files.append(
+                (
+                    "record_layout",
+                    (
+                        "record_layout.xlsx",
+                        (fixtures_root / case["record_layout"]).read_bytes(),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    ),
+                )
+            )
         for kind, path in case["reports"].items():
             files.append(
                 (

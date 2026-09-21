@@ -18,11 +18,13 @@ from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.checks.field_constraints import evaluate as evaluate_constraints
 from greenlight_ai.checks import anomaly
+from greenlight_ai.checks import attribute_suggestions
 from greenlight_ai.checks.profile import read_profile
 from greenlight_ai.checks.reports import (
     DIRT_ATTRIBUTE_SHEET,
     REPORT_CHECKED_KINDS,
     CheckOutcome,
+    attribute_stats,
     run_derived_check,
     waterfall_rows,
 )
@@ -32,7 +34,7 @@ from greenlight_ai.llm.prompts.schemas import JudgmentResponse, ProgrammeReading
 from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import RunContext
-from greenlight_ai.resolve.layout import LayoutResolver
+from greenlight_ai.resolve.layout import ATTRIBUTE, LayoutResolver
 from greenlight_ai.rules.derive import derive_checks
 from greenlight_ai.rules.schema import Evidence, Finding, Severity
 
@@ -47,6 +49,11 @@ _VIOLATION_SEVERITY: Final[Severity] = "high"
 #: How many attributes the shape reading is shown. A DIRT can carry hundreds, and
 #: a prompt that is mostly a list stops being a prompt.
 _MAX_SHAPE_ATTRIBUTES: Final[int] = 60
+
+#: How many extra attributes a note quotes. Enough for a reviewer to recognise what is
+#: being talked about, few enough that the detail stays a sentence rather than a column
+#: dump — the same reasoning as ``resolve.attributes.MAX_NEAR``.
+_MAX_EXTRA_ATTRIBUTES: Final[int] = 10
 
 #: Below this the model was guessing, and a guess about a number it cannot check is
 #: not worth a reviewer's time. The same floor every other reading in the product
@@ -67,10 +74,16 @@ def run(context: RunContext) -> None:
     # A re-check runs this stage again; counting both passes would report twice the
     # coverage of a run that did the same work once (Phase 6.11c).
     context.coverage_record.clear()
+    # Kept on the context, not only in this frame. `repository.save_context` reads the
+    # resolver back off it for the layout suggestions (6.21b) and the attribute call
+    # count (6.22d) — and it was never assigned, so every run since 6.21b has stored an
+    # empty suggestion list however much the model had to reason about. The rail has
+    # never once been offered something a real run found.
     resolver = _resolver(context)
+    context.resolver = resolver
 
     for rule in context.rules:
-        for check in derive_checks(rule):
+        for check in derive_checks(rule, context.product_codes):
             if check.kind not in REPORT_CHECKED_KINDS:
                 # Settled elsewhere: waterfall order is an OSL-against-config question
                 # and stage 5 answers it.
@@ -80,7 +93,9 @@ def run(context: RunContext) -> None:
             # (ADR-021). "The field distribution is wrong" is useless when five were
             # uploaded.
             for documents, part_name in _views(context):
-                outcome = run_derived_check(check, documents, context.aliases, resolver)
+                outcome = run_derived_check(
+                    check, documents, context.aliases, resolver, context.record_layout
+                )
                 if outcome.passed is None:
                     context.coverage_record.unevaluated(rule.rule_id)
                 else:
@@ -139,15 +154,18 @@ def run(context: RunContext) -> None:
                     )
                 )
 
+    _check_beyond_the_product_codes(context, resolver)
     _check_programme(context)
     _check_credit_date(context)
     _check_deliverable_count(context)
-    _run_field_constraints(context)
+    _run_field_constraints(context, resolver)
     _run_admin_checks(context, settings, customer)
     # After every check, because a name is only reasoned about when a check went
     # looking for it. Raised here rather than where it happened so one record covers
     # every check that needed the same sheet (Phase 6.21a).
     _report_reasoned_names(context, resolver)
+    _report_capped_attributes(context, resolver)
+    _offer_attribute_mappings(context, resolver)
     _check_anomalies(context, resolver)
     # Read here rather than at render time, because by then the workbooks are long
     # parsed and gone (Phase 6.21f).
@@ -183,6 +201,9 @@ def _resolver(context: RunContext) -> LayoutResolver:
     return LayoutResolver(
         client=context.client,
         alternates=context.admin.layout_map,
+        # Rung 4 for attribute names, and the shortlist rung 5 is shown (Phase 6.22d).
+        dictionary=context.dictionary,
+        max_attribute_calls=context.max_attribute_calls,
         preamble=preamble(context.guidance),
         examples=context.examples.get("name_locate", ()),
     )
@@ -226,6 +247,123 @@ def _report_reasoned_names(context: RunContext, resolver: LayoutResolver) -> Non
                 ),
             )
         )
+
+
+def _report_capped_attributes(context: RunContext, resolver: LayoutResolver) -> None:
+    """Say which attribute names the run's cap stopped it looking for (Phase 6.22d).
+
+    A notice rather than a finding, and the distinction is the point. Nothing is wrong
+    with the delivery: the tool ran out of the budget it was given and stopped asking,
+    which is a fact about this run rather than about what was delivered. It is a
+    **soft** limit — nothing was refused, and the checks that needed those names have
+    already said, separately, that they could not be evaluated.
+
+    Silent when nothing was capped, which is every run on a deployment whose dictionary
+    covers its deliveries.
+
+    Args:
+        context: The run context, whose ``notices`` this appends to.
+        resolver: The run's resolver, which counted.
+    """
+    if not resolver.capped:
+        return
+    shown = ", ".join(resolver.capped[:_MAX_EXTRA_ATTRIBUTES])
+    more = (
+        f" and {len(resolver.capped) - _MAX_EXTRA_ATTRIBUTES} more"
+        if len(resolver.capped) > _MAX_EXTRA_ATTRIBUTES
+        else ""
+    )
+    context.notices.append(
+        f"This run spent its {resolver.max_attribute_calls} attribute lookup(s) and "
+        f"stopped asking about {len(resolver.capped)} more: {shown}{more}. Nothing was "
+        "refused and nothing failed because of it; the checks that needed those names "
+        "report separately that they could not be evaluated. Recording the spellings "
+        "in the attribute dictionary removes the lookups altogether."
+    )
+    _LOG.info(
+        "run %s: %d attribute name(s) not looked up; the cap of %d was spent",
+        context.run_id,
+        len(resolver.capped),
+        resolver.max_attribute_calls,
+    )
+
+
+def _offer_attribute_mappings(context: RunContext, resolver: LayoutResolver) -> None:
+    """Propose what this delivery calls each attribute the checks could not locate.
+
+    Run after every check, because an attribute is only unresolved once something went
+    looking for it — the same placement, for the same reason, as
+    :func:`_report_reasoned_names`.
+
+    Two sources, and the free one first (Phase 6.22f). The record layout is a document
+    the delivery carried: where it declares exactly one field resembling the attribute
+    the OSL asked for, that is the delivery saying what it calls it, and reading it
+    costs no model call. Where the layout is silent, the fifth rung's readings stand,
+    already carrying the review record that says a person should look.
+
+    Nothing proposed here is in force. It becomes a dictionary spelling when somebody
+    accepts it, and not before (ADR-021).
+
+    Args:
+        context: The run context, whose ``attribute_suggestions`` this fills.
+        resolver: The run's resolver, which kept what the model read.
+    """
+    unresolved = tuple(
+        dict.fromkeys(
+            name
+            for finding in context.findings
+            if finding.type == "attribute_not_resolved"
+            for name in _unresolved_names(finding.title)
+        )
+    )
+    proposals = list(
+        attribute_suggestions.from_record_layout(
+            unresolved, context.record_layout.names, artifact="dirt"
+        )
+    )
+    proposals.extend(
+        attribute_suggestions.AttributeSuggestion(
+            artifact=reasoned.artifact,
+            wanted=reasoned.wanted,
+            found=reasoned.found,
+            origin="model",
+            confidence=reasoned.confidence,
+            reason=reasoned.reason,
+        )
+        for reasoned in resolver.reasoned
+        if reasoned.kind == ATTRIBUTE
+    )
+
+    known = {term.canonical: term.names() for term in context.dictionary.terms}
+    context.attribute_suggestions = attribute_suggestions.merge(proposals, known)
+    if context.attribute_suggestions:
+        _LOG.info(
+            "run %s: %d attribute mapping(s) to offer",
+            context.run_id,
+            len(context.attribute_suggestions),
+        )
+
+
+def _unresolved_names(title: str) -> tuple[str, ...]:
+    """The attribute names an ``attribute_not_resolved`` finding's title lists.
+
+    Read back off the title rather than threaded through, because the finding is what
+    a person sees and the offer must be about exactly those names. Stage 7 writes the
+    title a few lines above; the two are deliberately the same list.
+
+    Args:
+        title: The finding's title.
+
+    Returns:
+        The names, or empty when the title is not one this stage wrote.
+    """
+    marker = "Could not tell what the report calls "
+    if not title.startswith(marker):
+        return ()
+    rest = title[len(marker) :]
+    # Stage 7 appends " (part name)" when a kind was delivered several times.
+    rest = rest.split(" (", 1)[0]
+    return tuple(name.strip() for name in rest.split(",") if name.strip())
 
 
 def _check_anomalies(context: RunContext, resolver: LayoutResolver) -> None:
@@ -355,7 +493,7 @@ def _read_shape(context: RunContext) -> None:
         )
 
 
-def _run_field_constraints(context: RunContext) -> None:
+def _run_field_constraints(context: RunContext, resolver: LayoutResolver) -> None:
     """Check the per-attribute rules a reviewer wrote in plain words (ADR-021).
 
     The sentence was the input to synthesis; what runs here is structured data
@@ -363,6 +501,8 @@ def _run_field_constraints(context: RunContext) -> None:
 
     Args:
         context: The run context, whose ``findings`` this appends to.
+        resolver: The run's resolver, so a field the dictionary knows is found under
+            the spelling this delivery uses (Phase 6.22d).
     """
     specs = [
         spec for spec in context.admin.field_constraints if isinstance(spec, FieldConstraintSpec)
@@ -370,7 +510,7 @@ def _run_field_constraints(context: RunContext) -> None:
     if not specs:
         return
 
-    for outcome in evaluate_constraints(specs, context.reports, context.aliases):
+    for outcome in evaluate_constraints(specs, context.reports, context.aliases, resolver):
         if outcome.passed is not None:
             context.coverage_record.checked("", outcome.report_kind)
         if outcome.passed is True:
@@ -707,6 +847,81 @@ def _ask_what_it_reads_like(
         return None
     _ = declared
     return answer
+
+
+def _check_beyond_the_product_codes(context: RunContext, resolver: LayoutResolver) -> None:
+    """Note attributes the delivery carries that the named codes never asked for (6.22c).
+
+    A **low**-severity note and never a failure. A delivery may legitimately carry a
+    technical field, and a tool that failed a correct delivery for carrying one would
+    teach people to stop reading its findings.
+
+    It is worth a note for two reasons rather than one. The order may be wrong — the
+    extract pulled more than the OSL asked for. And **a field nobody asked for may be
+    PII**: the one case where carrying extra is not a harmless surplus but a disclosure
+    (ADR-003). The note says both, because a reviewer deciding which it is needs to
+    know that the second is possible.
+
+    Silent unless a requirement actually names a product code. Without a code there is
+    no authoritative list of what was asked for, and calling every unlisted column
+    "extra" against a hand-written attribute list would be noise on every run.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to.
+        resolver: The run's layout resolver, for reading the DIRT's attribute sheet.
+    """
+    named = tuple(
+        dict.fromkeys(code for rule in context.rules for code in rule.product_codes if code.strip())
+    )
+    if not named:
+        return
+
+    stats = attribute_stats(context.reports, context.aliases, resolver)
+    delivered = tuple(stat.name for stat in stats.values())
+    if not delivered:
+        return
+
+    extra = context.product_codes.beyond(named, delivered)
+    if not extra:
+        return
+
+    shown = ", ".join(extra[:_MAX_EXTRA_ATTRIBUTES])
+    more = (
+        f" and {len(extra) - _MAX_EXTRA_ATTRIBUTES} more"
+        if len(extra) > _MAX_EXTRA_ATTRIBUTES
+        else ""
+    )
+    context.add_finding(
+        Finding(
+            finding_id=context.next_finding_id(),
+            type="attributes_beyond_product_code",
+            severity="low",
+            title=(
+                f"The delivery carries {len(extra)} attribute(s) "
+                f"{', '.join(named)} does not list"
+            ),
+            detail=(
+                f"Product code {', '.join(named)} lists what this order asked for, and "
+                f"the DIRT also carries {shown}{more}. This is not a failure — a "
+                "delivery may legitimately carry a technical field — but it is worth "
+                "two looks: the extract may have pulled more than the order asked "
+                "for, and a field nobody asked for may be personal data that should "
+                "not have left."
+            ),
+            leg="osl_reports",
+            evidence=Evidence(
+                report_name="dirt",
+                report_sheet=DIRT_ATTRIBUTE_SHEET,
+                report_value=f"{len(delivered)} attributes delivered",
+            ),
+        )
+    )
+    _LOG.info(
+        "run %s: %d attribute(s) beyond product code(s) %s",
+        context.run_id,
+        len(extra),
+        ", ".join(named),
+    )
 
 
 def _check_programme(context: RunContext) -> None:

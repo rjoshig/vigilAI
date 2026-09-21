@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from greenlight_ai.rules import Condition, Rule, derive_checks
+from greenlight_ai.rules.product_codes import ProductCatalogue, ProductCodeEntry, ProductMember
 from greenlight_ai.rules.derive import INVERSE_OPERATOR
 
 
@@ -193,3 +194,62 @@ def test_every_check_names_its_rule() -> None:
     rule = _criteria(">=", 21)
     for check in derive_checks(rule):
         assert check.rule_id == "R-001"
+
+
+class TestProductCodes:
+    """A requirement that names a code derives the same check as one that lists (6.22c)."""
+
+    def _catalogue(self) -> ProductCatalogue:
+        return ProductCatalogue.from_entries(
+            [
+                ProductCodeEntry(
+                    code="ABC",
+                    members=(ProductMember("AT01", "", 1), ProductMember("ST", "", 2)),
+                )
+            ]
+        )
+
+    def _rule(self, **fields: object) -> Rule:
+        return Rule(  # type: ignore[arg-type]
+            rule_id="R-1",
+            source="osl",
+            req_type="attributes",
+            mode="include",
+            applies_to="accepts",
+            **fields,
+        )
+
+    def test_a_named_code_becomes_the_same_fields_present_check(self) -> None:
+        (check,) = derive_checks(self._rule(product_codes=("ABC",)), self._catalogue())
+        assert check.kind == "fields_present"
+        assert check.values == ("AT01", "ST")
+        assert check.values_from == ("ABC",)
+        assert "ABC" in check.description
+
+    def test_a_requirement_that_lists_its_attributes_is_unchanged(self) -> None:
+        """The path every OSL took before product codes existed."""
+        (check,) = derive_checks(self._rule(values=("AT01", "ST")))
+        assert check.kind == "fields_present"
+        assert check.values == ("AT01", "ST")
+        assert check.values_from == ()
+
+    def test_attributes_listed_beside_a_code_are_asked_for_once(self) -> None:
+        """ "AT01 plus everything in ABC" asks for AT01 once, in the order it was said."""
+        (check,) = derive_checks(
+            self._rule(values=("AT01", "AGE"), product_codes=("ABC",)), self._catalogue()
+        )
+        assert check.values == ("AT01", "AGE", "ST")
+
+    def test_an_undefined_code_becomes_its_own_check_and_never_an_empty_one(self) -> None:
+        """The answer that matters most: "check everything in ZZZ" must not pass."""
+        checks = derive_checks(self._rule(product_codes=("ABC", "ZZZ")), self._catalogue())
+        kinds = {c.kind for c in checks}
+        assert kinds == {"fields_present", "unknown_product_code"}
+        unknown = next(c for c in checks if c.kind == "unknown_product_code")
+        assert unknown.field_name == "ZZZ"
+
+    def test_a_code_with_no_catalogue_at_all_is_reported_not_dropped(self) -> None:
+        """What every caller had before the catalogue was passed in."""
+        (check,) = derive_checks(self._rule(product_codes=("ABC",)))
+        assert check.kind == "unknown_product_code"
+        assert check.field_name == "ABC"

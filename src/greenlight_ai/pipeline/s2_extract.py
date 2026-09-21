@@ -15,10 +15,11 @@ from greenlight_ai.llm.prompts.schemas import ExtractedRequirement, ExtractRespo
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.rules.normalize import normalize_states, parse_number
+from greenlight_ai.rules.product_codes import ProductCatalogue
 from greenlight_ai.parsers.base import OSL_KIND
 from greenlight_ai.rules.schema import SET_TYPES, Action, AppliesTo, Condition, Rule
 
-__all__ = ["normalize_elements", "normalize_response", "run", "to_rule"]
+__all__ = ["expand_product_codes", "normalize_elements", "normalize_response", "run", "to_rule"]
 
 _LOG: Final = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ _REQUIREMENT_KEYS: Final[frozenset[str]] = frozenset(
         "req_type",
         "conditions",
         "values",
+        "product_codes",
         "mode",
         "steps",
         "quantity",
@@ -47,6 +49,18 @@ _CONDITION_KEYS: Final[frozenset[str]] = frozenset({"field_name", "operator", "v
 
 #: Synonyms a real model uses for ``values``; the first one present wins.
 _VALUE_SYNONYMS: Final[tuple[str, ...]] = ("values", "fields", "attributes", "items", "states")
+
+#: Synonyms a real model uses for ``product_codes`` (Phase 6.22c); the first one
+#: present wins. ``model`` is here because in OSL prose that is exactly the word for a
+#: product code — which is why the codebase never uses it for one (the vocabulary table
+#: in ``docs/phase-6.22.md``).
+_CODE_SYNONYMS: Final[tuple[str, ...]] = (
+    "product_codes",
+    "product_code",
+    "codes",
+    "models",
+    "model",
+)
 
 #: Synonyms for a condition's ``field_name``.
 _FIELD_SYNONYMS: Final[tuple[str, ...]] = ("field_name", "field", "attribute", "name")
@@ -141,13 +155,56 @@ def run(context: RunContext) -> None:
             if rule is not None:
                 rules.append(rule)
 
-    context.rules = rules
+    context.rules = [expand_product_codes(rule, context.product_codes) for rule in rules]
     _LOG.info(
         "run %s stage 2: %d requirements, %d below the confidence floor",
         context.run_id,
         len(rules),
         sum(1 for r in rules if r.is_low_confidence),
     )
+
+
+def expand_product_codes(rule: Rule, catalogue: ProductCatalogue) -> Rule:
+    """Put the attributes a named product code stands for into the rule's values.
+
+    Done once, here, rather than at each check. A requirement that says *"deliver all
+    attributes from ABC"* and one that lists those attributes state the same thing, and
+    every stage after this should see the same rule for both — stage 5 comparing it
+    with the config, stage 6 deciding whether a config element is covered by anything
+    the OSL asked for, and stage 7 checking the reports. Expanding only where a check
+    happens would leave the reverse pass calling a correctly implemented config element
+    "extra", which is precisely what it did before this function existed.
+
+    The codes stay on the rule after expansion. They are what the *unknown* code check
+    reports on, what the "beyond the code" note measures against, and what a reviewer
+    reads to understand why an attribute is being asked for at all.
+
+    Expansion is a lookup, not a reading: ADR-061 keeps it in code, and an unknown code
+    contributes nothing here and is reported by the check instead.
+
+    Args:
+        rule: The extracted requirement.
+        catalogue: The codes in force for this run.
+
+    Returns:
+        The rule with the expanded attributes in ``values``, or the rule unchanged when
+        it names no code — which is every requirement on a deployment that defines none.
+    """
+    if rule.req_type != "attributes" or not rule.product_codes:
+        return rule
+    expanded = catalogue.expand(rule.product_codes).attributes
+    if not expanded:
+        return rule
+    values = tuple(dict.fromkeys(rule.values + expanded))
+    if values == rule.values:
+        return rule
+    _LOG.info(
+        "rule %s: product code(s) %s expanded to %d attribute(s)",
+        rule.rule_id,
+        ", ".join(rule.product_codes),
+        len(expanded),
+    )
+    return rule.model_copy(update={"values": values})
 
 
 def normalize_response(data: object) -> dict[str, Any]:
@@ -239,6 +296,18 @@ def _normalize_requirement(item: dict[str, Any]) -> dict[str, Any] | None:
         if key in item:
             out["values"] = _as_str_list(item[key])
             break
+
+    # Product codes an ``attributes`` requirement names instead of listing fields
+    # (Phase 6.22c). Read only for that type: a "model" on a geography requirement is
+    # the model inventing a key, not a product code, and expanding it would put
+    # attribute names into a state list.
+    if req_type == "attributes":
+        for key in _CODE_SYNONYMS:
+            if key in item:
+                codes = _as_str_list(item[key])
+                if codes:
+                    out["product_codes"] = codes
+                break
 
     conditions = item.get("conditions")
     if isinstance(conditions, dict):
@@ -351,6 +420,15 @@ def to_rule(
     elif extracted.req_type in SET_TYPES:
         values = tuple(v.strip() for v in extracted.values if v.strip())
 
+    # Codes are carried verbatim. What they contain is looked up by code at check
+    # time, against the catalogue this run snapshotted — never read from the model,
+    # and never expanded here where the catalogue is not in scope (ADR-061).
+    product_codes: tuple[str, ...] = ()
+    if extracted.req_type == "attributes":
+        product_codes = tuple(
+            dict.fromkeys(code.strip() for code in extracted.product_codes if code.strip())
+        )
+
     conditions: list[Condition] = []
     for raw in extracted.conditions:
         value: object = raw.value
@@ -374,6 +452,7 @@ def to_rule(
             req_type=extracted.req_type,
             conditions=tuple(conditions),
             values=values,
+            product_codes=product_codes,
             mode=extracted.mode or ("include" if extracted.req_type in SET_TYPES else None),
             steps=tuple(extracted.steps),
             quantity=extracted.quantity,

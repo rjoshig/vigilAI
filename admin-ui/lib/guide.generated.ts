@@ -257,7 +257,7 @@ export const GUIDE: GuideSection[] = [
         "kind": "text",
         "spans": [
           {
-            "text": "Five things are worth your time, and they are not equally worth it. In order:"
+            "text": "Six things are worth your time, and they are not equally worth it. In order:"
           }
         ]
       },
@@ -266,11 +266,27 @@ export const GUIDE: GuideSection[] = [
         "items": [
           [
             {
+              "text": "Accepting attribute suggestions.",
+              "bold": true
+            },
+            {
+              "text": " After a run, Reference data lists what the tool worked out that delivery calls each attribute it could not locate — mostly read straight out of the uploaded record layout, in code, with no AI involved. Each one you accept resolves that name in code on every later run of that configuration, and turns a requirement nothing checked into a requirement that is checked. It is clicking, not writing, which is why it is first."
+            }
+          ],
+          [
+            {
               "text": "Worked examples.",
               "bold": true
             },
             {
-              "text": " One example of a judgement the tool got wrong, at the stage it got it wrong, changes its answers on every run afterwards. Nothing else you can do has that reach for that little effort."
+              "text": " One example of a judgement the tool got wrong, at the stage it got it wrong, changes its answers on every run afterwards. Nothing else you "
+            },
+            {
+              "text": "write",
+              "italic": true
+            },
+            {
+              "text": " has that reach for that little effort."
             }
           ],
           [
@@ -304,7 +320,7 @@ export const GUIDE: GuideSection[] = [
               "bold": true
             },
             {
-              "text": " Background the tool should carry into every run of that programme. Useful, bounded, and read as background rather than as a rule — which is also why it is fourth: it informs answers rather than deciding them."
+              "text": " Background the tool should carry into every run of that programme. Useful, bounded, and read as background rather than as a rule — which is also why it is fifth: it informs answers rather than deciding them."
             }
           ],
           [
@@ -644,6 +660,18 @@ export const GUIDE: GuideSection[] = [
           [
             {
               "text": "Confirm the artifact types still match what customers actually send; add a sample for any layout that surprised the detector."
+            }
+          ],
+          [
+            {
+              "text": "Clear the attribute suggestions. Each one is a name the tool had to work out and will have to work out again on the next delivery. Watch "
+            },
+            {
+              "text": "attribute lookups per run",
+              "bold": true
+            },
+            {
+              "text": " on Usage while you do it: if that number is not falling, the suggestions are not the ones the runs actually need, and the thing to look at is which attributes keep coming back rather than the number itself."
             }
           ]
         ]

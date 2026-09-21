@@ -26,6 +26,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from greenlight_ai.db import models
+from greenlight_ai.parsers.record_layout import RecordLayoutDocument
 from greenlight_ai.rules.schema import Rule
 
 __all__ = [
@@ -33,7 +34,9 @@ __all__ = [
     "ConfigChange",
     "Drift",
     "FindingRef",
+    "RecordLayoutChange",
     "RequirementChange",
+    "diff_record_layout",
     "compute_drift",
     "diff_config",
     "diff_findings",
@@ -83,6 +86,23 @@ class ConfigChange:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordLayoutChange:
+    """One field whose declared shape differs between the two deliveries (6.22b).
+
+    Attributes:
+        name: The field, spelled as the layout that carries it spells it.
+        change: ``added``, ``removed``, ``retyped``, ``resized`` or ``moved``.
+        before: The shape or position last time.
+        after: The shape or position this time.
+    """
+
+    name: str
+    change: str
+    before: str = ""
+    after: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Drift:
     """What changed since the previous finalized run of the same configuration."""
 
@@ -100,6 +120,13 @@ class Drift:
     #: (Phase 6.11c). Coverage going backwards is not a finding on its own, and it
     #: is exactly the thing nobody notices: the findings list looks the same.
     newly_unchecked: tuple[str, ...] = ()
+    #: Fields the record layout gained, lost, retyped, resized or moved since the
+    #: previous delivery (Phase 6.22b). A layout change is the single most consequential
+    #: thing that can happen to a delivery and the one least likely to be mentioned: the
+    #: findings list looks the same, and a column has quietly become nine characters
+    #: instead of ten. Never a finding on its own — it is what changed, for a reviewer
+    #: to judge.
+    record_layout: tuple[RecordLayoutChange, ...] = ()
     previous_config_version: int | None = None
     config_version: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
@@ -390,6 +417,69 @@ def _rules(session: Session, run_id: int) -> list[Rule]:
     return [Rule(**row.rule) for row in rows]
 
 
+def diff_record_layout(run: models.Run, previous: models.Run) -> tuple[RecordLayoutChange, ...]:
+    """What changed in the delivered record's shape since the previous delivery.
+
+    Matched on the field name up the ladder, so a layout that respells a field is not
+    reported as one field removed and another added — which is the wrong answer and
+    the loud one. Pure code, like the rest of drift (ADR-030).
+
+    Args:
+        run: This run, whose ``record_layout`` snapshot is read.
+        previous: The previous finalized run of the same configuration.
+
+    Returns:
+        The changes, added and removed fields first and then the fields whose shape or
+        position moved, each in record order. Empty when either run carried no layout,
+        because "unknown" is not "unchanged".
+    """
+    before = RecordLayoutDocument.from_rows(previous.record_layout)
+    after = RecordLayoutDocument.from_rows(run.record_layout)
+    if not before.fields or not after.fields:
+        return ()
+
+    changes: list[RecordLayoutChange] = []
+    matched: set[str] = set()
+    for now in after.fields:
+        was = before.field(now.name)
+        if was is None:
+            changes.append(RecordLayoutChange(name=now.name, change="added", after=now.shape))
+            continue
+        matched.add(was.name)
+        if was.data_type != now.data_type:
+            changes.append(
+                RecordLayoutChange(
+                    name=now.name,
+                    change="retyped",
+                    before=was.data_type,
+                    after=now.data_type,
+                )
+            )
+        elif was.size != now.size:
+            # Only when the type held: a field that changed both is one change, and
+            # naming it twice would double-count the same edit on the panel.
+            changes.append(
+                RecordLayoutChange(name=now.name, change="resized", before=was.size, after=now.size)
+            )
+        if was.ordinal != now.ordinal:
+            changes.append(
+                RecordLayoutChange(
+                    name=now.name,
+                    change="moved",
+                    before=f"position {was.ordinal}",
+                    after=f"position {now.ordinal}",
+                )
+            )
+
+    removed = [
+        RecordLayoutChange(name=gone.name, change="removed", before=gone.shape)
+        for gone in before.fields
+        if gone.name not in matched
+    ]
+    ordered = [c for c in changes if c.change == "added"] + removed
+    return tuple(ordered + [c for c in changes if c.change != "added"])
+
+
 def compute_drift(session: Session, run: models.Run) -> Drift:
     """Compare a run with the previous finalized run of its configuration.
 
@@ -425,6 +515,7 @@ def compute_drift(session: Session, run: models.Run) -> Drift:
         previous_config.content if previous_config else None,
     )
     newly_unchecked = diff_coverage(run, previous)
+    record_layout = diff_record_layout(run, previous)
     verdict = ""
     report = session.execute(
         sa.select(models.FinalReport.verdict)
@@ -435,7 +526,7 @@ def compute_drift(session: Session, run: models.Run) -> Drift:
         verdict = str(report)
     _LOG.info(
         "run %d drift against run %d: %d new, %d resolved, %d carried, "
-        "%d requirement(s), %d config path(s)",
+        "%d requirement(s), %d config path(s), %d record-layout change(s)",
         run.id,
         previous.id,
         len(new),
@@ -443,6 +534,7 @@ def compute_drift(session: Session, run: models.Run) -> Drift:
         len(carried),
         len(requirements),
         len(config),
+        len(record_layout),
     )
     return Drift(
         previous_run_id=previous.id,
@@ -456,4 +548,5 @@ def compute_drift(session: Session, run: models.Run) -> Drift:
         previous_config_version=previous_config.version if previous_config else None,
         config_version=current_config.version if current_config else None,
         newly_unchecked=newly_unchecked,
+        record_layout=record_layout,
     )

@@ -78,6 +78,30 @@ The platform team, with the administrator.
 - [ ] **A decision on the compliance locator's model call.** It runs only where the
       deterministic match has already failed, and it costs one call per unmatched rule.
       It ships on, and the run statistics say what it costs (Phase 6.16b).
+- [ ] **The attribute dictionary seeded, and a decision on the lookup cap**
+      (Phase 6.22d). Two questions, and they belong together. First: is there a data
+      dictionary to seed from? `design.md` has carried that open question since Phase 0
+      and Reference data is where the answer lands. If there is one, load it; if there
+      is not, the tool fills it itself — the first real deliveries propose what each
+      artifact calls each attribute, mostly read out of the record layout in code at no
+      model call, and an administrator accepts them. Second:
+      `llm.max_attribute_calls_per_run` ships at 20 and is a **soft** limit — past it a
+      run stops asking and names what it did not look for, and nothing is refused.
+      Watch `runs.attribute_locate_calls` through UAT. **The number should fall towards
+      zero as the dictionary fills**; if it does not, the suggestions being accepted are
+      not the ones the runs need, and the thing to look at is which attributes keep
+      recurring.
+- [ ] **A decision on asking submitters for the record layout** (Phase 6.22b). It is
+      optional by design and stays optional: a delivery without one is checked exactly
+      as it was before the artifact existed. But it is the cheapest source the
+      dictionary has, and it is the only artifact that can show a field the delivered
+      file ships that nothing measured. Decide whether the delivery teams are asked for
+      it as a matter of course, and say so in the intake questionnaire.
+- [ ] **Product codes recorded, if the orders use them** (Phase 6.22c). An OSL that
+      says *"all attributes from ABC"* needs ABC defined in Reference data before it
+      runs: an undefined code is a **high-severity finding** and not a silent pass,
+      which is deliberate, but it is a finding nobody needs to see twice. Ask during
+      intake whether orders are written that way.
 - [ ] Phase 6.11 landed before UAT: the bulk-OK defect fixed, the finalize gate
       fail-closed with the attestation, coverage on the review screen and the report,
       and the benchmark harness reporting precision and recall per finding type.
@@ -237,33 +261,45 @@ without an answer is a risk with a name.
    and who set it?
 7. Is anything out of scope for the tool that a user might expect it to check?
 
+**The vocabulary the tool has to learn**
+8. Is there an attribute data dictionary — a list of what each field is called in the
+   OSL, the configuration and each report? This is the question `design.md` has carried
+   since Phase 0. If there is one, it is loaded before stage 1 and most of the tool's
+   "could not tell which column this is" findings never happen.
+9. Do the orders name **product codes** (*"all attributes from ABC"*) rather than
+   listing fields? If so, which codes, and where is the list of what each contains?
+   A code the tool does not know is a high-severity finding by design.
+10. Does the delivery come with a **record layout** — the file's own schema of field
+    names, types and sizes? It is optional, and it is the cheapest way the tool learns
+    a customer's vocabulary. Decide whether it is asked for as a matter of course.
+
 **Support and failure**
-8. Where does a user go with a question, by name and channel?
-9. What does a team do for a shift when the tool is down?
-10. What is the response time for an S1 at 02:00 in that region?
-11. Who is told when a delivery went out that the tool passed and should not have?
+11. Where does a user go with a question, by name and channel?
+12. What does a team do for a shift when the tool is down?
+13. What is the response time for an S1 at 02:00 in that region?
+14. Who is told when a delivery went out that the tool passed and should not have?
 
 **Change**
-12. Who may change settings and rules in production, and is that audited?
-13. Who patches, on what rhythm, and who approves a hotfix?
-14. Who ranks feature requests, and how does a user submit one?
-15. What is the release rhythm, and which region takes a release first?
+15. Who may change settings and rules in production, and is that audited?
+16. Who patches, on what rhythm, and who approves a hotfix?
+17. Who ranks feature requests, and how does a user submit one?
+18. What is the release rhythm, and which region takes a release first?
 
 **Data and compliance**
-16. What is the retention period, who approved it, and is it an ADR?
-17. Has security and compliance signed off on masked columns and the tripwire?
-18. Where do the database, the data volume, and the master key get backed up, and
+19. What is the retention period, who approved it, and is it an ADR?
+20. Has security and compliance signed off on masked columns and the tripwire?
+21. Where do the database, the data volume, and the master key get backed up, and
     when was a restore last tested?
-19. Is the model gateway in-house, and has anyone confirmed what it logs?
+22. Is the model gateway in-house, and has anyone confirmed what it logs?
 
 **People**
-20. Who are the senior associates for stage 3, and is their time protected?
-21. Who delivers the training, and when is the first session?
-22. What is the plan for the person who refuses to use it?
+23. Who are the senior associates for stage 3, and is their time protected?
+24. Who delivers the training, and when is the first session?
+25. What is the plan for the person who refuses to use it?
 
 **Acceptance**
-23. Who signs the acceptance for each scope?
-24. What would make the product owner stop the rollout, in one sentence?
+26. Who signs the acceptance for each scope?
+27. What would make the product owner stop the rollout, in one sentence?
 
 ### Answers
 

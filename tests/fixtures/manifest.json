@@ -15,6 +15,7 @@
         "counts": "cases/baseline_match/reports/counts.xlsx",
         "billing": "cases/baseline_match/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -36,7 +37,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "geography_extra_state",
@@ -53,6 +57,7 @@
         "counts": "cases/geography_extra_state/reports/counts.xlsx",
         "billing": "cases/geography_extra_state/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -80,7 +85,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "score_value_mismatch",
@@ -97,6 +105,7 @@
         "counts": "cases/score_value_mismatch/reports/counts.xlsx",
         "billing": "cases/score_value_mismatch/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -121,7 +130,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "rule_missing_in_config",
@@ -138,6 +150,7 @@
         "counts": "cases/rule_missing_in_config/reports/counts.xlsx",
         "billing": "cases/rule_missing_in_config/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -161,7 +174,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "attributes_missing_in_report",
@@ -178,6 +194,7 @@
         "counts": "cases/attributes_missing_in_report/reports/counts.xlsx",
         "billing": "cases/attributes_missing_in_report/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -201,7 +218,195 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
+    },
+    {
+      "name": "attribute_renamed",
+      "description": "A correct delivery whose DIRT spells every attribute the long way the source system does. Nothing is wrong with it.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10011",
+      "configuration_id": "CFG-SYNTH-RENAME-11",
+      "osl": "cases/attribute_renamed/osl.docx",
+      "config": "cases/attribute_renamed/config.json",
+      "reports": {
+        "dirt": "cases/attribute_renamed/reports/dirt.xlsx",
+        "state_distribution": "cases/attribute_renamed/reports/state_distribution.xlsx",
+        "field_distribution": "cases/attribute_renamed/reports/field_distribution.xlsx",
+        "counts": "cases/attribute_renamed/reports/counts.xlsx",
+        "billing": "cases/attribute_renamed/reports/billing.xlsx"
+      },
+      "record_layout": "cases/attribute_renamed/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "attribute_not_resolved"
+        ],
+        "unevidenced": 5
+      },
+      "programme": "",
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
+    },
+    {
+      "name": "record_layout_supplied",
+      "description": "A correct delivery that ships its record layout, headed the way a real layout workbook is headed rather than the way the parser asks. It also declares two fields the OSL never asked for.",
+      "customer": "Northwind Lending",
+      "order_number": "ORD-10018",
+      "configuration_id": "CFG-SYNTH-LAYOUT-18",
+      "osl": "cases/record_layout_supplied/osl.docx",
+      "config": "cases/record_layout_supplied/config.json",
+      "reports": {
+        "dirt": "cases/record_layout_supplied/reports/dirt.xlsx",
+        "state_distribution": "cases/record_layout_supplied/reports/state_distribution.xlsx",
+        "field_distribution": "cases/record_layout_supplied/reports/field_distribution.xlsx",
+        "counts": "cases/record_layout_supplied/reports/counts.xlsx",
+        "billing": "cases/record_layout_supplied/reports/billing.xlsx"
+      },
+      "record_layout": "cases/record_layout_supplied/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
+    },
+    {
+      "name": "product_code_named",
+      "description": "An OSL that names a product code instead of listing the attributes, plus one code the catalogue does not define. The delivery also carries two fields the code never listed.",
+      "customer": "Acme Card Services",
+      "order_number": "ORD-10019",
+      "configuration_id": "CFG-SYNTH-PRODUCT-19",
+      "osl": "cases/product_code_named/osl.docx",
+      "config": "cases/product_code_named/config.json",
+      "reports": {
+        "dirt": "cases/product_code_named/reports/dirt.xlsx",
+        "state_distribution": "cases/product_code_named/reports/state_distribution.xlsx",
+        "field_distribution": "cases/product_code_named/reports/field_distribution.xlsx",
+        "counts": "cases/product_code_named/reports/counts.xlsx",
+        "billing": "cases/product_code_named/reports/billing.xlsx"
+      },
+      "record_layout": "cases/product_code_named/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "report_violates_rule"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": "",
+      "product_code": "ABC",
+      "unknown_product_codes": [
+        "DEF"
+      ],
+      "product_code_attributes": [
+        "SCORE_V3",
+        "AGE",
+        "ST",
+        "REV_UTIL",
+        "OPEN_TRADES",
+        "INQ_6M",
+        "TOT_BAL",
+        "DELQ_30"
+      ]
+    },
+    {
+      "name": "layout_declares_more_than_the_dirt",
+      "description": "The record layout declares an attribute the OSL asks for and the DIRT never reports on. The delivered file ships the field and nothing measured it \u2014 the one case the DIRT alone cannot show.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10020",
+      "configuration_id": "CFG-SYNTH-UNMEASURED-20",
+      "osl": "cases/layout_declares_more_than_the_dirt/osl.docx",
+      "config": "cases/layout_declares_more_than_the_dirt/config.json",
+      "reports": {
+        "dirt": "cases/layout_declares_more_than_the_dirt/reports/dirt.xlsx",
+        "state_distribution": "cases/layout_declares_more_than_the_dirt/reports/state_distribution.xlsx",
+        "field_distribution": "cases/layout_declares_more_than_the_dirt/reports/field_distribution.xlsx",
+        "counts": "cases/layout_declares_more_than_the_dirt/reports/counts.xlsx",
+        "billing": "cases/layout_declares_more_than_the_dirt/reports/billing.xlsx"
+      },
+      "record_layout": "cases/layout_declares_more_than_the_dirt/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "report_violates_rule"
+        ],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "counts_do_not_reconcile",
@@ -218,6 +423,7 @@
         "counts": "cases/counts_do_not_reconcile/reports/counts.xlsx",
         "billing": "cases/counts_do_not_reconcile/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -241,7 +447,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "operator_boundary_drift",
@@ -258,6 +467,7 @@
         "counts": "cases/operator_boundary_drift/reports/counts.xlsx",
         "billing": "cases/operator_boundary_drift/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -281,7 +491,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "extra_config_filter",
@@ -298,6 +511,7 @@
         "counts": "cases/extra_config_filter/reports/counts.xlsx",
         "billing": "cases/extra_config_filter/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -321,7 +535,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "report_violates_state_rule",
@@ -338,6 +555,7 @@
         "counts": "cases/report_violates_state_rule/reports/counts.xlsx",
         "billing": "cases/report_violates_state_rule/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -362,7 +580,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "missing_waterfall_step",
@@ -379,6 +600,7 @@
         "counts": "cases/missing_waterfall_step/reports/counts.xlsx",
         "billing": "cases/missing_waterfall_step/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -402,7 +624,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "reordered_waterfall",
@@ -419,6 +644,7 @@
         "counts": "cases/reordered_waterfall/reports/counts.xlsx",
         "billing": "cases/reordered_waterfall/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -442,7 +668,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "missing_state_in_config",
@@ -459,6 +688,7 @@
         "counts": "cases/missing_state_in_config/reports/counts.xlsx",
         "billing": "cases/missing_state_in_config/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -480,7 +710,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "unevidenced_requirement",
@@ -497,6 +730,7 @@
         "counts": "cases/unevidenced_requirement/reports/counts.xlsx",
         "billing": "cases/unevidenced_requirement/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -518,7 +752,10 @@
         "unevidenced": 1
       },
       "programme": "AS",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "report_nothing_checks",
@@ -536,6 +773,7 @@
         "billing": "cases/report_nothing_checks/reports/billing.xlsx",
         "segment_summary": "cases/report_nothing_checks/reports/segment_summary.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -557,7 +795,10 @@
         "unevidenced": 0
       },
       "programme": "AM",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "credit_date_not_in_reports",
@@ -574,6 +815,7 @@
         "counts": "cases/credit_date_not_in_reports/reports/counts.xlsx",
         "billing": "cases/credit_date_not_in_reports/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -597,7 +839,10 @@
         "unevidenced": 0
       },
       "programme": "",
-      "credit_date": "2026-07-15"
+      "credit_date": "2026-07-15",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     },
     {
       "name": "layout_drift",
@@ -614,6 +859,7 @@
         "counts": "cases/layout_drift/reports/counts.xlsx",
         "billing": "cases/layout_drift/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -635,7 +881,10 @@
         "unevidenced": 1
       },
       "programme": "",
-      "credit_date": ""
+      "credit_date": "",
+      "product_code": "",
+      "unknown_product_codes": [],
+      "product_code_attributes": []
     }
   ]
 }

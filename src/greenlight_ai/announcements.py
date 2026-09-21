@@ -74,6 +74,7 @@ def validate(
     starts_at: dt.datetime,
     ends_at: dt.datetime,
     exclude_id: int | None = None,
+    now: dt.datetime | None = None,
 ) -> None:
     """Check a notice before it is stored.
 
@@ -85,6 +86,10 @@ def validate(
         starts_at: When it begins showing.
         ends_at: When it stops.
         exclude_id: A row being edited, which should not count against the limit.
+        now: The moment to measure expiry against, injectable so a test does not wait
+            and does not depend on the wall clock — the same parameter, for the same
+            reason, as :func:`showing_now`. Omitting it reads the clock, which is what
+            every caller in the product does.
 
     Raises:
         AnnouncementError: When the text is empty or too long, the level or audience
@@ -110,7 +115,7 @@ def validate(
         .select_from(models.Announcement)
         .where(
             models.Announcement.is_active.is_(True),
-            models.Announcement.ends_at > utcnow(),
+            models.Announcement.ends_at > (now or utcnow()),
         )
     )
     if exclude_id is not None:

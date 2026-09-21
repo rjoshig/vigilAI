@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `feature/phase-6.23c`, pushed, stacked on `feature/phase-6.23a`. **6.23a and 6.23c are complete**: a clone now lands on the New run form prefilled and can be edited, submitted or discarded. **Next concrete action: 6.23b** (remove the Re-check control, make the automatic re-check visible) and **6.23e** (the report column). Previously: `feature/phase-6.23a`, pushed. **Phase 6.23 is specified** ([`phase-6.23.md`](phase-6.23.md)) and **6.23a is complete** (ADR-063, ADR-066): the closed status set, one guard that stops a re-check rewriting a finalized run, a finalize gate that stops calling an empty draft ready to freeze, and the summary a re-check used to erase. **Next concrete action: 6.23b**, removing the Re-check control and making the automatic re-check visible. Previously: `feature/phase-6.22a`, pushed. **Phase 6.22 is specified** ([`phase-6.22.md`](phase-6.22.md)) and **6.22a is complete** (ADR-059): an attribute name code cannot resolve is a `review` record, not a high-severity violation — measured one high finding before, zero after. **Next concrete action: 6.22b**, the record layout as a fourth artifact. Also landed: `fix/seed-demo-grace-window`, which repaired `scripts/seed_demo.py` (it crashed on the `role` column 6.20 dropped, then reported outcomes it had not reached); nothing in `tests/` covers that script. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)) and **phase 8 is specified** ([`phase-8.md`](phase-8.md)), queued behind it; 6.21's one open criterion — what guided decoding buys — needs a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After 6.22, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)). `test_announcements.py::...::test_a_sixth_notice_is_refused_with_the_reason` fails on clean `dev` and needs its own look |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **6.23a and 6.23c complete**; **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
+| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 6.22 is complete** ([`phase-6.22.md`](phase-6.22.md), ADR-059 to ADR-062): the record layout as an optional fourth artifact, product codes expanded in code, the attribute dictionary as the ladder's fourth rung with a soft cap on the fifth, one alarm between the DIRT and the layout, and a suggestion rail that closes the loop. 6.22c keeps two items open and says why under its heading — a bulk master-file upload, and how a code reads in real OSL prose, which is [`phase-7.md`](phase-7.md)'s. **Next concrete action: 6.23b** (remove the Re-check control, make the automatic re-check visible) and **6.23e** (the report column), which is where `main` was. After that, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -31,6 +31,24 @@ are open and each needs somebody other than a session:
   endpoint to guide, so the number can only be read the first time this runs against a
   real model. Every call already records whether the schema was sent; it belongs to
   [`phase-7.md`](phase-7.md)'s bootstrap, where the baseline is taken anyway.
+
+**Two defects `main` was carrying, both fixed on this branch.**
+`announcements.validate` counted its five-notice limit against the wall clock while its
+tests seeded notices around a frozen `NOW`, so
+`test_a_sixth_notice_is_refused_with_the_reason` was green the morning it was written and
+red that afternoon — which is how it came to be failing on clean `dev`. The moment is an
+argument now, as `showing_now` has always taken one. And the draft-edit endpoint read
+every artifact off the raw multipart form and never closed it, leaking a spooled
+temporary file per upload; `test_draft_runs.py`'s four upload tests were failing on
+`origin/main` before this branch touched them. Both endpoints close their form now.
+
+**Two silent defects this phase uncovered, neither of them its subject.**
+`context.resolver` was **never assigned** — stage 7 built its resolver in a local and
+`save_context` read the context's, which was always `None`. So every run since 6.21b has
+stored an empty `layout_suggestions` list however much the model had to reason about: the
+suggest-then-accept rail ADR-054 describes has never once been offered something a real
+run found. And `drift_out` never filled `newly_unchecked`, computed since Phase 6.11c and
+never shown on a screen. Both are fixed.
 
 **A branch note.** `CLAUDE.md` says a branch never carries an agent or model name and a
 tool-assigned `claude/*` name is renamed before its first push. Phase 6.21 was built on a
@@ -3252,3 +3270,120 @@ Nothing in phase 8 is built, by design. The gate is the release: `v0.6.20` on `m
 titled *"Before the chatbot"*, once 6.21 has merged. It would be this repository's first
 tag — there are none today and no `CHANGELOG.md` — and the release notes should say so
 rather than implying a history that is not there.
+
+---
+
+### What was built on 2026-09-21 — Phase 6.22, complete
+
+**Branch:** `claude/eager-turing-8ay4w6`, pushed. **Status:** every part built, every
+acceptance criterion met. Six commits, plus a merge from `main`.
+
+The phase that answers the question `design.md` has carried since Phase 0: *is there an
+attribute data dictionary to seed the alias table?* This built the home for one, and the
+machinery that fills it when nobody has one.
+
+**6.22b — the record layout, a fourth artifact** (ADR-060). One row per delivered field
+with its name, data type and size, where the field name is what appears as the DIRT
+column. Optional and staying optional: a delivery without one is checked exactly as it
+was before the slot existed. Its own headings go up the ladder, so `Column Name` / `Type`
+/ `Length` is the same document as `Field name` / `Data type` / `Size`. Uploaded per run,
+promoted per configuration at **finalize** — a layout nobody has signed off is not yet
+that configuration's shape — and borrowed by a later run that uploads none, never
+silently: the run records which run and which date, and every finding resting on it says
+so. It feeds the drift card, matched up the ladder so a respelling is not one field lost
+and another gained.
+
+**6.22c — product codes** (ADR-061). An OSL says *"deliver all attributes from ABC"* or
+lists the fields; both reach the same check. The model reads only that a requirement
+named a code. Looking it up, deciding what it contains, and checking that it exists are
+lookups and comparisons, so they are code's. An undefined code **fails** rather than
+expanding to nothing, because "check everything in ABC" silently becoming "check nothing"
+passes the delivery for the worst possible reason. Carrying more than the code lists is a
+**low** note that says both reasons it matters: the extract may have over-pulled, and a
+field nobody asked for may be PII.
+
+**6.22d — the attribute dictionary** (ADR-062). Tables, not a JSON column: a bureau's
+vocabulary runs to thousands of terms with a spelling per artifact and provenance on
+each. It compiles into the ladder's **fourth rung** and changes nothing in `ladder.py`.
+It never picks — it hands the ladder alternates and the ladder still refuses when two
+candidates tie. The fifth rung is shown a deterministic shortlist and bounded by a
+**soft** cap: past it the run stops asking and names what it did not look for, and
+nothing is refused. The legacy alias table is superseded by a dual-run read, not a
+migration, with an explicit previewed copy for whoever wants to tidy up.
+
+**6.22e — what the layout lets us check.** Two artifacts now say what shipped, and they
+answer **once** between them. What the layout adds is the case the DIRT cannot show: a
+field the delivered file ships that nothing measured. The reverse does not fail — the
+DIRT reporting on something the layout omits means the delivery is right and the document
+is behind it.
+
+**6.22f — the loop closes.** A run proposes what the delivery calls each attribute it
+could not locate. Most proposals are read out of the **record layout in code, at no model
+call**, which is the record layout earning its place beyond being one more thing to
+check. Exactly one resembling field, or nothing: a tie is not an answer. Any user may
+propose a mapping while Train AI mode is on — the person who reads the DIRT every week is
+the one who knows — and a reviewer approves. What the model read does not come through
+that door; it stays a suggestion with its review record.
+
+**6.22g — the docs.** "Reconciles three things" became four in all four places that said
+it. `architecture.md` gained a `resolve/` row it had never had. Both training documents
+and both Guides rebuilt, with *accepting attribute suggestions* now first on "what
+improves the QC" — above writing anything, because it is clicking rather than writing.
+`gd-rollout-plan.md` gained three readiness items and three intake questions, one of
+which is the Phase 0 question itself.
+
+### Measured, not claimed
+
+Two acceptance criteria are numbers and both are asserted by counting calls. A run with
+an empty dictionary stays within its cap. The second run of a configuration whose
+spellings were recorded makes **zero** attribute lookups. And the whole loop was walked
+end to end: a run proposes, a person accepts, the next run's lookups fall — and the
+remainder is exactly the ties the record layout refused to guess at, which a person
+resolves by recording the term directly.
+
+One measurement changed a decision. Accepting a mapping for the one artifact it was seen
+in left 13 lookups on the next run; accepting it for **anywhere** left 4. So the accept
+defaults to anywhere, and a console offers the narrowing rather than imposing it.
+
+### Four defects found on the way, none of them this phase's subject
+
+- **`context.resolver` was never assigned.** Stage 7 built its resolver in a local and
+  `save_context` read the context's, which was always `None`. **Every run since 6.21b has
+  stored an empty `layout_suggestions` list** however much the model had to reason about;
+  ADR-054's suggest-then-accept rail has never once been offered something a real run
+  found.
+- **`drift_out` never filled `newly_unchecked`**, computed since Phase 6.11c and never
+  shown on a screen.
+- **`announcements.validate` counted its limit against the wall clock** while its tests
+  seeded notices around a frozen `NOW` — green the morning it was written, red that
+  afternoon, which is how it came to be failing on clean `dev`.
+- **The draft-edit endpoint leaked a spooled temporary file per upload.**
+  `test_draft_runs.py`'s four upload tests were failing on `origin/main` before this
+  branch touched them.
+
+### The merge from `main`
+
+`main` moved to 6.23a and 6.23c while this was being built. Three conflicts, all small.
+ADR numbers did not collide — `main` took 063 to 066 and left 060 to 062. No migrations
+on `main`, so the chain stays single-headed at `f5b7d9c1e3a6`.
+
+One resolution is an improvement rather than a reconciliation: the product-code snapshot
+moved into `_finish_submission`, beside the configuration-notes snapshot, so a draft
+submitted a week after it was cloned snapshots the catalogue **at submission** rather than
+at clone time — which is what ADR-061 says it should do and what the old placement would
+have got wrong once drafts existed.
+
+One acceptance criterion was overtaken. Criterion 6 said *"re-checking a **finalized**
+run"*; ADR-066 then refused that outright. The substance is unchanged and proved on
+`needs_review`, the only status a re-check now accepts, and the refusal is proved too.
+
+### Pending
+
+**6.22c keeps two items open**, both labelled under its heading and neither of them work
+a session can finish: a bulk master-file upload (the phase's own "Out of scope" already
+defers the dictionary's for the same reason — no import precedent exists anywhere in the
+product), and how a product code is recognised in real OSL prose, which only real orders
+can tune. `phase-7.md` now carries both, plus a per-artifact table for the record layout.
+
+**Next: 6.23b and 6.23e**, which is where `main` was — remove the Re-check control and
+make the automatic re-check visible, then the report column.

@@ -138,6 +138,20 @@ Per report type, and there may be types the tool does not know yet:
 | Identifying columns | The shipped masked-column patterns cover them | A column called `MEMBER_REF` or `HOUSEHOLD_ID` that nothing masks |
 | Size | Sheets fit the 100,000-row cap | A DIRT ships every delivered row |
 
+### The record layout (`.xlsx`) · `parsers/record_layout.py`
+
+The fourth artifact, and the only optional one (ADR-060). It arrives last in the design
+and first in a real delivery: it is the document that says what the file actually
+contains.
+
+| Look at | Today's assumption | Breaks if |
+| --- | --- | --- |
+| Column headings | `Field name`, `Data type`, `Size`, plus the alternates the parser carries | The real workbook heads them something none of those reach — add the spelling to `FIELD_NAME_HEADERS` and friends, which is a one-line change by design |
+| Where the layout sits | The first sheet whose header row resolves a field-name column; a cover sheet before it is skipped | The layout is split across sheets, one per record type or per segment |
+| One row per field | Each row is a field | Repeating groups, or a field described across two rows (a name and then its picture clause) |
+| Size | A single width, e.g. `10` or `9,2` | Widths and precisions sit in separate columns, or an offset/length pair replaces them |
+| Whether it exists at all | Optional; a delivery without one is checked as it always was | It turns out to be the *primary* description of a delivery, in which case its optionality is a decision to revisit — not a defect to patch |
+
 **Masking is the urgent one.** Walk every column header in the real DIRT and decide,
 explicitly, whether each is identifying. Anything missed is a value that reaches a
 finding, a report, and a prompt. This is the single highest-risk item in the phase.
@@ -200,6 +214,27 @@ detail.
 - [ ] Aliases: seeded from the data dictionary, or from the field names the first runs
       fail to resolve.
 - [ ] Named values and checks: the real cell locations behind the admin checks.
+- [ ] **Product codes, as real OSL prose writes them** (Phase 6.22c). The extraction
+      prompt recognises *"all attributes from ABC"*, *"the ABC package"* and *"product
+      code ABC"*. How a real order actually words it can only be read off real orders:
+      collect the wordings, add the ones that recur to the prompt's examples, and bump
+      its version. A wording the model misses produces an `attributes` requirement with
+      no values rather than a wrong one, so the failure is visible and safe — but it is
+      still a requirement nobody checked.
+- [ ] **What real deliveries carry beyond their product code** (Phase 6.22c). The tool
+      raises a low-severity note naming the attributes a delivery ships that the named
+      code does not list, for two reasons: the extract may have pulled more than the
+      order asked for, and a field nobody asked for may be personal data. Only real
+      deliveries say how many of those are routine technical fields. If every run
+      carries the same handful, they belong in the code's member list or in a list of
+      fields the note ignores — decided here, with the numbers in front of you, and
+      **not** by quietly widening the note until it says nothing.
+- [ ] **The record layout and the dictionary, seeded from each other** (Phases 6.22b,
+      6.22d). The first real delivery that carries a layout proposes a mapping for every
+      attribute the tool cannot resolve, in code and at no model call. Accepting those is
+      the cheapest way the dictionary will ever be filled, and it is worth doing before
+      the alias table is seeded by hand — measure `runs.attribute_locate_calls` before
+      and after, because that number is the whole claim.
 
 **Validation** · ⬜ not started
 - [ ] A real set runs end to end and a person who knows the delivery agrees with the

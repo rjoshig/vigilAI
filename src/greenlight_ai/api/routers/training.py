@@ -29,6 +29,7 @@ from greenlight_ai.api.deps import (
     require_training,
 )
 from greenlight_ai.api.schemas_training import (
+    AttributeMapping,
     CandidateDecision,
     CandidateOut,
     ConfigNoteIn,
@@ -45,8 +46,11 @@ from greenlight_ai.api.schemas_training import (
     SynthesizeIn,
     TrainingConfigOut,
 )
+from greenlight_ai import scopes
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import models, repository
+from greenlight_ai.db.types import utcnow
+from greenlight_ai.resolve import squashed
 from greenlight_ai.db.queue import JobQueue
 from greenlight_ai.training import conflicts
 from greenlight_ai.llm.factory import build_client
@@ -120,6 +124,7 @@ def _observation_out(
         rule_state=facts.state if facts else "",
         id=row.id,
         kind=row.kind,  # type: ignore[arg-type]
+        mapping=AttributeMapping.model_validate(row.mapping) if row.mapping else None,
         anchors=list(row.anchors or []),
         statement=row.statement,
         expectation=row.expectation,
@@ -238,6 +243,7 @@ def create_observation(
         author_user_id=user.id,
         author=user.name,
         kind=payload.kind,
+        mapping=payload.mapping.model_dump(mode="json") if payload.mapping else {},
         anchors=[anchor.model_dump(mode="json") for anchor in payload.anchors],
         statement=payload.statement.strip(),
         expectation=payload.expectation.strip(),
@@ -361,6 +367,104 @@ def edit_observation(
     row.kind = payload.kind
     row.version += 1
     session.flush()
+    return _observation_out(row, session)
+
+
+@router.post("/admin/observations/{observation_id}/approve-mapping", response_model=ObservationOut)
+def approve_attribute_mapping(
+    observation_id: int,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> ObservationOut:
+    """Approve an ``attribute_mapping`` observation into the dictionary (6.22f).
+
+    The one place where *who proposed it* changes what approval does, and the reason
+    is ADR-021 rather than a convenience. **Any** user may propose a mapping while
+    Train AI mode is on: the person who reads a customer's DIRT every week is the one
+    who knows what its columns are called, and requiring an administrator to be that
+    person would be requiring the wrong person. A reviewer or an administrator
+    approves, and approving writes the spelling — a person vouched for it, so it is
+    live from here.
+
+    What the **model** read does not come through this door. Its reading stays a
+    suggestion on the run, with the review record that says a person should look, until
+    somebody accepts it from the suggestion rail. The model proposing and the model
+    being believed are different things.
+
+    Args:
+        observation_id: The observation.
+        session: The request's session.
+        user: The caller, recorded on the spelling.
+
+    Returns:
+        The observation, now ``synthesized``: it produced something, which is what that
+        state means, and nothing in the training record is deleted.
+
+    Raises:
+        HTTPException: 404 when it does not exist, 422 when it is not a mapping, 409
+            when it has already been decided, and 403 when the caller may not approve.
+    """
+    _require_enabled(session)
+    row = session.get(models.TrainingObservation, observation_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such observation")
+    if row.kind != "attribute_mapping":
+        raise HTTPException(
+            HTTP_422,
+            f"observation {observation_id} is a {row.kind!r}, not an attribute mapping",
+        )
+    if row.status != "new":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"this observation is {row.status} and has already been decided",
+        )
+    require_training(user)
+
+    mapping = AttributeMapping.model_validate(row.mapping or {})
+    scope = scopes.for_customer(row.customer_name).token if row.customer_name else scopes.EVERYWHERE
+    term = session.execute(
+        sa.select(models.AttributeTerm).where(
+            models.AttributeTerm.canonical == mapping.attribute,
+            models.AttributeTerm.scope == scope,
+        )
+    ).scalar_one_or_none()
+    if term is None:
+        term = models.AttributeTerm(
+            canonical=mapping.attribute,
+            scope=scope,
+            created_by=user.name,
+            created_by_user_id=user.id,
+        )
+        session.add(term)
+        session.flush()
+
+    artifact = mapping.artifact.strip().lower()
+    if not any(
+        squashed(s.spelling) == squashed(mapping.spelling) and s.artifact == artifact
+        for s in term.spellings
+    ):
+        term.spellings.append(
+            models.AttributeSpelling(
+                spelling=mapping.spelling,
+                artifact=artifact,
+                # Provenance says a person proposed it, which is why it is live.
+                origin="observation",
+                origin_run_id=row.run_id,
+                created_by=user.name,
+            )
+        )
+    row.status = "synthesized"
+    row.status_note = f"approved into the attribute dictionary by {user.name}"
+    row.synthesized_at = utcnow()
+    session.flush()
+    repository.audit(
+        session,
+        "training.attribute_mapping_approved",
+        row.run_id,
+        detail=f"{mapping.attribute} = {mapping.spelling} @ {scope}",
+        user_id=user.id,
+        actor=user.name,
+    )
     return _observation_out(row, session)
 
 

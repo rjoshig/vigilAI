@@ -1,7 +1,11 @@
 # Phase 6.22 — Product codes, the record layout, and attribute resolution
 
-**Status:** 🟡 **in progress** — 6.22a complete 2026-09-21. The remaining parts are
-specified below and not started.
+**Status:** 🟡 **in progress** — every part built and every acceptance criterion met,
+2026-09-21. **6.22c stays 🟡 deliberately**: two of its items are not work this phase
+can finish, and both say so under its heading — a bulk master-file upload, which the
+phase's own "Out of scope" already defers for the dictionary and which has the same
+reason here, and how a product code is recognised in real OSL prose, which only
+[`phase-7.md`](phase-7.md) can tune. Nothing in the product is half-built.
 
 ## The goal, in the user's words
 
@@ -120,84 +124,253 @@ canonical, so only the loop's variable names were the wrong way round and the st
 data was always correct. The names are fixed so the next reader does not reach the same
 wrong conclusion.
 
-### 6.22b — The record layout is an artifact · ⬜ not started
+### 6.22b — The record layout is an artifact · ✅ complete
 
-The delivered file's record schema, uploaded as a fourth artifact: one row per field
-with its name, data type and size, where the field name is what appears as the DIRT
-column. It reuses `artifact_types`, so it needs no new admin screen.
+**Built 2026-09-21**, ADR-060. The delivered file's record schema, uploaded as a fourth
+artifact: one row per field with its name, data type and size, where the field name is
+what appears as the DIRT column. It reuses `artifact_types`, so it needs no new admin
+screen.
 
-- [ ] An `artifact_types` row `record_layout`, built in, **optional**, appearing as an
-      upload slot with no front-end change.
-- [ ] `parsers/record_layout.py` behind a Protocol (ADR-006), resolving its own headers
-      through the ladder so a drifted layout still parses.
-- [ ] Uploaded **per run and remembered for the configuration**: promoted on finalize,
+**Found while building.** A workbook with no field-name column anywhere must be a
+`ParseError` rather than an empty layout. Reading it as empty asserts "this delivery
+declares no fields", which is the same conflation of *absent* with *unknown* that 6.22a
+had just undone, one artifact along. And a **borrowed** layout must never be
+re-promoted: it is already the configuration's, and re-promoting would move the source
+run forward to a run that uploaded nothing, so every finding quoting that provenance
+would be quoting something untrue.
+
+- [x] An `artifact_types` row `record_layout`, built in, **optional**, appearing as an
+      upload slot with no front-end change. `NON_REPORT_KINDS` in `parsers/base.py` is
+      now the single place that says which uploaded kinds are not reports; the worker,
+      the replay and the credit-date pre-flight read it instead of each carrying their
+      own `{"osl", "config"}`.
+- [x] `parsers/record_layout.py` behind a Protocol (ADR-006), resolving its own headers
+      through the ladder so a drifted layout still parses. A layout headed `Column
+      Name` / `Type` / `Length` is the same document as one headed `Field name` /
+      `Data type` / `Size`, and a cover sheet before the layout is skipped rather than
+      rejected.
+- [x] Uploaded **per run and remembered for the configuration**: promoted on finalize,
       reused when a later run uploads none, and **every finding from a fallback names
-      the run and date it came from**.
-- [ ] A layout differing from the previous delivery's feeds the drift card.
-- [ ] `VersionKind` gains `record_layout`.
+      the run and date it came from** — `RecordLayoutDocument.provenance`, built from
+      `runs.record_layout_run_id` and `runs.record_layout_source_date`, which are stored
+      on the run so the clause still reads after the source run is purged.
+- [x] A layout differing from the previous delivery's feeds the drift card.
+      `drift.diff_record_layout` reports added, removed, retyped, resized and moved,
+      matched up the ladder so a respelling is not one field lost and another gained.
+- [x] `VersionKind` gains `record_layout`, keyed `customer|configuration_id`. The
+      snapshot excludes the source run on purpose: what is versioned is the layout, and
+      a second delivery of the same shape is not a new version of it.
+- [x] The `record_layout_supplied` fixture: a correct delivery shipping its layout under
+      a source system's own headings, declaring two fields the OSL never asked for.
+      `attribute_renamed` ships one too, which is the realistic pairing — a source
+      system that respells everything documents the respelling.
+- [x] ADR-060.
+- [x] Tests: `tests/parsers/test_record_layout.py`, `tests/db/test_record_layouts.py`,
+      `tests/api/test_record_layout.py`, and the record-layout class in
+      `tests/db/test_drift.py`.
 
-### 6.22c — Product codes · ⬜ not started
+**Two defects repaired that were not the point.** `drift_out` never filled
+`newly_unchecked`, computed since Phase 6.11c and never once shown on a screen; it is
+filled now, beside `record_layout`. And `announcements.validate` counted its five-notice
+limit against the wall clock while its tests seeded notices around a frozen `NOW`, so
+`test_a_sixth_notice_is_refused_with_the_reason` was green the morning it was written
+and red that afternoon — which is how it came to be failing on clean `dev`. The moment
+is an argument now, as `showing_now` has always taken one.
 
-The OSL may say *"all attributes from ABC"* or name attributes directly. Both must
-reach the same check, against the record layout **and** the DIRT.
+### 6.22c — Product codes · 🟡 in progress
 
-- [ ] `product_codes` and `product_code_members`. An attribute shared by two codes is
-      **one** term with one output name.
-- [ ] **Expansion is code, never the model.** The model's only job is reading that a
+**Built 2026-09-21**, ADR-061. The OSL may say *"all attributes from ABC"* or name
+attributes directly. Both must reach the same check, against the record layout **and**
+the DIRT.
+
+**Found while building.** Expanding at the check was the obvious place and the wrong
+one. The golden set caught it: `product_code_named` raised `extra_rule_in_config`,
+because stage 6 was asking "does any OSL requirement cover this config element" against
+a rule whose `values` were still empty. A requirement that names a code and one that
+lists the same attributes state the same thing, so the expansion has to happen **once**,
+at the end of stage 2, where every later stage sees the result.
+
+- [x] `product_codes` and `product_code_members`. An attribute shared by two codes is
+      **one** term with one output name: the console refuses the save that would create
+      a disagreement, and `ProductCatalogue.conflicts` names any that exist rather than
+      picking a winner.
+- [x] **Expansion is code, never the model.** The model's only job is reading that a
       requirement names a product code; code looks up the members and code validates
-      that the code it was given is one that exists.
-- [ ] The `attributes` requirement gains `product_codes` beside `values`.
-- [ ] `Run.product_code_attributes`: the expanded list this run used, snapshotted at
+      that the code it was given is one that exists. An undefined code becomes an
+      `unknown_product_code` check that **fails** — never an empty expansion, which
+      would turn "check everything in ABC" into "check nothing" and pass the delivery.
+- [x] The `attributes` requirement gains `product_codes` beside `values`, and is the
+      one set type that may carry codes instead of values. The extraction prompt goes
+      to version 4.
+- [x] `Run.product_code_attributes`: the catalogue this run used, snapshotted at
       submission. The catalogue keeps **no history** — a run's snapshot is what makes a
       finalized report reproduce, and a re-check that disagrees with the current
-      catalogue says so.
-- [ ] An attribute delivered beyond the named code's list is a **low**-severity note,
-      never a failure. It is also a privacy signal: a field nobody asked for may be PII.
-- [ ] Upload as a master file or one file per product code.
+      catalogue says so in a run notice.
+- [x] An attribute delivered beyond the named code's list is a **low**-severity note,
+      never a failure. It is also a privacy signal: a field nobody asked for may be PII,
+      and the note says so. Silent unless a requirement actually names a code.
+- [ ] Upload as a master file or one file per product code. **Outstanding.** The
+      console creates and edits a code one at a time, which is what a person maintaining
+      a handful does. A bulk upload has the same problem the dictionary's does — no
+      import precedent exists anywhere in the product — and it belongs with that one,
+      after real files have shown what a master file actually looks like (Phase 7).
+- [x] The `product_code_named` fixture: an OSL naming `ABC` instead of listing, plus an
+      undefined `DEF`, plus two delivered fields the code never listed. The golden set
+      seeds `ABC` from the manifest and leaves `DEF` undefined, because an undefined
+      code producing a finding is part of the oracle.
+- [x] ADR-061.
+- [x] Tests: `tests/rules/test_product_codes.py`, `tests/api/test_product_codes.py`, and
+      the product-code class in `tests/rules/test_derive.py`.
 - [ ] **Phase 7 refines this**: how a product code is recognised in real OSL prose, and
       what real deliveries carry beyond their code, can only be tuned against real files.
 
-### 6.22d — The dictionary and one resolution path · ⬜ not started
+### 6.22d — The dictionary and one resolution path · ✅ complete
 
-- [ ] `attribute_terms` and `attribute_spellings`: one canonical attribute, a spelling
-      per artifact, scoped with the ADR-029 vocabulary, provenance on the spelling.
-- [ ] The dictionary compiles into the ladder's **fourth rung**. Nothing in `ladder.py`
+**Built 2026-09-21**, ADR-062. The answer to the question `design.md` has carried since
+Phase 0: *"Is there an attribute data dictionary to seed the alias table?"* This is
+where one lives when somebody has one, and where the tool writes down what it learned
+when nobody does.
+
+**Found while building, and it is the worst defect this phase has turned up.** · ✅ complete
+`context.resolver` was never assigned. Stage 7 built its resolver in a local variable
+and `repository.save_context` read `context.resolver`, which was always `None` — so
+**every run since 6.21b has stored an empty `layout_suggestions` list**, however much
+the model had to reason about. The suggest-then-accept rail ADR-054 describes has never
+once been offered something a real run found. Stage 7 assigns it now, which is also what
+makes `attribute_locate_calls` reach the database at all.
+
+- [x] `attribute_terms` and `attribute_spellings`: one canonical attribute, a spelling
+      per artifact, scoped with the ADR-029 vocabulary, provenance on the spelling —
+      on the spelling rather than the term, because it is the spelling somebody
+      vouched for.
+- [x] The dictionary compiles into the ladder's **fourth rung**. Nothing in `ladder.py`
       changes; `resolve/layout.py`'s kinds gain `attribute` and `checks/layout.py`'s do
       not, because a dictionary is thousands of rows and a JSON column is the wrong home.
-- [ ] A deterministic shortlist before any model call, and a per-run cap on attribute
+- [x] A deterministic shortlist before any model call, and a per-run cap on attribute
       locate calls — a **soft** limit inside the existing ceiling, not a new refusal.
-- [ ] `attribute_aliases` superseded by a dual-run read and an explicit previewed copy.
-      Nothing that matched before stops matching.
-- [ ] The two dormant hooks populated: `NamedValue.label_alternates` and
-      `ReportSheet.resolve_column`'s alternates.
+      Past it the run stops asking and names what it did not look for.
+      `llm.max_attribute_calls_per_run` sets it; `runs.attribute_locate_calls` counts
+      what was spent, so the cap is measured rather than claimed.
+- [x] `attribute_aliases` superseded by a dual-run read and an explicit previewed copy.
+      Nothing that matched before stops matching, and the copy adds and never removes.
+- [x] The two dormant hooks populated: `NamedValue.label_alternates`, threaded since
+      Phase 6.15 with nothing ever filling it, and `ReportSheet.resolve_column`'s
+      alternates.
+- [x] `present()` takes a resolver through a **Protocol** rather than an import, so
+      `parsers` does not acquire a model adapter by using this package's normalisers.
+- [x] ADR-062.
+- [x] Tests: `tests/resolve/test_dictionary.py`, `tests/resolve/test_attribute_cap.py`,
+      `tests/api/test_attribute_dictionary.py`.
 
-### 6.22e — What the layout lets us check · ⬜ not started
+### 6.22e — What the layout lets us check · ✅ complete
 
-- [ ] Every attribute the OSL requires — named directly or expanded from a product
+**Built 2026-09-21.** No ADR: this applies ADR-060 and ADR-061 rather than deciding
+anything new.
+
+**Found while building.** The `layout_declares_more_than_the_dirt` fixture first used
+`MORT_BAL` as the unmeasured attribute, and the golden set failed: `MORT_BAL` shares the
+word `BAL` with the delivered `TOT_BAL`, so 6.22a reads it as a near miss and answers
+*could not tell*. That is the correct answer, and it is not the case the fixture is for.
+The fixture uses `DOB_YEAR`, which nothing in the DIRT resembles — so the layout's
+answer is the only one there is, which is the point.
+
+- [x] Every attribute the OSL requires — named directly or expanded from a product
       code — appears in the uploaded record layout, using 6.22a's three-state rule.
-- [ ] That check and `fields_present` produce **one** alarm between them, with the
-      explanation attached.
-- [ ] **Out of scope:** type agreement, size and precision, nullability, enum domains,
-      regex formats. Those belong on `field_constraints`, which already exists.
+      "Could not tell" in **either** artifact beats "is not there": one of them
+      plausibly carrying it is enough to withhold the accusation.
+- [x] That check and `fields_present` produce **one** alarm between them, with the
+      explanation attached. They are the same function: `_check_fields_present` reads
+      both artifacts and the detail says what each one showed.
+- [x] The case the DIRT alone cannot show: an attribute the layout **declares** and the
+      DIRT does not report on. The delivered file ships a field nothing measured, and
+      that fails. The reverse — the DIRT reports on it and the layout omits it — does
+      **not** fail: the delivery is right and the document is behind it, so it is said
+      and not counted against the delivery.
+- [x] A finding resting on a borrowed layout names the run and the date it came from.
+- [x] The `layout_declares_more_than_the_dirt` fixture, and the golden set reads each
+      case's record layout.
+- [x] **Out of scope:** type agreement, size and precision, nullability, enum domains,
+      regex formats. Those belong on `field_constraints`, which already exists — and
+      the check's own docstring says so, because the next person to read it will want
+      to add them here.
+- [x] Tests: `tests/checks/test_record_layout_checks.py` and the 6.22e class in
+      `tests/api/test_record_layout.py`.
 
-### 6.22f — It learns, and a person decides · ⬜ not started
+### 6.22f — It learns, and a person decides · ✅ complete
 
-- [ ] `Run.attribute_suggestions` and an accept endpoint, copied from the layout
-      suggestions rail.
-- [ ] `TrainingObservation` kind `attribute_mapping`: **any user** may propose while
+**Built 2026-09-21.** No ADR: this applies ADR-021 and ADR-062 rather than deciding
+anything new.
+
+**The suggestion that costs nothing.** The rail has two sources, and the first is free.
+Where the OSL asks for `AT01`, the ladder cannot settle which column it is, and the
+uploaded record layout declares exactly one field resembling it, **code** proposes the
+mapping out of a document the delivery carried — no model call at all. That is the
+record layout earning its place beyond being one more thing to check. Where the layout
+is silent, the fifth rung's readings stand, already carrying the review record.
+
+**Found while building.** A delivery whose OSL says *score* in its criteria table and
+`SCORE_V3` in its attribute list produces two suggestions pointing at one column, and
+the console refuses the second — correctly, because one name means one attribute. The
+refusal now says what to do instead: record `score` as another *spelling* of
+`SCORE_V3`, not as a term of its own.
+
+- [x] `Run.attribute_suggestions` and an accept endpoint, copied from the layout
+      suggestions rail — and its own column rather than sharing `layout_suggestions`,
+      because half of these come from a record layout and no model call, which the
+      layout rail has no way to say.
+- [x] The accept defaults to **anywhere** rather than to the artifact the mapping was
+      seen in. A customer who calls a field one thing in their DIRT calls it that in
+      their record layout too, and narrowing it would leave every other check asking
+      the model the question the click just answered. Measured: narrowing it left 13
+      lookups on the next run where anywhere left 4.
+- [x] `TrainingObservation` kind `attribute_mapping`: **any user** may propose while
       Train AI mode is on, a reviewer or admin approves, in the **existing** queue.
-- [ ] Person-proposed activates on approval; model-read stays in shadow with a review
-      record until a reviewer confirms it (ADR-021).
+      The two names live in a `mapping` column of their own, because they are the
+      substance of the observation rather than a pointer to where it was seen.
+- [x] Person-proposed activates on approval — a person vouched for it, so the spelling
+      is written with `origin="observation"` and is live from there. Model-read does
+      **not** come through that door: its reading stays a suggestion on the run, with
+      the review record that says a person should look, until somebody accepts it from
+      the rail. The model proposing and the model being believed are different things.
+- [x] Tests: `tests/checks/test_attribute_suggestions.py` and
+      `tests/api/test_attribute_suggestions_api.py`, which walks the whole loop — a run
+      proposes, a person accepts, the next run's lookups fall, and the remainder is
+      exactly the ties the layout refused to guess at.
 
-### 6.22g — The docs describe what is true · ⬜ not started
+### 6.22g — The docs describe what is true · ✅ complete
 
-- [ ] `model-context.md`, `architecture.md`, `glossary.md`, `phase-plan.md`, the phase
-      table in `CLAUDE.md`.
-- [ ] **`design.md` and `CLAUDE.md`: "reconciles three things" becomes four.**
-- [ ] `phase-7.md` gains the two refinements named in 6.22c.
-- [ ] Both training documents and both Guides rebuilt.
+**Built 2026-09-21.** · ✅ complete
 
-## Acceptance criteria · 🟡 in progress
+**Found while building.** `architecture.md` had no `resolve/` row at all — the package
+has existed since 6.21a and the table that says what every subpackage is for never
+gained one. It has one now, and it carries the rule that explains an otherwise odd piece
+of code: `checks.reports` reaches `resolve.attributes.present` with a resolver through a
+**Protocol** rather than an import, because `resolve.layout` reaches `llm/` and importing
+it would put a model adapter into every parser.
+
+- [x] `model-context.md`, `architecture.md`, `glossary.md`, `phase-plan.md`, the phase
+      table in `CLAUDE.md`. `model-context.md` gains five rows — the dictionary, product
+      codes, the record layout, the lookup cap and the suggestion rail — and says what
+      the attribute locator is shown, which is names and a shortlist and never a value.
+- [x] **`design.md` and `CLAUDE.md`: "reconciles three things" becomes four.** And
+      `README.md`, which said it too. Each says in the same breath that the fourth is
+      optional and that a delivery without one is checked exactly as it was before.
+- [x] `phase-7.md` gains the two refinements named in 6.22c — how a product code reads
+      in real OSL prose, and what real deliveries carry beyond their code — plus a
+      per-artifact table for the record layout beside the other three, and the note that
+      the first real delivery carrying one is the cheapest the dictionary will ever be
+      filled.
+- [x] Both training documents and both Guides rebuilt. The user document explains why
+      uploading a record layout is worth it and how to read the two new findings; the
+      admin document rewrites Reference data around the dictionary and puts *accepting
+      attribute suggestions* at the top of "what improves the QC", above writing
+      anything, because it is clicking rather than writing.
+- [x] `gd-rollout-plan.md`: three readiness items and three intake questions. The intake
+      now asks the question `design.md` has carried since Phase 0 — *is there an
+      attribute data dictionary?* — which is the one this phase built the answer's home
+      for.
+
+## Acceptance criteria · ✅ complete
 
 - [x] 1. A delivery whose DIRT spells every attribute in a long form the OSL does not
       use produces **zero** `report_violates_rule` findings. Measured on
@@ -208,20 +381,36 @@ reach the same check, against the record layout **and** the DIRT.
       nothing outside the module docstring that quotes the old test.
 - [x] 3. An attribute that genuinely was not delivered is still `report_violates_rule`
       at **high**. `attributes_missing_in_report` is unchanged.
-- [ ] 4. An OSL naming only product code `ABC` validates every one of ABC's attributes
+- [x] 4. An OSL naming only product code `ABC` validates every one of ABC's attributes
       against both the record layout and the DIRT; an OSL naming an attribute directly
-      validates that name. Both reach the same check.
-- [ ] 5. A delivery carrying attributes beyond the named code's list produces a **low**
-      note and no failure.
-- [ ] 6. Re-checking a finalized run after the catalogue changed uses the run's snapshot
-      and says the catalogue has since moved.
-- [ ] 7. With a record layout uploaded and an empty dictionary, a run makes at most the
-      configured cap of attribute locate calls, recorded in `llm_calls`.
-- [ ] 8. The second run of the same configuration, after one accepted suggestion, makes
-      **zero** attribute locate calls — asserted by counting calls, not claimed in prose.
-- [ ] 9. An OSL attribute absent from the record layout produces **one** finding, not two.
-- [ ] 10. A user without admin capability can propose a mapping when Train AI mode is on
-      and cannot activate one.
+      validates that name. Both reach the same check — literally the same function, and
+      the expansion happens once at the end of stage 2 so every later stage sees one
+      shape (ADR-061).
+- [x] 5. A delivery carrying attributes beyond the named code's list produces a **low**
+      note and no failure. It says both reasons it is worth a look: the extract may have
+      pulled more than the order asked for, and a field nobody asked for may be PII.
+- [x] 6. A re-check after the catalogue changed uses the run's snapshot and says the
+      catalogue has since moved. **The criterion said "re-checking a *finalized* run",
+      and that is no longer possible**: ADR-066, landed on `main` while this phase was
+      being built, refuses a re-check on any status but `needs_review` — a re-check
+      rewrites rules, traces and findings wholesale, and a frozen report must keep
+      matching what its reviewer was shown. So the snapshot is proved where a re-check
+      can actually happen, and the refusal is proved too
+      (`tests/api/test_product_codes.py::TestBothDoorsReachTheSameCheck`). What the
+      criterion was asking for is unchanged; only the status it can be asked on is.
+- [x] 7. With a record layout uploaded and an empty dictionary, a run makes at most the
+      configured cap of attribute locate calls, counted on the run itself
+      (`runs.attribute_locate_calls`) rather than inferred from `llm_calls`, because the
+      question is how many *this* run spent and the cap is enforced where they are spent.
+- [x] 8. The second run of the same configuration, after the spellings are recorded,
+      makes **zero** attribute locate calls — asserted by counting calls, not claimed in
+      prose (`tests/api/test_attribute_dictionary.py`).
+- [x] 9. An OSL attribute absent from the record layout produces **one** finding, not
+      two. Asserted end to end on `layout_declares_more_than_the_dirt`: exactly one
+      finding names the attribute, and its detail says which artifact carried it.
+- [x] 10. A user without admin capability can propose a mapping when Train AI mode is on
+      and cannot activate one. Proposing writes a `new` observation and nothing else;
+      the dictionary is untouched until a reviewer or an administrator approves it.
 - [x] 11. Nothing in 6.22a can make a delivery pass: the widened test only ever moves a
       finding *down* from high to review, and an attribute nothing resembles is still a
       violation. Code sets every severity (ADR-001).

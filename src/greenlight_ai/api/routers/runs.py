@@ -46,7 +46,7 @@ from greenlight_ai.db.types import utcnow
 from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.parsers import detect
-from greenlight_ai.parsers.base import ParseError
+from greenlight_ai.parsers.base import NON_REPORT_KINDS, RECORD_LAYOUT_KIND, ParseError
 from greenlight_ai.parsers.reports import parser_for
 from greenlight_ai.pipeline.s4_trace import describe_rule
 from greenlight_ai.report.pdf import renderer_available
@@ -275,7 +275,7 @@ def new_run_options(
         The active upload slots and delivery programmes, in display order.
     """
     catalog.seed_defaults(session)
-    accept = {"osl": ".docx,.pdf", "config": ".json"}
+    accept = {"osl": ".docx,.pdf", "config": ".json", RECORD_LAYOUT_KIND: ".xlsx"}
     return schemas.NewRunOptions(
         artifacts=[
             schemas.ArtifactSlot(
@@ -566,6 +566,15 @@ def _finish_submission(
     # Taken at submission, not when the draft was made, so it is the note in force for
     # whatever configuration id the draft ended up with (ADR-024).
     run.config_notes_snapshot = repository.active_config_notes(session, run.configuration_id)
+    # The product-code catalogue as it stands at submission, for the same reason and in
+    # the same place (Phase 6.22c). The catalogue keeps no history, so this snapshot is
+    # what makes a finalized report reproduce: a re-check next year expands the codes
+    # exactly as this run did, whatever an administrator has since changed. A draft
+    # submitted a week after it was cloned snapshots what is true now, not then. Empty
+    # on a deployment that defines no codes.
+    run.product_code_attributes = repository.product_code_snapshot(
+        repository.load_product_codes(session, run.customer_name, run.configuration_id, run.scope)
+    )
     _capture_config_from_upload(session, run, data_dir, files, user)
 
     # Do these artifacts belong to the delivery that was just described? Code compares,
@@ -703,6 +712,9 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     session.flush()
 
     _store_uploads(session, run, uploads, data_dir)
+    # The report slots were read off the raw form, so they are this endpoint's to close
+    # even though the framework closes the two declared ones.
+    await form.close()
     return _finish_submission(
         session, run, data_dir, user, queue, rerun_reason, discard_on_duplicate=True
     )
@@ -808,7 +820,10 @@ def _labelled_credit_date(
         (
             (file.kind, data_dir / file.storage_key)
             for file in files
-            if file.kind not in ("osl", "config")
+            # Reports only. The record layout is a schema and carries no credit date,
+            # and reading it with a report parser would spend the budget on a file
+            # that cannot answer (Phase 6.22b).
+            if file.kind not in NON_REPORT_KINDS
         ),
         key=lambda pair: pair[1].stat().st_size if pair[1].exists() else 0,
     )
@@ -1353,6 +1368,11 @@ def drift_out(result: drift.Drift) -> schemas.DriftOut:
         config=[schemas.DriftConfigChange(**asdict(c)) for c in result.config],
         previous_config_version=result.previous_config_version,
         config_version=result.config_version,
+        # Both of these existed on the wire model and were never filled: the panel
+        # showed an empty list whatever the comparison found. `newly_unchecked` has
+        # been computed since Phase 6.11c and has never reached a screen.
+        newly_unchecked=list(result.newly_unchecked),
+        record_layout=[schemas.DriftRecordLayoutChange(**asdict(c)) for c in result.record_layout],
     )
 
 
@@ -1728,6 +1748,13 @@ async def attach_draft_files(
     session.flush()
 
     _store_uploads(session, run, uploads, data_dir)
+    # Every file in the form is a spooled temporary file, and reading a form does not
+    # close them. `POST /runs` takes its OSL and config as declared parameters, which
+    # the framework closes for it; a draft edit reads **every** artifact off the raw
+    # form, so nothing else will. Closing here rather than relying on the garbage
+    # collector: an endpoint that leaks a descriptor per upload runs out of them under
+    # the load a bulk submission puts on it, long before anybody notices the warning.
+    await form.close()
     session.refresh(run)
     repository.audit(
         session,

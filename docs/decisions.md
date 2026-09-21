@@ -2288,6 +2288,245 @@ fixed so the next reader does not reach the same wrong conclusion.
 
 ---
 
+## ADR-060 — The record layout is a fourth artifact, uploaded per run and remembered per configuration
+
+**Status:** accepted · 2026-09-21 · Phase 6.22b
+
+**Context.** The tool reconciled three things: the OSL, the ETL config, and the output
+reports. It had no account of the *delivered file itself* — which fields it carries, in
+what order, at what type and size. Two consequences followed.
+
+The first is the one 6.22a exposed: when the tool cannot work out what the DIRT calls an
+attribute, it has nothing to look the name up in. It can only say so honestly, which is
+what 6.22a made it do, and that leaves the requirement unevidenced. Five of
+`attribute_renamed`'s requirements are unevidenced for exactly this reason.
+
+The second is quieter and worse. A field that was ten characters and is now nine
+produces no finding at all — there is no rule about it and nothing to compare against —
+while it is the first thing the customer's loader notices.
+
+**Decision.** A **record layout** is an artifact the tool accepts: one row per delivered
+field, with the field's name, its data type and its size, where the field name is what
+appears as the DIRT column. Five things follow from that and each one is a decision.
+
+**It is optional, and stays optional.** `record_layout` is a built-in `artifact_types`
+row with `is_required=False`. A delivery that uploads none is checked exactly as it was
+before the slot existed, and every caller is written so that path is the ordinary one
+rather than a degraded one — the same discipline `LayoutResolver` follows for a run with
+no client.
+
+**It is a fourth *kind*, not a report.** `parsers/base.NON_REPORT_KINDS` is now the one
+place that says which uploaded kinds the pipeline does not read as report workbooks;
+the worker, the replay and the credit-date pre-flight all read it rather than each
+carrying their own `{"osl", "config"}`. Reading a schema with a report parser would put
+a phantom report type into coverage and send every cross-report check looking for values
+in a file that has none.
+
+**Its own headers go up the ladder.** `parsers/record_layout.py` resolves *Field name*,
+*Data type* and *Size* through `resolve.ladder`, with alternates for the words a source
+system actually uses — *Column Name*, *Type*, *Length*. A parser that insisted on one
+spelling would report a delivery as declaring no fields at all, which is the loudest
+possible wrong answer and exactly the failure ADR-054 exists to prevent. A workbook with
+no field-name column anywhere is a `ParseError` and **not** an empty layout, because
+reading it as empty would assert "this delivery declares no fields" — the same
+conflation of *absent* with *unknown* that ADR-059 undid.
+
+**It is uploaded per run and remembered per configuration.** The same order delivered
+next month has the same shape unless somebody changed it, so the layout is snapshotted
+onto the run at stage 1 and **promoted onto the configuration at finalize**. Promotion
+at finalize rather than at submission, for the reason the anomaly baseline uses the same
+rule (Phase 6.21c): a layout nobody has signed off is not yet this configuration's
+shape, and promoting earlier would let a mistaken upload become the baseline the next
+delivery is judged against. A run that uploads none borrows the promoted layout, and the
+borrowing is never silent — `runs.record_layout_run_id` and
+`runs.record_layout_source_date` record it, `RecordLayoutDocument.provenance` renders it,
+and every finding resting on a borrowed layout carries that clause. A borrowed layout is
+never re-promoted, because that would move the source run forward to a run that uploaded
+nothing and make the provenance untrue.
+
+**It feeds the drift card.** `drift.diff_record_layout` reports fields added, removed,
+retyped, resized and moved, matched on the name **up the ladder** so a respelling is not
+reported as one field lost and another gained. Empty when either delivery carried no
+layout, because "unknown" is not "unchanged".
+
+**Consequences.** The run's snapshot is a copy, not a pointer, for the same reason the
+configuration notes are copied (ADR-024): the promoted layout moves on and a finalized
+report has to keep reproducing. `VersionKind` gains `record_layout`, keyed
+`customer|configuration_id`, so a promotion can be reverted like any other definition —
+and the version snapshot deliberately excludes the source run, because what is versioned
+is the *layout*, and a second delivery of the same shape is not a new version of it.
+
+This part adds no check of its own. What the layout lets the tool assert is 6.22e; what
+it lets the tool *resolve* is 6.22f, where its field names become the suggestion a person
+accepts into the dictionary.
+
+Two things this changed that were not the point. `drift_out` never filled `record_layout`
+— nor `newly_unchecked`, which has been computed since Phase 6.11c and had never reached
+a screen; both are filled now. And `announcements.validate` counted its limit against the
+wall clock, which is why `test_a_sixth_notice_is_refused_with_the_reason` was green the
+morning it was written and red that afternoon; the moment is an argument now, as
+`showing_now` has always taken one.
+
+---
+
+## ADR-061 — A product code is expanded by code; the model only reads that one was named
+
+**Status:** accepted · 2026-09-21 · Phase 6.22c
+
+**Context.** An OSL states the same requirement two ways. It either lists the fields —
+*"deliver AT01, AT02, ST"* — or names a product code that stands for them — *"deliver
+all attributes from ABC"*. The second form is how real orders are written, and the tool
+had no account of it at all: the extraction had nowhere to put a code, so a requirement
+stated that way either vanished or became an `attributes` requirement with an empty
+value list, which is a requirement that asks for nothing.
+
+**Decision.** A **product code** is reference data an administrator enters — a code, a
+set of member attributes, and a scope — and the expansion from one to the other happens
+in **code**.
+
+**The model's only job is reading that a requirement names a code.** That is reading
+meaning, which is exactly what ADR-001 gives it. Looking the code up, deciding which
+attributes it contains, and checking that the code exists at all are lookups and
+comparisons, which ADR-001 keeps in code. A model asked *"what is in ABC?"* answers
+plausibly and is believed, and a delivery is then validated against a list nobody wrote.
+So `ExtractedRequirement.product_codes` carries strings the model quoted, and
+`ProductCatalogue` is what decides whether those strings name anything.
+
+**An unknown code is a finding, never an empty expansion.** This is the decision the
+whole part turns on. Expanding a code the catalogue does not define to an empty
+attribute list turns *"check everything in ABC"* into *"check nothing"*, and the
+delivery passes — for the worst possible reason, that the tool could not say what was
+asked for. `unknown_product_code` is its own derived check, and it **fails** rather than
+degrading to "could not evaluate": the tool knows exactly what is wrong and exactly who
+fixes it. An administrator adds the code.
+
+**Expansion happens once, at the end of stage 2, into `rule.values`.** Not at each
+check. A requirement that names a code and one that lists the same attributes state the
+same thing, so every stage after extraction must see the same rule for both — stage 5
+comparing it with the config, stage 6 deciding whether a config element is covered,
+stage 7 checking the reports. Expanding only where a check happens left the reverse pass
+calling a correctly implemented config element *extra*, which is how this was found. The
+codes stay on the rule after expansion, because they are what the unknown-code check
+reports on and what the "beyond the code" note measures against.
+
+**An attribute two codes share is one term with one output name.** If ABC and DEF both
+carry `SCORE_V3` they carry the same one, delivered under one name. A catalogue where
+they disagree is a defect, not two opinions: the console refuses the save that would
+create one, and `ProductCatalogue.conflicts` names any that exist rather than picking a
+winner — the same rule the ladder follows when two candidates tie.
+
+**Carrying more than the code lists is a low-severity note and never a failure.** A
+delivery may legitimately carry a technical field, and a tool that failed a correct
+delivery over one teaches people to stop reading its findings. It is raised for two
+reasons rather than one, and says both: the extract may have pulled more than the order
+asked for, and **a field nobody asked for may be personal data that should not have
+left** (ADR-003). It is silent unless a requirement actually names a code, because
+without one there is no authoritative list of what was asked for and every unlisted
+column would be "extra" on every run.
+
+**The catalogue keeps no history; the run keeps a snapshot.** `Run.product_code_attributes`
+holds the catalogue as it stood at submission, which is what makes a finalized report
+reproduce — the same reasoning as ADR-024 for configuration notes and Phase 6.22b for the
+record layout. A re-check expands from the snapshot, and when the live catalogue has
+since moved it says so in a run notice: the catalogue cannot show *what* changed, but the
+run must not quietly reproduce an answer an administrator has moved on from.
+
+**Consequences.** `Rule.product_codes` sits beside `values`, and the `attributes`
+requirement is the one set type that may carry codes instead of values — every other
+still requires its values, because only attributes have a catalogue to be expanded from.
+The extraction prompt goes to version 4. Codes are scoped with the ADR-037 vocabulary,
+narrowest first, because one customer's `ABC` is not another's.
+
+**Phase 7 refines this**, and only Phase 7 can: how a product code is recognised in real
+OSL prose, and what real deliveries carry beyond their code, can be tuned against real
+files and nothing else.
+
+---
+
+## ADR-062 — The attribute dictionary is tables, read as the ladder's fourth rung
+
+**Status:** accepted · 2026-09-21 · Phase 6.22d
+
+**Context.** Rung 4 of the resolution ladder has existed since Phase 6.21a and has never
+had anything to read. It takes `alternates` — *other names that also mean this one* —
+and the only caller that ever filled it was the layout map: sheet names, column headings
+and row labels, a handful per artifact, in a JSON column on `artifact_types`.
+
+Attribute names are the reason the rung was built and the one thing it has never
+covered. 6.22a made the tool honest about it — an attribute it cannot locate is a
+`review` record naming the closest columns, not a high-severity violation — and honest
+is where it stopped. Five of `attribute_renamed`'s requirements stay unevidenced,
+correctly, because nothing tells the tool that `debsc_burs_atyrt_at01_1` is `AT01`.
+
+`design.md` has carried the matching open question since Phase 0: *"Is there an
+attribute data dictionary to seed the alias table?"*
+
+**Decision.** An **attribute dictionary**: `attribute_terms` (one canonical attribute,
+scoped with the ADR-037 vocabulary) and `attribute_spellings` (one row per way an
+artifact writes it, with provenance). It compiles into rung 4 and changes nothing about
+`ladder.py`.
+
+**Tables, not a JSON column.** `checks/layout.py`'s entries keep sheets, columns and row
+labels and do **not** grow an `attribute` kind. A credit bureau's vocabulary runs to
+thousands of attributes, each with a spelling per artifact and provenance on each
+spelling; that is not a JSON column, and pretending otherwise would make every run load
+a blob to answer one lookup. `resolve/layout.py`'s *kinds* do gain `attribute`, because
+an attribute name reaches the same five rungs as a sheet name and what the model had to
+reason about is offered to a person the same way.
+
+**Provenance is on the spelling, not the term.** An administrator typed it, a record
+layout declared it, the fifth rung reached it and somebody confirmed it, or a reviewer
+proposed it. It is the *spelling* somebody vouched for.
+
+**It never picks.** The dictionary hands the ladder alternates; the ladder decides, and
+it still refuses when two candidates tie. A dictionary entry is a stronger claim than
+any amount of normalising — which is why it is rung 4 and not rung 1 — but it is
+evidence offered to code, not a verdict. One name means one attribute: the console
+refuses a spelling another term already claims, because two terms claiming it would
+leave the ladder unable to answer the question the dictionary exists to settle.
+
+**A deterministic shortlist before any model call.** Rung 5 for an attribute is shown
+`near_names`' handful, never a column dump — and then only what the dictionary cannot
+already rule out, because a candidate it assigns to a *different* term is a distraction
+somebody has already answered. Ruling out everything gives the candidates back
+unchanged: an empty shortlist tells the model nothing and would turn a narrowing into a
+refusal the caller never asked for.
+
+**The cap is soft.** `llm.max_attribute_calls_per_run` bounds what rung 5 may cost, and
+past it the resolver stops asking, the run records the names it did not look for, and
+nothing is refused. No delivery fails over a budget; the checks that needed those names
+have already said, separately, that they could not be evaluated. The precedent is
+`s6_reverse._may_locate`. `runs.attribute_locate_calls` counts what was actually spent,
+so the number can be measured rather than claimed — and so the second run of a
+configuration whose spellings were recorded can be *shown* to have spent none.
+
+**`attribute_aliases` is superseded by a dual-run read, not a migration.** The alias
+rows are read alongside the dictionary on every run, the dictionary's own terms first.
+Nothing that matched before stops matching. An explicit, previewed copy is offered in
+the console for whoever wants to tidy up, and it adds and never removes — rewriting a
+table an administrator seeded is not something to do behind their back, which is the
+same reasoning ADR-037 gives for not rewriting stored scope strings.
+
+**Consequences.** The two dormant hooks are populated at last.
+`NamedValue.label_alternates` has been threaded from the pointer to `ReportSheet.lookup`
+since Phase 6.15 with nothing ever putting a value in it; the dictionary fills it, so a
+pointer whose label names an attribute finds it under whatever this delivery calls it.
+`ReportSheet.resolve_column`'s `alternates` is filled the same way.
+
+`present()` takes a resolver through a **Protocol** rather than an import.
+`greenlight_ai.parsers` uses this package for its normalisers, and `LayoutResolver`
+reaches `greenlight_ai.llm`; importing it would drag a model adapter into every parser.
+
+**A silent defect this uncovered.** `context.resolver` was never assigned. Stage 7 built
+a resolver in a local variable and `repository.save_context` read `context.resolver`,
+which was always `None` — so **every run since Phase 6.21b has stored an empty
+`layout_suggestions` list**, however much the model had to reason about. The
+suggest-then-accept rail ADR-054 describes has never once been offered something a real
+run found. Stage 7 assigns it now, which is also what makes `attribute_locate_calls`
+reach the database.
+
+---
+
 ## ADR-063 — A run's states are a closed set, and `draft` is one of them
 
 **Status:** accepted · 2026-09-21 · Phase 6.23a
