@@ -1,7 +1,7 @@
 # Phase 6.22 — Product codes, the record layout, and attribute resolution
 
-**Status:** 🟡 **in progress** — 6.22a complete 2026-09-21. The remaining parts are
-specified below and not started.
+**Status:** 🟡 **in progress** — 6.22a and 6.22b complete 2026-09-21. The remaining
+parts are specified below and not started.
 
 ## The goal, in the user's words
 
@@ -120,21 +120,58 @@ canonical, so only the loop's variable names were the wrong way round and the st
 data was always correct. The names are fixed so the next reader does not reach the same
 wrong conclusion.
 
-### 6.22b — The record layout is an artifact · ⬜ not started
+### 6.22b — The record layout is an artifact · ✅ complete
 
-The delivered file's record schema, uploaded as a fourth artifact: one row per field
-with its name, data type and size, where the field name is what appears as the DIRT
-column. It reuses `artifact_types`, so it needs no new admin screen.
+**Built 2026-09-21**, ADR-060. The delivered file's record schema, uploaded as a fourth
+artifact: one row per field with its name, data type and size, where the field name is
+what appears as the DIRT column. It reuses `artifact_types`, so it needs no new admin
+screen.
 
-- [ ] An `artifact_types` row `record_layout`, built in, **optional**, appearing as an
-      upload slot with no front-end change.
-- [ ] `parsers/record_layout.py` behind a Protocol (ADR-006), resolving its own headers
-      through the ladder so a drifted layout still parses.
-- [ ] Uploaded **per run and remembered for the configuration**: promoted on finalize,
+**Found while building.** A workbook with no field-name column anywhere must be a
+`ParseError` rather than an empty layout. Reading it as empty asserts "this delivery
+declares no fields", which is the same conflation of *absent* with *unknown* that 6.22a
+had just undone, one artifact along. And a **borrowed** layout must never be
+re-promoted: it is already the configuration's, and re-promoting would move the source
+run forward to a run that uploaded nothing, so every finding quoting that provenance
+would be quoting something untrue.
+
+- [x] An `artifact_types` row `record_layout`, built in, **optional**, appearing as an
+      upload slot with no front-end change. `NON_REPORT_KINDS` in `parsers/base.py` is
+      now the single place that says which uploaded kinds are not reports; the worker,
+      the replay and the credit-date pre-flight read it instead of each carrying their
+      own `{"osl", "config"}`.
+- [x] `parsers/record_layout.py` behind a Protocol (ADR-006), resolving its own headers
+      through the ladder so a drifted layout still parses. A layout headed `Column
+      Name` / `Type` / `Length` is the same document as one headed `Field name` /
+      `Data type` / `Size`, and a cover sheet before the layout is skipped rather than
+      rejected.
+- [x] Uploaded **per run and remembered for the configuration**: promoted on finalize,
       reused when a later run uploads none, and **every finding from a fallback names
-      the run and date it came from**.
-- [ ] A layout differing from the previous delivery's feeds the drift card.
-- [ ] `VersionKind` gains `record_layout`.
+      the run and date it came from** — `RecordLayoutDocument.provenance`, built from
+      `runs.record_layout_run_id` and `runs.record_layout_source_date`, which are stored
+      on the run so the clause still reads after the source run is purged.
+- [x] A layout differing from the previous delivery's feeds the drift card.
+      `drift.diff_record_layout` reports added, removed, retyped, resized and moved,
+      matched up the ladder so a respelling is not one field lost and another gained.
+- [x] `VersionKind` gains `record_layout`, keyed `customer|configuration_id`. The
+      snapshot excludes the source run on purpose: what is versioned is the layout, and
+      a second delivery of the same shape is not a new version of it.
+- [x] The `record_layout_supplied` fixture: a correct delivery shipping its layout under
+      a source system's own headings, declaring two fields the OSL never asked for.
+      `attribute_renamed` ships one too, which is the realistic pairing — a source
+      system that respells everything documents the respelling.
+- [x] ADR-060.
+- [x] Tests: `tests/parsers/test_record_layout.py`, `tests/db/test_record_layouts.py`,
+      `tests/api/test_record_layout.py`, and the record-layout class in
+      `tests/db/test_drift.py`.
+
+**Two defects repaired that were not the point.** `drift_out` never filled
+`newly_unchecked`, computed since Phase 6.11c and never once shown on a screen; it is
+filled now, beside `record_layout`. And `announcements.validate` counted its five-notice
+limit against the wall clock while its tests seeded notices around a frozen `NOW`, so
+`test_a_sixth_notice_is_refused_with_the_reason` was green the morning it was written
+and red that afternoon — which is how it came to be failing on clean `dev`. The moment
+is an argument now, as `showing_now` has always taken one.
 
 ### 6.22c — Product codes · ⬜ not started
 

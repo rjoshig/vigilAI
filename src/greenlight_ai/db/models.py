@@ -197,6 +197,23 @@ class Run(Base):
     #: artifact type, or does not. Kept on the run, like the keyword suggestions
     #: above, because that is where the evidence for it is.
     layout_suggestions: Mapped[Any] = mapped_column(Json, default=list)
+    #: The record layout this run was checked against, snapshotted at stage 1
+    #: (Phase 6.22b): one entry per delivered field with its name, data type and
+    #: size. Empty when the delivery uploaded none and no earlier run of this
+    #: configuration had promoted one, which is the ordinary state and checks exactly
+    #: as it did before the slot existed. A snapshot rather than a pointer, for the
+    #: same reason the configuration notes are copied here: the promoted layout moves
+    #: on, and a finalized report has to keep reproducing.
+    record_layout: Mapped[Any] = mapped_column(Json, default=list)
+    #: Which run supplied that layout, when it was not this one. Zero means this run
+    #: uploaded its own. Every finding resting on a borrowed layout names the run and
+    #: the date, because a layout one delivery out of date is exactly what a reviewer
+    #: needs told.
+    record_layout_run_id: Mapped[int] = mapped_column(sa.Integer, default=0)
+    #: When that run was finalized, as an ISO date. Stored beside the id rather than
+    #: looked up, so a finding still reads correctly after the source run is purged —
+    #: the same reasoning as ``configs.created_by`` being kept beside its user id.
+    record_layout_source_date: Mapped[str] = mapped_column(sa.String(10), default="")
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
@@ -470,6 +487,42 @@ class AttributeAlias(Base):
     canonical_name: Mapped[str] = mapped_column(sa.String(200), index=True)
     alias: Mapped[str] = mapped_column(sa.String(200), index=True)
     customer_name: Mapped[Optional[str]] = mapped_column(sa.String(200), nullable=True)
+
+
+class RecordLayoutRow(Base):
+    """The record layout a configuration is known to deliver (Phase 6.22b).
+
+    A record layout is uploaded **per run** and remembered **for the configuration**:
+    the run that finalizes promotes its layout here, and a later run of the same
+    configuration that uploads none borrows it. One row per customer and
+    configuration id; promoting replaces it, and the version history
+    (:mod:`greenlight_ai.db.versions`, kind ``record_layout``) keeps the previous ten
+    so a promotion can be reverted like any other definition.
+
+    Borrowing is never silent. The borrowing run stores ``record_layout_run_id``, and
+    every finding that rests on the borrowed layout names the run it came from and the
+    date that run was finalized.
+    """
+
+    __tablename__ = "record_layouts"
+    __table_args__ = (
+        sa.UniqueConstraint("customer_name", "configuration_id", name="uq_record_layout_config"),
+    )
+
+    id: Mapped[int] = _pk()
+    customer_name: Mapped[str] = mapped_column(sa.String(200), index=True)
+    configuration_id: Mapped[str] = mapped_column(sa.String(200), index=True)
+    #: One entry per delivered field: name, data type, size, ordinal.
+    fields: Mapped[Any] = mapped_column(Json, default=list)
+    #: The run whose finalize promoted it, and when that run was finalized. Both are
+    #: what a borrowing run's findings quote.
+    source_run_id: Mapped[Optional[int]] = mapped_column(
+        sa.ForeignKey("runs.id"), nullable=True, index=True
+    )
+    source_finished_at: Mapped[Optional[dt.datetime]] = mapped_column(Utc, nullable=True)
+    source_filename: Mapped[str] = mapped_column(sa.String(500), default="")
+    promoted_at: Mapped[dt.datetime] = mapped_column(Utc, default=utcnow)
+    promoted_by: Mapped[str] = mapped_column(sa.String(200), default="")
 
 
 class MaskedColumn(Base):

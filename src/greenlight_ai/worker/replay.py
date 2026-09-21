@@ -30,7 +30,7 @@ from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.checks.field_constraints import evaluate as evaluate_constraints
 from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.db import models, repository
-from greenlight_ai.parsers.base import ConfigDocument, ReportDocument
+from greenlight_ai.parsers.base import NON_REPORT_KINDS, ConfigDocument, ReportDocument
 from greenlight_ai.parsers.config_json import JsonConfigParser
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.parsers.reports.xlsx import parser_for
@@ -41,7 +41,7 @@ __all__ = ["REPLAY_NOTE", "replay_candidate"]
 _LOG: Final = logging.getLogger(__name__)
 
 #: File kinds that are not reports, so the replay does not try a workbook parser on them.
-_NON_REPORT_KINDS: Final[frozenset[str]] = frozenset({"osl", "config"})
+_NON_REPORT_KINDS: Final[frozenset[str]] = NON_REPORT_KINDS
 
 #: How many run titles to carry back, so the console can name what it would have found.
 _MAX_EXAMPLES: Final[int] = 5

@@ -474,6 +474,15 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
         run.attribute_profile = {
             name: entry.model_dump() for name, entry in context.profile.items()
         }
+    # The layout this run was actually checked against, snapshotted rather than
+    # pointed at (Phase 6.22b): the promoted one moves on with the next delivery, and
+    # a finalized report has to keep reproducing. Written unconditionally, because a
+    # re-check of a run whose layout was removed must clear it rather than keep the
+    # old one.
+    run.record_layout = context.record_layout.as_rows()
+    run.record_layout_run_id = context.record_layout.source_run_id
+    run.record_layout_source_date = context.record_layout.source_date
+
     # Names the ladder's fifth rung had to read, kept where the evidence for them is
     # (Phase 6.21b). A suggestion, never an application — an administrator records
     # them on the artifact type, or does not (ADR-021).

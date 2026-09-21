@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from greenlight_ai.db import models
-from greenlight_ai.parsers.base import CONFIG_KIND, OSL_KIND
+from greenlight_ai.parsers.base import CONFIG_KIND, OSL_KIND, RECORD_LAYOUT_KIND
 
 __all__ = [
     "ArtifactSpec",
@@ -118,6 +118,21 @@ DEFAULT_ARTIFACTS: Final[tuple[ArtifactSpec, ...]] = (
         is_required=True,
         is_builtin=True,
         sort_order=20,
+    ),
+    ArtifactSpec(
+        key=RECORD_LAYOUT_KIND,
+        label="Record layout",
+        kind=RECORD_LAYOUT_KIND,
+        description="The delivered file's record schema: one row per field, with its "
+        "name, data type and size. The field name is what appears as the DIRT column, "
+        "which is what lets the tool look a name up instead of guessing at it.",
+        # Optional, and it stays optional. A delivery that uploads none is checked
+        # exactly as it was before this slot existed (Phase 6.22b), and the one
+        # promoted by the configuration's last finalized run is used instead.
+        is_active=True,
+        is_required=False,
+        is_builtin=True,
+        sort_order=25,
     ),
     ArtifactSpec(
         key="dirt",

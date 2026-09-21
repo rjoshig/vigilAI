@@ -330,7 +330,7 @@ def _artifact_out(
                 sheets.append(name)
     # The column is a plain string so a future kind needs no migration; the wire model
     # narrows it, and an unrecognised value would be a bug in whatever wrote the row.
-    kind = cast(Literal["osl", "config", "report"], row.kind)
+    kind = cast(Literal["osl", "config", "record_layout", "report"], row.kind)
     return wire.ArtifactTypeOut(
         id=row.id,
         key=row.key,

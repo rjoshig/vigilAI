@@ -13,6 +13,7 @@ from greenlight_ai.parsers.base import ParseError
 from greenlight_ai.parsers.config_json import JsonConfigParser
 from greenlight_ai.parsers.masking import DEFAULT_MASKED_COLUMNS
 from greenlight_ai.parsers.osl import osl_parser_for
+from greenlight_ai.parsers.record_layout import parse_record_layout
 from greenlight_ai.parsers.reports.xlsx import parser_for
 from greenlight_ai.pipeline.context import ReportPart, RunContext
 
@@ -25,7 +26,8 @@ def run(context: RunContext) -> None:
     """Parse every input file into the context.
 
     Args:
-        context: The run context, whose ``osl``, ``config``, and ``reports`` this fills.
+        context: The run context, whose ``osl``, ``config``, ``record_layout`` and
+            ``reports`` this fills.
 
     Raises:
         ParseError: When any input cannot be parsed. A run cannot proceed on a partially
@@ -35,6 +37,13 @@ def run(context: RunContext) -> None:
 
     context.osl = osl_parser_for(context.osl_path).parse(context.osl_path)
     context.config = JsonConfigParser().parse(context.config_path)
+
+    # The fourth artifact, and the only optional one (Phase 6.22b). A run that
+    # uploaded none keeps whatever the worker put here — the layout the
+    # configuration's last finalized run promoted, or an empty document — and is
+    # checked exactly as it was before the slot existed.
+    if context.record_layout_path is not None:
+        context.record_layout = parse_record_layout(context.record_layout_path)
 
     # A kind with no parts recorded is the ordinary single-file case, so the two
     # shapes are unified here rather than in every caller (ADR-021).
@@ -63,10 +72,13 @@ def run(context: RunContext) -> None:
             context.reports[kind] = parsed[0].document
 
     _LOG.info(
-        "run %s stage 1: %d OSL sections, %d config blocks, %d reports in %d file(s)",
+        "run %s stage 1: %d OSL sections, %d config blocks, %d reports in %d file(s), "
+        "%d record-layout field(s)%s",
         context.run_id,
         len(context.osl.sections),
         len(context.config.blocks),
         len(context.reports),
         parts_read,
+        len(context.record_layout.fields),
+        f" {context.record_layout.provenance}" if context.record_layout.borrowed else "",
     )

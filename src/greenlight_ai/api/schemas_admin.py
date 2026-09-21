@@ -59,7 +59,10 @@ class ArtifactTypeIn(BaseModel):
 
     key: str = Field(min_length=2, max_length=60)
     label: str = Field(min_length=1, max_length=120)
-    kind: Literal["osl", "config", "report"] = "report"
+    #: A record layout is a fourth kind (Phase 6.22b). Only reports may be added or
+    #: removed; the other three are built in and their keys are fixed, because the
+    #: pipeline reads each with a dedicated parser.
+    kind: Literal["osl", "config", "record_layout", "report"] = "report"
     description: str = ""
     #: What the model should pay attention to, in plain language. Empty means the
     #: prompts are exactly what they were before this existed.

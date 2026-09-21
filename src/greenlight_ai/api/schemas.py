@@ -574,6 +574,15 @@ class DriftConfigChange(BaseModel):
     after: str = ""
 
 
+class DriftRecordLayoutChange(BaseModel):
+    """One delivered field whose shape or position differs from last time (6.22b)."""
+
+    name: str
+    change: Literal["added", "removed", "retyped", "resized", "moved"]
+    before: str = ""
+    after: str = ""
+
+
 class DriftOut(BaseModel):
     """What changed since the previous finalized run of the same configuration."""
 
@@ -590,6 +599,10 @@ class DriftOut(BaseModel):
     config_version: Optional[int] = None
     #: OSL references a report evidenced last time and evidences no longer.
     newly_unchecked: list[str] = Field(default_factory=list)
+    #: Fields the delivered record gained, lost, retyped, resized or moved
+    #: (Phase 6.22b). Empty when either delivery carried no record layout, because
+    #: "unknown" is not "unchanged".
+    record_layout: list[DriftRecordLayoutChange] = Field(default_factory=list)
 
 
 class RunRuleOut(BaseModel):

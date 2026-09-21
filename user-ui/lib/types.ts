@@ -628,6 +628,14 @@ export interface DriftConfigChange {
   after: string;
 }
 
+/** One delivered field whose shape or position differs from last time (6.22b). */
+export interface DriftRecordLayoutChange {
+  name: string;
+  change: "added" | "removed" | "retyped" | "resized" | "moved";
+  before: string;
+  after: string;
+}
+
 /** What changed since the previous finalized run of the same configuration. */
 export interface Drift {
   previous_run_id: number | null;
@@ -643,6 +651,12 @@ export interface Drift {
   config_version: number | null;
   /** OSL references a report evidenced last time and evidences no longer. */
   newly_unchecked: string[];
+  /**
+   * Fields the delivered record gained, lost, retyped, resized or moved
+   * (Phase 6.22b). Empty when either delivery carried no record layout, because
+   * "unknown" is not "unchanged".
+   */
+  record_layout: DriftRecordLayoutChange[];
 }
 
 /** What happened to one requirement: was it actually checked? (Phase 6.11c) */

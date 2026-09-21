@@ -2287,3 +2287,84 @@ were simply the wrong way round and the stored data was always correct. The name
 fixed so the next reader does not reach the same wrong conclusion.
 
 ---
+
+## ADR-060 — The record layout is a fourth artifact, uploaded per run and remembered per configuration
+
+**Status:** accepted · 2026-09-21 · Phase 6.22b
+
+**Context.** The tool reconciled three things: the OSL, the ETL config, and the output
+reports. It had no account of the *delivered file itself* — which fields it carries, in
+what order, at what type and size. Two consequences followed.
+
+The first is the one 6.22a exposed: when the tool cannot work out what the DIRT calls an
+attribute, it has nothing to look the name up in. It can only say so honestly, which is
+what 6.22a made it do, and that leaves the requirement unevidenced. Five of
+`attribute_renamed`'s requirements are unevidenced for exactly this reason.
+
+The second is quieter and worse. A field that was ten characters and is now nine
+produces no finding at all — there is no rule about it and nothing to compare against —
+while it is the first thing the customer's loader notices.
+
+**Decision.** A **record layout** is an artifact the tool accepts: one row per delivered
+field, with the field's name, its data type and its size, where the field name is what
+appears as the DIRT column. Five things follow from that and each one is a decision.
+
+**It is optional, and stays optional.** `record_layout` is a built-in `artifact_types`
+row with `is_required=False`. A delivery that uploads none is checked exactly as it was
+before the slot existed, and every caller is written so that path is the ordinary one
+rather than a degraded one — the same discipline `LayoutResolver` follows for a run with
+no client.
+
+**It is a fourth *kind*, not a report.** `parsers/base.NON_REPORT_KINDS` is now the one
+place that says which uploaded kinds the pipeline does not read as report workbooks;
+the worker, the replay and the credit-date pre-flight all read it rather than each
+carrying their own `{"osl", "config"}`. Reading a schema with a report parser would put
+a phantom report type into coverage and send every cross-report check looking for values
+in a file that has none.
+
+**Its own headers go up the ladder.** `parsers/record_layout.py` resolves *Field name*,
+*Data type* and *Size* through `resolve.ladder`, with alternates for the words a source
+system actually uses — *Column Name*, *Type*, *Length*. A parser that insisted on one
+spelling would report a delivery as declaring no fields at all, which is the loudest
+possible wrong answer and exactly the failure ADR-054 exists to prevent. A workbook with
+no field-name column anywhere is a `ParseError` and **not** an empty layout, because
+reading it as empty would assert "this delivery declares no fields" — the same
+conflation of *absent* with *unknown* that ADR-059 undid.
+
+**It is uploaded per run and remembered per configuration.** The same order delivered
+next month has the same shape unless somebody changed it, so the layout is snapshotted
+onto the run at stage 1 and **promoted onto the configuration at finalize**. Promotion
+at finalize rather than at submission, for the reason the anomaly baseline uses the same
+rule (Phase 6.21c): a layout nobody has signed off is not yet this configuration's
+shape, and promoting earlier would let a mistaken upload become the baseline the next
+delivery is judged against. A run that uploads none borrows the promoted layout, and the
+borrowing is never silent — `runs.record_layout_run_id` and
+`runs.record_layout_source_date` record it, `RecordLayoutDocument.provenance` renders it,
+and every finding resting on a borrowed layout carries that clause. A borrowed layout is
+never re-promoted, because that would move the source run forward to a run that uploaded
+nothing and make the provenance untrue.
+
+**It feeds the drift card.** `drift.diff_record_layout` reports fields added, removed,
+retyped, resized and moved, matched on the name **up the ladder** so a respelling is not
+reported as one field lost and another gained. Empty when either delivery carried no
+layout, because "unknown" is not "unchanged".
+
+**Consequences.** The run's snapshot is a copy, not a pointer, for the same reason the
+configuration notes are copied (ADR-024): the promoted layout moves on and a finalized
+report has to keep reproducing. `VersionKind` gains `record_layout`, keyed
+`customer|configuration_id`, so a promotion can be reverted like any other definition —
+and the version snapshot deliberately excludes the source run, because what is versioned
+is the *layout*, and a second delivery of the same shape is not a new version of it.
+
+This part adds no check of its own. What the layout lets the tool assert is 6.22e; what
+it lets the tool *resolve* is 6.22f, where its field names become the suggestion a person
+accepts into the dictionary.
+
+Two things this changed that were not the point. `drift_out` never filled `record_layout`
+— nor `newly_unchecked`, which has been computed since Phase 6.11c and had never reached
+a screen; both are filled now. And `announcements.validate` counted its limit against the
+wall clock, which is why `test_a_sixth_notice_is_refused_with_the_reason` was green the
+morning it was written and red that afternoon; the moment is an argument now, as
+`showing_now` has always taken one.
+
+---

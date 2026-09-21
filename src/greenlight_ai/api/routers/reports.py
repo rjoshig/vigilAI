@@ -25,7 +25,7 @@ from greenlight_ai.api.deps import (
     get_session,
 )
 from greenlight_ai.auth.settings import AuthSettings
-from greenlight_ai.db import models, repository, drift
+from greenlight_ai.db import models, record_layouts, repository, drift
 from greenlight_ai.report.pdf import PdfUnavailable, render_pdf, renderer_available
 from greenlight_ai.report.render import render_report, write_report
 
@@ -250,6 +250,12 @@ def finalize(
         )
     )
     run.status = "finalized"
+    # The shape this delivery carried becomes the shape the configuration is known to
+    # deliver, so the next run of the same order has something to fall back on when it
+    # uploads no layout (Phase 6.22b). At finalize rather than at submission: a layout
+    # nobody has signed off is not yet this configuration's, and promoting it earlier
+    # would let a mistaken upload become the baseline the next run is judged against.
+    record_layouts.promote(session, run, user.name)
     repository.audit(
         session,
         "run.finalized",

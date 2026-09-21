@@ -161,6 +161,18 @@ class Case:
     #: ``debsc_burs_atyrt_at01_1``. `layout` renames the *structure*; this renames the
     #: attribute itself, which is a different defect and was never covered.
     attribute_spellings: Mapping[str, str] = field(default_factory=dict)
+    #: Whether this case ships a record layout — the delivered file's schema, one row
+    #: per field with its name, data type and size (Phase 6.22b). Optional by design,
+    #: so most cases carry none and exercise the path a delivery without one takes.
+    record_layout: bool = False
+    #: What the layout workbook heads its three columns, where that differs from what
+    #: the parser asks for. A layout heading them ``Column Name``, ``Type`` and
+    #: ``Length`` is the same document, and a parser that insists on one spelling is
+    #: the shape defect 6.21a exists to stop.
+    record_layout_headers: tuple[str, str, str] = ("Field name", "Data type", "Size")
+    #: Fields the layout declares that the OSL never asked for. A delivery carrying
+    #: more than the order named is a low-severity note, never a failure (6.22c).
+    record_layout_extra: tuple[str, ...] = ()
 
     def delivered(self, name: str) -> str:
         """What the DIRT calls one attribute.
@@ -325,6 +337,12 @@ CASES: Final[tuple[Case, ...]] = (
         attribute_spellings={
             name: f"debsc_burs_atyrt_{name.lower()}_1" for name in ATTRIBUTES[:10]
         },
+        # It ships a record layout too (Phase 6.22b), spelled the delivered way like
+        # the DIRT. That does not on its own resolve anything — the layout is a second
+        # artifact to check against, not a mapping — but it is where the suggestion a
+        # person accepts comes from (6.22f), and it makes this the realistic pairing:
+        # a source system that respells everything documents the respelling.
+        record_layout=True,
         expected_findings=("attribute_not_resolved",),
         # Five requirements stay unevidenced, and that is the correct answer: until the
         # dictionary of 6.22d exists, the tool genuinely cannot prove which DIRT column
@@ -334,6 +352,41 @@ CASES: Final[tuple[Case, ...]] = (
         notes=(
             "The case Phase 6.22a exists for: an unresolved attribute name is a "
             "review record, never a high-severity violation."
+        ),
+    ),
+    Case(
+        name="record_layout_supplied",
+        description=(
+            "A correct delivery that ships its record layout, headed the way a real "
+            "layout workbook is headed rather than the way the parser asks. It also "
+            "declares two fields the OSL never asked for."
+        ),
+        customer=CUSTOMERS[1],
+        order_number="ORD-10018",
+        configuration_id="CFG-SYNTH-LAYOUT-18",
+        osl_states=("IL", "AZ"),
+        config_states=("IL", "AZ"),
+        report_states=("IL", "AZ"),
+        criteria=_baseline_criteria(),
+        osl_attributes=ATTRIBUTES[:8],
+        config_attributes=ATTRIBUTES[:8],
+        report_attributes=ATTRIBUTES[:8],
+        waterfall=("input", "geography", "score", "age", "exclusions", "dedupe"),
+        input_count=1_000_000,
+        step_removals=(612_440, 201_118, 3_905, 1_204, 2_109),
+        record_layout=True,
+        # The three headings the parser asks for, written the way a source system
+        # writes them. Nothing about this delivery is wrong; a parser that insisted on
+        # one spelling would have reported a delivery with no declared fields at all.
+        record_layout_headers=("Column Name", "Type", "Length"),
+        # Two fields nobody asked for. A delivery carrying more than the order named
+        # is a low-severity note and never a failure — and it is also a privacy
+        # signal, because a field nobody asked for may be PII (Phase 6.22c).
+        record_layout_extra=("INTERNAL_SEQ", "LOAD_TIMESTAMP"),
+        expected_findings=(),
+        notes=(
+            "The record layout case: it parses through the ladder, it is promoted on "
+            "finalize, and the next delivery of this configuration borrows it."
         ),
     ),
     Case(
@@ -976,6 +1029,32 @@ def write_reports(case: Case, directory: Path) -> dict[str, Path]:
     return written
 
 
+def write_record_layout(case: Case, path: Path) -> None:
+    """Write the case's record layout: the delivered file's schema (Phase 6.22b).
+
+    Its field names are the **delivered** spellings, because a record layout describes
+    the file that shipped — which is precisely what makes it able to answer "what does
+    this DIRT call ``AT01``".
+
+    Args:
+        case: The scenario.
+        path: Where to write the workbook.
+    """
+    import openpyxl
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    numeric = {c.field_name for c in case.criteria}
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Record layout"
+    sheet.append(list(case.record_layout_headers))
+    for name in case.report_attributes:
+        sheet.append([case.delivered(name), "DECIMAL" if name in numeric else "CHAR", 10])
+    for name in case.record_layout_extra:
+        sheet.append([name, "CHAR", 20])
+    workbook.save(path)
+
+
 # --------------------------------------------------------------------------------------
 # Driver
 # --------------------------------------------------------------------------------------
@@ -997,9 +1076,15 @@ def generate(case: Case, root: Path) -> dict[str, object]:
     write_osl(case, osl_path)
     write_config(case, config_path)
     reports = write_reports(case, directory / "reports")
+    layout_path: Path | None = None
+    if case.record_layout:
+        layout_path = directory / "record_layout.xlsx"
+        write_record_layout(case, layout_path)
     flow = compute_flow(case)
 
-    _LOG.info("generated case %s (%d files)", case.name, 2 + len(reports))
+    _LOG.info(
+        "generated case %s (%d files)", case.name, 2 + len(reports) + (1 if layout_path else 0)
+    )
     return {
         "name": case.name,
         "description": case.description,
@@ -1009,6 +1094,9 @@ def generate(case: Case, root: Path) -> dict[str, object]:
         "osl": str(osl_path.relative_to(root)),
         "config": str(config_path.relative_to(root)),
         "reports": {kind: str(p.relative_to(root)) for kind, p in reports.items()},
+        # Optional, and most cases carry none: a delivery without a record layout is
+        # checked exactly as it was before the slot existed (Phase 6.22b).
+        "record_layout": str(layout_path.relative_to(root)) if layout_path else "",
         "expected": {
             "osl_states": list(case.osl_states),
             "config_states": list(case.config_states),

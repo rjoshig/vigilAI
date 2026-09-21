@@ -81,7 +81,8 @@ export function DriftCard({ runId }: DriftCardProps) {
     drift.new.length === 0 &&
     drift.resolved.length === 0 &&
     drift.requirements.length === 0 &&
-    drift.config.length === 0;
+    drift.config.length === 0 &&
+    drift.record_layout.length === 0;
 
   return (
     <Card className="mb-4" data-testid="drift-card">
@@ -134,7 +135,8 @@ export function DriftCard({ runId }: DriftCardProps) {
 
             {nothingChanged ? (
               <p className="text-muted-foreground">
-                Nothing changed: same findings, same requirements, same configuration.
+                Nothing changed: same findings, same requirements, same configuration, same record
+                layout.
               </p>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
@@ -162,6 +164,34 @@ export function DriftCard({ runId }: DriftCardProps) {
                           {item.change === "changed"
                             ? `${item.before} → ${item.after}`
                             : item.after || item.before}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+                {drift.record_layout.length > 0 ? (
+                  <details className="sm:col-span-2">
+                    <summary className="cursor-pointer font-semibold">
+                      {drift.record_layout.length} record layout change
+                      {drift.record_layout.length === 1 ? "" : "s"}
+                    </summary>
+                    <p className="mt-1 text-muted-foreground">
+                      The shape of the delivered file itself. A field that was ten characters and is
+                      now nine will not show up in any finding above, and is exactly the kind of
+                      change a customer notices first.
+                    </p>
+                    <ul className="mt-1 space-y-0.5 pl-1">
+                      {drift.record_layout.map((item) => (
+                        <li key={`${item.name}-${item.change}`}>
+                          <span className="mono">{item.name}</span>{" "}
+                          <Badge tone={item.change === "removed" ? "warn" : "muted"}>
+                            {item.change}
+                          </Badge>{" "}
+                          <span className="mono">
+                            {item.before && item.after
+                              ? `${item.before} → ${item.after}`
+                              : item.after || item.before}
+                          </span>
                         </li>
                       ))}
                     </ul>

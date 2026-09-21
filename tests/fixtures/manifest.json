@@ -15,6 +15,7 @@
         "counts": "cases/baseline_match/reports/counts.xlsx",
         "billing": "cases/baseline_match/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -53,6 +54,7 @@
         "counts": "cases/geography_extra_state/reports/counts.xlsx",
         "billing": "cases/geography_extra_state/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -97,6 +99,7 @@
         "counts": "cases/score_value_mismatch/reports/counts.xlsx",
         "billing": "cases/score_value_mismatch/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -138,6 +141,7 @@
         "counts": "cases/rule_missing_in_config/reports/counts.xlsx",
         "billing": "cases/rule_missing_in_config/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -178,6 +182,7 @@
         "counts": "cases/attributes_missing_in_report/reports/counts.xlsx",
         "billing": "cases/attributes_missing_in_report/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -204,6 +209,86 @@
       "credit_date": ""
     },
     {
+      "name": "attribute_renamed",
+      "description": "A correct delivery whose DIRT spells every attribute the long way the source system does. Nothing is wrong with it.",
+      "customer": "Harbor Credit Union",
+      "order_number": "ORD-10011",
+      "configuration_id": "CFG-SYNTH-RENAME-11",
+      "osl": "cases/attribute_renamed/osl.docx",
+      "config": "cases/attribute_renamed/config.json",
+      "reports": {
+        "dirt": "cases/attribute_renamed/reports/dirt.xlsx",
+        "state_distribution": "cases/attribute_renamed/reports/state_distribution.xlsx",
+        "field_distribution": "cases/attribute_renamed/reports/field_distribution.xlsx",
+        "counts": "cases/attribute_renamed/reports/counts.xlsx",
+        "billing": "cases/attribute_renamed/reports/billing.xlsx"
+      },
+      "record_layout": "cases/attribute_renamed/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [
+          "attribute_not_resolved"
+        ],
+        "unevidenced": 5
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
+      "name": "record_layout_supplied",
+      "description": "A correct delivery that ships its record layout, headed the way a real layout workbook is headed rather than the way the parser asks. It also declares two fields the OSL never asked for.",
+      "customer": "Northwind Lending",
+      "order_number": "ORD-10018",
+      "configuration_id": "CFG-SYNTH-LAYOUT-18",
+      "osl": "cases/record_layout_supplied/osl.docx",
+      "config": "cases/record_layout_supplied/config.json",
+      "reports": {
+        "dirt": "cases/record_layout_supplied/reports/dirt.xlsx",
+        "state_distribution": "cases/record_layout_supplied/reports/state_distribution.xlsx",
+        "field_distribution": "cases/record_layout_supplied/reports/field_distribution.xlsx",
+        "counts": "cases/record_layout_supplied/reports/counts.xlsx",
+        "billing": "cases/record_layout_supplied/reports/billing.xlsx"
+      },
+      "record_layout": "cases/record_layout_supplied/record_layout.xlsx",
+      "expected": {
+        "osl_states": [
+          "IL",
+          "AZ"
+        ],
+        "config_states": [
+          "IL",
+          "AZ"
+        ],
+        "report_states": [
+          "IL",
+          "AZ"
+        ],
+        "accepts": 179224,
+        "rejects": 820776,
+        "input_count": 1000000,
+        "reconciles": true,
+        "findings": [],
+        "unevidenced": 0
+      },
+      "programme": "",
+      "credit_date": ""
+    },
+    {
       "name": "counts_do_not_reconcile",
       "description": "588 records vanish between exclusions and dedupe; accepts + rejects < input.",
       "customer": "Acme Card Services",
@@ -218,6 +303,7 @@
         "counts": "cases/counts_do_not_reconcile/reports/counts.xlsx",
         "billing": "cases/counts_do_not_reconcile/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -258,6 +344,7 @@
         "counts": "cases/operator_boundary_drift/reports/counts.xlsx",
         "billing": "cases/operator_boundary_drift/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -298,6 +385,7 @@
         "counts": "cases/extra_config_filter/reports/counts.xlsx",
         "billing": "cases/extra_config_filter/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -338,6 +426,7 @@
         "counts": "cases/report_violates_state_rule/reports/counts.xlsx",
         "billing": "cases/report_violates_state_rule/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -379,6 +468,7 @@
         "counts": "cases/missing_waterfall_step/reports/counts.xlsx",
         "billing": "cases/missing_waterfall_step/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -419,6 +509,7 @@
         "counts": "cases/reordered_waterfall/reports/counts.xlsx",
         "billing": "cases/reordered_waterfall/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -459,6 +550,7 @@
         "counts": "cases/missing_state_in_config/reports/counts.xlsx",
         "billing": "cases/missing_state_in_config/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -497,6 +589,7 @@
         "counts": "cases/unevidenced_requirement/reports/counts.xlsx",
         "billing": "cases/unevidenced_requirement/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -536,6 +629,7 @@
         "billing": "cases/report_nothing_checks/reports/billing.xlsx",
         "segment_summary": "cases/report_nothing_checks/reports/segment_summary.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -574,6 +668,7 @@
         "counts": "cases/credit_date_not_in_reports/reports/counts.xlsx",
         "billing": "cases/credit_date_not_in_reports/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",
@@ -614,6 +709,7 @@
         "counts": "cases/layout_drift/reports/counts.xlsx",
         "billing": "cases/layout_drift/reports/billing.xlsx"
       },
+      "record_layout": "",
       "expected": {
         "osl_states": [
           "IL",

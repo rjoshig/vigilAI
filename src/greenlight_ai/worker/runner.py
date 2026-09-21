@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from greenlight_ai.checks import field_labels
 from greenlight_ai.checks.guides import GuideEntry, guide_lines
 from greenlight_ai.meaning.render import effective_entries, meaning_lines
-from greenlight_ai.db import catalog, models, repository, versions
+from greenlight_ai.db import catalog, models, record_layouts, repository, versions
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db.cache import DbCache, record_calls
 from greenlight_ai.db.session import session_scope
@@ -35,6 +35,7 @@ from greenlight_ai.pipeline.context import (
     RunContext,
     StageRecord,
 )
+from greenlight_ai.parsers.base import NON_REPORT_KINDS, RECORD_LAYOUT_KIND
 from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.pipeline.run import PipelineError, run_pipeline
 
@@ -42,9 +43,11 @@ __all__ = ["execute_run", "recheck_run", "build_context"]
 
 _LOG: Final = logging.getLogger(__name__)
 
-#: The two uploaded kinds that are not reports. Everything else a run carries is one,
-#: including report types an administrator defined (ADR-020).
-_NON_REPORT_KINDS: Final[frozenset[str]] = frozenset({"osl", "config"})
+#: The uploaded kinds that are not reports. Everything else a run carries is one,
+#: including report types an administrator defined (ADR-020). Defined once, in
+#: :mod:`greenlight_ai.parsers.base`, so adding a non-report artifact — the record
+#: layout was the first since Phase 0 — touches one line rather than three modules.
+_NON_REPORT_KINDS: Final[frozenset[str]] = NON_REPORT_KINDS
 
 
 def build_guidance(session: Session, run: models.Run) -> RunGuidance:
@@ -180,6 +183,11 @@ def build_context(
         config_path=paths["config"],
         report_paths={k: v for k, v in paths.items() if k not in _NON_REPORT_KINDS},
         report_parts=_parts(session, run, data_dir),
+        # Optional, and the only optional artifact (Phase 6.22b). A run that uploaded
+        # none gets whichever layout its configuration's last finalized run promoted,
+        # seeded below; a run whose configuration has none too is checked exactly as
+        # it was before the slot existed.
+        record_layout_path=paths.get(RECORD_LAYOUT_KIND),
         client=client,
         customer=run.customer_name,
         admin=repository.load_admin_config(
@@ -214,6 +222,13 @@ def build_context(
         anomaly_sensitivity=float(resolve(session, "anomaly.sensitivity_pct").value) / 100.0,
         anomaly_model=bool(resolve(session, "anomaly.model_reads_shape").value),
     )
+
+    # Seeded before stage 1 so that a run which uploaded no layout still has one to
+    # check against. Stage 1 overwrites this when the delivery did upload one.
+    if context.record_layout_path is None:
+        context.record_layout = record_layouts.run_layout(
+            session, run.customer_name, run.configuration_id, None
+        )
 
     for row in session.execute(
         sa.select(models.RunStage).where(models.RunStage.run_id == run.id)

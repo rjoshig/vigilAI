@@ -46,7 +46,7 @@ from greenlight_ai.db.types import utcnow
 from greenlight_ai.llm.factory import build_client
 from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.parsers import detect
-from greenlight_ai.parsers.base import ParseError
+from greenlight_ai.parsers.base import NON_REPORT_KINDS, RECORD_LAYOUT_KIND, ParseError
 from greenlight_ai.parsers.reports import parser_for
 from greenlight_ai.pipeline.s4_trace import describe_rule
 from greenlight_ai.report.pdf import renderer_available
@@ -269,7 +269,7 @@ def new_run_options(
         The active upload slots and delivery programmes, in display order.
     """
     catalog.seed_defaults(session)
-    accept = {"osl": ".docx,.pdf", "config": ".json"}
+    accept = {"osl": ".docx,.pdf", "config": ".json", RECORD_LAYOUT_KIND: ".xlsx"}
     return schemas.NewRunOptions(
         artifacts=[
             schemas.ArtifactSlot(
@@ -658,7 +658,10 @@ def _labelled_credit_date(
         (
             (file.kind, data_dir / file.storage_key)
             for file, _, _ in stored
-            if file.kind not in ("osl", "config")
+            # Reports only. The record layout is a schema and carries no credit date,
+            # and reading it with a report parser would spend the budget on a file
+            # that cannot answer (Phase 6.22b).
+            if file.kind not in NON_REPORT_KINDS
         ),
         key=lambda pair: pair[1].stat().st_size if pair[1].exists() else 0,
     )
@@ -1191,6 +1194,11 @@ def drift_out(result: drift.Drift) -> schemas.DriftOut:
         config=[schemas.DriftConfigChange(**asdict(c)) for c in result.config],
         previous_config_version=result.previous_config_version,
         config_version=result.config_version,
+        # Both of these existed on the wire model and were never filled: the panel
+        # showed an empty list whatever the comparison found. `newly_unchecked` has
+        # been computed since Phase 6.11c and has never reached a screen.
+        newly_unchecked=list(result.newly_unchecked),
+        record_layout=[schemas.DriftRecordLayoutChange(**asdict(c)) for c in result.record_layout],
     )
 
 

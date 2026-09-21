@@ -38,6 +38,8 @@ __all__ = [
     "programme_snapshot",
     "prune_versions",
     "record_artifact_version",
+    "record_layout_key",
+    "record_layout_version",
     "record_example_version",
     "record_meaning_version",
     "record_programme_version",
@@ -57,6 +59,10 @@ VersionKind = Literal[
     "meaning",
     "example",
     "field_label",
+    #: The record layout promoted for one configuration (Phase 6.22b). Keyed by
+    #: ``customer|configuration_id``, so promoting a new one keeps the previous ten and
+    #: a promotion can be reverted like any other definition.
+    "record_layout",
 ]
 
 #: Artifact-type fields an administrator edits, in snapshot order.
@@ -345,6 +351,53 @@ def record_programme_version(
     session.flush()
     return _record(
         session, "programme_rules", code, programme_snapshot(session, code), actor, summary
+    )
+
+
+def record_layout_key(customer: str, configuration_id: str) -> str:
+    """The key one configuration's record layout is versioned under (Phase 6.22b).
+
+    Args:
+        customer: Who the delivery is for.
+        configuration_id: The configuration.
+
+    Returns:
+        A stable key. The two parts are joined with a pipe because neither may contain
+        one and a customer named after a configuration must not collide with it.
+    """
+    return f"{customer.strip()}|{configuration_id.strip()}"
+
+
+def record_layout_version(
+    session: Session,
+    customer: str,
+    configuration_id: str,
+    snapshot: dict[str, Any],
+    actor: str,
+    summary: str = "",
+) -> models.DefinitionVersion:
+    """Snapshot a configuration's record layout after a promotion (Phase 6.22b).
+
+    Args:
+        session: An open session.
+        customer: Who the delivery is for.
+        configuration_id: The configuration.
+        snapshot: The layout as JSON, as :func:`record_layout_snapshot` builds it.
+        actor: Who promoted it.
+        summary: What changed, when the caller knows; derived otherwise.
+
+    Returns:
+        The version written, or the latest when nothing changed. A run that finalizes
+        with the same layout as last time writes no version, which is what keeps the
+        ten the console lists meaningful.
+    """
+    return _record(
+        session,
+        "record_layout",
+        record_layout_key(customer, configuration_id),
+        snapshot,
+        actor,
+        summary,
     )
 
 

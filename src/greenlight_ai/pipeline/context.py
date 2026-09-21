@@ -21,6 +21,7 @@ from greenlight_ai.checks.profile import AttributeProfile
 from greenlight_ai.resolve.layout import LayoutResolver
 from greenlight_ai.pipeline.guidance import RunGuidance
 from greenlight_ai.parsers.base import ConfigDocument, OslDocument, ReportDocument, ReportKind
+from greenlight_ai.parsers.record_layout import RecordLayoutDocument
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.schema import ConfigElement, Finding, Rule, Trace
 
@@ -182,6 +183,7 @@ class RunContext:
         config_path: The ETL config.
         report_paths: Report kind to its first file, kept because most checks want
             exactly one workbook.
+        record_layout_path: The uploaded record layout, when the delivery carried one.
         report_parts: Report kind to every uploaded file of that kind, each with its
             label. One entry per kind is the ordinary case.
         client: The LLM adapter. The only route to a model (ADR-004).
@@ -202,6 +204,7 @@ class RunContext:
         masked_columns: Header patterns masked at parse time (ADR-003).
         osl: The parsed OSL, set by stage 1.
         config: The parsed config, set by stage 1.
+        record_layout: The record layout in force, set by stage 1.
         reports: The parsed reports, set by stage 1.
         rules: Canonical requirements from the OSL, set by stage 2.
         elements: Config elements in requirement vocabulary, set by stage 3.
@@ -219,6 +222,10 @@ class RunContext:
     report_paths: Mapping[ReportKind, Path]
     client: LLMClient
     customer: str = ""
+    #: The uploaded record layout, or ``None`` when this delivery uploaded none
+    #: (Phase 6.22b). Optional by design: a run without one is checked exactly as it
+    #: was before the slot existed.
+    record_layout_path: Path | None = None
     admin: AdminConfig = field(default_factory=AdminConfig)
     guidance: RunGuidance = field(default_factory=RunGuidance)
     aliases: AliasTable = field(default_factory=lambda: AliasTable.from_mapping({}))
@@ -231,6 +238,12 @@ class RunContext:
 
     osl: OslDocument | None = None
     config: ConfigDocument | None = None
+    #: The record layout this run is checked against, set by stage 1 (Phase 6.22b).
+    #: Either the one this delivery uploaded or, when it uploaded none, the one the
+    #: configuration's last finalized run promoted — in which case ``borrowed`` is
+    #: true and every finding resting on it names the run and the date it came from.
+    #: An empty document is the ordinary state and changes no check's answer.
+    record_layout: RecordLayoutDocument = field(default_factory=RecordLayoutDocument)
     reports: dict[ReportKind, ReportDocument] = field(default_factory=dict)
     #: Every uploaded file per report kind, in upload order, with the label the
     #: submitter gave it. A campaign can deliver the same report type several times,
