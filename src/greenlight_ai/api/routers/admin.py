@@ -60,6 +60,7 @@ from greenlight_ai.checks.expressions import (
     referenced_names,
     validate,
 )
+from greenlight_ai.checks import attribute_suggestions as attribute_rail
 from greenlight_ai.checks import guides, layout
 from greenlight_ai.resolve import squashed
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
@@ -4107,6 +4108,168 @@ def rehearsal(
         ],
         notes=list(result.notes),
     )
+
+
+@router.get("/attribute-suggestions", response_model=wire.AttributeSuggestionsOut)
+def attribute_suggestions(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.AttributeSuggestionsOut:
+    """What deliveries appear to call the attributes the tool could not locate (6.22f).
+
+    Each one comes from a run where the OSL asked for an attribute, the ladder's
+    deterministic rungs could not say which column it is, and something proposed an
+    answer: the uploaded record layout, in code and at no model call, or the ladder's
+    fifth rung where the layout was silent.
+
+    That is a gap in what the tool has been told about a customer's vocabulary rather
+    than a defect in the delivery, and it recurs on every delivery from that customer
+    until somebody closes it. Accepting a suggestion is what closes it: from then on
+    the fourth rung resolves the name in code and no call is made.
+
+    **Nothing here is in force.** A suggestion is a suggestion until somebody accepts
+    it (ADR-021).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        Every pending mapping, most-seen first, with the runs it came from.
+    """
+    # Already listed when the dictionary holds the spelling for that attribute, at any
+    # scope. Scope is deliberately ignored, for the reason 6.21b gives about the layout
+    # map: somebody who recorded it once has decided, and asking again on the next
+    # programme's delivery is how a console trains people to click past it.
+    listed: set[tuple[str, str]] = set()
+    for term in session.execute(sa.select(models.AttributeTerm)).scalars():
+        for spelling in term.spellings:
+            listed.add((squashed(term.canonical), squashed(spelling.spelling)))
+
+    seen: dict[tuple[str, str, str], list[int]] = {}
+    best: dict[tuple[str, str, str], wire.AttributeSuggestionOut] = {}
+    rows = session.execute(
+        sa.select(models.Run.id, models.Run.attribute_suggestions).where(
+            models.Run.attribute_suggestions.is_not(None)
+        )
+    ).all()
+    for run_id, suggestions in rows:
+        for raw in suggestions or []:
+            try:
+                read = attribute_rail.AttributeSuggestion.model_validate(raw)
+            except ValueError:
+                continue
+            key = read.key
+            seen.setdefault(key, []).append(int(run_id))
+            # A record layout's reading beats the model's, and between two of a kind
+            # the more confident one: it is the one worth judging.
+            current = best.get(key)
+            if (
+                current is None
+                or (current.origin != "record_layout" and read.origin == "record_layout")
+                or (current.origin == read.origin and read.confidence > current.confidence)
+            ):
+                best[key] = wire.AttributeSuggestionOut(
+                    artifact=read.artifact,
+                    wanted=read.wanted,
+                    found=read.found,
+                    origin=read.origin,
+                    confidence=read.confidence,
+                    reason=read.reason,
+                )
+
+    out: list[wire.AttributeSuggestionOut] = []
+    for key, run_ids in seen.items():
+        row_out = best[key]
+        row_out.seen = len(run_ids)
+        row_out.run_ids = sorted(run_ids)[-10:]
+        row_out.already_listed = (key[1], key[2]) in listed
+        out.append(row_out)
+    out.sort(key=lambda row: (row.already_listed, -row.seen, row.wanted, row.found))
+    return wire.AttributeSuggestionsOut(suggestions=out)
+
+
+@router.post("/attribute-suggestions/accept", response_model=wire.AttributeTermOut)
+def accept_attribute_suggestion(
+    payload: wire.AttributeAcceptIn,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_reference),
+) -> wire.AttributeTermOut:
+    """Record one mapping in the attribute dictionary (Phase 6.22f).
+
+    The act that closes the loop: from here the ladder's fourth rung resolves this name
+    in code and the model is not asked again (ADR-062). The term is created when it
+    does not exist, because the first delivery to teach the tool an attribute is
+    usually the one that teaches it the attribute exists.
+
+    Args:
+        payload: The attribute, what this delivery calls it, and where that applies.
+        session: The request's session.
+        user: The caller, recorded on the spelling.
+
+    Returns:
+        The term, with its new spelling.
+
+    Raises:
+        HTTPException: 422 when the spelling already belongs to a different attribute.
+    """
+    scope = scopes.token(payload.scope)
+    wanted = squashed(payload.spelling_key())
+    for other in session.execute(sa.select(models.AttributeTerm)).scalars():
+        if squashed(other.canonical) == squashed(payload.wanted):
+            continue
+        if wanted in {squashed(s.spelling) for s in other.spellings} or wanted == squashed(
+            other.canonical
+        ):
+            raise HTTPException(
+                HTTP_422,
+                f"{payload.found!r} already belongs to {other.canonical!r}. One name "
+                f"means one attribute. If {payload.wanted!r} and {other.canonical!r} "
+                f"are the same attribute written two ways, record {payload.wanted!r} "
+                f"as another spelling of {other.canonical!r} instead of as a term of "
+                "its own.",
+            )
+
+    row = session.execute(
+        sa.select(models.AttributeTerm).where(
+            models.AttributeTerm.canonical == payload.wanted,
+            models.AttributeTerm.scope == scope,
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        row = models.AttributeTerm(
+            canonical=payload.wanted.strip(),
+            scope=scope,
+            created_by=user.name,
+            created_by_user_id=user.id,
+        )
+        session.add(row)
+        session.flush()
+
+    artifact = payload.artifact.strip().lower()
+    if not any(
+        squashed(s.spelling) == squashed(payload.found) and s.artifact == artifact
+        for s in row.spellings
+    ):
+        row.spellings.append(
+            models.AttributeSpelling(
+                spelling=payload.found.strip(),
+                artifact=artifact,
+                origin=payload.origin.strip() or "model",
+                origin_run_id=payload.origin_run_id or None,
+                created_by=user.name,
+            )
+        )
+    session.flush()
+
+    repository.audit(
+        session,
+        "admin.attribute_suggestion_accepted",
+        detail=f"{payload.wanted} = {payload.found} @ {scope} ({payload.origin})",
+        user_id=user.id,
+        actor=user.name,
+    )
+    return _term_out(row)
 
 
 @router.get("/layout-suggestions", response_model=wire.LayoutSuggestionsOut)

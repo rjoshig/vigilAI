@@ -18,6 +18,7 @@ from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.checks.field_constraints import evaluate as evaluate_constraints
 from greenlight_ai.checks import anomaly
+from greenlight_ai.checks import attribute_suggestions
 from greenlight_ai.checks.profile import read_profile
 from greenlight_ai.checks.reports import (
     DIRT_ATTRIBUTE_SHEET,
@@ -33,7 +34,7 @@ from greenlight_ai.llm.prompts.schemas import JudgmentResponse, ProgrammeReading
 from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import RunContext
-from greenlight_ai.resolve.layout import LayoutResolver
+from greenlight_ai.resolve.layout import ATTRIBUTE, LayoutResolver
 from greenlight_ai.rules.derive import derive_checks
 from greenlight_ai.rules.schema import Evidence, Finding, Severity
 
@@ -164,6 +165,7 @@ def run(context: RunContext) -> None:
     # every check that needed the same sheet (Phase 6.21a).
     _report_reasoned_names(context, resolver)
     _report_capped_attributes(context, resolver)
+    _offer_attribute_mappings(context, resolver)
     _check_anomalies(context, resolver)
     # Read here rather than at render time, because by then the workbooks are long
     # parsed and gone (Phase 6.21f).
@@ -284,6 +286,84 @@ def _report_capped_attributes(context: RunContext, resolver: LayoutResolver) -> 
         len(resolver.capped),
         resolver.max_attribute_calls,
     )
+
+
+def _offer_attribute_mappings(context: RunContext, resolver: LayoutResolver) -> None:
+    """Propose what this delivery calls each attribute the checks could not locate.
+
+    Run after every check, because an attribute is only unresolved once something went
+    looking for it — the same placement, for the same reason, as
+    :func:`_report_reasoned_names`.
+
+    Two sources, and the free one first (Phase 6.22f). The record layout is a document
+    the delivery carried: where it declares exactly one field resembling the attribute
+    the OSL asked for, that is the delivery saying what it calls it, and reading it
+    costs no model call. Where the layout is silent, the fifth rung's readings stand,
+    already carrying the review record that says a person should look.
+
+    Nothing proposed here is in force. It becomes a dictionary spelling when somebody
+    accepts it, and not before (ADR-021).
+
+    Args:
+        context: The run context, whose ``attribute_suggestions`` this fills.
+        resolver: The run's resolver, which kept what the model read.
+    """
+    unresolved = tuple(
+        dict.fromkeys(
+            name
+            for finding in context.findings
+            if finding.type == "attribute_not_resolved"
+            for name in _unresolved_names(finding.title)
+        )
+    )
+    proposals = list(
+        attribute_suggestions.from_record_layout(
+            unresolved, context.record_layout.names, artifact="dirt"
+        )
+    )
+    proposals.extend(
+        attribute_suggestions.AttributeSuggestion(
+            artifact=reasoned.artifact,
+            wanted=reasoned.wanted,
+            found=reasoned.found,
+            origin="model",
+            confidence=reasoned.confidence,
+            reason=reasoned.reason,
+        )
+        for reasoned in resolver.reasoned
+        if reasoned.kind == ATTRIBUTE
+    )
+
+    known = {term.canonical: term.names() for term in context.dictionary.terms}
+    context.attribute_suggestions = attribute_suggestions.merge(proposals, known)
+    if context.attribute_suggestions:
+        _LOG.info(
+            "run %s: %d attribute mapping(s) to offer",
+            context.run_id,
+            len(context.attribute_suggestions),
+        )
+
+
+def _unresolved_names(title: str) -> tuple[str, ...]:
+    """The attribute names an ``attribute_not_resolved`` finding's title lists.
+
+    Read back off the title rather than threaded through, because the finding is what
+    a person sees and the offer must be about exactly those names. Stage 7 writes the
+    title a few lines above; the two are deliberately the same list.
+
+    Args:
+        title: The finding's title.
+
+    Returns:
+        The names, or empty when the title is not one this stage wrote.
+    """
+    marker = "Could not tell what the report calls "
+    if not title.startswith(marker):
+        return ()
+    rest = title[len(marker) :]
+    # Stage 7 appends " (part name)" when a kind was delivered several times.
+    rest = rest.split(" (", 1)[0]
+    return tuple(name.strip() for name in rest.split(",") if name.strip())
 
 
 def _check_anomalies(context: RunContext, resolver: LayoutResolver) -> None:

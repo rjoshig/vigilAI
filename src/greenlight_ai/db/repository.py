@@ -742,6 +742,13 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
     if context.resolver is not None:
         run.attribute_locate_calls = context.resolver.attribute_calls
 
+    # What this delivery appears to call each attribute the checks could not locate
+    # (Phase 6.22f). A suggestion, never an application — somebody accepts it into the
+    # dictionary, or does not (ADR-021).
+    run.attribute_suggestions = [
+        suggestion.model_dump() for suggestion in context.attribute_suggestions
+    ]
+
     # Names the ladder's fifth rung had to read, kept where the evidence for them is
     # (Phase 6.21b). A suggestion, never an application — an administrator records
     # them on the artifact type, or does not (ADR-021).

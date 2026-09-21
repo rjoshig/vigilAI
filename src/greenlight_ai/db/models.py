@@ -226,6 +226,14 @@ class Run(Base):
     #: to have spent none. A **soft** limit inside the existing token ceiling: past it
     #: the run stops asking and says so, and nothing is refused.
     attribute_locate_calls: Mapped[int] = mapped_column(sa.Integer, default=0)
+    #: What this delivery appears to call each attribute the checks could not locate
+    #: (Phase 6.22f): one entry per artifact, wanted name, spelling and origin. Read
+    #: out of the uploaded record layout in code where it settles the question, and
+    #: from the ladder's fifth rung where it does not. A suggestion, never an
+    #: application — somebody accepts it into the dictionary, or does not (ADR-021).
+    #: Kept on the run, like the keyword and layout suggestions, because that is where
+    #: the evidence for it is.
+    attribute_suggestions: Mapped[Any] = mapped_column(Json, default=list)
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
@@ -1113,8 +1121,15 @@ class TrainingObservation(Base):
     author_user_id: Mapped[Optional[int]] = mapped_column(sa.ForeignKey("users.id"), nullable=True)
     author: Mapped[str] = mapped_column(sa.String(200), default="")
 
-    #: reconciliation · field_constraint · correction · note · config_note
+    #: reconciliation · field_constraint · correction · note · config_note ·
+    #: attribute_mapping
     kind: Mapped[str] = mapped_column(sa.String(30), default="reconciliation", index=True)
+    #: For an ``attribute_mapping``: what this delivery calls one attribute
+    #: (Phase 6.22f), as ``{"attribute", "spelling", "artifact"}``. Empty for every
+    #: other kind. It is here rather than folded into an anchor because the two names
+    #: are the substance of the observation, not a pointer to where it was seen — and
+    #: a reviewer approving it is agreeing to exactly these two strings.
+    mapping: Mapped[Any] = mapped_column(Json, default=dict)
     #: For a ``config_note``: the ETL configuration it follows (ADR-024). A note is
     #: guidance for every run of that configuration until it is switched off, and an
     #: observation in the queue at the same time.

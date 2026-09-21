@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, Mapping, Sequence
 
+from greenlight_ai.checks.attribute_suggestions import AttributeSuggestion
 from greenlight_ai.checks.definitions import AdminConfig
 from greenlight_ai.llm.client import LLMClient
 from greenlight_ai.llm.examples import LibraryExample
@@ -281,6 +282,11 @@ class RunContext:
     #: offered to an administrator, who decides whether they belong in the word list.
     #: Nothing activates without a person (ADR-021).
     keyword_suggestions: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: What this delivery appears to call each attribute the checks could not locate
+    #: (Phase 6.22f). Proposed by code from the record layout where it settles the
+    #: question, and by the ladder's fifth rung where it does not. Never applied by the
+    #: run: somebody accepts it into the dictionary, or does not (ADR-021).
+    attribute_suggestions: list["AttributeSuggestion"] = field(default_factory=list)
     summary: str = ""
     top_issues: tuple[str, ...] = ()
 

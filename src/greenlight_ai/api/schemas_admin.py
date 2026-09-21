@@ -46,6 +46,9 @@ __all__ = [
     "MaskedColumnIn",
     "MaskedColumnOut",
     "AliasCopyPreview",
+    "AttributeAcceptIn",
+    "AttributeSuggestionOut",
+    "AttributeSuggestionsOut",
     "AttributeSpellingIn",
     "AttributeTermIn",
     "AttributeTermOut",
@@ -791,6 +794,65 @@ class LayoutAcceptIn(BaseModel):
     #: for a report type only one customer delivers and the wrong one otherwise — so
     #: the console offers the run's programme first.
     scope: str = ""
+
+
+class AttributeSuggestionOut(BaseModel):
+    """What a delivery appears to call one attribute, offered to a person (6.22f)."""
+
+    artifact: str = ""
+    wanted: str = ""
+    found: str = ""
+    #: ``record_layout`` for a mapping code read out of the delivered file's own
+    #: schema, at no model call; ``model`` for one the ladder's fifth rung reached.
+    origin: str = "model"
+    #: The model's own number for a reading; ``1.0`` for a record layout, which is a
+    #: claim about provenance rather than certainty — a person still decides.
+    confidence: float = 0.0
+    reason: str = ""
+    #: How many runs met it. A mapping seen on every delivery from a customer is that
+    #: customer's vocabulary; one seen once may be a one-off workbook.
+    seen: int = 0
+    run_ids: list[int] = Field(default_factory=list)
+    #: True when the dictionary already holds it, so an accepted mapping stops asking
+    #: to be accepted.
+    already_listed: bool = False
+
+
+class AttributeSuggestionsOut(BaseModel):
+    """Every pending attribute mapping."""
+
+    suggestions: list[AttributeSuggestionOut] = Field(default_factory=list)
+
+
+class AttributeAcceptIn(BaseModel):
+    """Record one mapping in the attribute dictionary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    wanted: str = Field(min_length=1, max_length=200)
+    found: str = Field(min_length=1, max_length=200)
+    #: Which artifact writes it this way. **Empty by default, meaning anywhere**, and
+    #: that default is deliberate: a suggestion carries the artifact it was *seen* in,
+    #: but a customer who calls a field ``debsc_burs_atyrt_at01_1`` in their DIRT calls
+    #: it that in their record layout and their field distribution too. Narrowing it to
+    #: the one artifact it was seen in would leave every other check still asking the
+    #: model the question a person has just answered. A console offers the narrowing;
+    #: it does not impose it.
+    artifact: str = Field(default="", max_length=60)
+    #: ``everywhere``, ``programme:CODE``, ``customer:NAME`` or ``config:ID``.
+    scope: str = "everywhere"
+    #: Where the mapping came from, carried onto the spelling as its provenance.
+    origin: str = Field(default="model", max_length=30)
+    #: The run it was learned from, so the spelling can be traced back to a delivery.
+    origin_run_id: int = 0
+
+    def spelling_key(self) -> str:
+        """The name being claimed, for the one-name-one-attribute check.
+
+        Returns:
+            The delivery's spelling, which is what another term must not already hold.
+        """
+        return self.found
 
 
 class ArtifactReadingOut(BaseModel):

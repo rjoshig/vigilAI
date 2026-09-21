@@ -1,8 +1,8 @@
 # Phase 6.22 — Product codes, the record layout, and attribute resolution
 
-**Status:** 🟡 **in progress** — 6.22a, 6.22b, 6.22d and 6.22e complete and 6.22c
-built, 2026-09-21. 6.22c leaves two items open and says why under its heading. 6.22f
-and g are specified below and not started.
+**Status:** 🟡 **in progress** — 6.22a, 6.22b, 6.22d, 6.22e and 6.22f complete and
+6.22c built, 2026-09-21. 6.22c leaves two items open and says why under its heading.
+6.22g is specified below and not started.
 
 ## The goal, in the user's words
 
@@ -293,14 +293,46 @@ answer is the only one there is, which is the point.
 - [x] Tests: `tests/checks/test_record_layout_checks.py` and the 6.22e class in
       `tests/api/test_record_layout.py`.
 
-### 6.22f — It learns, and a person decides · ⬜ not started
+### 6.22f — It learns, and a person decides · ✅ complete
 
-- [ ] `Run.attribute_suggestions` and an accept endpoint, copied from the layout
-      suggestions rail.
-- [ ] `TrainingObservation` kind `attribute_mapping`: **any user** may propose while
+**Built 2026-09-21.** No ADR: this applies ADR-021 and ADR-062 rather than deciding
+anything new.
+
+**The suggestion that costs nothing.** The rail has two sources, and the first is free.
+Where the OSL asks for `AT01`, the ladder cannot settle which column it is, and the
+uploaded record layout declares exactly one field resembling it, **code** proposes the
+mapping out of a document the delivery carried — no model call at all. That is the
+record layout earning its place beyond being one more thing to check. Where the layout
+is silent, the fifth rung's readings stand, already carrying the review record.
+
+**Found while building.** A delivery whose OSL says *score* in its criteria table and
+`SCORE_V3` in its attribute list produces two suggestions pointing at one column, and
+the console refuses the second — correctly, because one name means one attribute. The
+refusal now says what to do instead: record `score` as another *spelling* of
+`SCORE_V3`, not as a term of its own.
+
+- [x] `Run.attribute_suggestions` and an accept endpoint, copied from the layout
+      suggestions rail — and its own column rather than sharing `layout_suggestions`,
+      because half of these come from a record layout and no model call, which the
+      layout rail has no way to say.
+- [x] The accept defaults to **anywhere** rather than to the artifact the mapping was
+      seen in. A customer who calls a field one thing in their DIRT calls it that in
+      their record layout too, and narrowing it would leave every other check asking
+      the model the question the click just answered. Measured: narrowing it left 13
+      lookups on the next run where anywhere left 4.
+- [x] `TrainingObservation` kind `attribute_mapping`: **any user** may propose while
       Train AI mode is on, a reviewer or admin approves, in the **existing** queue.
-- [ ] Person-proposed activates on approval; model-read stays in shadow with a review
-      record until a reviewer confirms it (ADR-021).
+      The two names live in a `mapping` column of their own, because they are the
+      substance of the observation rather than a pointer to where it was seen.
+- [x] Person-proposed activates on approval — a person vouched for it, so the spelling
+      is written with `origin="observation"` and is live from there. Model-read does
+      **not** come through that door: its reading stays a suggestion on the run, with
+      the review record that says a person should look, until somebody accepts it from
+      the rail. The model proposing and the model being believed are different things.
+- [x] Tests: `tests/checks/test_attribute_suggestions.py` and
+      `tests/api/test_attribute_suggestions_api.py`, which walks the whole loop — a run
+      proposes, a person accepts, the next run's lookups fall, and the remainder is
+      exactly the ties the layout refused to guess at.
 
 ### 6.22g — The docs describe what is true · ⬜ not started
 
@@ -338,8 +370,9 @@ answer is the only one there is, which is the point.
 - [x] 9. An OSL attribute absent from the record layout produces **one** finding, not
       two. Asserted end to end on `layout_declares_more_than_the_dirt`: exactly one
       finding names the attribute, and its detail says which artifact carried it.
-- [ ] 10. A user without admin capability can propose a mapping when Train AI mode is on
-      and cannot activate one.
+- [x] 10. A user without admin capability can propose a mapping when Train AI mode is on
+      and cannot activate one. Proposing writes a `new` observation and nothing else;
+      the dictionary is untouched until a reviewer or an administrator approves it.
 - [x] 11. Nothing in 6.22a can make a delivery pass: the widened test only ever moves a
       finding *down* from high to review, and an attribute nothing resembles is still a
       violation. Code sets every severity (ADR-001).
