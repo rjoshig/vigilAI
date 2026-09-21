@@ -127,29 +127,40 @@ and the coverage card truthful together; patching the button would have fixed on
 - [ ] The training document and the Guide say *"press Re-check"*; they become "the
       comparison stages re-run by themselves".
 
-### 6.23c — The draft you can actually finish · ⬜ not started
+### 6.23c — The draft you can actually finish · ✅ complete
 
-The **New run form finishes the draft**, which is what the mock built and what
-[`design.md`](design.md) promises. It reuses the existing form — its type detection,
-multi-part slots and duplicate dialog — rather than growing a second uploader.
+**Built 2026-09-21**, ADR-064 and ADR-065. The **New run form finishes the draft**,
+which is what the mock built and what [`design.md`](design.md) promises. It reuses the
+existing form — its type detection, multi-part slots, field markers and duplicate
+dialog — rather than growing a second uploader that would have to be kept correct
+alongside it.
 
-- [ ] Five endpoints, each refusing a run that is not a draft with the status named:
+**Found while building.** A draft that submits into `held` (its artifacts disagree with
+what was typed, ADR-041) took the early return before the expiry was re-stamped, so it
+kept the five-day draft window while waiting for a person to accept the disagreement —
+and would have been purged out from under them. The expiry is re-stamped as soon as the
+run is known not to be a duplicate, before the mismatch branch.
+
+- [x] Five endpoints, each refusing a run that is not a draft with the status named:
       `PATCH /runs/{id}` · `POST /runs/{id}/files` · `DELETE /runs/{id}/files/{fid}` ·
       `POST /runs/{id}/submit` · `DELETE /runs/{id}` (under the typed word, ADR-032).
-- [ ] `PATCH` uses `exclude_unset`: `""` clears a note, `0` means the submitter did not
+- [x] `PATCH` uses `exclude_unset`: `""` clears a note, `0` means the submitter did not
       say, an absent key changes nothing.
-- [ ] Replacing the files of a kind **unlinks the bytes it replaces**.
-- [ ] **Refactor `create_run` rather than duplicating it** into `_read_uploads`,
+- [x] Replacing the files of a kind **unlinks the bytes it replaces**.
+- [x] **Refactor `create_run` rather than duplicating it** into `_read_uploads`,
       `_admit`, `_store_uploads`, `_finish_submission`. Two copies of the admission rules
       is how they come to differ by which door a delivery entered.
-- [ ] ADR-005 applies at submit, where the files finally exist. A draft never matches as a
+- [x] ADR-005 applies at submit, where the files finally exist. A draft never matches as a
       duplicate, and **a duplicate answer keeps the draft** — deleting it would destroy
       the work in the act of asking about it.
-- [ ] When the matched duplicate **is** the draft's source, the dialog says so. This is
+- [x] When the matched duplicate **is** the draft's source, the dialog says so. This is
       what finally gives `cloned_from_id` a reader.
-- [ ] Clone carries the fields it drops today, and returns an existing draft rather than
+- [x] Clone carries the fields it dropped, and returns an existing draft rather than
       making a second.
-- [ ] `/runs/{id}` for a draft redirects to the editor, which removes the dead page.
+- [x] A draft's row in the runs list leads to the editor and reads **Finish**, and
+      `draft` is in the status filter at last.
+- [x] `lib/draft.ts` holds the prefill as pure, tested functions — `user-ui` has no
+      page-level tests, so the logic lives in `lib/` beside a test file.
 
 ### 6.23d — Five days, visible, and retention that is actually read · ⬜ not started
 
@@ -181,9 +192,9 @@ multi-part slots and duplicate dialog — rather than growing a second uploader.
 
 ## Acceptance criteria · 🟡 in progress
 
-- [ ] 1. Clone a finalized run, land on the New run form prefilled, replace a file,
-      submit — and it runs. Impossible today: the draft is unreachable by any endpoint.
-- [ ] 2. A draft can be discarded, and cannot be re-checked or finalized.
+- [x] 1. Clone a finalized run, land on the New run form prefilled, replace a file,
+      submit — and it runs. Impossible before: the draft was unreachable by any endpoint.
+- [x] 2. A draft can be discarded, and cannot be re-checked or finalized.
 - [ ] 3. A draft shows a countdown and is gone after the configured window; a submitted
       run keeps the full retention window.
 - [ ] 4. `resolve(session, "retention.days")` and `resolve(session, "uploads.max_mb")`

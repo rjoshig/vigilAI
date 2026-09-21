@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `feature/phase-6.23a`, pushed. **Phase 6.23 is specified** ([`phase-6.23.md`](phase-6.23.md)) and **6.23a is complete** (ADR-063, ADR-066): the closed status set, one guard that stops a re-check rewriting a finalized run, a finalize gate that stops calling an empty draft ready to freeze, and the summary a re-check used to erase. **Next concrete action: 6.23b**, removing the Re-check control and making the automatic re-check visible. Previously: `feature/phase-6.22a`, pushed. **Phase 6.22 is specified** ([`phase-6.22.md`](phase-6.22.md)) and **6.22a is complete** (ADR-059): an attribute name code cannot resolve is a `review` record, not a high-severity violation — measured one high finding before, zero after. **Next concrete action: 6.22b**, the record layout as a fourth artifact. Also landed: `fix/seed-demo-grace-window`, which repaired `scripts/seed_demo.py` (it crashed on the `role` column 6.20 dropped, then reported outcomes it had not reached); nothing in `tests/` covers that script. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)) and **phase 8 is specified** ([`phase-8.md`](phase-8.md)), queued behind it; 6.21's one open criterion — what guided decoding buys — needs a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After 6.22, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)). `test_announcements.py::...::test_a_sixth_notice_is_refused_with_the_reason` fails on clean `dev` and needs its own look |
+| Branch | `feature/phase-6.23c`, pushed, stacked on `feature/phase-6.23a`. **6.23a and 6.23c are complete**: a clone now lands on the New run form prefilled and can be edited, submitted or discarded. **Next concrete action: 6.23b** (remove the Re-check control, make the automatic re-check visible) and **6.23e** (the report column). Previously: `feature/phase-6.23a`, pushed. **Phase 6.23 is specified** ([`phase-6.23.md`](phase-6.23.md)) and **6.23a is complete** (ADR-063, ADR-066): the closed status set, one guard that stops a re-check rewriting a finalized run, a finalize gate that stops calling an empty draft ready to freeze, and the summary a re-check used to erase. **Next concrete action: 6.23b**, removing the Re-check control and making the automatic re-check visible. Previously: `feature/phase-6.22a`, pushed. **Phase 6.22 is specified** ([`phase-6.22.md`](phase-6.22.md)) and **6.22a is complete** (ADR-059): an attribute name code cannot resolve is a `review` record, not a high-severity violation — measured one high finding before, zero after. **Next concrete action: 6.22b**, the record layout as a fourth artifact. Also landed: `fix/seed-demo-grace-window`, which repaired `scripts/seed_demo.py` (it crashed on the `role` column 6.20 dropped, then reported outcomes it had not reached); nothing in `tests/` covers that script. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)) and **phase 8 is specified** ([`phase-8.md`](phase-8.md)), queued behind it; 6.21's one open criterion — what guided decoding buys — needs a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After 6.22, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)). `test_announcements.py::...::test_a_sixth_notice_is_refused_with_the_reason` fails on clean `dev` and needs its own look |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -156,6 +156,54 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (the draft you can finish)
+
+**Branch:** `feature/phase-6.23c`, pushed · **Phase:** 6.23c complete, ADR-064 and
+ADR-065 · **Status:** 1,868 Python tests, 131 user-ui; every gate clean.
+
+Built out of order, because the value is the form: the plan put 6.23c fourth and the
+user asked for it directly — *"I was hoping to see the exact form the new run has with
+contents populated ahead"*. That is the use case, and it is what `design.md` and the
+mock have both described since Phase 1.
+
+**Four endpoints and one shared body.** `PATCH /runs/{id}`, `POST /runs/{id}/files`,
+`POST /runs/{id}/submit` and `DELETE /runs/{id}`, each refusing anything that is not a
+draft. `create_run` was 267 lines doing seven jobs; it is now assembled from
+`_read_uploads`, `_admit`, `_store_uploads` and `_finish_submission`, and the draft path
+uses the same four. Two copies of the admission rules is how they come to differ by
+which door a delivery entered.
+
+**The ordering change worth remembering:** `RunFile` rows are written **before** the
+fingerprint, where they used to be written after the duplicate branch. That is what lets
+both paths read `run.files`, and it is why `_record_mismatches`,
+`_capture_config_from_upload` and `_labelled_credit_date` now take rows rather than
+freshly stored tuples. The riskiest edit in the phase, and the suite was green either
+side of it.
+
+**Found while building.** A draft submitting into `held` took the early return before
+the expiry was re-stamped, so it kept the five-day draft window while waiting for
+somebody to accept the artifact disagreement — and would have been purged out from under
+them. It is re-stamped as soon as the run is known not to be a duplicate.
+
+**`cloned_from_id` has a reader at last.** Written since Phase 3 and never looked at.
+When the duplicate the fingerprint matched *is* the draft's source, the dialog says
+*"this is a clone of run N and its files are unchanged"* rather than "these inputs were
+already run", which reads as nonsense to somebody who just uploaded them. That is the
+commonest way to reach it: clone, fix a field, forget to swap the DIRT.
+
+**Two dead settings, alive.** `retention.days` and `uploads.max_mb` were both editable in
+the console and read by nothing — neither `expiry_from`'s `days` nor `store_upload`'s
+`max_bytes` was ever passed. `expiry_for` and `_upload_limit` resolve them at the call
+site now. And `retention.days`'s help text claimed shortening it deletes more at the next
+sweep, which was false: the expiry is stamped at creation. Corrected.
+
+**Not verified in a browser.** The API flow is covered end to end by
+`tests/api/test_draft_runs.py` and the prefill by `user-ui/lib/draft.test.ts`, and the
+page typechecks, lints and builds — but no browser tool was available this session, so
+the rendered form has not been seen. That is the one thing left to confirm.
 
 ---
 

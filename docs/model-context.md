@@ -138,6 +138,7 @@ produce a finding.
 | **Field labels** | Admin → Reference data | `checks/field_labels.py`, resolving what a delivery calls a checked field |
 | **Artifact type layout map** | Admin → Artifact types → Layout | `resolve/ladder.py`, as the fourth rung — an administrator's spelling resolves a name in code and costs no call (ADR-054) |
 | **Scheduled notices** | Admin → Settings → Notices | Nothing evaluates them; they are shown to people between their start and end (Phase 6.14g) |
+| **How long a draft is kept** | Admin → Settings → Retention | `db/repository.py::expiry_for`, resolved per run. Reaches no prompt and decides no finding: it says when an unsubmitted draft is deleted. Stamped once when the draft is made, so changing it never shortens the life of a draft that already exists (ADR-065) |
 | **Cost per million tokens** | Admin → Settings → Availability | `spend.py`, over the `llm_calls` rows already stored. Reaches no prompt and refuses nothing: the per-run token budget stays the only hard stop (Phase 6.21d) |
 
 ## Fields that are reference only

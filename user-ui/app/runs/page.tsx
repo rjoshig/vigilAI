@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import { STATUS_LABEL, STATUS_TONE, isActive } from "@/lib/display";
+import { expiresIn } from "@/lib/draft";
 import { STAGE_LABELS, type RunSummary } from "@/lib/types";
 import { fmtRelative } from "@/lib/utils";
 
@@ -73,7 +74,12 @@ function RunProgress({ run }: { run: RunSummary }) {
     );
   }
   if (run.status === "draft") {
-    return <span className="text-xs text-muted-foreground">Draft — no files uploaded yet</span>;
+    const left = expiresIn(run.expires_at);
+    return (
+      <span className="text-xs text-muted-foreground">
+        Draft — not submitted{left ? ` · ${left}` : ""}
+      </span>
+    );
   }
 
   const total = run.high + run.medium + run.low + run.review;
@@ -225,6 +231,7 @@ export default function RunsPage() {
           aria-label="Filter by status"
         >
           <option value="">All statuses</option>
+          <option value="draft">Draft</option>
           <option value="queued">Queued</option>
           <option value="running">Running</option>
           <option value="needs_review">Needs review</option>
@@ -318,12 +325,20 @@ export default function RunsPage() {
                       )}
                     </TD>
                     <TD className="text-right">
-                      <Link href={`/runs/${run.id}`}>
+                      <Link
+                        href={
+                          run.status === "draft" ? `/runs/new?draft=${run.id}` : `/runs/${run.id}`
+                        }
+                      >
                         <Button
                           size="sm"
                           variant={run.status === "needs_review" ? "default" : "outline"}
                         >
-                          {run.status === "needs_review" ? "Review" : "Open"}
+                          {run.status === "needs_review"
+                            ? "Review"
+                            : run.status === "draft"
+                              ? "Finish"
+                              : "Open"}
                         </Button>
                       </Link>
                     </TD>

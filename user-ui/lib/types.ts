@@ -107,6 +107,20 @@ export interface RunSummary {
   low: number;
   review: number;
   queue_position: number | null;
+  /** When the purge may delete this run. A draft's window is much shorter. */
+  expires_at?: string | null;
+  /** The run this was cloned from, when it was one. */
+  cloned_from?: number | null;
+}
+
+/** One artifact stored against a run, with its part and label (Phase 6.23c). */
+export interface RunFileOut {
+  id: number;
+  kind: string;
+  part: number;
+  part_label: string;
+  filename: string;
+  size_bytes: number;
 }
 
 export interface RunDetail extends RunSummary {
@@ -132,6 +146,12 @@ export interface RunDetail extends RunSummary {
   pdf_available: boolean;
   stages: StageInfo[];
   files: Record<string, string>;
+  /** The same artifacts as rows, with their parts and labels (Phase 6.23c). */
+  files_detail?: RunFileOut[];
+  /** Whether the submitter said suppressions were applied. */
+  has_suppressions?: boolean;
+  /** Anything else about the delivery the submitter wrote down. */
+  delivery_notes?: string;
   /** Where the artifacts disagreed with the submission, accepted or not (ADR-041). */
   mismatches: ArtifactMismatch[];
   /**
