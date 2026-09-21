@@ -436,7 +436,9 @@ def load_masked_columns(session: Session) -> tuple[str, ...]:
 # --------------------------------------------------------------------------------------
 
 
-def save_context(session: Session, run: models.Run, context: RunContext) -> None:
+def save_context(
+    session: Session, run: models.Run, context: RunContext, *, narrative: bool = True
+) -> None:
     """Write a completed pipeline run into the database.
 
     Rules, elements, traces, and findings are replaced wholesale. A re-check rebuilds
@@ -447,6 +449,11 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
         session: An open session.
         run: The run row.
         context: The finished pipeline context.
+        narrative: Whether this run produced the plain-English summary. A re-check
+            does not: it runs stages 5 to 7 and skips stage 9, so ``context.summary``
+            is empty and writing it would erase the one the full run wrote. An
+            explicit flag rather than an emptiness test, because a run that genuinely
+            summarised to nothing should still be able to say so (Phase 6.23a).
     """
     _replace_rules(session, run, context.rules)
     _replace_elements(session, run, context.elements)
@@ -455,8 +462,9 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
     _save_stages(session, run, context)
 
     run.rules_version = context.rules_version
-    run.summary = context.summary
-    run.top_issues = list(context.top_issues)
+    if narrative:
+        run.summary = context.summary
+        run.top_issues = list(context.top_issues)
     if context.coverage is not None:
         run.coverage = coverage_module.as_rows(context.coverage)
         run.report_coverage = [
@@ -883,15 +891,42 @@ def purge_expired(session: Session, data_dir: Path) -> int:
             )
         ).scalars()
     )
+    drafts = sum(1 for run in expired if run.status == "draft")
     for run in expired:
-        for file_row in run.files:
-            candidate = data_dir / file_row.storage_key
-            if candidate.exists():
-                candidate.unlink()
-        session.execute(
-            sa.update(models.LlmCall).where(models.LlmCall.run_id == run.id).values(run_id=None)
-        )
-        session.delete(run)
+        delete_run(session, run, data_dir)
     if expired:
-        _LOG.info("purged %d expired run(s)", len(expired))
+        # Counted apart because they mean different things: a purged run reached the
+        # end of its retention, an expired draft was started and abandoned. A draft
+        # leaving without telling the person (Phase 6.23) is not the same as one
+        # leaving without a record.
+        _LOG.info(
+            "purged %d expired run(s), of which %d abandoned draft(s)",
+            len(expired) - drafts,
+            drafts,
+        )
     return len(expired)
+
+
+def delete_run(session: Session, run: models.Run, data_dir: Path) -> None:
+    """Remove one run, its uploaded files, and its findings.
+
+    The one implementation of "this run is gone": the retention purge, an expired
+    draft, and a draft somebody discards all go through here, so a path cannot forget
+    to unlink the bytes on the shared volume (Phase 6.23a).
+
+    Aggregated usage survives — ``llm_calls`` rows are kept with their run reference
+    cleared — because what a run cost is a fact about the month, not about the run.
+
+    Args:
+        session: An open session.
+        run: The run to delete.
+        data_dir: The shared volume its files live under.
+    """
+    for file_row in run.files:
+        candidate = data_dir / file_row.storage_key
+        if candidate.exists():
+            candidate.unlink()
+    session.execute(
+        sa.update(models.LlmCall).where(models.LlmCall.run_id == run.id).values(run_id=None)
+    )
+    session.delete(run)

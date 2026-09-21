@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **7 dormant** (runs only on request, on the target PC); **8 specified, not started** |
-| Branch | `feature/phase-6.22a`, pushed. **Phase 6.22 is specified** ([`phase-6.22.md`](phase-6.22.md)) and **6.22a is complete** (ADR-059): an attribute name code cannot resolve is a `review` record, not a high-severity violation — measured one high finding before, zero after. **Next concrete action: 6.22b**, the record layout as a fourth artifact. Also landed: `fix/seed-demo-grace-window`, which repaired `scripts/seed_demo.py` (it crashed on the `role` column 6.20 dropped, then reported outcomes it had not reached); nothing in `tests/` covers that script. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)) and **phase 8 is specified** ([`phase-8.md`](phase-8.md)), queued behind it; 6.21's one open criterion — what guided decoding buys — needs a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After 6.22, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)). `test_announcements.py::...::test_a_sixth_notice_is_refused_with_the_reason` fails on clean `dev` and needs its own look |
+| Branch | `feature/phase-6.23a`, pushed. **Phase 6.23 is specified** ([`phase-6.23.md`](phase-6.23.md)) and **6.23a is complete** (ADR-063, ADR-066): the closed status set, one guard that stops a re-check rewriting a finalized run, a finalize gate that stops calling an empty draft ready to freeze, and the summary a re-check used to erase. **Next concrete action: 6.23b**, removing the Re-check control and making the automatic re-check visible. Previously: `feature/phase-6.22a`, pushed. **Phase 6.22 is specified** ([`phase-6.22.md`](phase-6.22.md)) and **6.22a is complete** (ADR-059): an attribute name code cannot resolve is a `review` record, not a high-severity violation — measured one high finding before, zero after. **Next concrete action: 6.22b**, the record layout as a fourth artifact. Also landed: `fix/seed-demo-grace-window`, which repaired `scripts/seed_demo.py` (it crashed on the `role` column 6.20 dropped, then reported outcomes it had not reached); nothing in `tests/` covers that script. **Phase 6.21 is built** ([`phase-6.21.md`](phase-6.21.md)) and **phase 8 is specified** ([`phase-8.md`](phase-8.md)), queued behind it; 6.21's one open criterion — what guided decoding buys — needs a real endpoint and belongs to [`phase-7.md`](phase-7.md)'s bootstrap. After 6.22, **phase 8**, or **6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)). `test_announcements.py::...::test_a_sixth_notice_is_refused_with_the_reason` fails on clean `dev` and needs its own look |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -156,6 +156,65 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (a draft nothing could finish, and a button that showed nothing)
+
+**Branch:** `feature/phase-6.23a`, pushed · **Phase:** 6.23a complete, ADR-063 and
+ADR-066 · **Status:** 1,851 Python tests; `black`, `flake8`, `mypy` and the docs check
+clean. One pre-existing failure untouched.
+
+Specified [`phase-6.23.md`](phase-6.23.md) from three complaints about using the product,
+and built the first part. Two of the three turned out to be defects rather than
+misunderstandings, and in both cases the product already said what the behaviour should be.
+
+**Clone makes a draft, and nothing can advance it.** `POST /runs/{id}/clone` creates
+`Run(status="draft")` prefilled with the submitter's fields and no files — which is what
+the user expected. But the runs router has no endpoint that attaches files to an existing
+run, edits a run's fields, or starts a draft, and `POST /runs` always builds a new queued
+row. The UI pushes you to a detail page that suppresses its whole body for a draft. The
+row then sits there for **ninety days** until the purge takes it. It cannot even be
+cancelled. **The intended flow was built once, in the mock** — `mock/user-ui/report.html`
+sends Clone to `new-run.html`, which has a "Copy from previous run" modal — and
+`design.md` still promises it. Neither was built.
+
+**Re-check shows nothing and was documented nowhere.** Enqueuing changes no status, so
+the detail page's polling never starts: the screen is byte-identical after you click.
+Every document describes one use case — edit a requirement, then re-check — and the edit
+endpoint **already queues the re-check itself**. The standalone button has no tooltip, no
+Guide entry, and its own docstring is the only description of it in the repository.
+
+**What 6.23a repaired.** One condition — `status != "needs_review"` — closed the case
+that mattered: a re-check on a **finalized** run rewrote rules, traces and findings while
+the frozen report stayed put, which is the invariant `reports.py` states and hard rule 5
+requires. Findings, coverage and reports all refuse a finalized run; this route was the
+hole. The same line covers draft, queued, running, held, failed and cancelled, every one
+of which was accepted silently.
+
+**Two more found while building.** A re-check **erased the run summary**: stage 9 is
+skipped but `save_context` wrote `context.summary` unconditionally, so correcting one
+rule cost the reviewer the narrative. And `gate_state` called an empty draft ready to
+freeze, because it counted only findings and a draft has none — the same untruth for
+queued, running, held, failed and cancelled runs. Fixing it in the gate rather than on the
+button made five screens truthful at once.
+
+Also: the cancel audit read `run.status` after setting it, so every cancellation in the
+log said *"was cancelled"* rather than naming what the run was. And `RUN_STATUSES` is now
+a closed set the browser's union is tested against — the docstring had listed six of
+eight since `draft` and `cancelled` were added.
+
+**Verified the summary test earns its place** by reverting the fix and watching it fail.
+
+**Found and specified, not yet fixed:** `retention.days` **and** `uploads.max_mb` are both
+editable in the admin console and read by **nothing** — neither `expiry_from`'s `days` nor
+`store_upload`'s `max_bytes` is ever passed, so the console offers two settings that do
+nothing at all. Both are fixed in 6.23d, before the draft-expiry setting repeats the same
+ADR-023 mistake.
+
+**Still open, untouched:**
+`tests/test_announcements.py::TestTheRules::test_a_sixth_notice_is_refused_with_the_reason`
+fails on clean `dev` as well and needs its own look.
 
 ---
 

@@ -792,11 +792,14 @@ def cancel_run(
             f"run {run_id} was picked up a moment ago and is running now",
         )
 
+    # Read before the write: the detail is meant to name what the run was, and taking
+    # it afterwards made every cancellation in the audit log say "was cancelled".
+    was = run.status
     run.status = "cancelled"
     run.finished_at = utcnow()
     session.flush()
     repository.audit(
-        session, "run.cancelled", run.id, f"was {run.status}", user_id=user.id, actor=user.name
+        session, "run.cancelled", run.id, f"was {was}", user_id=user.id, actor=user.name
     )
     _LOG.info("run %d cancelled by %s", run.id, user.name)
     return _summary(session, run)
@@ -1237,6 +1240,30 @@ def get_requirements(
     )
 
 
+def _must_be_reviewable(run: models.Run) -> None:
+    """Refuse a re-check on a run that is not awaiting review (Phase 6.23a).
+
+    One condition covers every wrong case at once. The sharpest is ``finalized``: a
+    re-check rewrites rules, traces and findings, and doing that under a frozen report
+    breaks the invariant `reports.py` states and hard rule 5 requires — re-reviewing a
+    finalized run is already refused by the findings, coverage and report routes, and
+    this was the hole in that. The rest — ``draft`` with no files, ``queued`` and
+    ``running`` where the pipeline owns the row, ``failed``, ``held`` and ``cancelled``
+    where there is nothing to re-compare — were all accepted silently.
+
+    Args:
+        run: The run a re-check was asked for.
+
+    Raises:
+        HTTPException: 409 when the run is in any other state.
+    """
+    if run.status != "needs_review":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run.id} is {run.status}; only a run awaiting review can be re-checked",
+        )
+
+
 @router.put("/{run_id}/requirements", response_model=schemas.RecheckResult)
 def edit_requirements(
     run_id: int,
@@ -1265,6 +1292,7 @@ def edit_requirements(
             edited rule fails validation.
     """
     run = _get_run(session, run_id)
+    _must_be_reviewable(run)
     version = run.rules_version + 1
 
     for edit in payload.edits:
@@ -1333,6 +1361,7 @@ def recheck(
         Confirmation that a re-check was queued.
     """
     run = _get_run(session, run_id)
+    _must_be_reviewable(run)
     _queue(request, session).enqueue(TASK_RECHECK, run_id=run_id)
     repository.audit(session, "run.recheck_requested", run_id)
     return schemas.RecheckResult(run_id=run_id, rules_version=run.rules_version, queued=True)
