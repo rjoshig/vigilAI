@@ -42,6 +42,13 @@ MODEL_SURFACES: Final[tuple[tuple[str, str, str], ...]] = (
     ("user-ui/app/runs/new/page.tsx", "model", "delivery programme, suppressions, notes"),
     ("user-ui/components/config-notes.tsx", "model", "a standing note on a configuration"),
     ("user-ui/components/observation-dialog.tsx", "model", "what a reviewer teaches the tool"),
+    # --- the settings screen, where two rows decide what and which (Phase 8f) ---------
+    (
+        "admin-ui/app/settings/page.tsx",
+        "model",
+        "chat.report_aggregates decides what the chat is shown; chat.model decides which "
+        "model is shown it",
+    ),
 )
 
 #: Surfaces whose field is evaluated by code rather than read by the model. Marked for
@@ -87,7 +94,11 @@ def test_a_surface_says_what_its_field_does(relative: str, kind: str, field: str
         field: What the field is, so a failure is actionable.
     """
     source = _source(relative)
-    assert f'kind="{kind}"' in source, (
+    # Two spellings, because a screen with several marked fields declares them in a map
+    # and passes the kind through rather than repeating the attribute per row. Both are
+    # the marker being declared, which is what this check is about.
+    spellings = (f'kind="{kind}"', f'kind: "{kind}"')
+    assert any(spelling in source for spelling in spellings), (
         f"{relative} writes {field}, which is {kind!r}, and carries no such marker. "
         "An administrator cannot see a prompt, so the marker is the only account they get."
     )

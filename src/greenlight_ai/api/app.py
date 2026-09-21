@@ -18,6 +18,7 @@ from greenlight_ai.api.deps import get_db_settings, get_llm_settings
 from greenlight_ai.api.routers import (
     admin,
     appearance,
+    chat,
     coverage,
     explore,
     meaning,
@@ -166,6 +167,7 @@ def create_app(
         meaning.router,
         coverage.router,
         explore.router,
+        chat.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

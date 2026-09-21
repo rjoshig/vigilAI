@@ -667,6 +667,156 @@ export const GUIDE: GuideSection[] = [
   },
   {
     "id": "s9",
+    "title": "Asking the frozen report",
+    "blocks": [
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "When an administrator has turned it on, a frozen report carries an "
+          },
+          {
+            "text": "Ask this report",
+            "bold": true
+          },
+          {
+            "text": " button in the bottom-right corner. It opens a panel that answers questions about "
+          },
+          {
+            "text": "that run",
+            "italic": true
+          },
+          {
+            "text": " — why a finding is high, what changed since the last delivery of that configuration, what nobody checked, which global rules applied, what the report itself concluded."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "What it can see.",
+            "bold": true
+          },
+          {
+            "text": " What the tool derived from your files: the findings and the decisions people made on them, what was checked and what was not, the rules in force, the list of artifacts that arrived, and the text of the report you are looking at. With one setting on, it can also see per-column figures the tool computed — a minimum, a maximum, a mean, a count of nulls."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "What it cannot see, ever.",
+            "bold": true
+          },
+          {
+            "text": " The rows in your files, and the cell values in them. Not the OSL document, not the workbooks. It reads what the pipeline already derived from them, and the same check that guards every other prompt guards this one."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "What it will not do",
+            "bold": true
+          },
+          {
+            "text": ", and you should expect it to say so rather than oblige:"
+          }
+        ]
+      },
+      {
+        "kind": "list",
+        "items": [
+          [
+            {
+              "text": "It will not work anything out.",
+              "bold": true
+            },
+            {
+              "text": " Every figure it quotes was computed by the tool before you asked. Ask it to add two numbers and it will tell you it reports figures rather than deriving them."
+            }
+          ],
+          [
+            {
+              "text": "It will not answer about another run, another customer or another configuration.",
+              "bold": true
+            },
+            {
+              "text": " It can see this one."
+            }
+          ],
+          [
+            {
+              "text": "It will not change anything.",
+              "bold": true
+            },
+            {
+              "text": " No decision, no finding, no re-opening the report, no re-run. If you ask, it says where in the product you do that yourself."
+            }
+          ],
+          [
+            {
+              "text": "It will not guess.",
+              "bold": true
+            },
+            {
+              "text": " When the answer is not in what it can see, it says so and says what it would need. That is the answer, not a failure — a confident wrong answer about a QC report is worse than no answer at all."
+            }
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "Every claim is checked before you see it.",
+            "bold": true
+          },
+          {
+            "text": " The answer arrives as you read it; the little chips underneath — "
+          },
+          {
+            "text": "F-003",
+            "code": true
+          },
+          {
+            "text": ", "
+          },
+          {
+            "text": "R-012",
+            "code": true
+          },
+          {
+            "text": " — appear only once the tool has checked that each one is really in what it was shown. An identifier it made up is discarded and never shown. If it did not say what its answer rests on, the panel tells you the citations could not be verified, and you should check the answer against the report before relying on it."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "The conversation is not saved.",
+            "bold": true
+          },
+          {
+            "text": " Not by the tool, not in your browser. Close the panel and it is gone — which is why there is a "
+          },
+          {
+            "text": "Copy",
+            "bold": true
+          },
+          {
+            "text": " button: keeping a conversation, and deciding where it ends up, is yours."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "s10",
     "title": "Getting help",
     "blocks": [
       {

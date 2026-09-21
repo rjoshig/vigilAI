@@ -56,6 +56,8 @@ class SettingSpec:
 #: The sections the console draws, in order.
 GROUPS: Final[tuple[str, ...]] = (
     "Model",
+    # Every row in it qualifies something in "Model", so it sits directly after.
+    "Chat",
     "Anomalies",
     "Training",
     "Login",
@@ -476,6 +478,121 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         maximum=2000,
         help="Enforced while streaming, so an oversized file is refused before it "
         "lands on disk.",
+    ),
+    # --- the report chat (Phase 8f) ---------------------------------------------------
+    # Nine rows, and the console needs no code for any of them: it renders the group,
+    # ADR-023 resolves each value, and the `help` line is the only account an
+    # administrator gets of a value they cannot otherwise observe.
+    SettingSpec(
+        key="chat.enabled",
+        env="GREENLIGHT_AI_CHAT",
+        label="Report chat",
+        group="Chat",
+        kind="bool",
+        default=False,
+        help="Ask questions about a frozen report, in a panel on the report page. Off "
+        "means no launcher and an endpoint that refuses, so a deployment that upgrades "
+        "never silently gains an outbound model surface. It reads one run and changes "
+        "nothing.",
+    ),
+    SettingSpec(
+        key="chat.model",
+        env="GREENLIGHT_AI_CHAT_MODEL",
+        label="Model",
+        group="Chat",
+        kind="str",
+        default="",
+        help="Which model answers. Empty follows the Model section above, so nothing "
+        "changes on upgrade. A cheaper model here never touches validation accuracy, "
+        "and because the model name is part of every cache key the two can never serve "
+        "each other's answers.",
+    ),
+    SettingSpec(
+        key="chat.max_tokens",
+        env="GREENLIGHT_AI_CHAT_MAX_TOKENS",
+        label="Maximum tokens per answer",
+        group="Chat",
+        kind="int",
+        default=800,
+        minimum=256,
+        maximum=4000,
+        help="The ceiling on one answer. Too low truncates mid-sentence, which on a "
+        "streamed answer is visible and alarming; too high only costs money.",
+    ),
+    SettingSpec(
+        key="chat.temperature_pct",
+        env="GREENLIGHT_AI_CHAT_TEMPERATURE_PCT",
+        label="Temperature (%)",
+        group="Chat",
+        kind="int",
+        default=0,
+        minimum=0,
+        maximum=100,
+        help="Zero repeats itself exactly and caches well. Raising it reads more "
+        "naturally and makes the same question answerable two ways, which on a QC "
+        "report is a worse trade than it looks. It is part of the cache key, so raising "
+        "it re-asks everything.",
+    ),
+    SettingSpec(
+        key="chat.max_questions_per_run",
+        env="GREENLIGHT_AI_CHAT_MAX_PER_RUN",
+        label="Questions per run",
+        group="Chat",
+        kind="int",
+        default=20,
+        minimum=1,
+        maximum=200,
+        help="How long one conversation may go. Reached, the panel says so rather than " "failing.",
+    ),
+    SettingSpec(
+        key="chat.max_questions_per_day",
+        env="GREENLIGHT_AI_CHAT_MAX_PER_DAY",
+        label="Questions per person per day",
+        group="Chat",
+        kind="int",
+        default=50,
+        minimum=0,
+        maximum=500,
+        help="The per-person ceiling, and the lever for a staged rollout: set it to "
+        "zero to deny the feature to everybody until you are ready.",
+    ),
+    SettingSpec(
+        key="chat.max_turns",
+        env="GREENLIGHT_AI_CHAT_MAX_TURNS",
+        label="Transcript turns kept",
+        group="Chat",
+        kind="int",
+        default=8,
+        minimum=1,
+        maximum=30,
+        help="How much history is re-sent with each question, and the main cost lever: "
+        "every turn re-sends the ones before it. Lower it and the chat forgets sooner; "
+        "raise it and each answer costs more than the last.",
+    ),
+    SettingSpec(
+        key="chat.timeout_s",
+        env="GREENLIGHT_AI_CHAT_TIMEOUT_S",
+        label="Timeout (seconds)",
+        group="Chat",
+        kind="int",
+        default=60,
+        minimum=10,
+        maximum=300,
+        help="How long an answer may take before it is abandoned. An abandoned answer "
+        "stores nothing and is never cached.",
+    ),
+    SettingSpec(
+        key="chat.report_aggregates",
+        env="GREENLIGHT_AI_CHAT_AGGREGATES",
+        label="Include report aggregates",
+        group="Chat",
+        kind="bool",
+        default=False,
+        help="CHANGES WHAT LEAVES THE BUILDING. Off, the chat sees only what the "
+        "pipeline already derived. On, it also sees per-column figures code computed — "
+        "minimum, maximum, mean, count, nulls, distinct — so it can answer what a "
+        "field's distribution looks like. Never a row and never a cell that is not an "
+        "aggregate; the tripwire still fails closed on every prompt.",
     ),
     # --- retention ------------------------------------------------------------------
     SettingSpec(

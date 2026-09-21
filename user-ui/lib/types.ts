@@ -729,3 +729,41 @@ export interface Coverage {
   outstanding: string[];
   reason: string;
 }
+
+/** One checked citation beneath a chat answer (Phase 8c). */
+export interface ChatCitation {
+  id: string;
+  kind: string;
+  label: string;
+  anchor: string;
+}
+
+/**
+ * What the chat panel shows before anybody asks anything (Phase 8e).
+ *
+ * Every field is produced by code on the server. A greeting written by the model
+ * would be the first thing a person read and the one sentence nothing had checked.
+ */
+export interface ChatOpening {
+  enabled: boolean;
+  unavailable_reason: string;
+  greeting: string;
+  starters: string[];
+  cannot_see: string;
+  changes_nothing: string;
+  not_saved: string;
+  /** What was left out of the context to fit, said rather than hidden. */
+  trimmed: string[];
+  aggregates_included: boolean;
+  max_questions_per_run: number;
+  questions_left_today: number;
+}
+
+/** One turn in the panel. Held in component state only — never stored anywhere. */
+export interface ChatTurn {
+  who: "You" | "Assistant";
+  text: string;
+  citations?: ChatCitation[];
+  /** The model did not say what the answer rests on; the answer still stands. */
+  unverified?: boolean;
+}

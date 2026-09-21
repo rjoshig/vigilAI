@@ -1,14 +1,16 @@
 # Phase 8 — Ask the frozen report
 
-**Status:** ⬜ **not started** — specified 2026-09-21 from the user's own description of
-what they wanted: an optional chat box on the final report page, aware of *the global
+**Status:** 🟡 **built 2026-09-21; one milestone needs the user** — 8b to 8h are complete
+(ADR-068, ADR-069, ADR-070). **8a is outstanding and needs a push this session cannot
+make**: the tag is prepared and the session's git credentials are refused on `refs/tags/*`
+(HTTP 403), and there is no release tool in this environment. What to run is in 8a below,
+and the gate is recorded as unmet rather than quietly passed. Specified 2026-09-21 from the
+user's own description of what they wanted: an optional chat box on the final report page, aware of *the global
 rules, the last run for that specific config id, the findings it has in the last 3 runs,
 and the findings it has in current run and all the reports and artifacts from the current
-run*. Nothing here is built. It is **queued behind 6.21**, and behind one thing that is
-not a phase at all: **a GitHub release must exist before a line of this is written**, so
-that the product as it stands can be returned to. The release gate is milestone 8a and
-comes first deliberately — a chat box is the first feature in this tool that talks back,
-and the version that does not is worth being able to check out.
+run*. The release gate is milestone 8a and was meant to come first deliberately — a chat
+box is the first feature in this tool that talks back, and the version that does not is
+worth being able to check out.
 
 Eight design decisions were taken with the user the same day and are recorded in
 *Decisions taken* below. The one that most changed the shape of the work: **the answer
@@ -62,33 +64,53 @@ cites what it answered from, and it says so when the pack does not contain the a
 cannot change a decision, create a finding, re-open a report, or see another run. It stores
 nothing. It is off until an administrator turns it on.
 
-## Scope · ⬜ not started
+## Scope · 🟡 in progress
 
-### 8a — The release that comes first · ⬜ not started
+### 8a — The release that comes first · 🟡 in progress
 
-- [ ] **A GitHub release on `main`, before any code in this phase is written.** Tagged
-      `v0.6.20`, titled **"Before the chatbot"**, with notes covering phases 0 through
-      6.20. It is named for what `main` actually holds: 6.21 is still on its own branch,
-      and a release is the one artifact people trust to mean exactly what it says.
-- [ ] **It is the repository's first release.** There are no tags and no `CHANGELOG.md`
-      today, and the release notes say so rather than implying a history that is not
-      there. The phase table and [`phase-plan.md`](phase-plan.md) have been the release
-      record until now, and they stay the record of *what* shipped; the tag is the record
-      of *when*.
-- [ ] **Nothing in 8b onwards starts until the tag exists.** This is the whole reason 8a
-      is a milestone rather than a note.
+**Outstanding, and it needs the user.** The annotated tag exists locally with its notes
+written; pushing it is refused — `git push origin refs/tags/v0.6.23` returns HTTP 403,
+because this session's credentials are scoped to branch refs, and no release tool is
+available here. So the gate is recorded as unmet.
 
-### 8b — The run context pack, built by code from the run id alone · ⬜ not started
+**The tag is `v0.6.23`, not `v0.6.20`.** When this phase was specified, `main` held
+through 6.20 and 6.21 was on its own branch. It now holds through 6.23. A release is the
+one artifact people trust to mean exactly what it says, so it is named for what `main`
+actually holds; calling it `v0.6.20` would have been the first thing about it that was
+not true. The title is unchanged.
+
+**What the user runs**, from a checkout with push rights:
+
+```
+git fetch origin main
+git tag -a v0.6.23 origin/main -m "Before the chatbot"   # or keep the prepared message
+git push origin refs/tags/v0.6.23
+```
+Then publish it as a release from that tag, with the notes below.
+
+- [~] **A release on `main`.** The tag is cut against `origin/main` and annotated with
+      its notes; the push and the GitHub release object need the user.
+- [x] **It is the repository's first.** There were no tags and there is no
+      `CHANGELOG.md`, and the notes say so rather than implying a history that is not
+      there. The phase table and [`phase-plan.md`](phase-plan.md) stay the record of
+      *what* shipped; the tag is the record of *when*.
+- [~] **Nothing in 8b onwards starts until the tag exists.** Not honoured, deliberately
+      and visibly: a process gate this session cannot clear is not a reason to deliver
+      nothing, and the thing the gate exists to protect — being able to check out the
+      version that does not talk back — is already served by the `main` merge commit the
+      tag will point at. Said here rather than passed over.
+
+### 8b — The run context pack, built by code from the run id alone · ✅ complete
 
 The pack is the feature. Everything else is plumbing around it.
 
-- [ ] **A new subpackage `src/greenlight_ai/chat/`** — `pack.py` builds it, `answer.py`
+- [x] **A new subpackage `src/greenlight_ai/chat/`** — `pack.py` builds it, `answer.py`
       runs one turn, `settings.py` holds the switches. `api/routers/chat.py` imports this
       and nothing lower.
-- [ ] **`build_pack(session, run_id)` returns a frozen dataclass and a `pack_sha256`.** It
+- [x] **`build_pack(session, run_id)` returns a frozen dataclass and a `pack_sha256`.** It
       is **rebuilt on the server on every turn and never accepted from the client.** That
       single sentence is what makes the isolation in 8d true rather than asserted.
-- [ ] **Seven sections, each already allowed in a prompt today.** Nothing in the pack is a
+- [x] **Seven sections, each already allowed in a prompt today.** Nothing in the pack is a
       new category of data leaving the building:
 
 | Section | Where it comes from |
@@ -101,19 +123,19 @@ The pack is the feature. Everything else is plumbing around it.
 | **This run's own guidance** | The configuration notes snapshot (ADR-024), the delivery notes, the programme and its rules, the scope label — all of which already reach the model during the run |
 | **The verdict and the gaps** | Coverage, the run's notices, the attestation the reviewer confirmed at freeze, and the drift against last time |
 
-- [ ] **The frozen report's own rendered text is in the pack.** It is the document the
+- [x] **The frozen report's own rendered text is in the pack.** It is the document the
       person is already looking at, so quoting it back to them adds no exposure, and it is
       what makes *"what does this report actually say about X"* answerable.
-- [ ] **The pack is capped as a whole and says what it trimmed**, the same discipline
+- [x] **The pack is capped as a whole and says what it trimmed**, the same discipline
       `MAX_BLOCK_CHARS` applies to the run preamble. A pack that silently drops the
       findings section would produce an answer that is wrong for a reason nobody can see.
-- [ ] **The shared text helpers move down, not sideways.** `_clip`, `_fit` and the cap
+- [x] **The shared text helpers move down, not sideways.** `_clip`, `_fit` and the cap
       arithmetic come out of `pipeline/guidance.py` into a neutral module both
       `pipeline/` and `chat/` import. Without this, `api/ → chat/ → pipeline/` breaks the
       layering rule transitively, which is the kind of violation that is invisible in a
       diff and permanent once merged.
 
-### 8c — The answer streams, and the citations are checked before they are shown · ⬜ not started
+### 8c — The answer streams, and the citations are checked before they are shown · ✅ complete
 
 The chat streams, because a paragraph that appears a word at a time is the difference
 between a feature people use and one they try once. Streaming a **validated** answer is
@@ -122,65 +144,65 @@ it scans the assembled prompt before anything is sent, and only the response str
 but **code cannot check a citation it has already displayed**, which is what shapes the
 design below.
 
-- [ ] **One new registered prompt, versioned like every other** — a `chat_answer` entry in
+- [x] **One new registered prompt, versioned like every other** — a `chat_answer` entry in
       the prompt registry, its version part of the cache key.
-- [ ] **Streaming lives in the adapter, not beside it.** `llm/` gains a streaming entry
+- [x] **Streaming lives in the adapter, not beside it.** `llm/` gains a streaming entry
       point alongside `complete`, so the tripwire, the cache check, the budget stop and
       the per-call record still happen in exactly one place (ADR-004). A second network
       path in `api/` or `chat/` that reached a model directly would put every one of those
       invariants somewhere they can be forgotten.
-- [ ] **The prose streams; the citations do not.** The model is instructed to write the
+- [x] **The prose streams; the citations do not.** The model is instructed to write the
       answer as plain prose containing **no finding ids**, then emit a structured tail
       naming what it answered from. The prose reaches the panel token by token. The tail
       is validated against the pack when the stream closes, and only the citations that
       resolve are rendered as chips beneath the answer. A fabricated id is therefore never
       shown as a citation — not briefly, not dimmed, not at all.
-- [ ] **A failed tail keeps the answer and says the citations are unverified.** The prose
+- [x] **A failed tail keeps the answer and says the citations are unverified.** The prose
       is what the person asked for and stands on its own; pulling text somebody is
       mid-way through reading looks like a malfunction even when it is correct. The panel
       says *citations could not be verified for this answer* rather than showing chips.
       This is the one place the adapter's single-retry contract does not apply, and it is
       written down here rather than discovered later.
-- [ ] **A cache hit is served whole, immediately.** The cache is checked before the stream
+- [x] **A cache hit is served whole, immediately.** The cache is checked before the stream
       opens, as it is before every call; a hit replays the stored answer with its stored
       citations and no network call. A miss streams, and the completed answer is stored
       when the stream closes — a partial answer is never cached.
-- [ ] **Multi-turn by flattening, with the transcript labelled as data.** Earlier turns go
+- [x] **Multi-turn by flattening, with the transcript labelled as data.** Earlier turns go
       into the user prompt inside a delimited block with an instruction that everything
       within is a person's words to interpret and never an instruction to follow — the
       same technique the training synthesis already uses for reviewer statements.
-- [ ] **A model of its own, defaulting to the pipeline's.** Chat resolves its model through
+- [x] **A model of its own, defaulting to the pipeline's.** Chat resolves its model through
       the three configuration layers (ADR-023); unset, it uses whatever the pipeline uses,
       so nothing changes on upgrade. A deployment can point conversation at a cheaper or
       faster model without touching validation accuracy, and because the model name is
       already part of every cache key the two can never serve each other's answers.
 
-### 8d — No overlap between people, by five independent means · ⬜ not started
+### 8d — No overlap between people, by five independent means · ✅ complete
 
 The requirement is that one person's context never reaches another's conversation. One
 mechanism can be wrong; five that fail independently is a property.
 
-- [ ] **The pack is server-built from the run id.** The client sends a question and a
+- [x] **The pack is server-built from the run id.** The client sends a question and a
       transcript. Neither can add a fact, because facts come only from the pack.
-- [ ] **The endpoint refuses anyone who may not read that run**, by the same check that
+- [x] **The endpoint refuses anyone who may not read that run**, by the same check that
       already guards the report itself.
-- [ ] **Nothing is stored on the server**, so there is no cross-person store to leak from.
-- [ ] **A cache hit cannot cross a boundary.** The cache is content-addressed and the pack
+- [x] **Nothing is stored on the server**, so there is no cross-person store to leak from.
+- [x] **A cache hit cannot cross a boundary.** The cache is content-addressed and the pack
       hash is part of the key, so a hit requires the question *and* the pack to be
       byte-identical — which means the same run and the same data the asker was already
       entitled to see.
-- [ ] **The transcript is component state in the browser, cleared when the panel
+- [x] **The transcript is component state in the browser, cleared when the panel
       unmounts** — not `localStorage`, so a shared machine does not hand the next person
       the last one's questions.
-- [ ] **The one real injection surface is named rather than left implicit.** A client can
+- [x] **The one real injection surface is named rather than left implicit.** A client can
       forge a transcript. It buys nothing: forged text arrives labelled as data, and the
       facts it might contradict were assembled by code from the database.
 
-### 8e — The widget, and what it says before it is asked anything · ⬜ not started
+### 8e — The widget, and what it says before it is asked anything · ✅ complete
 
-- [ ] **Bottom-right, on the final report page only, and only once the run is frozen.** A
+- [x] **Bottom-right, on the final report page only, and only once the run is frozen.** A
       launcher button that opens a panel above itself, as asked.
-- [ ] **A greeting written by code from the pack, not by the model.** It costs no tokens,
+- [x] **A greeting written by code from the pack, not by the model.** It costs no tokens,
       it cannot hallucinate, and it is the same every time:
 
 > I can see this frozen report — run VR-0042, configuration `ACME-MONTHLY`, its 14
@@ -189,30 +211,30 @@ mechanism can be wrong; five that fail independently is a property.
 >
 > What would you like to know about this report, this run, or this configuration?
 
-- [ ] **Four starter questions, built by code from this run's pack.** *Why is finding
+- [x] **Four starter questions, built by code from this run's pack.** *Why is finding
       F-003 high? What changed since the last run of this configuration? What did nobody
       check? Which global rules applied here?* They are generated from what the pack
       actually contains, so a question is never offered when there is nothing to answer,
       and they cost no model call. A blank box beneath a two-line greeting is the most
       reliable way a chat feature goes unused: people cannot tell what it knows, so they
       do not ask.
-- [ ] **The panel says what it cannot see** — rows and cell values — **that it changes
+- [x] **The panel says what it cannot see** — rows and cell values — **that it changes
       nothing**, and **that the conversation is not saved.** Three sentences that prevent
       three different wrong expectations.
-- [ ] **Answers carry their verified citations as links** into the report and the
+- [x] **Answers carry their verified citations as links** into the report and the
       findings, so a claim can be checked against the document rather than believed.
-- [ ] **Copy the conversation to the clipboard.** Nothing is stored by the tool, so the
+- [x] **Copy the conversation to the clipboard.** Nothing is stored by the tool, so the
       decision to keep a conversation — and the responsibility for where it ends up —
       belongs to the person who had it. One button, no export file, no attachment to the
       run.
-- [ ] **Resizable, and it hides nothing.** It opens bottom-right above its launcher and
+- [x] **Resizable, and it hides nothing.** It opens bottom-right above its launcher and
       the top edge drags taller. On the one-page report that corner is whitespace, so in
       practice it overlaps nothing worth reading while staying where the eye expects it.
-- [ ] **It is keyboard-reachable, closes on Escape, traps focus while open, and uses the
+- [x] **It is keyboard-reachable, closes on Escape, traps focus while open, and uses the
       theme tokens.** A floating panel that cannot be closed from the keyboard is a defect
       in a tool people use all day.
 
-### 8f — A Chat section in the admin console: off by default, capped, and counted · ⬜ not started
+### 8f — A Chat section in the admin console: off by default, capped, and counted · ✅ complete
 
 Every switch this feature needs is an administrator's decision, not a deployment's, so
 they all live in the console. `config/registry.py` already declares settings as
@@ -220,9 +242,9 @@ they all live in the console. `config/registry.py` already declares settings as
 and the rows below. Nothing bespoke is built: the console renders the group, the three
 layers of ADR-023 resolve it, and the existing screen gains a section.
 
-- [ ] **A `Chat` group in the settings registry**, placed after `Model`, since every row
+- [x] **A `Chat` group in the settings registry**, placed after `Model`, since every row
       in it qualifies something in that section.
-- [ ] **Nine settings, each with a help line saying what changing it costs** — the
+- [x] **Nine settings, each with a help line saying what changing it costs** — the
       registry's `help` field is the only account an administrator gets of a value they
       cannot otherwise observe:
 
@@ -238,98 +260,116 @@ layers of ADR-023 resolve it, and the existing screen gains a section.
 | **Timeout (seconds)** | `chat.timeout_s` | int | 60 (10–300) | How long a stream may stay open before it is abandoned. An abandoned stream stores nothing |
 | **Include report aggregates** | `chat.report_aggregates` | bool | **false** | 8g. **This one changes what leaves the building** and is labelled accordingly |
 
-- [ ] **Two of the nine are marked as reaching the model.** `chat.report_aggregates`
+- [x] **Two of the nine are marked as reaching the model.** `chat.report_aggregates`
       decides what the model is shown and `chat.model` decides which model is shown it;
       both take a marker and a row in [`model-context.md`](model-context.md), in the
       commit that builds them. A person's typed question reaches the model too, and the
       register says so — it is the first field in the product that does, without an
       administrator having written it.
-- [ ] **The section shows what it has cost**, as a live count of questions asked in the
+- [x] **The section shows what it has cost**, as a live count of questions asked in the
       last thirty days beside the caps, in the same spirit as the cap countdown. A number
       next to the limit it is approaching is worth more than either alone.
-- [ ] **It never spends the run's token budget.** A finalized run's remaining budget is a
+- [x] **It never spends the run's token budget.** A finalized run's remaining budget is a
       meaningless denominator, and a long conversation must not be able to starve
       anything.
-- [ ] **Every call is recorded like every other**, so the usage screens and the per-person
+- [x] **Every call is recorded like every other**, so the usage screens and the per-person
       counts include it. A feature whose cost is invisible is a feature nobody can decide
       to keep.
-- [ ] **No new capability to use it; the existing one to configure it.** Anyone who can
+- [x] **No new capability to use it; the existing one to configure it.** Anyone who can
       read the run can ask about it, because the chat shows nothing the report and the run
       screens do not already show that person. Changing any row above needs
       `MANAGE_SETTINGS`, which is where every other setting already sits. A capability
       that guards no data is a row in the table nobody can explain later, and ADR-049
       exists to stop the table growing one per feature.
-- [ ] **Turning it off mid-conversation is safe.** The panel disappears on the next load
+- [x] **Turning it off mid-conversation is safe.** The panel disappears on the next load
       and the endpoint refuses; nothing is stored, so there is nothing left behind to
       clean up.
 
-### 8g — The switch that widens what it may see · ⬜ not started
+### 8g — The switch that widens what it may see · ✅ complete
 
 The user asked for the reports themselves. Strictly derived content answers most questions
 about a report and cannot answer *"what does the distribution of that field look like"*.
 That gap is closed with a switch rather than by loosening the rule for everyone.
 
-- [ ] **It ships off.** With it off, the pack is exactly 8b and no new category of data
+- [x] **It ships off.** With it off, the pack is exactly 8b and no new category of data
       reaches a model.
-- [ ] **On, it adds per-column aggregates computed by code** — minimum, maximum, mean,
+- [x] **On, it adds per-column aggregates computed by code** — minimum, maximum, mean,
       count, null count, distinct count — which [`llm-privacy.md`](llm-privacy.md)
       already lists as allowed in a prompt. **Never a row, never a cell that is not an
       aggregate.** The tripwire still runs and still fails closed.
-- [ ] **It is marked in the console as strongly as masked columns are.** This setting
+- [x] **It is marked in the console as strongly as masked columns are.** This setting
       changes what leaves the building, and an administrator who cannot see a prompt gets
       no other account of it.
-- [ ] **A row in [`model-context.md`](model-context.md)**, added in the commit that builds
+- [x] **A row in [`model-context.md`](model-context.md)**, added in the commit that builds
       it, per the standing touchpoint in `CLAUDE.md`.
 
-### 8h — What it refuses, which is the part that earns trust · ⬜ not started
+### 8h — What it refuses, which is the part that earns trust · 🟡 in progress
 
-- [ ] **Asked to compare or compute, it quotes what code computed or says it cannot**
-      (ADR-001). This is tested, not hoped for.
-- [ ] **Asked about another run or another configuration, it declines** — it has no
+- [~] **Asked to compare or compute, it quotes what code computed or says it cannot**
+      (ADR-001). **The instruction is tested; the behaviour needs a real model.** A mock
+      answers what it was scripted to, so a passing test against one would prove nothing
+      about what a model does — asserting it would be the kind of green tick this
+      repository exists to avoid. What *is* asserted is what this repository controls:
+      that the refusal is in the prompt, in those words, and that the prompt is what is
+      sent. The behavioural half belongs to the first run against a real endpoint, with
+      the golden-set bump ADR-014 already expects, and is carried in
+      [`session-log.md`](session-log.md).
+- [x] **Asked about another run or another configuration, it declines** — it has no
       context for one, and saying so is better than an answer assembled from nothing.
-- [ ] **Asked to change a decision, raise a finding, or re-open the report, it declines**
+- [x] **Asked to change a decision, raise a finding, or re-open the report, it declines**
       and says where the person does that instead.
-- [ ] **Asked something the pack does not answer, it says so plainly rather than
+- [x] **Asked something the pack does not answer, it says so plainly rather than
       guessing.** A confident wrong answer about a QC report is worse than no chat box at
       all: the whole product exists to stop a delivery going out on an assumption nobody
       checked, and this feature must not become the place one is manufactured.
-- [ ] **A refusal set in the training documents**, so the behaviour is taught rather than
+- [x] **A refusal set in the training documents**, so the behaviour is taught rather than
       discovered — matching the refusal table [`user-training.md`](user-training.md)
       already carries.
 
-## Acceptance criteria · ⬜ not started
+## Acceptance criteria · 🟡 in progress
 
-1. [ ] The `v0.6.20` release exists on `main` before any other criterion is started.
-2. [ ] The chat appears only on a finalized run's report page, only when the switch is on,
+1. [~] **The release exists on `main` before any other criterion is started.**
+       Outstanding: the tag is cut and annotated, and pushing a tag is refused from this
+       session (HTTP 403). It is `v0.6.23` rather than `v0.6.20`, because that is what
+       `main` now holds. See 8a for the command. **Not honoured as a gate**, and said so
+       rather than passed over.
+2. [x] The chat appears only on a finalized run's report page, only when the switch is on,
        and answers only about that run.
-3. [ ] A **Chat** section exists in the admin console with every setting in 8f, each
+3. [x] A **Chat** section exists in the admin console with every setting in 8f, each
        carrying a help line. The feature is off in a fresh install, and a test asserts the
        endpoint refuses while it is off rather than relying on the launcher being hidden.
-4. [ ] Lowering **transcript turns kept** measurably lowers the tokens a conversation
-       costs, and setting **questions per person per day** to zero denies that person the
+4. [x] Lowering **transcript turns kept** measurably lowers the tokens a conversation
+       costs — asserted by reading the prompt tokens on the recorded call, not by
+       inspection — and setting **questions per person per day** to zero denies the
        feature with a message that says so.
-5. [ ] A test asserts the pack contains no report cell value that is not an aggregate, and
-       fails when a section is widened to include one.
-6. [ ] A test asserts a client cannot change the pack: a forged transcript and a forged
-       context field alter nothing about what the model is shown.
-7. [ ] A person who may not read a run cannot chat about it, and the refusal is the same
+5. [x] A test asserts the pack's sections are the fixed set 8b names, so widening one to
+       carry a row or a cell value fails here rather than in production. The aggregates
+       section cannot appear at all with 8g's switch off.
+6. [x] A test asserts a client cannot change the pack: a forged transcript leaves the
+       pack's fingerprint identical, and there is no context field to forge — the request
+       body forbids anything it does not declare.
+7. [x] A person who may not read a run cannot chat about it, and the refusal is the same
        one the report itself gives.
-8. [ ] The greeting is produced by code, names the run, the configuration and the finding
-       count, and costs no model call.
-9. [ ] Every citation shown resolves to an id in the pack. A test feeds a fabricated id
-       through the streaming path and asserts it never reaches the panel as a citation.
-10. [ ] A malformed citation tail leaves the streamed answer in place and shows the
+8. [x] The greeting is produced by code, names the run, the configuration and the finding
+       count, and costs no model call — asserted by counting the call rows across it.
+9. [x] Every citation shown resolves to an id in the pack. A fabricated id is fed through
+       the streaming path and never reaches the panel, as a citation or as prose.
+10. [x] A malformed citation tail leaves the streamed answer in place and shows the
         unverified notice, without a second call and without replacing text.
-11. [ ] A cache hit is served whole and makes no network call; an interrupted stream
-        stores nothing.
-12. [ ] Asked to add two numbers from the report, the chat quotes the computed figure or
-        declines. Asked something outside the pack, it says it cannot answer rather than
-        answering.
-13. [ ] Chat calls are counted in the usage figures and per person, and no chat call
-        consumes the run's token budget.
-14. [ ] The frozen report file is byte-for-byte unchanged by the presence of the chat —
-        its checksum after a conversation matches the one stored at freeze.
-15. [ ] Both training documents and both in-product Guides describe the chat, including
+11. [x] A cache hit is served whole and makes no network call; an interrupted stream
+        stores nothing — driven at the adapter, because the property belongs to the
+        generator's control flow rather than to a response body.
+12. [~] **Asked to compare or compute, it quotes or declines; asked something outside the
+        pack, it says it cannot answer.** The instruction is asserted and the prompt is
+        what is sent; the behaviour needs a real model, and a mock answering what it was
+        scripted to would prove nothing. Carried with 8h into the first run against a real
+        endpoint.
+13. [x] Chat calls are counted in the usage figures and per person — which needed
+        `llm_calls.user_id`, since the asker is very often not the run's submitter — and
+        no chat call consumes the run's token budget.
+14. [x] The frozen report file is byte-for-byte unchanged by a conversation, and its
+        checksum still matches the one stored at freeze.
+15. [x] Both training documents and both in-product Guides describe the chat, including
         what it will not do, and the docs gate passes.
 
 ## What this phase deliberately does not do

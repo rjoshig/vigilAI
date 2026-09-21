@@ -388,14 +388,52 @@ def test_unusable_responses_raise(text: str) -> None:
 
 
 def test_the_mock_answers_every_llm_stage_against_its_real_schema() -> None:
-    """ADR-014: the whole of Phase 2 runs on this provider, so it must satisfy them."""
+    """ADR-014: the whole of Phase 2 runs on this provider, so it must satisfy them.
+
+    All but one. `chat_answer` answers in prose and is never sent through `complete`
+    (Phase 8c) — its shape is checked by code after the stream closes rather than by
+    the adapter — so it is exercised by the streaming test below instead.
+    """
     from greenlight_ai.llm.prompts import PROMPTS
+    from greenlight_ai.llm.prompts.chat_answer import CHAT_ANSWER_PROMPT
 
     client = MockClient()
     for stage, prompt in PROMPTS.items():
+        if stage == CHAT_ANSWER_PROMPT.stage:
+            continue
         result = client.complete("s", f"u-{stage}", prompt.schema, stage=stage)
         assert result.data is not None
         assert result.parsed(prompt.schema) is not None
+
+
+def test_the_mock_streams_the_one_prose_stage_in_pieces() -> None:
+    """A mock that handed back the whole answer would let the streaming path pass
+    on a property it has to earn: that the pieces concatenate to the whole answer."""
+    from greenlight_ai.llm.prompts.chat_answer import CITATION_MARKER
+
+    client = MockClient()
+    pieces = list(client.stream("s", "u", stage="chat_answer"))
+    assert len(pieces) > 1
+    assert CITATION_MARKER in "".join(pieces)
+
+
+def test_a_streamed_answer_is_cached_and_the_second_call_is_a_hit() -> None:
+    """The cache is checked before the stream opens, as it is before every call."""
+    client = MockClient()
+    first = "".join(client.stream("s", "u", stage="chat_answer"))
+    second = "".join(client.stream("s", "u", stage="chat_answer"))
+    assert first == second
+    assert client.call_log.cache_hits == 1
+
+
+def test_an_abandoned_stream_caches_nothing() -> None:
+    """A partial answer is never served to the next person (ADR-069)."""
+    client = MockClient()
+    stream = client.stream("s", "u", stage="chat_answer")
+    next(stream)
+    stream.close()
+    list(client.stream("s", "u", stage="chat_answer"))
+    assert client.call_log.cache_hits == 0
 
 
 def test_the_mock_records_what_it_was_asked() -> None:

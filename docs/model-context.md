@@ -1,6 +1,6 @@
 # What reaches the model, and what code decides
 
-**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i, 6.15, 6.21, 6.22 and 6.23).
+**Last derived from the call sites:** 2026-09-21 (Phase 6.14c, extended in 6.14i, 6.15, 6.21, 6.22, 6.23 and 8).
 
 An administrator cannot see a prompt. Everything they know about where their words end
 up comes from the label next to the box they typed them in, which makes that label the
@@ -63,6 +63,9 @@ prompts are byte-for-byte what they were before any of this existed.
 | **Judgment check named values** | Admin → Checks | Stage 7, as `name = value` lines for the named values that check lists | — |
 | **Attribute statistics** | Read from the delivery's own DIRT | Stage 7, only when `anomaly.model_reads_shape` is on: aggregates per attribute, never a row (Phase 6.21c) | 60 attributes |
 | **Artifact type layout map** | Admin → Artifact types → Layout | Only when four deterministic rungs have already failed: the *names* an artifact carries are shown so the model can say which is which (Phase 6.21a) | 80 names |
+| **A question about a frozen report** | User → the report page → *Ask this report* | The `chat_answer` prompt, with the run's context pack. **The first field in the product that reaches a model without an administrator having written it** (Phase 8c) | 2,000 characters |
+| **The report chat's context pack** | Built by code from the run id; nothing comes from the client | The `chat_answer` prompt only. Findings (shadow excluded), coverage and the attestation, the rules scoped `everywhere`, the programme's rules, this run's guidance, the last three finalized runs of the configuration, the artifact inventory, and the frozen report's own rendered text | 24,000 characters, per section and as a whole; what was trimmed is stated in the prompt and in the panel |
+| **Report aggregates** (`chat.report_aggregates`, **off**) | Admin → Settings → Chat | Adds `runs.attribute_profile` to the pack: per attribute, a null rate, a minimum, a maximum and a mean, all computed by code at stage 7 (Phase 6.21c). **Never a row, never a cell that is not an aggregate** (ADR-052). This is the one setting that widens what leaves the building, and it is marked as such in the console | 24,000 characters shared with the rest of the pack |
 
 **The stages that build a preamble** are 2 (extract), 3 (describe), 4 (trace),
 6 (reverse), 7 (reports), 8 (verify) and 9 (summarize). Stage 5 (compare) builds none
@@ -154,6 +157,8 @@ produce a finding.
 | **Scheduled notices** | Admin → Settings → Notices | Nothing evaluates them; they are shown to people between their start and end (Phase 6.14g) |
 | **How long a draft is kept** | Admin → Settings → Retention | `db/repository.py::expiry_for`, resolved per run. Reaches no prompt and decides no finding: it says when an unsubmitted draft is deleted. Stamped once when the draft is made, so changing it never shortens the life of a draft that already exists (ADR-065) |
 | **Cost per million tokens** | Admin → Settings → Availability | `spend.py`, over the `llm_calls` rows already stored. Reaches no prompt and refuses nothing: the per-run token budget stays the only hard stop (Phase 6.21d) |
+| **The report chat's caps** | Admin → Settings → Chat | `api/routers/chat.py`. `chat.enabled` decides whether the endpoint answers at all; the per-run and per-person-per-day caps are counted from `llm_calls`, which is where every call in the product is already recorded. `chat.max_turns` decides how much transcript is re-sent and is the main cost lever. A chat call runs on a fresh call log, so **no conversation can spend a run's token budget** (Phase 8f) |
+| **Which model answers a question** (`chat.model`) | Admin → Settings → Chat | Resolved through the three layers (ADR-023); empty follows the Model section. It decides *which* model is shown the pack rather than what is in it, and it is part of every cache key, so the chat's answers and the pipeline's can never be served to each other |
 
 ## Fields that are reference only
 
@@ -165,6 +170,7 @@ produce a finding.
 | **Programme keywords** | Compared by code at stage 7 to confirm a run is the programme it claims. **They no longer only reach code:** when none of the declared programme's words match, the delivery's own words go to the model once, which says what programme they read like (Phase 6.18f). The keywords themselves are not sent — what they decide is *whether the call happens at all*. |
 | Programme **name** | Sent with the programme list in that one prompt, because a code on its own says nothing about what a programme is. |
 | **Attribute suggestions** | What a run proposed that a delivery calls an attribute it could not locate (Phase 6.22f). Read by whoever accepts or ignores them; nothing evaluates them and nothing is in force until somebody clicks. Accepting writes a dictionary spelling, which is the row that then does the work. |
+| A **chat conversation** | The report chat panel | Not a field and not stored anywhere: the transcript is component state in the browser, cleared when the panel unmounts, and the server keeps neither the question nor the answer. It is re-sent with each question, inside a block labelled as a record of what was said and never as instructions — a client can forge one, and it buys nothing, because every fact comes from the pack code built (Phase 8d). |
 | The **Setting up a new delivery** checklist | Navigation, not a field: it reads what already exists to say which steps are done, and reaches no prompt, feeds no comparison, and is stored nowhere. Each step carries the marker of the thing it sets up — three **Helps the AI**, three **Checked by code**, one **Used for setup, not for runs** — so the card answers "which of these changes what the AI finds" without claiming anything for itself (Phase 6.19d). |
 
 ## What never reaches a prompt, under any setting
