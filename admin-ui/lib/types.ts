@@ -338,6 +338,10 @@ export interface UserUsage {
   configurations: number;
   repeat_runs: number;
   mismatch_runs: number;
+  /** Tokens their runs sent, and what those cost (Phase 6.21d). */
+  tokens: number;
+  cost: number;
+  cached_calls: number;
   high_findings: number;
   completed_runs: number;
   failure_rate: number;
@@ -361,6 +365,10 @@ export interface UsageByUser {
   held_rate: number;
   repeat_rate: number;
   periods: number[];
+  /** The rate every row's cost was computed at, carried once (Phase 6.21d).
+   * Zero means no rate is set and the table shows tokens only. */
+  rate_per_million: number;
+  currency: string;
 }
 
 export interface Usage {
@@ -375,6 +383,8 @@ export interface Usage {
   json_failure_rate: number;
   false_positive_rate: number;
   findings_by_type: Record<string, number>;
+  /** What it all cost (Phase 6.21d). */
+  spend: Spend;
   decisions: Record<string, number>;
 }
 
@@ -1033,4 +1043,34 @@ export interface LayoutSuggestion {
 /** What `GET /admin/layout-suggestions` returns. */
 export interface LayoutSuggestions {
   suggestions: LayoutSuggestion[];
+}
+
+/** One day's tokens and cost (Phase 6.21d). */
+export interface DayCost {
+  day: string;
+  tokens: number;
+  cost: number;
+}
+
+/**
+ * What some period cost (Phase 6.21d).
+ *
+ * `rate_per_million` of zero means nobody has set a rate, every money figure here is
+ * zero, and the console shows tokens only — a cost built on a rate nobody supplied is
+ * a number that gets quoted back as fact.
+ */
+export interface Spend {
+  rate_per_million: number;
+  currency: string;
+  tokens: number;
+  cost: number;
+  month_tokens: number;
+  month_cost: number;
+  /** Warn above this, per month. Never a refusal: the per-run token budget is the
+   * only hard stop in the product. Zero switches the band off. */
+  monthly_warning: number;
+  /** Calls the cache served. They cost nothing and are counted apart. */
+  cached_calls: number;
+  calls: number;
+  per_day: DayCost[];
 }

@@ -30,6 +30,9 @@ function person(overrides: Partial<UserUsage> = {}): UserUsage {
     configurations: 2,
     repeat_runs: 1,
     mismatch_runs: 0,
+    tokens: 0,
+    cost: 0,
+    cached_calls: 0,
     high_findings: 5,
     completed_runs: 3,
     failure_rate: 0.25,
@@ -54,6 +57,8 @@ function period(users: UserUsage[]): UsageByUser {
     held_rate: 0.05,
     repeat_rate: 0.2,
     periods: [7, 30, 90, 180],
+    rate_per_million: 0,
+    currency: "USD",
   };
 }
 

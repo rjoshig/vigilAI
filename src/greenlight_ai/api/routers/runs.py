@@ -35,7 +35,7 @@ from greenlight_ai.api.deps import (
     get_data_dir,
     get_session,
 )
-from greenlight_ai import availability
+from greenlight_ai import availability, spend
 from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.checks import artifact_match, field_labels
 from greenlight_ai.api.uploads import UploadError, store_upload
@@ -1432,6 +1432,8 @@ def run_stats(
         ).all()
     }
 
+    rate = spend.rate_for(session)
+    tokens = int(totals[2]) + int(totals[3])
     return schemas.RunStats(
         run_id=run_id,
         total_duration_ms=sum(s.duration_ms for s in stages),
@@ -1440,6 +1442,10 @@ def run_stats(
         findings_by_engine=by_engine,
         prompt_tokens=int(totals[2]),
         completion_tokens=int(totals[3]),
+        cost=round(spend.cost_of(tokens, rate), 4),
+        currency=rate.currency,
+        rate_per_million=rate.per_million,
+        budget_tokens=resolved_llm_settings(session).max_tokens_per_run,
         stages=stages,
     )
 

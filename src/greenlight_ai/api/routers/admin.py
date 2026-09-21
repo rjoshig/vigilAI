@@ -31,7 +31,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from greenlight_ai import announcements, scopes, user_usage, value_report
+from greenlight_ai import announcements, scopes, spend, user_usage, value_report
 from greenlight_ai.api import schemas_admin as wire
 from greenlight_ai.api.deps import (
     DELETE_WORD,
@@ -2436,6 +2436,7 @@ def usage_by_user(
         raise HTTPException(HTTP_422, f"period must be one of {offered} days")
 
     period = user_usage.build(session, days)
+    rate = spend.rate_for(session)
     return wire.UsageByUserOut(
         start=period.start,
         end=period.end,
@@ -2445,6 +2446,8 @@ def usage_by_user(
         held_rate=period.held_rate,
         repeat_rate=period.repeat_rate,
         periods=list(user_usage.PERIODS),
+        rate_per_million=rate.per_million,
+        currency=rate.currency,
         users=[
             wire.UserUsageOut(
                 user_id=row.user_id,
@@ -2462,6 +2465,9 @@ def usage_by_user(
                 orders=row.orders,
                 customers=row.customers,
                 configurations=row.configurations,
+                tokens=row.tokens,
+                cost=row.cost,
+                cached_calls=row.cached_calls,
                 repeat_runs=row.repeat_runs,
                 mismatch_runs=row.mismatch_runs,
                 high_findings=row.high_findings,
@@ -2555,6 +2561,46 @@ def usage(
         false_positive_rate=round(false_positives / decided, 4) if decided else 0.0,
         findings_by_type=by_type,
         decisions=decisions,
+        spend=_spend_out(session, calls),
+    )
+
+
+def _spend_out(session: Session, calls: Sequence[models.LlmCall]) -> wire.SpendOut:
+    """What the deployment has spent (Phase 6.21d).
+
+    Two figures side by side, and they answer different questions. The period's spend
+    is over whatever window the caller asked for; the month's is over this calendar
+    month, because that is the one a budget is set against and the one somebody will be
+    asked about.
+
+    Args:
+        session: The request's session.
+        calls: The period's calls, already loaded by the caller.
+
+    Returns:
+        The figures. Every amount is zero when no rate is configured, and the console
+        reads ``rate_per_million`` to decide whether to show money at all.
+    """
+    rate = spend.rate_for(session)
+    sent = [call for call in calls if not call.cached]
+    tokens = sum(call.prompt_tokens + call.completion_tokens for call in sent)
+
+    today = utcnow().date()
+    month = spend.spend_by_day(session, today.replace(day=1), today, rate)
+    return wire.SpendOut(
+        rate_per_million=rate.per_million,
+        currency=rate.currency,
+        tokens=tokens,
+        cost=round(spend.cost_of(tokens, rate), 2),
+        month_tokens=sum(entry.tokens for _day, entry in month),
+        month_cost=round(sum(entry.cost for _day, entry in month), 2),
+        monthly_warning=rate.monthly_warning,
+        cached_calls=len(calls) - len(sent),
+        calls=len(sent),
+        per_day=[
+            wire.DayCost(day=day.isoformat(), tokens=entry.tokens, cost=round(entry.cost, 2))
+            for day, entry in month
+        ],
     )
 
 

@@ -356,6 +356,14 @@ class RunStats(BaseModel):
     findings_by_engine: dict[str, int] = Field(default_factory=dict)
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    #: What this run cost, and how much of its budget it used (Phase 6.21d). ``cost``
+    #: is zero when nobody has set a rate, in which case the screen shows tokens only.
+    #: ``budget_tokens`` is the per-run ceiling — the one hard stop in the product —
+    #: so a run can say how close it came rather than only reporting it was stopped.
+    cost: float = 0.0
+    currency: str = "USD"
+    rate_per_million: float = 0.0
+    budget_tokens: int = 0
     stages: list[StageInfo] = Field(default_factory=list)
 
 

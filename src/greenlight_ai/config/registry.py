@@ -547,6 +547,45 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "you expect to be back, if you know.",
     ),
     SettingSpec(
+        key="cost.per_million_tokens",
+        env="GREENLIGHT_AI_COST_PER_MILLION_TOKENS",
+        label="Cost per million tokens",
+        group="Availability",
+        kind="int",
+        default=0,
+        minimum=0,
+        maximum=1_000_000,
+        help="What a million tokens costs, in whole currency units, so the token "
+        "counts the tool already keeps can be read as money. **Zero, the default, "
+        "means the figures stay in tokens and no number is invented** — which is the "
+        "right state until somebody who knows the contract fills this in.",
+    ),
+    SettingSpec(
+        key="cost.currency",
+        env="GREENLIGHT_AI_COST_CURRENCY",
+        label="Currency",
+        group="Availability",
+        kind="str",
+        default="USD",
+        help="What the cost figures are denominated in. Shown beside every amount, "
+        "because a number with no currency on it is a number somebody will read as "
+        "theirs.",
+    ),
+    SettingSpec(
+        key="cost.monthly_warning",
+        env="GREENLIGHT_AI_COST_MONTHLY_WARNING",
+        label="Warn above, per month",
+        group="Availability",
+        kind="int",
+        default=0,
+        minimum=0,
+        maximum=100_000_000,
+        help="Show a warning on the usage screen once this month's spend passes this "
+        "figure. **A warning, never a refusal**: the only hard stop in the product is "
+        "the per-run token budget, and adding a second one is a decision for after "
+        "somebody has looked at these numbers. Zero switches the band off.",
+    ),
+    SettingSpec(
         key="value.hours_per_order",
         env="GREENLIGHT_AI_HOURS_PER_ORDER",
         label="Hours a manual check takes",

@@ -234,24 +234,34 @@ low or review severity only, and code sets every severity (ADR-001).
       own variance producing nothing; too little history producing a stated silence rather
       than a finding; the model naming an attribute it was not shown refused.
 
-### 6.21d — Spend, visible everywhere · ⬜ not started
+### 6.21d — Spend, visible everywhere · ✅ complete
+
+**Built 2026-09-21.** Arithmetic over the `llm_calls` rows the adapter already writes:
+nothing new is recorded and nothing is estimated. **No rate configured means no money
+anywhere** — the figures stay in tokens and no currency appears at all, which the card
+says rather than showing a zero that reads as "this cost nothing".
+
+**Nothing new refuses anything**, and `tests/test_spend.py` asserts it by reading the
+module's own source for a `raise`. The monthly band produces a warning that says in so
+many words that nothing has been stopped, because a warning somebody reads as a block
+is a support call and a delivery nobody submitted.
 
 No new refusal. The per-run token ceiling stays the only hard stop, as decided.
 
-- [ ] A cost-per-thousand-tokens setting, so the token counts the tool already keeps
+- [x] A cost-per-thousand-tokens setting, so the token counts the tool already keeps
       become money. Zero by default, which means the figures stay in tokens and no number
       is invented.
-- [ ] **Tokens and cost on the run statistics screen**, with a budget-consumed meter
+- [x] **Tokens and cost on the run statistics screen**, with a budget-consumed meter
       reusing `admin-ui/components/cap-meter.tsx` — the countdown built in 6.17b, applied
       to the other budget.
-- [ ] **Tokens and cost per person** on Admin → Usage. The per-person table exists
+- [x] **Tokens and cost per person** on Admin → Usage. The per-person table exists
       (`user_usage.py`) and counts runs, failures and holds; it has never counted tokens.
-- [ ] **Deployment spend per day and per month** on Admin → Usage, with a warning band an
+- [x] **Deployment spend per day and per month** on Admin → Usage, with a warning band an
       administrator sets. A band is a warning, not a gate.
-- [ ] The figures state their own assumption, as the value report does: the rate was
+- [x] The figures state their own assumption, as the value report does: the rate was
       supplied rather than measured, and cached calls cost nothing and are shown
       separately.
-- [ ] Tests: cost derived from stored token counts rather than recomputed; a zero rate
+- [x] Tests: cost derived from stored token counts rather than recomputed; a zero rate
       showing tokens and no currency; cache hits excluded from spend; per-person totals
       reconciling with the deployment total.
 

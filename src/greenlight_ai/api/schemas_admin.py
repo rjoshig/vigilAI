@@ -458,6 +458,11 @@ class UserUsageOut(BaseModel):
     repeat_runs: int = 0
     #: Runs that recorded an artifact disagreement, accepted or not.
     mismatch_runs: int = 0
+    #: Tokens their runs actually sent, and what those cost at the configured rate
+    #: (Phase 6.21d). Zero cost means no rate is set, not that they spent nothing.
+    tokens: int = 0
+    cost: float = 0.0
+    cached_calls: int = 0
     high_findings: int = 0
     completed_runs: int = 0
 
@@ -490,6 +495,47 @@ class UsageByUserOut(BaseModel):
     repeat_rate: float = 0.0
     #: The periods the console may ask for, so the picker cannot drift from the API.
     periods: list[int] = Field(default_factory=list)
+    #: The rate every row's cost was computed at, carried once rather than on each row
+    #: (Phase 6.21d). Zero means no rate is set and the console shows tokens only.
+    rate_per_million: float = 0.0
+    currency: str = "USD"
+
+
+class SpendOut(BaseModel):
+    """What some period or some runs cost (Phase 6.21d)."""
+
+    #: Whole currency units per million tokens, as configured. Zero means no rate has
+    #: been set and every other money figure here is zero and should not be shown.
+    rate_per_million: float = 0.0
+    currency: str = "USD"
+    #: Tokens actually sent, across calls the cache did not serve.
+    tokens: int = 0
+    #: Those tokens at the rate.
+    cost: float = 0.0
+    #: This calendar month's spend, and the band an administrator set. A band produces
+    #: a warning and never a refusal: the per-run token budget stays the only hard stop.
+    month_cost: float = 0.0
+    month_tokens: int = 0
+    monthly_warning: float = 0.0
+    #: Calls the cache served. They cost nothing and are counted apart rather than
+    #: folded in, where they would flatter the total.
+    cached_calls: int = 0
+    calls: int = 0
+    #: One entry per day that made a call, oldest first, so a strip can be drawn.
+    per_day: list[DayCost] = Field(default_factory=list)
+
+    @property
+    def known(self) -> bool:
+        """Whether a cost can be shown at all."""
+        return self.rate_per_million > 0
+
+
+class DayCost(BaseModel):
+    """One day's tokens and cost."""
+
+    day: str
+    tokens: int = 0
+    cost: float = 0.0
 
 
 class UsageOut(BaseModel):
@@ -503,6 +549,10 @@ class UsageOut(BaseModel):
     tokens_total: int = 0
     tokens_per_day: list[DayCount] = Field(default_factory=list)
     cache_hit_rate: float = 0.0
+    #: What it all cost (Phase 6.21d). Zero throughout when nobody has set a rate, in
+    #: which case the console shows tokens and no currency at all — a cost built on a
+    #: rate nobody supplied is a number that gets quoted back as fact.
+    spend: SpendOut = Field(default_factory=lambda: SpendOut())
     json_failure_rate: float = 0.0
     false_positive_rate: float = 0.0
     findings_by_type: dict[str, int] = Field(default_factory=dict)
