@@ -28,6 +28,9 @@ __all__ = [
     "AttributeStat",
     "REPORT_CHECKED_KINDS",
     "WHAT",
+    "sheet_for",
+    "column_for",
+    "label_for",
 ]
 
 _LOG: Final = logging.getLogger(__name__)
@@ -89,7 +92,7 @@ WHAT: Final[dict[str, str]] = {
 }
 
 
-def _sheet(
+def sheet_for(
     document: ReportDocument,
     wanted: str,
     resolver: LayoutResolver | None,
@@ -118,7 +121,7 @@ def _sheet(
     return None if found is None else document.named(found.value)
 
 
-def _column(
+def column_for(
     sheet: ReportSheet,
     wanted: str,
     resolver: LayoutResolver | None,
@@ -149,7 +152,7 @@ def _column(
     return None if found is None else list(sheet.header).index(found.value)
 
 
-def _label(
+def label_for(
     sheet: ReportSheet,
     wanted: str,
     resolver: LayoutResolver | None,
@@ -241,15 +244,15 @@ def attribute_stats(
     dirt = reports.get("dirt")
     if dirt is None:
         return {}
-    sheet = _sheet(dirt, DIRT_ATTRIBUTE_SHEET, resolver)
+    sheet = sheet_for(dirt, DIRT_ATTRIBUTE_SHEET, resolver)
     if sheet is None:
         return {}
 
-    name_index = _column(sheet, "Attribute", resolver, "dirt")
+    name_index = column_for(sheet, "Attribute", resolver, "dirt")
     if name_index is None:
         return {}
-    min_index = _column(sheet, "Min", resolver, "dirt")
-    max_index = _column(sheet, "Max", resolver, "dirt")
+    min_index = column_for(sheet, "Min", resolver, "dirt")
+    max_index = column_for(sheet, "Max", resolver, "dirt")
 
     stats: dict[str, AttributeStat] = {}
     for row in sheet.rows:
@@ -399,13 +402,13 @@ def _check_value_set(
             passed=None, detail=f"The {check.field_name} distribution report was not supplied."
         )
 
-    sheet = _sheet(document, sheet_name, resolver)
+    sheet = sheet_for(document, sheet_name, resolver)
     if sheet is None:
         return CheckOutcome(
             passed=None, detail=f"Sheet {sheet_name!r} was not found in the distribution report."
         )
 
-    index = _column(sheet, column, resolver, str(document.kind))
+    index = column_for(sheet, column, resolver, str(document.kind))
     if index is None:
         return CheckOutcome(
             passed=None,
@@ -489,11 +492,11 @@ def _flow_value(
     Returns:
         The number, or ``None`` when the label is absent or not numeric.
     """
-    sheet = _sheet(document, FLOW_SHEET, resolver)
+    sheet = sheet_for(document, FLOW_SHEET, resolver)
     if sheet is None:
         return None
     header_width = len(sheet.header)
-    spelled = _label(sheet, label, resolver, str(document.kind))
+    spelled = label_for(sheet, label, resolver, str(document.kind))
     if spelled is None:
         return None
     cell = sheet.lookup(spelled, value_column=max(header_width - 1, 1))

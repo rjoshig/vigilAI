@@ -190,36 +190,47 @@ is derived from it, never the other way round. The test that caught it is
       (programme over everywhere); revert restoring the previous map; a suggestion
       recorded, listed, accepted, and then short-circuiting the model on the next run.
 
-### 6.21c — Anomalies, both ways · ⬜ not started
+### 6.21c — Anomalies, both ways · ✅ complete
+
+**Built 2026-09-21**, ADR-053. `profile_anomaly` is produced by a real code path at
+last. Measured before shipping: **92.3% precision, 100% recall**
+([`benchmarks/phase-6.21-anomaly.md`](benchmarks/phase-6.21-anomaly.md)).
+
+**The benchmark corrected an assumption while it was being written.** A scenario
+asserted that a null rate up 40% should not fire; it fired every time, and it was
+right — on a measure that has sat at 4.0% ± 0.2% for eight deliveries, 5.6% is eight
+deviations out. What counts as a nudge is relative to how much that measure normally
+moves, which is the whole reason this compares against a spread rather than a fixed
+percentage.
 
 The first findings in the product that no person authored a rule for. Both halves produce
 low or review severity only, and code sets every severity (ADR-001).
 
-- [ ] **Per-attribute aggregates stored on every finalized run**: null rate, min, max,
+- [x] **Per-attribute aggregates stored on every finalized run**: null rate, min, max,
       mean and row count per attribute. Aggregates only — no row, no value that is not
       already an aggregate (ADR-003).
-- [ ] **Code, against history.** Compare this delivery with the last *N* finalized runs of
+- [x] **Code, against history.** Compare this delivery with the last *N* finalized runs of
       the same configuration and raise `profile_anomaly` when an attribute is far from its
       own history. Sensitivity and *N* settable in the console, with a default that errs
       toward silence.
-- [ ] **Silent until it has evidence.** Below the minimum number of prior runs the check
+- [x] **Silent until it has evidence.** Below the minimum number of prior runs the check
       reports that it has nothing to say rather than inventing a baseline — the same
       discipline [`phase-7.1.md`](phase-7.1.md) applies to the demotion bar.
-- [ ] **The model, reading the shape.** One capped call per run, shown the aggregate
+- [x] **The model, reading the shape.** One capped call per run, shown the aggregate
       statistics and nothing else, asked what looks unusual. It never decides severity and
       never says whether the delivery is acceptable. Code checks each attribute it names
       was one it was shown, applies a confidence floor, and emits at review severity with
       `engine="model"`. The tripwire scans the assembled prompt like every other call.
-- [ ] Both halves are settings an administrator can switch off, defaulting to the code
+- [x] Both halves are settings an administrator can switch off, defaulting to the code
       half on and the model half off, because the model half spends tokens on every run.
-- [ ] `profile_anomaly` stops being a dead finding type: `rules/schema.py:89` has declared
+- [x] `profile_anomaly` stops being a dead finding type: `rules/schema.py:89` has declared
       it since Phase 2, `user-ui/lib/display.ts` labels it, `llm/prompts/s9_summarize.py`
       has an example of it, and nothing in `src/` has ever produced one.
-- [ ] A benchmark on synthetic history with precision and recall recorded under
+- [x] A benchmark on synthetic history with precision and recall recorded under
       [`benchmarks/`](benchmarks), following the 6.11 harness. **An anomaly detector
       nobody measured is a false-positive generator**, and this phase does not ship one on
       a promise.
-- [ ] Tests: a seeded history with a planted null-rate shift caught; a delivery inside its
+- [x] Tests: a seeded history with a planted null-rate shift caught; a delivery inside its
       own variance producing nothing; too little history producing a stated silence rather
       than a finding; the model naming an attribute it was not shown refused.
 

@@ -270,6 +270,41 @@ class NameLocation(BaseModel):
     confidence: Confidence = 0.5
 
 
+class UnusualAttribute(BaseModel):
+    """One attribute the model read as unusual for this delivery (Phase 6.21c)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The attribute, quoted from the list it was shown. Code checks it was.
+    attribute: str = ""
+    #: Which of the numbers it is talking about, in its own words, so a reviewer can
+    #: see what was read rather than only that something was.
+    observation: str = ""
+    confidence: Confidence = 0.5
+
+
+class ShapeReading(BaseModel):
+    """What the aggregate statistics look like to the model (Phase 6.21c).
+
+    The narrowest kind of question this product asks. The model is shown counts and
+    averages — never a row, never a value that is not already an aggregate (ADR-003) —
+    and asked which of them look unusual for a credit-data delivery. It is **not**
+    asked whether the delivery is correct, whether a requirement is met, or how serious
+    anything is: those are comparisons and judgements that belong to code and to a
+    person (ADR-001).
+
+    Nothing it says becomes a failure. Code checks each attribute was one it was shown,
+    applies a confidence floor, and raises a review item.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The attributes worth a second look. Empty is the expected answer for a delivery
+    #: with nothing odd about it, and the prompt says so.
+    unusual: list[UnusualAttribute] = Field(default_factory=list, max_length=10)
+    reason: str = ""
+
+
 class SynthesizedRule(BaseModel):
     """One rule the model proposes from what people wrote (ADR-021).
 

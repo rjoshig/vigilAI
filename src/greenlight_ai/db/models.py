@@ -180,6 +180,12 @@ class Run(Base):
     #: application: an administrator adds them to the word list, or does not. Kept on
     #: the run because that is where the evidence for them is.
     keyword_suggestions: Mapped[Any] = mapped_column(Json, default=dict)
+    #: The shape of what this delivery carried, per attribute: a null rate, a
+    #: minimum, a maximum and a mean (Phase 6.21c). **Aggregates only** — never a row,
+    #: never which record held the minimum (ADR-003). A later run of the same
+    #: configuration is compared against these, which is the only honest baseline for
+    #: a finding no rule covers.
+    attribute_profile: Mapped[Any] = mapped_column(Json, default=dict)
     #: Names the model read for this run because four deterministic rungs could not
     #: (Phase 6.21b, ADR-051): one entry per artifact, kind, wanted name and what was
     #: used. A suggestion, never an application — an administrator records it on the

@@ -56,6 +56,7 @@ class SettingSpec:
 #: The sections the console draws, in order.
 GROUPS: Final[tuple[str, ...]] = (
     "Model",
+    "Anomalies",
     "Training",
     "Login",
     "Throughput",
@@ -227,6 +228,56 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         "logs hold ids and counts otherwise.",
     ),
     # --- training -------------------------------------------------------------------
+    # --- anomalies (Phase 6.21c) ------------------------------------------------------
+    SettingSpec(
+        key="anomaly.enabled",
+        env="GREENLIGHT_AI_ANOMALY",
+        label="Compare a delivery with its own history",
+        group="Anomalies",
+        kind="bool",
+        default=True,
+        help="Raise a low-severity finding when an attribute's null rate, range or "
+        "mean is unlike the previous finalized deliveries of the same configuration. "
+        "The only finding the tool makes that no rule covers. Costs no model call, and "
+        "says nothing until there is enough history.",
+    ),
+    SettingSpec(
+        key="anomaly.min_history",
+        env="GREENLIGHT_AI_ANOMALY_MIN_HISTORY",
+        label="Deliveries before it speaks",
+        group="Anomalies",
+        kind="int",
+        default=3,
+        minimum=2,
+        maximum=50,
+        help="How many previous finalized deliveries of a configuration are needed "
+        "before anything is compared. A baseline of one delivery is not a baseline.",
+    ),
+    SettingSpec(
+        key="anomaly.sensitivity_pct",
+        env="GREENLIGHT_AI_ANOMALY_SENSITIVITY_PCT",
+        label="How far is far",
+        group="Anomalies",
+        kind="int",
+        default=400,
+        minimum=100,
+        maximum=1000,
+        help="How far from the usual figure counts, as a percentage of how much this "
+        "configuration's deliveries normally vary. 400 means four times the usual "
+        "spread. Lower finds more and is wrong more often.",
+    ),
+    SettingSpec(
+        key="anomaly.model_reads_shape",
+        env="GREENLIGHT_AI_ANOMALY_MODEL",
+        label="Let the AI read the shape too",
+        group="Anomalies",
+        kind="bool",
+        default=False,
+        help="One extra model call per run. It is shown the aggregate statistics and "
+        "nothing else — never a row — and asked what looks unusual; code decides the "
+        "severity and it is always a question rather than a failure. Off by default "
+        "because it spends tokens on every run, including the ones with nothing wrong.",
+    ),
     SettingSpec(
         key="training.enabled",
         env="GREENLIGHT_AI_TRAIN_AI_MODE",

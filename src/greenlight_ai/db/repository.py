@@ -20,6 +20,7 @@ from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.training.lifecycle import RUNNING_STATES
 from greenlight_ai.checks import layout as layout_module
+from greenlight_ai.checks.profile import AttributeProfile
 from greenlight_ai.checks.definitions import (
     DEFAULT_CATEGORIES,
     AdminConfig,
@@ -270,6 +271,66 @@ def load_admin_config(
     )
 
 
+def load_profile_history(
+    session: Session,
+    configuration_id: str,
+    customer: str = "",
+    limit: int = 20,
+    exclude_run_id: int | None = None,
+) -> tuple[dict[str, AttributeProfile], ...]:
+    """The shape of the previous finalized deliveries of one configuration.
+
+    The baseline the anomaly check compares against (Phase 6.21c). **Finalized only**:
+    a run somebody abandoned or one still waiting for a reviewer has not been agreed to
+    be a normal delivery, and a baseline built from unreviewed runs would learn
+    whatever went wrong in them.
+
+    Args:
+        session: An open session.
+        configuration_id: The configuration whose history to read. Empty returns
+            nothing: two deliveries for different configurations are not the same thing
+            measured twice.
+        customer: The customer, so one customer's shape is not another's baseline.
+        limit: How many to read, newest first.
+        exclude_run_id: A run to leave out, so a re-check does not compare a delivery
+            with itself.
+
+    Returns:
+        The profiles, newest first. Runs that stored no profile are left out rather
+        than counted as empty.
+    """
+    if not configuration_id.strip():
+        return ()
+
+    statement = (
+        sa.select(models.Run.id, models.Run.attribute_profile)
+        .where(
+            models.Run.configuration_id == configuration_id,
+            models.Run.status == "finalized",
+        )
+        .order_by(models.Run.id.desc())
+        .limit(limit)
+    )
+    if customer.strip():
+        statement = statement.where(models.Run.customer_name == customer)
+    if exclude_run_id is not None:
+        statement = statement.where(models.Run.id != exclude_run_id)
+
+    history: list[dict[str, AttributeProfile]] = []
+    for _run_id, stored in session.execute(statement).all():
+        if not stored:
+            continue
+        read: dict[str, AttributeProfile] = {}
+        for name, raw in dict(stored).items():
+            try:
+                read[str(name)] = AttributeProfile.model_validate(raw)
+            except ValueError:
+                continue
+        if read:
+            history.append(read)
+    return tuple(history)
+
+
 def active_check_versions(session: Session) -> list[str]:
     """List the active checks as ``name:version``, for the run fingerprint.
 
@@ -406,6 +467,10 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
     if context.keyword_suggestions:
         run.keyword_suggestions = {
             code: list(phrases) for code, phrases in context.keyword_suggestions.items()
+        }
+    if context.profile:
+        run.attribute_profile = {
+            name: entry.model_dump() for name, entry in context.profile.items()
         }
     # Names the ladder's fifth rung had to read, kept where the evidence for them is
     # (Phase 6.21b). A suggestion, never an application — an administrator records

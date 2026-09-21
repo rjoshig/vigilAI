@@ -19,6 +19,7 @@ from greenlight_ai.checks import field_labels
 from greenlight_ai.checks.guides import GuideEntry, guide_lines
 from greenlight_ai.meaning.render import effective_entries, meaning_lines
 from greenlight_ai.db import catalog, models, repository, versions
+from greenlight_ai.config.store import resolve
 from greenlight_ai.db.cache import DbCache, record_calls
 from greenlight_ai.db.session import session_scope
 from greenlight_ai.db.types import utcnow
@@ -200,6 +201,18 @@ def build_context(
         rules_version=run.rules_version,
         verify_lenses=llm_settings.verify_lenses,
         max_lens_calls=llm_settings.max_lens_calls_per_run,
+        # The delivery's own history, which is the only honest baseline for a finding
+        # no rule covers (Phase 6.21c). Finalized runs only, and never this one.
+        profile_history=repository.load_profile_history(
+            session,
+            run.configuration_id,
+            run.customer_name,
+            exclude_run_id=run.id,
+        ),
+        anomalies=bool(resolve(session, "anomaly.enabled").value),
+        anomaly_min_history=int(resolve(session, "anomaly.min_history").value),
+        anomaly_sensitivity=float(resolve(session, "anomaly.sensitivity_pct").value) / 100.0,
+        anomaly_model=bool(resolve(session, "anomaly.model_reads_shape").value),
     )
 
     for row in session.execute(

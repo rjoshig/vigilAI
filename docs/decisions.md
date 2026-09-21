@@ -1982,3 +1982,63 @@ can be measured rather than assumed.
 than a tuple, which is the only change any provider had to make. A 500 is still an
 ordinary failure: only a 400 reads as a refusal of the field, because only a 400 means
 the request itself was rejected.
+
+---
+
+## ADR-053 — The tool may report what no rule covers, at the bottom of the severity scale
+
+**Status:** accepted · 2026-09-21 · Phase 6.21c
+
+**Context.** Every finding this product made traced back to a rule somebody authored: an
+OSL requirement, a compliance control, an administrator's check. That is the right
+default — a finding nobody can explain is a finding nobody acts on — but it means the
+tool could only ever find what it had been told to look for. `docs/design.md` has
+promised a `profile_anomaly` finding since Phase 2 ("unexpected nulls, wrong type, mean
+far from prior runs"). The type was declared in `rules/schema.py`, labelled in the user
+interface, used as an example in the stage-9 prompt, and **constructed nowhere**.
+
+**Decision.** Each finalized run stores the shape of what it delivered — per attribute,
+a null rate, a minimum, a maximum and a mean — and a later run of the same configuration
+is compared against them. Two halves:
+
+- **Code, by default.** The median and median absolute deviation of the previous
+  finalized deliveries, not the mean and standard deviation: with a handful of runs a
+  single odd delivery drags a mean far enough to hide the next one, and the median does
+  not move. A perfectly flat history has no spread to be a multiple of, so a relative
+  threshold applies there instead.
+- **The model, off by default.** One call, shown the same aggregates, asked what looks
+  unusual on its own terms. It is the only call the product makes on *every* run, which
+  is why it ships off.
+
+**Three constraints make this safe to ship.**
+
+1. **It says nothing until it has enough history** (three deliveries by default). A
+   baseline of one delivery is not a baseline, and a tool that invented one would teach
+   reviewers to ignore the whole category in its first week.
+2. **Code grades it, and grades it low.** Code cannot know whether a mean moving three
+   percent matters for this attribute in this business, and severity is code's to set
+   (ADR-001) — so it sets the one that means *look when you have a moment* and puts the
+   numbers in the finding for a person to judge. The model half is **review**, because
+   it has a reading behind it rather than arithmetic.
+3. **It is measured.** `scripts/anomaly_benchmark.py` and
+   `docs/benchmarks/phase-6.21-anomaly.md`: 92.3% precision, 100% recall on synthetic
+   histories. An anomaly detector nobody measured is a false-positive generator, and the
+   failure that matters is not a wrong finding but a reviewer learning the category is
+   noise.
+
+**Aggregates only** (ADR-003). A null *rate*, not which rows were null; a minimum, not
+the record that held it. That is what makes the profile safe to store for the retention
+window and safe to show the model.
+
+**Consequences.** A configuration's first few deliveries get no anomaly findings, which
+is correct and will read as the feature being broken until somebody reads this. The
+stored profile is one more thing the retention purge removes with a run. And the
+thresholds are console settings rather than constants, because the number that survives
+contact with real deliveries is a Phase 7 question — the benchmark bounds the
+arithmetic, not the product.
+
+Building the benchmark corrected an assumption worth recording: a null rate up 40% on a
+measure that has sat at 4.0% ± 0.2% for eight deliveries **is** eight deviations out,
+and firing on it is right. What counts as a nudge is relative to how much that measure
+normally moves, which is the whole reason this compares against a spread rather than a
+fixed percentage.

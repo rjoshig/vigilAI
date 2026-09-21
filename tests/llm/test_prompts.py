@@ -39,6 +39,9 @@ PIPELINE_STAGES = {
     # deterministic rungs failed to say which sheet, column or label was meant, so a
     # delivery whose layout is what the tool expects never pays for it (Phase 6.21a).
     "name_locate",
+    # The one call this product makes on every run when it is switched on, which is
+    # why it ships off: the aggregate statistics, read for anything odd (Phase 6.21c).
+    "shape_reading",
 }
 
 #: The admin flow's prompts: drafting a check (once, at authoring time) and answering a

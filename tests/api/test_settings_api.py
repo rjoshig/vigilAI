@@ -31,6 +31,7 @@ def test_the_console_lists_every_setting_with_its_source(client: TestClient, api
     names = [group["name"] for group in groups]
     assert names == [
         "Model",
+        "Anomalies",
         "Training",
         "Login",
         "Throughput",

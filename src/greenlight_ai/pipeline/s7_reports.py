@@ -17,10 +17,17 @@ from greenlight_ai.checks.expressions import ExpressionError, UnresolvedValue, e
 from greenlight_ai.checks.named_values import NamedValue, resolve_all
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.checks.field_constraints import evaluate as evaluate_constraints
-from greenlight_ai.checks.reports import REPORT_CHECKED_KINDS, CheckOutcome, run_derived_check
+from greenlight_ai.checks import anomaly
+from greenlight_ai.checks.profile import read_profile
+from greenlight_ai.checks.reports import (
+    DIRT_ATTRIBUTE_SHEET,
+    REPORT_CHECKED_KINDS,
+    CheckOutcome,
+    run_derived_check,
+)
 from greenlight_ai.llm.client import LLMError
-from greenlight_ai.llm.prompts import JUDGMENT_PROMPT, PROGRAMME_READING_PROMPT
-from greenlight_ai.llm.prompts.schemas import JudgmentResponse, ProgrammeReading
+from greenlight_ai.llm.prompts import JUDGMENT_PROMPT, PROGRAMME_READING_PROMPT, SHAPE_PROMPT
+from greenlight_ai.llm.prompts.schemas import JudgmentResponse, ProgrammeReading, ShapeReading
 from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.pipeline import coverage as coverage_module
 from greenlight_ai.pipeline.context import RunContext
@@ -35,6 +42,15 @@ _LOG: Final = logging.getLogger(__name__)
 #: A report that contradicts a requirement is as serious as a config that does: the
 #: delivery is already wrong.
 _VIOLATION_SEVERITY: Final[Severity] = "high"
+
+#: How many attributes the shape reading is shown. A DIRT can carry hundreds, and
+#: a prompt that is mostly a list stops being a prompt.
+_MAX_SHAPE_ATTRIBUTES: Final[int] = 60
+
+#: Below this the model was guessing, and a guess about a number it cannot check is
+#: not worth a reviewer's time. The same floor every other reading in the product
+#: uses.
+_SHAPE_FLOOR: Final[float] = 0.6
 
 
 def run(context: RunContext) -> None:
@@ -111,6 +127,7 @@ def run(context: RunContext) -> None:
     # looking for it. Raised here rather than where it happened so one record covers
     # every check that needed the same sheet (Phase 6.21a).
     _report_reasoned_names(context, resolver)
+    _check_anomalies(context, resolver)
 
     # Coverage is settled here, where every check that was going to run has run. It
     # is not a stage of its own: it computes nothing new, it reports what the stage
@@ -182,6 +199,132 @@ def _report_reasoned_names(context: RunContext, resolver: LayoutResolver) -> Non
                     report_name=reasoned.artifact,
                     report_sheet=reasoned.found if reasoned.kind == "sheet" else "",
                 ),
+            )
+        )
+
+
+def _check_anomalies(context: RunContext, resolver: LayoutResolver) -> None:
+    """Compare this delivery's shape with its own history, and read it (Phase 6.21c).
+
+    The only finding the product makes that no rule covers. Two halves, both graded by
+    code and both at the bottom of the severity scale:
+
+    - **Against history.** Pure arithmetic over the previous finalized deliveries of
+      this configuration. Says nothing at all until there are enough of them.
+    - **On its own terms.** One model call, shown aggregates and nothing else, asked
+      what looks odd. Off by default. Code checks every attribute it names was one it
+      was shown, applies a floor, and raises a review item.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to and whose
+            ``profile`` this fills.
+    """
+    context.profile = read_profile(context.reports, context.aliases, resolver)
+    if not context.profile:
+        return
+
+    if context.anomalies:
+        for deviation in anomaly.compare(
+            context.profile,
+            context.profile_history,
+            sensitivity=context.anomaly_sensitivity,
+            min_history=context.anomaly_min_history,
+        ):
+            context.add_finding(
+                Finding(
+                    finding_id=context.next_finding_id(),
+                    type="profile_anomaly",
+                    # Low, always. Code cannot know whether a mean moving matters for
+                    # this attribute in this business, and severity is code's to set
+                    # (ADR-001) — so it sets the one that means "look when you have a
+                    # moment" and puts the numbers in the finding for a person to judge.
+                    severity="low",
+                    title=deviation.title,
+                    detail=anomaly.describe(deviation),
+                    leg="config_reports",
+                    evidence=Evidence(report_name="dirt", report_sheet=DIRT_ATTRIBUTE_SHEET),
+                )
+            )
+
+    if context.anomaly_model:
+        _read_shape(context)
+
+
+def _read_shape(context: RunContext) -> None:
+    """Ask the model what looks odd about the aggregates, and believe little of it.
+
+    Args:
+        context: The run context, whose ``findings`` this appends to.
+    """
+    if context.client is None or not context.profile:
+        return
+
+    lines = []
+    for name, entry in sorted(context.profile.items()):
+        parts = []
+        if entry.null_rate is not None:
+            parts.append(f"missing {entry.null_rate:.1%}")
+        for measure, label in (("minimum", "min"), ("maximum", "max"), ("mean", "mean")):
+            value = getattr(entry, measure)
+            if value is not None:
+                parts.append(f"{label} {value:,.6g}")
+        if parts:
+            lines.append(f"- {entry.name or name}: {', '.join(parts)}")
+    if not lines:
+        return
+
+    offered = {(entry.name or name) for name, entry in context.profile.items()}
+    try:
+        result = context.client.complete(
+            SHAPE_PROMPT.system,
+            preamble(context.guidance)
+            + SHAPE_PROMPT.render_with_examples(
+                context.examples.get("shape_reading", ()),
+                attributes="\n".join(lines[:_MAX_SHAPE_ATTRIBUTES]),
+            ),
+            ShapeReading,
+            stage="shape_reading",
+            prompt_version=SHAPE_PROMPT.version,
+        )
+        reading = result.parsed(ShapeReading)
+    except LLMError as exc:
+        _LOG.info(
+            "run %s: the shape reading did not answer (%s)", context.run_id, type(exc).__name__
+        )
+        return
+
+    for unusual in reading.unusual:
+        # The model was told to quote an attribute from the list. Code checks that it
+        # did: an attribute nobody offered is a hallucination, and believing one would
+        # put a finding on a field this delivery does not carry.
+        if unusual.attribute not in offered:
+            _LOG.info(
+                "run %s: the shape reading named %r, which was not shown",
+                context.run_id,
+                unusual.attribute,
+            )
+            continue
+        if unusual.confidence < _SHAPE_FLOOR:
+            continue
+        context.add_finding(
+            Finding(
+                finding_id=context.next_finding_id(),
+                type="profile_anomaly",
+                # Review rather than low: this one has no arithmetic behind it, only a
+                # reading, so it is put to a person as a question rather than filed as
+                # a fact (ADR-001).
+                severity="review",
+                title=f"{unusual.attribute}: the AI read something odd in the numbers",
+                detail=(
+                    f"{unusual.observation} The AI was shown this delivery's aggregate "
+                    f"statistics — how often each value was missing, the smallest and "
+                    f"largest, and the average — and nothing else: no records and no "
+                    f"individual values. It was {unusual.confidence:.0%} sure. Nothing has "
+                    f"been decided; confirm whether this is expected."
+                ),
+                leg="config_reports",
+                engine="model",
+                evidence=Evidence(report_name="dirt", report_sheet=DIRT_ATTRIBUTE_SHEET),
             )
         )
 
