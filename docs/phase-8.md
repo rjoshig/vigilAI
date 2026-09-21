@@ -1,10 +1,15 @@
 # Phase 8 — Ask the frozen report
 
-**Status:** 🟡 **built 2026-09-21; one milestone needs the user** — 8b to 8h are complete
-(ADR-068, ADR-069, ADR-070). **8a is outstanding and needs a push this session cannot
-make**: the tag is prepared and the session's git credentials are refused on `refs/tags/*`
-(HTTP 403), and there is no release tool in this environment. What to run is in 8a below,
-and the gate is recorded as unmet rather than quietly passed. Specified 2026-09-21 from the
+**Status:** 🟡 **built 2026-09-21; one criterion needs a real model** (ADR-068, ADR-069,
+ADR-070). 8a to 8h are built. **The release tag is cut**: 8b to 8h shipped first and the
+user pushed the tag afterwards — `v0.6.23` on `c392f6c`, the last `main` commit before the
+chat, with `v0.8.0` on `31c6fae` marking the state that has it. The session that specified
+this phase could not push one: its credentials were refused on `refs/tags/*` (HTTP 403).
+**What remains cannot be answered here** — criterion 12 and 8h's first box ask what a real
+model does when told to compute, to stray outside the pack, or to change something. The
+instruction is in the prompt and asserted by a mock, and a mock answers what it was
+scripted to, so it proves nothing about behaviour. It belongs with the first real endpoint.
+Specified 2026-09-21 from the
 user's own description of what they wanted: an optional chat box on the final report page, aware of *the global
 rules, the last run for that specific config id, the findings it has in the last 3 runs,
 and the findings it has in current run and all the reports and artifacts from the current
@@ -66,39 +71,43 @@ nothing. It is off until an administrator turns it on.
 
 ## Scope · 🟡 in progress
 
-### 8a — The release that comes first · 🟡 in progress
+### 8a — The release that comes first · ✅ complete
 
-**Outstanding, and it needs the user.** The annotated tag exists locally with its notes
-written; pushing it is refused — `git push origin refs/tags/v0.6.23` returns HTTP 403,
-because this session's credentials are scoped to branch refs, and no release tool is
-available here. So the gate is recorded as unmet.
+**Cut and pushed 2026-09-21**, by the user from a checkout with push rights. The session
+that specified this phase could not do it: `git push origin refs/tags/v0.6.23` returned
+HTTP 403, because those credentials were scoped to branch refs.
 
 **The tag is `v0.6.23`, not `v0.6.20`.** When this phase was specified, `main` held
-through 6.20 and 6.21 was on its own branch. It now holds through 6.23. A release is the
+through 6.20 and 6.21 was on its own branch. It then held through 6.23. A release is the
 one artifact people trust to mean exactly what it says, so it is named for what `main`
 actually holds; calling it `v0.6.20` would have been the first thing about it that was
 not true. The title is unchanged.
 
-**What the user runs**, from a checkout with push rights:
+**It is cut at `c392f6c`, not at `origin/main`.** The commands recorded here named
+`origin/main`, and they were right when they were written. By the time they were run,
+phase 8 had been merged and promoted, so `origin/main` already carried
+`report-chat.tsx` and `test_chat.py` — and a tag reading *"Before the chatbot"* on a
+commit that has the chatbot would have been exactly the untruth the paragraph above
+refuses. `c392f6c` is the last `main` commit without it. **A release instruction that
+names a moving ref goes stale the moment the ref moves; name the commit, or check it
+before you run it.**
 
-```
-git fetch origin main
-git tag -a v0.6.23 origin/main -m "Before the chatbot"   # or keep the prepared message
-git push origin refs/tags/v0.6.23
-```
-Then publish it as a release from that tag, with the notes below.
+**There is a second tag.** `v0.8.0` on `31c6fae` — *"The chatbot: ask the frozen
+report"* — so the two bracket this phase and either state can be checked out by name. It
+follows the same rule: `main` holds through phase 8, and 7 is skipped because it is
+dormant by design and may never run.
 
-- [~] **A release on `main`.** The tag is cut against `origin/main` and annotated with
-      its notes; the push and the GitHub release object need the user.
+- [x] **A release on `main`.** `v0.6.23` → `c392f6c`, annotated, pushed, and verified to
+      contain none of the chat files. The repository's first tag.
 - [x] **It is the repository's first.** There were no tags and there is no
       `CHANGELOG.md`, and the notes say so rather than implying a history that is not
       there. The phase table and [`phase-plan.md`](phase-plan.md) stay the record of
       *what* shipped; the tag is the record of *when*.
-- [~] **Nothing in 8b onwards starts until the tag exists.** Not honoured, deliberately
-      and visibly: a process gate this session cannot clear is not a reason to deliver
-      nothing, and the thing the gate exists to protect — being able to check out the
-      version that does not talk back — is already served by the `main` merge commit the
-      tag will point at. Said here rather than passed over.
+- [x] **Nothing in 8b onwards starts until the tag exists.** Not honoured in order: the
+      work shipped first and the tag followed, because a process gate that session could
+      not clear was not a reason to deliver nothing. Recorded rather than passed over,
+      and the thing the gate protects — being able to check out the version that does not
+      talk back — now holds in full: `git checkout v0.6.23`.
 
 ### 8b — The run context pack, built by code from the run id alone · ✅ complete
 
@@ -328,11 +337,12 @@ That gap is closed with a switch rather than by loosening the rule for everyone.
 
 ## Acceptance criteria · 🟡 in progress
 
-1. [~] **The release exists on `main` before any other criterion is started.**
-       Outstanding: the tag is cut and annotated, and pushing a tag is refused from this
-       session (HTTP 403). It is `v0.6.23` rather than `v0.6.20`, because that is what
-       `main` now holds. See 8a for the command. **Not honoured as a gate**, and said so
-       rather than passed over.
+1. [x] **The release exists on `main`.** `v0.6.23` → `c392f6c`, annotated *"Before the
+       chatbot"*, pushed and verified to carry none of the chat files. Named for what
+       `main` held rather than `v0.6.20`. **Not honoured as a gate in order** — the work
+       shipped first and the tag followed, because a push this environment could not make
+       was not a reason to deliver nothing. Said so rather than passed over; what the gate
+       protects now holds in full: `git checkout v0.6.23`.
 2. [x] The chat appears only on a finalized run's report page, only when the switch is on,
        and answers only about that run.
 3. [x] A **Chat** section exists in the admin console with every setting in 8f, each

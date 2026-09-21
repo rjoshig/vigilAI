@@ -12,7 +12,7 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**, **6.23**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **8 built** (two items open — the release tag needs a push, and what a real model does when asked to compute needs a real endpoint); **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 8 is built** ([`phase-8.md`](phase-8.md), ADR-068 to ADR-070): *Ask this report* on a frozen report, answering from a context pack code assembles from the run id on every turn; the prose streams and every citation is checked against that pack before it is shown; a **Chat** section in the console with nine settings, off by default, capped and counted; nothing stored. **Two items open and both need something this session does not have:** the release tag (a tag push is refused, HTTP 403 — the command is in 8a) and what a real model does when asked to compute (the instruction is asserted; a mock proves nothing about behaviour). **Next concrete action: push the tag, then 6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 8 is built** ([`phase-8.md`](phase-8.md), ADR-068 to ADR-070): *Ask this report* on a frozen report, answering from a context pack code assembles from the run id on every turn; the prose streams and every citation is checked against that pack before it is shown; a **Chat** section in the console with nine settings, off by default, capped and counted; nothing stored. **The release tag is cut**: `v0.6.23` on `c392f6c` (before the chat) and `v0.8.0` on `31c6fae` (with it), both pushed. **One item open**: what a real model does when asked to compute, to stray outside the pack, or to change something — the instruction is asserted, and a mock proves nothing about behaviour. **Next concrete action: 6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -28,9 +28,6 @@ are open and each needs somebody other than a session:
 - **The three items under "Outstanding, needs the user"** at the foot of this block: the
   retention decision and sign-off, a model for the golden-set benchmark, and a sanitized
   shape reference.
-- **Phase 8 criterion 1** — the release tag. Cut and annotated locally; pushing a tag
-  is refused from this environment (HTTP 403 on `refs/tags/*`) and no release tool is
-  available here. `docs/phase-8.md` §8a has the three commands.
 - **Phase 8 criteria 12 and 8h's first box** — what a real model does when asked to
   compute, to stray outside the pack, or to change something. The instructions are in
   the prompt and asserted; a mock answers what it was scripted to, so asserting the
