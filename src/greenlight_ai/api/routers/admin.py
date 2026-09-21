@@ -2384,7 +2384,7 @@ def usage_by_user(
                 user_id=row.user_id,
                 name=row.name,
                 username=row.username,
-                role=row.role,
+                roles=list(row.roles),
                 is_active=row.is_active,
                 runs=row.runs,
                 finalized=row.finalized,

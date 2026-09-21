@@ -63,7 +63,6 @@ class CurrentUser:
         username: What is typed at the sign-in prompt.
         name: A display name for the audit log and the screens that show who did what.
         email: The account's address.
-        role: The strongest role held, kept for callers not yet moved to ``roles``.
         roles: Every role held, weakest first (ADR-049). Capabilities are the union.
         capabilities: What this caller may actually do. Resolved from ``roles``, and
             **empty when the deployment is not enforcing** — see :func:`current_user`.
@@ -79,7 +78,6 @@ class CurrentUser:
         "username",
         "name",
         "email",
-        "role",
         "roles",
         "capabilities",
         "is_admin",
@@ -93,7 +91,6 @@ class CurrentUser:
         username: str = "",
         name: str = "anonymous",
         email: str = "",
-        role: str = "admin",
         roles: Sequence[str] | None = None,
         capabilities: frozenset[Capability] | None = None,
         is_admin: bool = True,
@@ -107,8 +104,9 @@ class CurrentUser:
             username: What is typed at the prompt.
             name: A display name.
             email: The account's address.
-            role: The strongest role held.
-            roles: Every role held; defaults to the one in ``role``.
+            roles: Every role held. Defaults to an administrator, which is what a
+                caller constructed without any is: the tests and the worker, neither of
+                which is a person being gated.
             capabilities: What the caller may do; defaults to what ``roles`` grant.
             is_admin: Whether admin routes are permitted.
             is_placeholder: Whether this is the stand-in used while login is off.
@@ -118,8 +116,7 @@ class CurrentUser:
         self.username = username
         self.name = name
         self.email = email
-        self.role = role
-        self.roles = normalize_roles(roles if roles is not None else [role])
+        self.roles = normalize_roles(roles if roles is not None else [Role.ADMIN.value])
         self.capabilities = (
             capabilities_of(self.roles) if capabilities is None else frozenset(capabilities)
         )
@@ -286,7 +283,6 @@ def current_user(
             username=row.username,
             name=row.name,
             email=row.email,
-            role=row.role,
             roles=list(row.roles or []),
             capabilities=frozenset() if enforcing else capabilities_of(row.roles),
             # The roles above say what this account holds; this says what the
@@ -303,7 +299,6 @@ def current_user(
         username=user.username,
         name=user.name or user.username,
         email=user.email,
-        role=user.role,
         roles=list(user.roles or []),
         capabilities=capabilities_of(user.roles),
         # Read from the role list rather than from the legacy column, so an account

@@ -320,7 +320,8 @@ export interface UserUsage {
   user_id: number;
   name: string;
   username: string;
-  role: string;
+  /** Every role they hold, weakest first (ADR-049). */
+  roles: UserRole[];
   is_active: boolean;
   runs: number;
   finalized: number;
@@ -470,7 +471,6 @@ export interface CurrentUser {
   id: number;
   name: string;
   email: string;
-  role: UserRole;
   /** Every role held, weakest first (ADR-049). Capabilities are the union. */
   roles: UserRole[];
   /**
@@ -491,8 +491,6 @@ export interface AdminUser {
   username: string;
   name: string;
   email: string;
-  /** The strongest role held. Kept until nothing reads it (phase 6.20f). */
-  role: UserRole;
   /** Every role held, weakest first. They add up rather than replacing one another. */
   roles: UserRole[];
   is_active: boolean;

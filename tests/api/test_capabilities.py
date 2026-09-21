@@ -102,7 +102,6 @@ def sign_in(locked_client: TestClient, factory: sessionmaker[Session]) -> Callab
                     email=f"{username}@localhost",
                     password_hash=hash_password(PASSWORD),
                     roles=list(roles),
-                    role=roles[-1],
                     is_active=True,
                     must_change_password=False,
                 )
@@ -344,7 +343,6 @@ def test_roles_are_a_set_and_the_union_takes_effect_at_once(
 
     assert promoted.status_code == 200, promoted.text
     assert promoted.json()["roles"] == ["user", "reviewer"]
-    assert promoted.json()["role"] == "reviewer", "the legacy field holds the strongest"
 
 
 def test_nothing_ticked_still_leaves_a_plain_user(

@@ -434,7 +434,8 @@ class UserUsageOut(BaseModel):
     #: Their name, or their username where they have none.
     name: str = ""
     username: str = ""
-    role: str = ""
+    #: Every role they hold, weakest first (ADR-049).
+    roles: list[str] = Field(default_factory=list)
     #: Deactivated accounts still appear: what they did does not stop having happened.
     is_active: bool = True
 

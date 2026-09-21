@@ -113,10 +113,9 @@ def ensure_placeholder(session: Session) -> models.User:
         carries no usable password, so it can never be signed in as.
 
         It holds **user and admin** (ADR-049). While login is off this is the only
-        account there is and it can already do everything — ``deps.py`` hands it
-        ``is_admin=True`` — so the stored roles say what the behaviour already is, and
-        the console does not start refusing the only account when it begins gating on
-        them.
+        account there is and it can already do everything, so the stored roles say what
+        the behaviour already is and the console does not refuse the only account there
+        is now that it gates on them.
     """
     row = session.execute(
         sa.select(models.User).where(models.User.is_placeholder)
@@ -130,7 +129,6 @@ def ensure_placeholder(session: Session) -> models.User:
         email=PLACEHOLDER_EMAIL,
         password_hash="",
         roles=[Role.USER.value, Role.ADMIN.value],
-        role=Role.ADMIN.value,
         is_placeholder=True,
         is_active=True,
     )
@@ -161,7 +159,6 @@ def ensure_bootstrap(session: Session) -> models.User | None:
         email="admin@localhost",
         password_hash=hash_password(BOOTSTRAP_PASSWORD),
         roles=[Role.USER.value, Role.ADMIN.value],
-        role=Role.ADMIN.value,
         must_change_password=True,
         is_active=True,
     )
@@ -250,7 +247,6 @@ def create_account(
         email=email,
         password_hash=hash_password(password),
         roles=list(held),
-        role=held[-1],
         must_change_password=True,
         created_by_user_id=created_by,
     )
@@ -286,8 +282,6 @@ def set_roles(session: Session, user: models.User, roles: Sequence[str]) -> tupl
 
     held = normalize_roles(roles)
     user.roles = list(held)
-    # The strongest held, which is what the legacy field means until 6.20f removes it.
-    user.role = held[-1]
     session.flush()
     return held
 

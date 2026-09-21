@@ -1,9 +1,9 @@
 """The account everything is attributed to while login is off (ADR-022, ADR-049).
 
 It holds **user and admin**. While login is off it is the only account there is and it
-can already do everything — `deps.py` hands it `is_admin=True` — so the stored roles say
-what the behaviour already is. The failure this guards against is the quiet one: the
-console starts gating on roles and refuses the only account anybody has.
+can already do everything, so the stored roles say what the behaviour already is. The
+failure this guards against is the quiet one: the console gates on roles and refuses the
+only account anybody has.
 """
 
 from __future__ import annotations
@@ -40,7 +40,6 @@ def test_the_placeholder_is_a_user_and_an_administrator(session: Session) -> Non
     row = ensure_placeholder(session)
 
     assert list(row.roles) == ["user", "admin"]
-    assert row.role == "admin", "the legacy field holds the strongest role held"
 
 
 def test_the_placeholder_may_do_everything_in_the_console(session: Session) -> None:

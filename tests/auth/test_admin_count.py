@@ -58,7 +58,6 @@ def _account(session: Session, username: str, roles: list[str], active: bool = T
         email=f"{username}@localhost",
         password_hash="x",
         roles=roles,
-        role=roles[-1],
         is_active=active,
     )
     session.add(row)
@@ -74,14 +73,12 @@ def test_the_bootstrap_admin_is_created_once(session: Session) -> None:
     assert ensure_bootstrap(session) is None
 
 
-def test_an_account_whose_legacy_field_disagrees_still_counts(session: Session) -> None:
-    """The list is the truth. A stale ``role`` must not conjure a second bootstrap."""
-    row = ensure_bootstrap(session)
-    assert row is not None
-    row.role = "user"  # what 6.20f removes; the list still says admin
-    session.flush()
+def test_an_unknown_stored_role_is_dropped_rather_than_trusted(session: Session) -> None:
+    """A name that is not a role reads as a plain user, so it cannot buy admin access."""
+    real = _account(session, "one", ["admin"])
+    _account(session, "two", ["superuser"])
 
-    assert ensure_bootstrap(session) is None
+    assert other_active_admins(session, besides=real.id) == 0
 
 
 def test_the_placeholder_is_never_the_administrator_that_exists(session: Session) -> None:

@@ -87,11 +87,12 @@ class User(Base):
     #: The roles this account holds, weakest first: any of ``user``, ``reviewer``,
     #: ``admin`` (ADR-049). Capabilities are the union, so holding more never takes
     #: anything away, and `auth/roles.py` is the only place that says what each grants.
+    #:
+    #: The only answer. A single ``role`` column stood beside it while the callers were
+    #: moved over and was dropped in `d2f4a6b8c0e1`: two answers to one question is
+    #: where the two get to disagree, and an account behaving as an administrator while
+    #: its row says otherwise is how somebody gets locked out.
     roles: Mapped[Any] = mapped_column(Json, default=lambda: ["user"])
-    #: The single role this account used to hold, kept in step with ``roles`` until
-    #: everything reads the list (phase 6.20f). The strongest role held, so code that
-    #: still asks ``role == "admin"`` keeps giving the right answer.
-    role: Mapped[str] = mapped_column(sa.String(50), default="user")
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
     #: Set on every account an administrator creates, including the bootstrap admin:
     #: a password another person typed is already known to two people.

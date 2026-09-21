@@ -1,8 +1,11 @@
-"""Account administration (ADR-022).
+"""Account administration (ADR-022, ADR-049).
 
-Only an administrator reaches these routes, and they create accounts for both roles:
-there is no self-registration and no second place to administer people from. Accounts
-are deactivated, never deleted, so what a person did stays attributed to them.
+Only an administrator reaches these routes, and they create every account: there is no
+self-registration and no second place to administer people from. Accounts are
+deactivated, never deleted, so what a person did stays attributed to them.
+
+**Roles are a set.** An account holds any of ``user``, ``reviewer`` and ``admin``, and
+its capabilities are the union, so granting one never takes another away.
 """
 
 from __future__ import annotations
@@ -56,7 +59,6 @@ def _out(row: models.User) -> UserOut:
         username=row.username,
         name=row.name,
         email=row.email,
-        role=row.role,
         roles=list(row.roles or []),
         is_active=row.is_active,
         is_placeholder=row.is_placeholder,
@@ -114,11 +116,15 @@ def list_users(
     """
     accounts.ensure_placeholder(session)
     rows = session.execute(
-        sa.select(models.User).order_by(
-            models.User.is_placeholder, models.User.role, models.User.username
-        )
+        sa.select(models.User).order_by(models.User.is_placeholder, models.User.username)
     ).scalars()
-    return [_out(row) for row in rows]
+    # Administrators first, then by name. Ordered here rather than in SQL because what
+    # somebody holds is a JSON list now, and JSON membership is not portable across
+    # SQLite and Postgres (ADR-017).
+    return sorted(
+        (_out(row) for row in rows),
+        key=lambda out: (out.is_placeholder, Role.ADMIN.value not in out.roles, out.username),
+    )
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -128,7 +134,7 @@ def create_user(
     settings: AuthSettings = Depends(get_auth_settings),
     user: CurrentUser = Depends(require_users),
 ) -> UserOut:
-    """Create an account for either role.
+    """Create an account holding whichever roles it should.
 
     Args:
         payload: The account to create, including its first password.

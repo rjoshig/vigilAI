@@ -287,7 +287,7 @@ def test_a_user_account_cannot_reach_an_admin_route(
                 name="Plain User",
                 email="plain@example.com",
                 password_hash=hash_password(GOOD),
-                role="user",
+                roles=["user"],
             )
         )
         session.commit()
@@ -428,7 +428,7 @@ def test_a_signed_in_person_is_recorded_on_their_work(
                 name="Submitter",
                 email="sub@example.com",
                 password_hash=hash_password(GOOD),
-                role="user",
+                roles=["user"],
             )
         )
         session.commit()
@@ -493,11 +493,10 @@ def test_whoami_reports_the_roles_the_account_holds(client: TestClient, api: str
 
     It used to answer ``role: "user"`` from a literal in `deps.py` while behaving as an
     administrator, which is the sort of disagreement that is only found by reading the
-    code. The console will gate on these, so the answer has to be the account's own.
+    code. Both consoles gate on these, so the answer has to be the account's own.
     """
     body = client.get(f"{api}/auth/me").json()
 
     assert body["roles"] == ["user", "admin"]
-    assert body["role"] == "admin", "the legacy field holds the strongest role held"
     assert body["is_placeholder"] is True
     assert body["is_admin"] is True, "with login off nothing is gated (ADR-022)"

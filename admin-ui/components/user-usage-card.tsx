@@ -63,7 +63,7 @@ const PAGE_SIZE = 10;
 const CSV_COLUMNS: { header: string; value: (row: UserUsage) => string | number }[] = [
   { header: "Person", value: (row) => row.name },
   { header: "Username", value: (row) => row.username },
-  { header: "Role", value: (row) => row.role },
+  { header: "Roles", value: (row) => (row.roles ?? []).join(" + ") },
   { header: "Account active", value: (row) => (row.is_active ? "yes" : "no") },
   { header: "Runs", value: (row) => row.runs },
   { header: "Distinct orders", value: (row) => row.orders },

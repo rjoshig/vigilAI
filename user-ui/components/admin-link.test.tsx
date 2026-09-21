@@ -50,7 +50,6 @@ function account(capabilities: string[]): CurrentUser {
     id: 2,
     name: "A person",
     email: "person@localhost",
-    role: "user",
     roles: ["user"],
     capabilities,
     is_admin: false,

@@ -38,9 +38,7 @@ class WhoAmIOut(BaseModel):
     username: str = ""
     name: str = ""
     email: str = ""
-    role: str = "user"
-    #: Every role held, weakest first (ADR-049). ``role`` is the strongest of them and
-    #: stays until everything reads this list.
+    #: Every role held, weakest first (ADR-049).
     roles: list[str] = Field(default_factory=lambda: ["user"])
     #: What this caller may actually do, so **neither app has to know the matrix**
     #: (ADR-049). The matrix lives in one place and the apps read the answer: a console
@@ -122,8 +120,6 @@ class UserOut(BaseModel):
     username: str
     name: str
     email: str
-    #: The strongest role held. Stays until 6.20f, so nothing that still reads it breaks.
-    role: str
     #: Every role held, weakest first (ADR-049).
     roles: list[str] = Field(default_factory=lambda: ["user"])
     is_active: bool

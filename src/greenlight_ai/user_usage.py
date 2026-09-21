@@ -70,7 +70,7 @@ class UserUsage:
         user_id: The account.
         name: What to show. Their name, or their username where they have no name.
         username: The sign-in name, so two people called the same thing are distinct.
-        role: ``admin`` or ``user``.
+        roles: Which of ``user``, ``reviewer`` and ``admin`` they hold (ADR-049).
         is_active: Whether the account can still sign in. Deactivated accounts still
             appear, because what they did does not stop having happened (ADR-022).
         runs: Everything they submitted in the period, whatever became of it.
@@ -98,7 +98,7 @@ class UserUsage:
     user_id: int
     name: str
     username: str
-    role: str
+    roles: tuple[str, ...]
     is_active: bool
     runs: int
     finalized: int
@@ -343,7 +343,7 @@ def _one_user(
         user_id=user_id,
         name=(account.name or account.username) if account is not None else f"account {user_id}",
         username=account.username if account is not None else "",
-        role=account.role if account is not None else "",
+        roles=tuple(account.roles or ()) if account is not None else (),
         is_active=account.is_active if account is not None else False,
         runs=len(theirs),
         finalized=statuses.count("finalized"),

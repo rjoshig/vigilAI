@@ -384,7 +384,6 @@ export interface CurrentUser {
   id: number;
   name: string;
   email: string;
-  role: string;
   /** Every role held, weakest first (ADR-049). */
   roles: string[];
   /**
