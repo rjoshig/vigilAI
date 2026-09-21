@@ -13,9 +13,11 @@ from greenlight_ai.auth.roles import (
     ROLES,
     Capability,
     DEFAULT_ROLES,
+    Role,
     capabilities_of,
     describe,
     has_capability,
+    holds,
     normalize_roles,
 )
 
@@ -99,3 +101,19 @@ def test_every_role_says_what_it_is_for() -> None:
     for role in ROLES:
         assert len(describe(role)) > 40, f"{role} needs a description worth reading"
     assert describe("wizard") == ""
+
+
+# --- holds(): the one question SQL cannot portably answer ---------------------------
+
+
+def test_holds_finds_a_role_in_the_list() -> None:
+    """What ``other_active_admins`` asks of every row."""
+    assert holds(["user", "admin"], Role.ADMIN) is True
+    assert holds(["user", "reviewer"], Role.ADMIN) is False
+
+
+def test_holds_normalizes_before_answering() -> None:
+    """An unknown stored name is dropped rather than trusted, here as everywhere."""
+    assert holds(["administrator"], Role.ADMIN) is False
+    assert holds([], Role.USER) is True, "nothing stored still reads as a plain user"
+    assert holds(None, Role.USER) is True

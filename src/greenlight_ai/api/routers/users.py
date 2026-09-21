@@ -19,6 +19,7 @@ from greenlight_ai.api.deps import CurrentUser, get_auth_settings, get_session, 
 from greenlight_ai.api.schemas_auth import ResetPasswordIn, UserIn, UserOut
 from greenlight_ai.auth import accounts
 from greenlight_ai.auth.passwords import PasswordTooShort, hash_password
+from greenlight_ai.auth.roles import Role, holds
 from greenlight_ai.auth.sessions import revoke_all_for_user
 from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.db import models, repository
@@ -231,18 +232,10 @@ def set_active(
             HTTP_422,
             "the placeholder is how actions are attributed while login is off",
         )
-    if not is_active and row.role == "admin":
-        others = session.execute(
-            sa.select(sa.func.count())
-            .select_from(models.User)
-            .where(
-                models.User.role == "admin",
-                models.User.is_active,
-                models.User.id != row.id,
-                sa.not_(models.User.is_placeholder),
-            )
-        ).scalar_one()
-        if not others:
+    if not is_active and holds(row.roles, Role.ADMIN):
+        # Counted in Python over the role list, because JSON membership is not portable
+        # across SQLite and Postgres (ADR-017).
+        if not accounts.other_active_admins(session, besides=row.id):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "this is the last active administrator; nobody could sign in afterwards",

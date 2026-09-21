@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from greenlight_ai.auth.passwords import check_length, hash_password, verify_password
-from greenlight_ai.auth.roles import Role, normalize_roles
+from greenlight_ai.auth.roles import Role, holds, normalize_roles
 from greenlight_ai.auth.settings import (
     BOOTSTRAP_PASSWORD,
     BOOTSTRAP_USERNAME,
@@ -36,6 +36,7 @@ __all__ = [
     "create_account",
     "ensure_bootstrap",
     "ensure_placeholder",
+    "other_active_admins",
     "set_password",
 ]
 
@@ -63,6 +64,41 @@ class AccountLocked(AccountError):
 
 class DefaultPasswordInUse(AccountError):
     """The bootstrap administrator still has the documented default password."""
+
+
+def _real_admins(session: Session) -> list[models.User]:
+    """Every account that holds ``admin`` and is not the placeholder.
+
+    Args:
+        session: An open session.
+
+    Returns:
+        The rows, which may be empty on a fresh install.
+
+    Membership of the stored role list is tested in Python rather than in SQL. A JSON
+    containment predicate is written differently on SQLite and on Postgres and the
+    product must run unchanged on both (ADR-017); the users table is the smallest in
+    the schema, so reading it whole is cheaper than the portability problem.
+    """
+    rows = session.execute(
+        sa.select(models.User).where(sa.not_(models.User.is_placeholder))
+    ).scalars()
+    return [row for row in rows if holds(row.roles, Role.ADMIN)]
+
+
+def other_active_admins(session: Session, *, besides: int) -> int:
+    """How many active administrators there would still be without this one.
+
+    Args:
+        session: An open session.
+        besides: The account being deactivated or demoted.
+
+    Returns:
+        The count of other active, non-placeholder accounts holding ``admin``. Zero
+        means the change would lock everybody out of the console, which is only
+        recoverable by editing the database.
+    """
+    return sum(1 for row in _real_admins(session) if row.is_active and row.id != besides)
 
 
 def ensure_placeholder(session: Session) -> models.User:
@@ -115,12 +151,7 @@ def ensure_bootstrap(session: Session) -> models.User | None:
     The password is the documented default and the account must change it before it
     can do anything else. This is a way into a fresh install, not a credential.
     """
-    existing = session.execute(
-        sa.select(models.User).where(
-            models.User.role == "admin", sa.not_(models.User.is_placeholder)
-        )
-    ).first()
-    if existing is not None:
+    if _real_admins(session):
         return None
 
     row = models.User(
