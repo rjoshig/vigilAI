@@ -2287,3 +2287,89 @@ were simply the wrong way round and the stored data was always correct. The name
 fixed so the next reader does not reach the same wrong conclusion.
 
 ---
+
+## ADR-063 — A run's states are a closed set, and `draft` is one of them
+
+**Status:** accepted · 2026-09-21 · Phase 6.23a
+
+**Context.** `runs.status` is an unconstrained `String(30)` whose docstring listed
+`held · queued · running · needs_review · finalized · failed`. The code also writes
+`cancelled` (when a run is withdrawn before it starts) and `draft` (when a run is
+cloned), so the register of states was two short of the truth. The browser knew better
+than the database: `user-ui/lib/types.ts` has carried all eight in its `RunStatus` union,
+with a badge tone and a label for each, since before either was documented.
+
+Two lists of states is how a screen comes to render one it cannot name, and how a guard
+comes to be written for the six somebody remembered.
+
+**Decision.** `models.RUN_STATUSES` is the whole set, in lifecycle order, beside
+`RETENTION_DAYS`. `ACTIVE_STATUSES` and `TERMINAL_STATUSES` name the two groupings code
+actually asks about. The `Run.status` docstring says what each one means, including that
+a `draft` is a run whose fields and artifacts can still be edited and which expires on a
+shorter window than the retention one.
+
+**Deliberately not a database `CHECK` constraint.** ADR-017 requires migrations portable
+across SQLite and Postgres, and a `CHECK` on this column means a `batch_alter_table`
+rebuild every time a state is added — for a column that has carried eight without one.
+What keeps it honest instead is that every write site uses a name from the tuple, and a
+test reads `user-ui/lib/types.ts` and asserts the two languages name the same eight
+states. A status added on one side and not the other now fails the suite.
+
+**Consequences.** A guard can be written against the set rather than against the states
+somebody happened to recall, which is what ADR-066 does. The remaining work of Phase 6.23
+— the endpoints that let a draft be edited, submitted or discarded — has a documented
+state to attach to rather than a string the code invented.
+
+---
+
+## ADR-066 — A re-check belongs to review, and a frozen report stays frozen
+
+**Status:** accepted · 2026-09-21 · Phase 6.23a
+
+**Context.** `POST /runs/{id}/recheck` had no status check at all. It read the run and
+enqueued the task. That accepted a `draft` with no files, a `queued` or `running` run the
+pipeline already owns, a `failed` or `cancelled` one with nothing to re-compare — and a
+**finalized** one.
+
+The last is the serious one. A re-check rewrites rules, traces and findings wholesale.
+Re-reviewing a finalized run is refused by the findings route, the coverage routes and
+the report route, because hard rule 5 and ADR-005 say a frozen report must keep matching
+what the reviewer was shown. The re-check route was the hole in that: the `FinalReport`
+row stayed frozen while everything it described was replaced underneath it.
+
+Two smaller faults sat beside it. A re-check runs stages 5 to 7 and skips stage 9, but
+`save_context` wrote `run.summary` and `run.top_issues` unconditionally from a context
+whose defaults are empty — so **every re-check erased the plain-English account of the
+run**, and a reviewer lost the narrative in the act of correcting one rule. And
+`gate_state` computed `can_finalize` from undecided findings, unacknowledged requirements
+and second approvals alone; a run with none of any passed every test vacuously, so an
+empty draft was reported as ready to freeze, under a tooltip claiming every
+high-severity finding had a decision. The same was true of a queued, running, held,
+failed or cancelled run.
+
+**Decision.** One condition, applied at both places that queue a re-check — the
+standalone endpoint and the requirements edit that queues one of its own:
+
+> `run.status != "needs_review"` → 409, naming the status.
+
+It is deliberately a whitelist of one rather than a blacklist of `finalized`. A re-check
+compares an existing set of rules and traces against parsed artifacts; the only state in
+which that is a meaningful question is the one where a person is reviewing the answer.
+
+`save_context` gains an explicit `narrative` flag, passed `False` by the re-check — not
+an emptiness test, because a run that genuinely summarised to nothing should still be
+able to record that. And `gate_state` answers for the whole run before it counts
+anything: a run that never reached review cannot be frozen, and says so. Fixing it there
+rather than on the button made the header, the report page's card and the coverage card
+truthful at once; patching the button would have corrected one of five screens telling
+the same untruth.
+
+**Consequences.** The standalone Re-check control is removed in 6.23b — it is documented
+nowhere, gives the user no visible feedback, and its only documented use case is already
+automatic, because editing a requirement queues the re-check itself. The endpoint stays,
+because `design.md` documents it and it is now safe.
+
+This does not amend ADR-054's account of what a re-check costs. It narrows when one may
+be asked for at all.
+
+---

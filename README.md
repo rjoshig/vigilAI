@@ -172,6 +172,10 @@ http://localhost:3000 and admin-ui on http://localhost:3001.
   the OSL can name instead of listing attributes, one central dictionary of what each
   attribute is called in each artifact — and, first and alone, the repair that stops the
   tool calling a delivered attribute missing because it is spelled differently
+- [`docs/phase-6.23.md`](docs/phase-6.23.md) — **the draft that can be finished, and the
+  button that did nothing**: cloning a run leaves a draft nothing can advance, so the New
+  run form learns to finish it; a draft expires in five days; the undocumented Re-check
+  control goes, and the one guard it needed closes a hole in the frozen report
 - [`docs/phase-7.md`](docs/phase-7.md) — **real-world fit**: the dormant phase that runs
   on the machine holding the real files, only when asked (ADR-019)
 - [`docs/phase-7.1.md`](docs/phase-7.1.md) — **the shadow evidence**: dormant too, and

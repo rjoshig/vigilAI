@@ -45,6 +45,9 @@ __all__ = [
     "FinalReport",
     "Job",
     "RETENTION_DAYS",
+    "RUN_STATUSES",
+    "ACTIVE_STATUSES",
+    "TERMINAL_STATUSES",
     "DefinitionVersion",
     "MeaningEntry",
 ]
@@ -52,6 +55,31 @@ __all__ = [
 #: Runs expire this long after creation; the purge job deletes by ``runs.expires_at``
 #: and cascades to the files on the shared volume (``docs/design.md`` "Data model").
 RETENTION_DAYS: int = 90
+
+#: Every state a run can be in, in lifecycle order (Phase 6.23a).
+#:
+#: Deliberately a Python constant rather than a database ``CHECK``: ADR-017 requires
+#: migrations portable across SQLite and Postgres, and a ``CHECK`` on this column means
+#: a table rebuild every time a state is added. The column has carried eight states
+#: without one. What keeps it honest instead is that every write site uses a name from
+#: here, and a test asserts this tuple and ``user-ui/lib/types.ts``'s ``RunStatus``
+#: union say the same eight things.
+RUN_STATUSES: tuple[str, ...] = (
+    "draft",
+    "held",
+    "queued",
+    "running",
+    "needs_review",
+    "finalized",
+    "failed",
+    "cancelled",
+)
+
+#: A run the worker is moving through, so a screen watching it should keep polling.
+ACTIVE_STATUSES: tuple[str, ...] = ("queued", "running")
+
+#: A run that will not change again on its own.
+TERMINAL_STATUSES: tuple[str, ...] = ("finalized", "failed", "cancelled")
 
 
 class Base(DeclarativeBase):
@@ -150,10 +178,19 @@ class Run(Base):
     credit_date: Mapped[Optional[dt.date]] = mapped_column(sa.Date, nullable=True)
     notes: Mapped[str] = mapped_column(sa.Text, default="")
 
-    #: held · queued · running · needs_review · finalized · failed. A run is ``held``
-    #: when the artifacts disagree with what the submitter typed (ADR-041): the files
-    #: are stored and the run exists, and it waits for somebody to accept the
-    #: disagreement rather than being thrown away and re-uploaded.
+    #: One of :data:`RUN_STATUSES`, which is the whole set:
+    #:
+    #: * ``draft`` — cloned from another run and not yet submitted. Its fields and its
+    #:   artifacts can still be edited, and it expires on the short window rather than
+    #:   the retention one (Phase 6.23).
+    #: * ``held`` — the artifacts disagree with what the submitter typed (ADR-041). The
+    #:   files are stored and the run exists; it waits for somebody to accept the
+    #:   disagreement rather than being thrown away and re-uploaded.
+    #: * ``queued`` · ``running`` · ``needs_review`` · ``finalized`` · ``failed``
+    #: * ``cancelled`` — withdrawn before it started.
+    #:
+    #: This docstring listed six of the eight until Phase 6.23a, omitting the two the
+    #: product had quietly grown.
     status: Mapped[str] = mapped_column(sa.String(30), default="queued", index=True)
     current_stage: Mapped[str] = mapped_column(sa.String(30), default="")
     #: One line, shown in the runs list and at the top of the run: what went wrong.
