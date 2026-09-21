@@ -239,6 +239,36 @@ class JobQueue:
             max_attempts=job.max_attempts,
         )
 
+    def touch(self, job_id: int) -> bool:
+        """Say that this job is still being worked on.
+
+        ``locked_at`` was written once, when the job was claimed, and
+        :meth:`reclaim_stale` compares it against the clock — so a job that is merely
+        **slow** is indistinguishable from one whose worker is **dead**. A delivery with
+        a long OSL against an endpoint answering near its timeout can hold a claim for
+        longer than the stale window, and every consequence of being reclaimed then
+        followed from a guess.
+
+        That was survivable while reclaiming only meant "run it again". It stopped being
+        survivable when reclaiming learned to give up on a job and fail its run: the
+        guess became a wrong, user-visible verdict on a delivery that was still being
+        validated. A heartbeat is what makes the window mean what it says.
+
+        Args:
+            job_id: The job this worker holds.
+
+        Returns:
+            ``True`` when the row was still running and was touched. ``False`` means
+            somebody else has already taken it or finished it, which is worth knowing
+            rather than ignoring.
+        """
+        updated = self._session.execute(
+            sa.update(Job)
+            .where(Job.id == job_id, Job.status == "running")
+            .values(locked_at=utcnow())
+        )
+        return int(updated.rowcount) == 1  # type: ignore[attr-defined]
+
     def finish(self, job_id: int) -> None:
         """Mark a job done.
 

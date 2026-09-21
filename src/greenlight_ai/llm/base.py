@@ -337,12 +337,18 @@ class BaseClient(ABC):
             for piece in self._send_stream(system, user):
                 pieces.append(piece)
                 yield piece
-        except Exception as exc:
-            # Recorded exactly as `complete` records a transport failure. It was not:
-            # the row was written only after the loop finished, so a stream that died
-            # mid-answer left no trace at all — invisible to the usage and spend
-            # screens, and free against the per-person cap that is counted from these
-            # rows. A call that failed is a call that happened.
+        except BaseException as exc:
+            # `BaseException`, not `Exception`, and the difference is the whole point:
+            # a caller that stops reading closes the generator, which raises
+            # **GeneratorExit** — and `GeneratorExit` does not derive from `Exception`.
+            # Catching only `Exception` left the abandoned stream recording nothing at
+            # all, which is the same hole ADR-072 had just closed, reopened through a
+            # different door: the per-run and per-day chat caps are counted from these
+            # rows, so a client that asked a question, read one piece and hung up paid
+            # for none of it while the provider was called and the tokens spent.
+            #
+            # Recorded exactly as `complete` records a transport failure. A call that
+            # failed, or that nobody stayed to read, is still a call that happened.
             self.call_log.add(
                 CallRecord(
                     stage=stage,

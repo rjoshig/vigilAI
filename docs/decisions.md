@@ -2914,14 +2914,26 @@ should say what it means, or all three should move.
 **Decision.** The rule says what it means. **The API may import a pure leaf under
 `pipeline/`; it may never import a stage.**
 
-A **stage** owns a step of the run: it reaches a prompt, a model client or a
-`RunContext` full of parsed artifacts. `run.py` and `s1_parse` … `s9_summarize` are
-stages. Importing one into the API process drags the prompt registry and the adapter in
-behind it, which is the coupling the original rule was written to prevent — and, for
-`describe_rule`, it dragged all of that in to render one string.
+A **stage** owns a step of the run: `run.py` and `s1_parse` … `s9_summarize`. Importing
+one into a router couples the API to how a run is *executed* — the orchestration, the
+resume logic, the stage's own prompt — which is the coupling the original rule was
+written to prevent. For `describe_rule` it did that to render one string.
 
-A **leaf** is plain code over plain data — `context.py`, `coverage.py`, `guidance.py`.
-Reading one from a router costs nothing and couples nothing.
+A **leaf** does not own a step. `coverage.py` and `guidance.py` are plain code over plain
+data. `context.py` is the run's data structure.
+
+**The obvious rationale for this rule is wrong, and saying so is the point.** It is
+tempting to justify it as "a stage drags the prompt registry and the adapter in behind
+it, a leaf does not". Measured, that is false: importing `pipeline/context.py` alone
+loads 320 modules including the whole of `llm/` — every prompt module and all three
+client implementations — because the context holds a client. An allow-listed leaf pulls
+in as much as a stage does.
+
+It costs nothing here only because `api/` already depends on `llm/` for its own reasons:
+the chat calls a model and the admin console drafts a check. So the rule is about
+**ownership**, not import weight. A router may read the run's data and the pure
+functions over it; it may not reach into how a run is run. If `api/` ever stops
+importing `llm/`, `context` comes off the allow-list.
 
 Two things follow, and both are done rather than promised:
 
@@ -2981,6 +2993,15 @@ the person who hits it rather than telling them to reopen the panel.
 the product and carries the run and the person, never the question or the answer. ADR-070
 stands: no transcript, no question, no answer, nothing to leak from.
 
+**A question that failed still spends the cap, and that is deliberate.** The rows counted
+here include calls that returned an error and calls whose reader walked away, because
+both reached the provider and both cost tokens. The alternative — count only the
+successes — hands back a cap that a client can spend for free by abandoning every
+request, which is the failure this ADR exists to close. The cost is real and is named
+rather than hidden: somebody whose endpoint is having a bad afternoon can spend their
+allowance on answers they never received, and the remedy is an administrator raising the
+number, not a silent exemption the client controls.
+
 **Consequences.** The cap is now a cap. A reviewer who spends it on one report still has
 the report, the run screens and every other report — the count is per run, so it closes
 one panel and no others. An administrator who wants the old, looser behaviour raises the
@@ -2995,9 +3016,11 @@ number, which is a lever that now does what the console says it does.
 **Context.** The sampling temperature had two names for one value.
 `config/registry.py` declared `llm.temperature_pct` / `LLM_TEMPERATURE_PCT` in whole
 percent, because the console renders integers and a float field would have needed a kind
-of its own for one row. `LLMSettings.from_env()` read a float `LLM_TEMPERATURE`. The API
-and the worker resolve settings through ADR-023's layers, so they read the percent form;
-the CLI reads `from_env`, so it read the float. `.env.example` documented the float and
+of its own for one row. `LLMSettings.from_env()` read a float `LLM_TEMPERATURE`. A run started
+by the API or the worker resolves through ADR-023's layers, so it reads the percent
+form; `from_env` is what the CLI uses and what every fallback path lands on when there
+is no console to resolve through (`llm/factory.py`, `worker/runner.py`), so those read
+the float. `.env.example` documented the float and
 never mentioned the other.
 
 The result: a deployment that set `LLM_TEMPERATURE=0.7` in the file the deployment guide
@@ -3009,7 +3032,9 @@ to leave it there.
 because it is the one the console and the running product already agree on.
 `LLMSettings.from_env()` reads `LLM_TEMPERATURE_PCT`. `LLM_TEMPERATURE` is honoured
 where it is read, with a warning naming its replacement, so an existing `.env` keeps
-working and its owner finds out rather than guessing later.
+working and its owner finds out rather than guessing later. The warning says *where* it
+is read rather than claiming a single caller, because "the CLI alone" was itself not
+true — `from_env` is the fallback wherever settings are built without a session.
 
 `tests/config/test_registry.py` asserts that no two settings claim one environment
 variable, and — the other half of the same problem — that every setting in the registry

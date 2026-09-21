@@ -737,7 +737,7 @@ export const GUIDE: GuideSection[] = [
             "italic": true
           },
           {
-            "text": ". With one setting on, it can also see per-column figures the tool computed — a minimum, a maximum, a mean, a count of nulls."
+            "text": ". With one setting on, it can also see per-column figures the tool computed — minimum, maximum, mean, count, nulls and distinct — so it can answer what a field's distribution looks like."
           }
         ]
       },
@@ -803,11 +803,25 @@ export const GUIDE: GuideSection[] = [
           ],
           [
             {
-              "text": "It will not answer about another run, another customer or another configuration.",
+              "text": "It will not answer about another customer, or a configuration that is not this one.",
               "bold": true
             },
             {
-              "text": " It can see this one."
+              "text": " It "
+            },
+            {
+              "text": "can",
+              "italic": true
+            },
+            {
+              "text": " see the last three finalized runs of "
+            },
+            {
+              "text": "this",
+              "bold": true
+            },
+            {
+              "text": " configuration, which is how it answers \"is this normal for this customer?\" — but that history is all it has beyond this run, and it will not go looking for anything else."
             }
           ],
           [

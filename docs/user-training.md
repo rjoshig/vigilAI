@@ -623,7 +623,8 @@ both the global ones and your delivery programme's — the list of artifacts tha
 what this run was told, and the text of the report you are looking at. It also sees **the
 last three finalized runs of this configuration** and what they found, which is what lets
 it answer *"is this normal for this customer?"*. With one setting on, it can also see
-per-column figures the tool computed — a minimum, a maximum, a mean, a count of nulls.
+per-column figures the tool computed — minimum, maximum, mean, count, nulls and
+distinct — so it can answer what a field's distribution looks like.
 
 **Before you ask anything**, the panel says which run it is looking at and how many
 findings it has, and offers four questions built from what this particular report
@@ -644,8 +645,10 @@ them, and the same check that guards every other prompt guards this one.
 - **It will not work anything out.** Every figure it quotes was computed by the tool
   before you asked. Ask it to add two numbers and it will tell you it reports figures
   rather than deriving them.
-- **It will not answer about another run, another customer or another configuration.**
-  It can see this one.
+- **It will not answer about another customer, or a configuration that is not this
+  one.** It *can* see the last three finalized runs of **this** configuration, which is
+  how it answers "is this normal for this customer?" — but that history is all it has
+  beyond this run, and it will not go looking for anything else.
 - **It will not change anything.** No decision, no finding, no re-opening the report, no
   re-run. If you ask, it says where in the product you do that yourself.
 - **It will not guess.** When the answer is not in what it can see, it says so and says

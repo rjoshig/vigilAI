@@ -11,6 +11,7 @@ import argparse
 import logging
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 from types import FrameType
@@ -51,6 +52,11 @@ IDLE_SLEEP_SECONDS: Final[float] = 1.0
 #: A claim older than this is treated as abandoned, so a killed worker's job is picked
 #: up by another rather than sitting in ``running`` forever.
 STALE_CLAIM_SECONDS: Final[int] = 900
+
+#: How often a worker says the job it holds is still alive. Comfortably inside
+#: :data:`STALE_CLAIM_SECONDS`, so a single missed beat never looks like an abandoned
+#: claim, and rare enough that a long run costs a handful of one-row updates.
+HEARTBEAT_SECONDS: Final[int] = 60
 
 #: How often to make sure a purge job is queued. The worker schedules its own retention
 #: sweep so a deployment needs no cron entry; several workers racing to queue one is
@@ -181,15 +187,57 @@ class Worker:
                 JobQueue(session, self._is_sqlite).fail(job.id, f"unknown task {job.task!r}")
             return True
 
+        beat = self._start_heartbeat(job)
         try:
             handler(job)
         except Exception as exc:  # noqa: BLE001 - the loop must survive any task failure
             self._handle_failure(job, exc)
             return True
+        finally:
+            beat.set()
 
         with session_scope(self._factory) as session:
             JobQueue(session, self._is_sqlite).finish(job.id)
         return True
+
+    def _start_heartbeat(self, job: ClaimedJob) -> threading.Event:
+        """Keep saying this job is alive for as long as the handler runs.
+
+        `locked_at` was stamped once, at claim time, and `reclaim_stale` reads it as
+        "how long has this been held". Without a heartbeat a **slow** job and a **dead**
+        one look identical, and a delivery with a long OSL against an endpoint answering
+        near its timeout can genuinely hold a claim past the window. That was tolerable
+        while being reclaimed only meant running it again. It is not tolerable now that
+        reclaiming can give up on a job and mark its run failed — that turns a guess
+        into a wrong verdict on a delivery somebody is waiting for.
+
+        A daemon thread rather than a hook in the pipeline: the stages know nothing
+        about jobs, and threading the queue through them to solve a queue problem would
+        put the arrows the wrong way round.
+
+        Args:
+            job: The claimed job to keep warm.
+
+        Returns:
+            The event to set when the handler is done. Setting it stops the thread at
+            its next wake, and the thread is a daemon so a worker shutting down mid-job
+            is never held open by it.
+        """
+        done = threading.Event()
+
+        def beat() -> None:
+            while not done.wait(HEARTBEAT_SECONDS):
+                try:
+                    with session_scope(self._factory) as session:
+                        if not JobQueue(session, self._is_sqlite).touch(job.id):
+                            # Somebody else owns it now. Stop rather than fight for it.
+                            _LOG.warning("job %d is no longer ours to keep alive", job.id)
+                            return
+                except SQLAlchemyError:  # pragma: no cover - a blip must not kill the job
+                    _LOG.warning("job %d heartbeat could not be written", job.id)
+
+        threading.Thread(target=beat, name=f"heartbeat-{job.id}", daemon=True).start()
+        return done
 
     def _handle_failure(self, job: ClaimedJob, exc: Exception) -> None:
         """Record a task failure and decide about a retry.

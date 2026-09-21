@@ -543,8 +543,9 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
         minimum=1,
         maximum=200,
         help="How many questions one person may ask about one report, counted from the "
-        "call record and so not reset by reopening the panel. Reached, the panel says "
-        "so rather than failing.",
+        "call record and so not reset by reopening the panel. A question that failed "
+        "counts too, because it still reached the model. Reached, the panel says so "
+        "rather than failing.",
     ),
     SettingSpec(
         key="chat.max_questions_per_day",
