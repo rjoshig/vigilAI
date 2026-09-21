@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/primitives";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CoverageCard } from "@/components/coverage-card";
+import { ReportChat } from "@/components/report-chat";
 import { api, ApiError } from "@/lib/api";
 import type { Coverage, RunDetail } from "@/lib/types";
 import { saveBlob } from "@/lib/utils";
@@ -245,6 +246,11 @@ export default function ReportPage() {
           </Card>
         </>
       )}
+
+      {/* Only once the run is frozen, and only when an administrator has turned the
+          chat on — the component asks the server and draws nothing otherwise. It is
+          a sibling of the iframe, never a change to the document inside it. */}
+      {run.finalized ? <ReportChat runId={runId} /> : null}
 
       <ConfirmDialog
         open={confirming}

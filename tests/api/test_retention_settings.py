@@ -41,7 +41,18 @@ def _set(client: TestClient, api: str, key: str, value: object) -> None:
 
 
 def _days_until(stamp: str, created: str) -> float:
-    return (dt.datetime.fromisoformat(stamp) - dt.datetime.fromisoformat(created)).days
+    """How many whole days apart two API timestamps are.
+
+    The ``Z`` suffix is spelled out because `fromisoformat` only learned to read it in
+    Python 3.11, and ADR-010 pins 3.10 as the floor: without this the helper raises
+    `ValueError` on the interpreter the project actually targets, and the assertion
+    below never runs.
+    """
+
+    def read(value: str) -> dt.datetime:
+        return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    return (read(stamp) - read(created)).days
 
 
 class TestTheWindowsAreRead:

@@ -566,6 +566,12 @@ export interface Setting {
 export interface SettingGroup {
   name: string;
   settings: Setting[];
+  /**
+   * One line the section says about itself, when it has something to say that no
+   * single row does. Only **Chat** has one today: the questions asked in the last
+   * thirty days, beside the caps they are approaching (Phase 8f).
+   */
+  note?: string;
 }
 
 /** One entry in the settings change history. A secret's values read "(secret)". */

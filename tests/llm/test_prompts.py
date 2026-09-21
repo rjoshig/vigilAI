@@ -14,6 +14,7 @@ import pytest
 
 from greenlight_ai.llm import MockClient, extract_json
 from greenlight_ai.llm.prompts import PROMPTS, Prompt, get_prompt, prompt_versions
+from greenlight_ai.llm.prompts.chat_answer import CITATION_MARKER
 from greenlight_ai.llm.prompts.registry import register
 
 #: The pipeline stages that call a model (``docs/architecture.md`` "The pipeline").
@@ -57,8 +58,22 @@ ADMIN_STAGES = {
 #: asks for it (ADR-021). Like drafting, it is authoring-time rather than per-run.
 TRAINING_STAGES = {"training_synthesize", "training_critique"}
 
-#: Every registered prompt. The rules below apply to all of them equally.
-LLM_STAGES = PIPELINE_STAGES | ADMIN_STAGES | TRAINING_STAGES
+#: The one prompt that answers in **prose** rather than JSON (Phase 8c). It is carved
+#: out by name rather than by a flag on the prompt, so adding a second prose stage is a
+#: deliberate edit to this line and not something a new file can do quietly.
+#:
+#: The ADR-001 rules below still apply to it, and matter more here than anywhere: the
+#: report chat is the one place a person can *ask* for a calculation in their own words,
+#: so "do not compute" has to be in the prompt and has to be checked. What does not
+#: apply is the JSON-only pair — a chat that answered in JSON would be unreadable, and
+#: the shape it must satisfy is checked by code after the stream closes instead.
+PROSE_STAGES = {"chat_answer"}
+
+#: Every registered prompt. The ADR-001 rules below apply to all of them equally.
+LLM_STAGES = PIPELINE_STAGES | ADMIN_STAGES | TRAINING_STAGES | PROSE_STAGES
+
+#: The prompts whose answer is JSON validated against a schema, which is all but one.
+JSON_STAGES = LLM_STAGES - PROSE_STAGES
 
 #: Anything shaped like a real identifier must never appear in a prompt (ADR-003).
 _PII_TRIPWIRE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -92,11 +107,29 @@ def test_every_prompt_has_a_schema() -> None:
         assert prompt.schema is not None
 
 
-@pytest.mark.parametrize("stage", sorted(LLM_STAGES))
+@pytest.mark.parametrize("stage", sorted(JSON_STAGES))
 def test_every_prompt_demands_json_only(stage: str) -> None:
     system = get_prompt(stage).system.lower()
     assert "json object" in system
     assert "no prose" in system
+
+
+@pytest.mark.parametrize("stage", sorted(PROSE_STAGES))
+def test_a_prose_prompt_forbids_identifiers_in_its_answer(stage: str) -> None:
+    """The rule that replaces "JSON only" for the one prompt that answers in prose.
+
+    An identifier written in the body is an unverifiable claim already on the screen,
+    and code cannot check a citation it has already displayed (ADR-069). So the prose
+    must carry none, and what the answer rests on goes in the tail where code can
+    refuse it.
+    """
+    system = get_prompt(stage).system.lower()
+    assert "write no identifiers in the answer itself" in system
+    assert "checked against the context before the person is shown it" in system
+    # A prose prompt takes no worked examples, so the format block is what teaches the
+    # shape. It has to be there, and it has to show the marker the splitter looks for.
+    assert "format, exactly:" in system
+    assert CITATION_MARKER.lower() in system
 
 
 #: An instruction to compute, unless it is negated ("do not compute", "never compare").
@@ -148,7 +181,7 @@ def test_no_prompt_contains_anything_resembling_a_sample_row(stage: str) -> None
         assert banned.lower() not in text.lower()
 
 
-@pytest.mark.parametrize("stage", sorted(LLM_STAGES))
+@pytest.mark.parametrize("stage", sorted(JSON_STAGES))
 def test_worked_examples_are_present_and_parse_as_json(stage: str) -> None:
     """Two to three worked examples per extraction prompt keep a mid-size model honest."""
     template = get_prompt(stage).template
@@ -158,7 +191,7 @@ def test_worked_examples_are_present_and_parse_as_json(stage: str) -> None:
         assert isinstance(json.loads(answer), dict)
 
 
-@pytest.mark.parametrize("stage", sorted(LLM_STAGES))
+@pytest.mark.parametrize("stage", sorted(JSON_STAGES))
 def test_worked_example_answers_validate_against_the_stage_schema(stage: str) -> None:
     """An example the schema would reject teaches the model the wrong shape."""
     prompt = get_prompt(stage)

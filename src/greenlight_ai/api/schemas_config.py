@@ -46,6 +46,12 @@ class SettingGroupOut(BaseModel):
 
     name: str
     settings: list[SettingOut] = Field(default_factory=list)
+    #: One line the section shows about itself, when the section has something to say
+    #: that no single row does. Only **Chat** has one today: the questions asked in the
+    #: last thirty days, beside the caps they are approaching (Phase 8f). A number next
+    #: to the limit it is running towards is worth more than either alone, which is the
+    #: same reason the cap countdown exists.
+    note: str = ""
 
 
 class SettingIn(BaseModel):

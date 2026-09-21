@@ -477,3 +477,33 @@ class ProgrammeReading(BaseModel):
     phrases: list[str] = Field(default_factory=list, max_length=5)
     reason: str = ""
     confidence: Confidence = 0.5
+
+
+class ChatAnswer(BaseModel):
+    """One answer about a frozen report, after code has split it (Phase 8c).
+
+    **Not a guided-decoding schema.** Every other schema here is sent to the endpoint
+    so the answer cannot come back the wrong shape; this one never is, because the chat
+    answers in prose and a guided request would force JSON. It is what *code* builds
+    from the streamed text and validates before anything is shown — which is the same
+    contract in the other direction: the prompt registry says what an answer must
+    satisfy, and here that is satisfied after the fact rather than in flight.
+
+    The split matters. The prose is what the person reads and it streams; the citations
+    are a claim about what the answer rests on, and a claim has to be checkable before
+    it is shown. Code cannot check a citation it has already displayed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: What the person reads. Contains no identifiers by instruction: an id in the
+    #: prose would be an unverifiable claim already on the screen.
+    prose: str = ""
+    #: The identifiers the model says it answered from, as written. Each is resolved
+    #: against the pack before it becomes a chip; one that does not resolve is
+    #: discarded, never shown dimmed and never shown at all.
+    citations: list[str] = Field(default_factory=list)
+    #: True when the tail was missing or unreadable. The answer still stands — pulling
+    #: text somebody is mid-way through reading looks like a malfunction even when it
+    #: is correct — and the panel says the citations could not be verified.
+    citations_unverified: bool = False

@@ -21,6 +21,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Final, Sequence
 
+from greenlight_ai import textfit
+
 __all__ = [
     "guide_block",
     "RunGuidance",
@@ -129,12 +131,7 @@ def _clip(text: str) -> str:
     Returns:
         The text, truncated at a word boundary with an ellipsis when it is too long.
     """
-    cleaned = " ".join(text.split())
-    if len(cleaned) <= MAX_CONTEXT_CHARS:
-        return cleaned
-    cut = cleaned[:MAX_CONTEXT_CHARS].rsplit(" ", 1)[0]
-    _LOG.info("guidance truncated from %d to %d characters", len(cleaned), len(cut))
-    return f"{cut}…"
+    return textfit.clip(text, MAX_CONTEXT_CHARS, what="guidance")
 
 
 def _fit(lines: Sequence[str], what: str, bullet: bool = True) -> str:
@@ -145,6 +142,10 @@ def _fit(lines: Sequence[str], what: str, bullet: bool = True) -> str:
     out loud rather than silently omitted: a model told nine of ten notes should not
     believe it has ten.
 
+    The arithmetic lives in :mod:`greenlight_ai.textfit` since Phase 8b, because the
+    chat pack needs the same rule and ``api/`` may not import ``pipeline/``. These two
+    wrappers stay so this module's callers keep reading the way they did.
+
     Args:
         lines: The lines to render, oldest first.
         what: What a dropped line is called, for the note that replaces it.
@@ -153,23 +154,7 @@ def _fit(lines: Sequence[str], what: str, bullet: bool = True) -> str:
     Returns:
         The rendered block.
     """
-    rendered = [f"- {line}" if bullet else line for line in lines]
-    total = sum(len(line) + 1 for line in rendered)
-    if total <= MAX_BLOCK_CHARS:
-        return "\n".join(rendered)
-
-    kept: list[str] = []
-    used = 0
-    for line in reversed(rendered):
-        if used + len(line) + 1 > MAX_BLOCK_CHARS:
-            break
-        kept.append(line)
-        used += len(line) + 1
-    kept.reverse()
-    dropped = len(rendered) - len(kept)
-    _LOG.info("guidance block trimmed: %d of %d %s(s) dropped", dropped, len(rendered), what)
-    marker = f"({dropped} older {what}(s) omitted to keep this prompt short.)"
-    return "\n".join([f"- {marker}" if bullet else marker, *kept])
+    return str(textfit.fit(lines, what, MAX_BLOCK_CHARS, bullet=bullet))
 
 
 def context_lines(guidance: RunGuidance | None, artifact_key: str = "") -> list[str]:

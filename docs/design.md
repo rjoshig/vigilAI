@@ -322,6 +322,7 @@ Two rules keep token use sustainable: the same content is never sent to the LLM 
 | Checks cost nothing | Expression checks and all report checks run in code |
 | Frozen reports | The final report and PDF are stored. Viewing and downloading never call the LLM |
 | Review is free | OK, Not OK, comments, and re-check never call the LLM |
+| The chat sees one run | A context pack built on the server from the run id, never from the client. No rows, no cell values. It cannot compute, decide, or change anything (ADR-068) |
 | Budget | `LLM_MAX_TOKENS_PER_RUN` in `.env`. A run that exceeds it stops and is flagged. Tokens per run and cache hit rate show on the admin dashboard |
 
 Cache keys include the model name and the prompt version, so changing either one refreshes results. Cache entries hold no sample rows and expire with the 90-day retention.
@@ -335,7 +336,7 @@ Two apps share one theme. The look and feel matches the compare-file ui2 mock (c
 | user-ui | New run | Form: customer name, order number, configuration ID, date, delivery programme (AM / AS / Archives / other), whether suppressions were applied (defaults to no), additional notes. Drag-and-drop for OSL, config JSON, and reports. Copy from a previous run. If the same inputs were already run, shows that report and asks for a reason before re-running |
 | user-ui | Runs | History with filters. Queue position and live stage progress. A **Report** column carrying the frozen verdict, which opens the report in one click. Drafts are kept out of the history and reached by their own toggle |
 | user-ui | Review | Traceability matrix, coverage, and findings. Three decisions and a comment per finding. **Fix a wrong trace link from its row, with a reason; the re-check is queued by the correction itself and the screen says it is happening.** Generate final report |
-| user-ui | Final report | The frozen one-page HTML report. Download PDF. Clone run |
+| user-ui | Final report | The frozen one-page HTML report. Download PDF. Clone run. **Ask this report** — an optional panel, off until an administrator turns it on, that answers questions about this one run from a context pack code builds (Phase 8) |
 | user-ui | Explore a sample | The stored example of any artifact the tool accepts, read-only: a workbook cell by cell with its label, an OSL by section, a configuration by JSON path. With Train AI mode on, any of them can be pointed at to start an observation |
 | user-ui | Observations | What this person has recorded in Train AI mode and what became of it. Only when the mode is on (ADR-021) |
 | user-ui | Run stats | Stage timings, LLM calls, tokens, cache hits |
@@ -384,6 +385,7 @@ A small REST API under `/api/v1`. FastAPI generates the OpenAPI spec and docs pa
 | GET /runs/{id}/coverage, POST /runs/{id}/coverage/acknowledge | What was checked and what was not; record that a person has seen a gap |
 | POST /runs/{id}/finalize | Generate and freeze the final report |
 | GET /runs/{id}/report, GET /runs/{id}/report.pdf | Final HTML and PDF |
+| GET /runs/{id}/chat, POST /runs/{id}/chat | What the chat panel shows before it is asked anything, and one streamed answer. Both refuse when the feature is off, when the run has no frozen report, or when the asker is over their cap |
 | POST /runs/{id}/clone | New run prefilled from this one |
 | GET /runs/{id}/stats | Stage timings, LLM calls, cache hits |
 | GET /configs, GET /configs/{id} | Browse and copy captured configs |

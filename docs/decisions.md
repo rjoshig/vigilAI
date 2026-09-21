@@ -2749,3 +2749,146 @@ is silent; only the status is untouched, and only for this one task.
 The ADR-054 guard moved to the path that runs. `worker/runner.py::recheck_run` counted rows
 in the call log, so every correctly-cached re-check logged a warning; it counts tokens now,
 as the unreached copy in `pipeline/run.py` already did.
+
+---
+
+## ADR-068 — The report chat sees a context pack code built, and can do nothing else
+
+**Status:** accepted · 2026-09-21 · Phase 8b, 8d
+
+**Context.** The report is the product's output and the only thing most people ever see
+of it. It is one dense page answering the questions its author anticipated, and a
+reviewer's real questions arrive afterwards: *why is this high, did we see this last
+month, what does the rule actually say, what did nobody check.* Every one of those is
+already in the database and none is on the page.
+
+A chat box is also where a careful tool starts guessing, and this one sits on top of a
+document somebody has attested to.
+
+**Decision.** The chat is given a **context pack** and can see nothing else.
+
+**The pack is built on the server from the run id, on every turn.** The client sends a
+question and a transcript. Neither can add a fact, because facts come only from the
+pack. That single sentence is what makes the isolation a property rather than a claim:
+the other four mechanisms — the permission check, storing nothing, the pack hash in the
+cache key, and a transcript that lives only in the browser — exist because one
+mechanism can be wrong, not because this one is insufficient.
+
+**Nothing in the pack is a new category of data leaving the building.** Findings with
+the evidence the report already shows, coverage, the rules in force by title and text,
+an *inventory* of the artifacts (what arrived, not what is in it), this run's own
+guidance — every line of which already reached a prompt while the run was validated —
+the last three finalized runs of the configuration, and the frozen report's own
+rendered text, which is the document the person is looking at. `llm-privacy.md` and
+ADR-003 are unchanged, and the tripwire still scans the assembled prompt and still
+fails closed.
+
+**Shadow findings are excluded**, exactly as the frozen report excludes them. A rule
+nobody has activated must not start answering questions either.
+
+**The pack is capped as a whole and says what it trimmed.** A pack that silently
+dropped the findings section would produce an answer that is wrong for a reason nobody
+can see, so the trimming is carried on the pack, stated in the prompt, and shown in the
+panel.
+
+**Consequences.** `chat/` is a subpackage rather than a router helper, because `api/`
+may never import `pipeline/` and the context this needs is the sort of thing
+`pipeline/` already builds. The shared prompt-fitting helpers moved **down** into
+`textfit.py` rather than being copied into `chat/`: two implementations of the rule
+that decides what a model is not shown is the kind of divergence nobody notices until
+an answer is wrong.
+
+Only frozen runs. A conversation whose context shifted as decisions were made would
+give answers that were true when given and are not now, and a model that appeared to
+advise a verdict is exactly what this tool keeps to people and code.
+
+---
+
+## ADR-069 — The prose streams; the citations are checked before they are shown
+
+**Status:** accepted · 2026-09-21 · Phase 8c
+
+**Context.** A paragraph that appears a word at a time is the difference between a
+feature people use and one they try once, so the answer streams. But a citation is a
+claim about what the answer rests on, and **code cannot check a citation it has already
+displayed.**
+
+**Decision.** The model writes the answer as plain prose containing **no identifiers at
+all**, then a delimited tail naming what it answered from. The prose reaches the panel
+token by token; the tail is validated against the pack when the stream closes, and only
+the citations that resolve are rendered as chips. A fabricated identifier is therefore
+never shown as a citation — not briefly, not dimmed, not at all. Everything after the
+marker is withheld from the caller, and a marker split across two chunks is held back
+rather than half-shown, so the person never sees the seam of the mechanism that checks
+the answer.
+
+**A failed tail keeps the answer** and says the citations are unverified. The prose is
+what the person asked for and stands on its own; pulling text somebody is mid-way
+through reading looks like a malfunction even when it is correct. This is the one place
+the adapter's single-retry contract does not apply, and it is written down here rather
+than discovered later. A deliberate `NONE` is not a failure: the answer rests on
+nothing in particular, which is the right tail for a refusal.
+
+**Streaming lives in the adapter.** `LLMClient.stream` sits beside `complete`, so the
+tripwire, the cache check, the budget stop and the per-call record still happen in
+exactly one place (ADR-004). A second network path in `api/` or `chat/` would put all
+four somewhere they can be forgotten. Three consequences follow from putting it there:
+a cache hit is served whole and makes no network call; **a partial answer is never
+cached**, because the store happens after the last yield rather than behind a flag
+somebody has to remember to set; and there is no schema and no retry, because this path
+is for prose and re-asking after somebody has begun reading would replace text on
+screen.
+
+**Consequences.** A provider with no streaming transport yields the whole answer once,
+which is a correct stream of one chunk rather than a pretence. The OpenAI-compatible
+and Anthropic clients read real server-sent events; a frame that does not parse is
+skipped, because half an answer shown is better than an error replacing text already
+on the screen. Token counts on this path are estimated from length, since a chunked
+response carries no usage block — a spend figure that is approximately right is worth
+more than a zero that is precisely wrong.
+
+**The chat's model is its own setting, defaulting to the pipeline's.** Because the
+model name is already part of every cache key, the two can never serve each other's
+answers, so a deployment can point conversation at a cheaper model without touching
+validation accuracy.
+
+---
+
+## ADR-070 — Nothing about a conversation is stored, and it costs its own budget
+
+**Status:** accepted · 2026-09-21 · Phase 8d, 8f
+
+**Context.** The obvious design stores conversations: it makes them recoverable, and it
+makes per-person limits easy to count. It also creates a transcript store to secure,
+retain and purge — holding the one kind of text in the product that a person wrote
+freely, about a customer's delivery, with no field validating it.
+
+**Decision.** Nothing is stored. Not the question, not the answer, not the transcript.
+The transcript is component state in the browser — not `localStorage`, so a shared
+machine does not hand the next person the last one's questions — and it is re-sent with
+each question inside a block labelled as a record of what was said and never as
+instructions.
+
+**The cost is real and is stated rather than hidden.** A question asked before a report
+was shared cannot be recovered later. That is why the panel carries a **Copy** button:
+keeping a conversation, and the responsibility for where it ends up, belongs to the
+person who had it.
+
+**Counting still works, from what is already recorded.** `llm_calls` is where every call
+in the product is written down, so the per-person daily cap is counted there rather than
+from a store of its own — a second count is a second thing that can be wrong about the
+same fact. That needed one column: `llm_calls.user_id`, nullable and null for every
+pipeline call, because the person asking about a run is very often not the person who
+submitted it and attributing a question to the submitter would make the cap meaningless.
+Cache hits count: a question answered from the cache still used the feature.
+
+**It never spends the run's budget.** A chat call runs on a fresh call log, so the
+budget it checks starts at zero every request. A finalized run's remaining budget is a
+meaningless denominator, and a long conversation must not be able to starve anything.
+
+**Consequences.** No new capability to use it — anyone who can read the run can ask
+about it, because the chat shows nothing the report and the run screens do not already
+show that person, and a capability guarding no data is a row in the table nobody can
+explain later (ADR-049). Configuring it needs `MANAGE_SETTINGS`, where every other
+setting already sits. Turning it off mid-conversation is safe: the panel disappears on
+the next load and the endpoint refuses, and there is nothing left behind to clean up.

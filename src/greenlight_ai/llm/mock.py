@@ -12,12 +12,14 @@ registers one, which is the injected-fake path the standards call for.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Final, Mapping
+import re
+from typing import Any, Callable, Final, Iterator, Mapping
 
 from pydantic import BaseModel
 
 from greenlight_ai.llm.base import BaseClient
 from greenlight_ai.llm.client import LLMResponseError, Sent
+from greenlight_ai.llm.prompts.chat_answer import CITATION_MARKER
 from greenlight_ai.llm.settings import LLMSettings
 
 __all__ = ["MockClient", "Responder", "canned_for_stage"]
@@ -26,6 +28,11 @@ _LOG: Final = logging.getLogger(__name__)
 
 #: A responder receives the system and user prompts and returns the response text.
 Responder = Callable[[str, str], str]
+
+
+#: Imported here rather than hardcoded so the mock's canned answer and the real
+#: prompt's format can never drift apart.
+_CHAT_MARKER: Final[str] = CITATION_MARKER
 
 
 def canned_for_stage(stage: str) -> str:
@@ -83,6 +90,14 @@ def canned_for_stage(stage: str) -> str:
         # and unfamiliar vocabulary is what the keyword check already concluded.
         "programme_reading": '{"programme_code": "", "verdict": "unclear", '
         '"phrases": [], "reason": "mock client", "confidence": 0.0}',
+        # Prose rather than JSON, because the chat is the one stage that answers in
+        # prose (Phase 8c). It cites nothing, which is the honest answer for a mock
+        # that read nothing: a canned citation would let a test pass on the check that
+        # a citation resolves against the pack.
+        "chat_answer": (
+            "No model was called; this is the mock client's canned answer.\n"
+            f"{_CHAT_MARKER}\nNONE"
+        ),
     }
     return shapes.get(stage, "{}")
 
@@ -147,6 +162,41 @@ class MockClient(BaseClient):
         """
         self._current_stage = str(kwargs.get("stage", ""))
         return super().complete(system, user, schema, **kwargs)
+
+    def stream(self, system: str, user: str, **kwargs: Any) -> Any:
+        """Record the stage, then delegate to the shared streaming path.
+
+        Args:
+            system: The system prompt.
+            user: The user prompt.
+            **kwargs: ``stage`` and ``prompt_version``.
+
+        Returns:
+            The generator, from the cache or from a responder.
+        """
+        self._current_stage = str(kwargs.get("stage", ""))
+        return super().stream(system, user, **kwargs)
+
+    def _send_stream(self, system: str, user: str) -> Iterator[str]:
+        """Yield the canned answer a word at a time.
+
+        A mock that handed back the whole answer in one piece would let a test pass on
+        a property the streaming path has to earn — that a caller which reads the
+        pieces in order gets the same text, and that a caller which stops half way
+        leaves nothing cached. So it is chunked, while the *content* stays exactly what
+        the ordinary path would have produced.
+
+        Args:
+            system: The system prompt.
+            user: The user prompt.
+
+        Yields:
+            The answer in word-sized pieces, whitespace preserved.
+        """
+        text = self._send(system, user, None).text
+        for piece in re.split(r"(\s+)", text):
+            if piece:
+                yield piece
 
     def _send(self, system: str, user: str, schema: type[BaseModel] | None = None) -> Sent:
         """Produce a canned answer.

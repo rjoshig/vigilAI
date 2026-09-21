@@ -8,8 +8,9 @@ air-gapped network (ADR-004).
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any, Final
+from typing import Any, Final, Iterator
 
 import httpx
 
@@ -122,6 +123,53 @@ class OpenAIClient(BaseClient):
             guided=guided,
         )
 
+    def _send_stream(self, system: str, user: str) -> Iterator[str]:
+        """Stream one chat completion over server-sent events (Phase 8c).
+
+        The same endpoint with ``stream: true``. No schema is sent: this path is for
+        prose, and a guided request would force JSON.
+
+        A malformed or unknown event is skipped rather than raising. The answer is the
+        concatenation of the deltas that did parse, and half an answer shown is better
+        than an error replacing text somebody is already reading — the adapter's
+        single-retry contract deliberately does not apply here.
+
+        Args:
+            system: The system prompt.
+            user: The user prompt.
+
+        Yields:
+            Each content delta, in order.
+
+        Raises:
+            LLMTimeoutError: When the endpoint does not answer in time.
+            LLMResponseError: When the status is not 2xx.
+        """
+        payload: dict[str, object] = {
+            "model": self.settings.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "max_tokens": self.settings.max_tokens,
+            "temperature": self.settings.temperature,
+            "stream": True,
+        }
+        try:
+            with self._client.stream("POST", "/chat/completions", json=payload) as response:
+                if response.status_code >= 400:
+                    # The body may echo the prompt, so only the status is reported
+                    # (ADR-003).
+                    raise LLMResponseError(f"endpoint returned HTTP {response.status_code}")
+                for line in response.iter_lines():
+                    piece = _delta_of(line)
+                    if piece:
+                        yield piece
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(f"endpoint did not answer in {self.settings.timeout_s}s") from exc
+        except httpx.HTTPError as exc:
+            raise LLMResponseError(f"transport failed: {type(exc).__name__}") from exc
+
     def _post(self, payload: dict[str, object]) -> httpx.Response:
         """Send one request, turning transport failures into :class:`LLMError`.
 
@@ -146,3 +194,27 @@ class OpenAIClient(BaseClient):
     def close(self) -> None:
         """Close the underlying HTTP connection pool."""
         self._client.close()
+
+
+def _delta_of(line: str) -> str:
+    """Read one content delta out of a server-sent-event line.
+
+    Args:
+        line: One line of the stream, with or without its ``data:`` prefix.
+
+    Returns:
+        The text of the delta, or an empty string for a keep-alive, the ``[DONE]``
+        sentinel, or anything that does not parse — which is skipped rather than
+        raised, so one odd frame does not lose an answer already on screen.
+    """
+    text = line.strip()
+    if not text.startswith("data:"):
+        return ""
+    body = text[len("data:") :].strip()
+    if not body or body == "[DONE]":
+        return ""
+    try:
+        event: Any = json.loads(body)
+        return str(event["choices"][0]["delta"].get("content") or "")
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        return ""

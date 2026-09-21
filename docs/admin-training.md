@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 6.22.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 8.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -502,8 +502,8 @@ for a year is either load-bearing or dead, and only a person can tell which.
 
 ## Settings
 
-Every runtime setting, grouped: Model, Training, Login, Throughput, Uploads,
-Retention, Appearance, Platform. Beside each value is **where it came from**: set here, from
+Every runtime setting, grouped: Model, Chat, Anomalies, Training, Login, Throughput,
+Availability, Uploads, Retention, Appearance, Platform. Beside each value is **where it came from**: set here, from
 `.env`, or the built-in default. A value you set here wins over `.env`; **Revert** puts
 it back and says what it will revert to. The **change history** at the foot says who
 changed what and from what.
@@ -512,6 +512,19 @@ changed what and from what.
   encrypted, never shown again, and only accepted when the server has a master key
   configured. **Test connection** makes one cheap call with the saved settings; do
   this before a run fails at stage two.
+- **Chat.** The report chat: nine rows, and it **ships off**. Turning it on gives
+  people an *Ask this report* panel on a frozen report that answers questions about
+  that one run — and nothing else. Two rows carry a **Helps the AI** marker, because
+  they are the only two settings in the product that decide what a model is shown:
+  **Include report aggregates** (off) widens the context to per-column figures code
+  computed, never a row and never a cell that is not an aggregate; **Model** decides
+  which model answers, and empty follows the Model section above so nothing changes on
+  upgrade. **Transcript turns kept** is the main cost lever — every turn re-sends the
+  ones before it — and **Questions per person per day** set to zero is how you stage a
+  rollout. Above the rows the section says how many questions have been asked in the
+  last thirty days and by how many people: every one is counted in the usage figures
+  like any other model call, and none of them spends a run's token budget. Nothing a
+  conversation contains is stored, by the tool or by the browser.
 - **Training.** The Train AI switch, whether approvals go into shadow (leave it on),
   and how many recent finalized runs a replay evaluates the rule against.
 - **Login.** Both switches, session lifetime, idle timeout, minimum password length,
@@ -849,7 +862,50 @@ on every run, forever. Sort Rules by dismissal rate before you add another one.
 - **Usage** counts runs per person and per period. It is there to show where the work
   actually is, not to rank anybody.
 
-<!-- guide 7: What is never editable, and why -->
+<!-- guide 7: The report chat, and what it will not do -->
+## The report chat, and what it will not do
+
+Off in a fresh install, and it stays off until you turn it on in **Settings → Chat**.
+On, a frozen report carries an **Ask this report** panel that answers questions about
+that one run.
+
+**What you are turning on.** An outbound model surface that people use directly — the
+first one in the product where somebody types a question with no prior shape. It reads a
+**context pack** the server assembles from the run: the findings and the decisions made
+on them, what was checked and what was not, the rules in force, the programme's rules,
+an inventory of the artifacts that arrived, the last three finalized runs of that
+configuration, and the text of the report itself. Nothing comes from the browser, so
+nobody can add a fact to it.
+
+**What it never sees.** Rows, and cell values. Not the OSL document, not the workbooks.
+The same tripwire that guards every other prompt guards this one and still fails closed.
+**Include report aggregates** is the one setting that widens it, to per-column figures
+code already computed — a minimum, a maximum, a mean, a null count — and never to a row.
+It is marked in the console as strongly as masked columns are, because it changes what
+leaves the building and you cannot see a prompt.
+
+**What it will not do**, which is the part that earns trust: it will not compute (every
+figure it quotes was computed before the question), it will not answer about another run
+or another configuration, it will not change a decision or raise a finding or re-open a
+report, and it will not guess — asked something its context does not answer, it says so
+and says what it would need.
+
+**Every citation is checked before anybody sees it.** The answer streams; the chips
+underneath appear only once the server has confirmed each identifier is really in the
+pack. A fabricated one is discarded, never dimmed and never shown. When the model said
+nothing about what its answer rested on, the panel says the citations could not be
+verified — and keeps the answer, because pulling text somebody is reading looks like a
+malfunction even when it is right.
+
+**What it costs, and how to stage it.** Every question is a model call, recorded and
+counted like any other, and the section shows how many have been asked in the last
+thirty days beside the caps. **Transcript turns kept** is the main lever: every turn
+re-sends the ones before it. **Questions per person per day** at zero denies the feature
+to everybody, which is how you roll it out to one team first. No conversation can spend
+a run's token budget, and turning the whole thing off mid-conversation is safe — nothing
+is stored, so there is nothing left to clean up.
+
+<!-- guide 8: What is never editable, and why -->
 ## What is never editable, and why
 
 Four settings are shown read-only on the Settings screen, and no console anywhere can
@@ -859,7 +915,7 @@ database URL that lived in the database could be pointed somewhere else and then
 read back; a master key stored under its own encryption cannot decrypt itself. They are
 environment configuration, changed where the service is deployed and nowhere else.
 
-<!-- guide 8: A weekly routine that keeps the tool honest -->
+<!-- guide 9: A weekly routine that keeps the tool honest -->
 ## A weekly routine that keeps the tool honest
 
 1. Read the training queue. Reject what cannot be a rule, with reasons; synthesize

@@ -8,7 +8,7 @@ provider to change with a ``.env`` edit and a worker restart.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Protocol, Type, TypeVar
+from typing import Iterator, Mapping, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -193,6 +193,37 @@ class LLMClient(Protocol):
 
         Returns:
             The result, whether it came from the cache or the network.
+
+        Raises:
+            LLMError: When the call cannot be completed.
+        """
+        ...
+
+    def stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        stage: str = "",
+        prompt_version: str = "",
+    ) -> Iterator[str]:
+        """Send one prose task, yielding the answer as it arrives (Phase 8c).
+
+        Beside :meth:`complete` rather than beside the adapter, so the tripwire, the
+        cache check, the budget stop and the call record still happen in exactly one
+        place (ADR-004). No schema and no retry: this path is for prose, and re-asking
+        after somebody has begun reading would replace text on screen.
+
+        Args:
+            system: The system prompt.
+            user: The user prompt.
+            stage: The stage, recorded on the call row.
+            prompt_version: The prompt template's version, part of the cache key.
+
+        Yields:
+            Pieces of the answer, in order. A cache hit yields the whole answer once
+            and makes no network call; a stream that is not read to the end caches
+            nothing.
 
         Raises:
             LLMError: When the call cannot be completed.

@@ -875,6 +875,122 @@ export const GUIDE: GuideSection[] = [
   },
   {
     "id": "s7",
+    "title": "The report chat, and what it will not do",
+    "blocks": [
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "Off in a fresh install, and it stays off until you turn it on in "
+          },
+          {
+            "text": "Settings → Chat",
+            "bold": true
+          },
+          {
+            "text": ". On, a frozen report carries an "
+          },
+          {
+            "text": "Ask this report",
+            "bold": true
+          },
+          {
+            "text": " panel that answers questions about that one run."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "What you are turning on.",
+            "bold": true
+          },
+          {
+            "text": " An outbound model surface that people use directly — the first one in the product where somebody types a question with no prior shape. It reads a "
+          },
+          {
+            "text": "context pack",
+            "bold": true
+          },
+          {
+            "text": " the server assembles from the run: the findings and the decisions made on them, what was checked and what was not, the rules in force, the programme's rules, an inventory of the artifacts that arrived, the last three finalized runs of that configuration, and the text of the report itself. Nothing comes from the browser, so nobody can add a fact to it."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "What it never sees.",
+            "bold": true
+          },
+          {
+            "text": " Rows, and cell values. Not the OSL document, not the workbooks. The same tripwire that guards every other prompt guards this one and still fails closed. "
+          },
+          {
+            "text": "Include report aggregates",
+            "bold": true
+          },
+          {
+            "text": " is the one setting that widens it, to per-column figures code already computed — a minimum, a maximum, a mean, a null count — and never to a row. It is marked in the console as strongly as masked columns are, because it changes what leaves the building and you cannot see a prompt."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "What it will not do",
+            "bold": true
+          },
+          {
+            "text": ", which is the part that earns trust: it will not compute (every figure it quotes was computed before the question), it will not answer about another run or another configuration, it will not change a decision or raise a finding or re-open a report, and it will not guess — asked something its context does not answer, it says so and says what it would need."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "Every citation is checked before anybody sees it.",
+            "bold": true
+          },
+          {
+            "text": " The answer streams; the chips underneath appear only once the server has confirmed each identifier is really in the pack. A fabricated one is discarded, never dimmed and never shown. When the model said nothing about what its answer rested on, the panel says the citations could not be verified — and keeps the answer, because pulling text somebody is reading looks like a malfunction even when it is right."
+          }
+        ]
+      },
+      {
+        "kind": "text",
+        "spans": [
+          {
+            "text": "What it costs, and how to stage it.",
+            "bold": true
+          },
+          {
+            "text": " Every question is a model call, recorded and counted like any other, and the section shows how many have been asked in the last thirty days beside the caps. "
+          },
+          {
+            "text": "Transcript turns kept",
+            "bold": true
+          },
+          {
+            "text": " is the main lever: every turn re-sends the ones before it. "
+          },
+          {
+            "text": "Questions per person per day",
+            "bold": true
+          },
+          {
+            "text": " at zero denies the feature to everybody, which is how you roll it out to one team first. No conversation can spend a run's token budget, and turning the whole thing off mid-conversation is safe — nothing is stored, so there is nothing left to clean up."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "s8",
     "title": "What is never editable, and why",
     "blocks": [
       {
@@ -916,7 +1032,7 @@ export const GUIDE: GuideSection[] = [
     ]
   },
   {
-    "id": "s8",
+    "id": "s9",
     "title": "A weekly routine that keeps the tool honest",
     "blocks": [
       {
