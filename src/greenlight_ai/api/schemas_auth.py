@@ -37,6 +37,10 @@ class WhoAmIOut(BaseModel):
     name: str = ""
     email: str = ""
     role: str = "user"
+    #: Every role held, weakest first (ADR-049). ``role`` is the strongest of them and
+    #: stays until everything reads this list. Both consoles will gate on capabilities
+    #: derived from here rather than on the single field.
+    roles: list[str] = Field(default_factory=lambda: ["user"])
     is_admin: bool = False
     #: True when login is off and this is the stand-in every action is attributed to.
     is_placeholder: bool = False

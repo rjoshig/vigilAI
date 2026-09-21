@@ -486,3 +486,18 @@ def test_a_signed_in_person_is_recorded_on_their_work(
         assert run.user_id == submitter.id
         assert config.created_by == "Submitter"
         assert config.created_by_user_id == submitter.id
+
+
+def test_whoami_reports_the_roles_the_account_holds(client: TestClient, api: str) -> None:
+    """The placeholder is a user and an administrator, and says so (ADR-049).
+
+    It used to answer ``role: "user"`` from a literal in `deps.py` while behaving as an
+    administrator, which is the sort of disagreement that is only found by reading the
+    code. The console will gate on these, so the answer has to be the account's own.
+    """
+    body = client.get(f"{api}/auth/me").json()
+
+    assert body["roles"] == ["user", "admin"]
+    assert body["role"] == "admin", "the legacy field holds the strongest role held"
+    assert body["is_placeholder"] is True
+    assert body["is_admin"] is True, "with login off nothing is gated (ADR-022)"

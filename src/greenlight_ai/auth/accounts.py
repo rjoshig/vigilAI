@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from greenlight_ai.auth.passwords import check_length, hash_password, verify_password
+from greenlight_ai.auth.roles import Role, normalize_roles
 from greenlight_ai.auth.settings import (
     BOOTSTRAP_PASSWORD,
     BOOTSTRAP_USERNAME,
@@ -73,6 +74,12 @@ def ensure_placeholder(session: Session) -> models.User:
     Returns:
         The placeholder. It is a real row so every action has a real author, and it
         carries no usable password, so it can never be signed in as.
+
+        It holds **user and admin** (ADR-049). While login is off this is the only
+        account there is and it can already do everything — ``deps.py`` hands it
+        ``is_admin=True`` — so the stored roles say what the behaviour already is, and
+        the console does not start refusing the only account when it begins gating on
+        them.
     """
     row = session.execute(
         sa.select(models.User).where(models.User.is_placeholder)
@@ -85,7 +92,8 @@ def ensure_placeholder(session: Session) -> models.User:
         name=PLACEHOLDER_NAME,
         email=PLACEHOLDER_EMAIL,
         password_hash="",
-        role="user",
+        roles=[Role.USER.value, Role.ADMIN.value],
+        role=Role.ADMIN.value,
         is_placeholder=True,
         is_active=True,
     )
@@ -120,7 +128,8 @@ def ensure_bootstrap(session: Session) -> models.User | None:
         name="Administrator",
         email="admin@localhost",
         password_hash=hash_password(BOOTSTRAP_PASSWORD),
-        role="admin",
+        roles=[Role.USER.value, Role.ADMIN.value],
+        role=Role.ADMIN.value,
         must_change_password=True,
         is_active=True,
     )
@@ -205,6 +214,9 @@ def create_account(
         name=name.strip(),
         email=email,
         password_hash=hash_password(password),
+        # One role in, a list of one out. `create_account` still takes a single role;
+        # the console gains checkboxes in 6.20e, and the list is what it will write.
+        roles=normalize_roles([role]),
         role=role,
         must_change_password=True,
         created_by_user_id=created_by,

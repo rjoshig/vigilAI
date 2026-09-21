@@ -14,12 +14,13 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Final, Iterator
+from typing import Final, Iterator, Sequence
 
 from fastapi import Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session
 
 from greenlight_ai.auth.accounts import ensure_placeholder
+from greenlight_ai.auth.roles import normalize_roles
 from greenlight_ai.auth.sessions import COOKIE_NAME, resolve_session
 from greenlight_ai.auth.settings import AuthSettings, resolved_auth_settings
 from greenlight_ai.db.settings import DbSettings
@@ -50,7 +51,8 @@ class CurrentUser:
         username: What is typed at the sign-in prompt.
         name: A display name for the audit log and the screens that show who did what.
         email: The account's address.
-        role: ``admin`` or ``user``.
+        role: The strongest role held, kept for callers not yet moved to ``roles``.
+        roles: Every role held, weakest first (ADR-049). Capabilities are the union.
         is_admin: Whether admin routes are permitted.
         is_placeholder: Whether this is the stand-in used while login is off.
         must_change_password: Whether every request but the password change should be
@@ -63,6 +65,7 @@ class CurrentUser:
         "name",
         "email",
         "role",
+        "roles",
         "is_admin",
         "is_placeholder",
         "must_change_password",
@@ -75,6 +78,7 @@ class CurrentUser:
         name: str = "anonymous",
         email: str = "",
         role: str = "admin",
+        roles: Sequence[str] | None = None,
         is_admin: bool = True,
         is_placeholder: bool = False,
         must_change_password: bool = False,
@@ -86,7 +90,8 @@ class CurrentUser:
             username: What is typed at the prompt.
             name: A display name.
             email: The account's address.
-            role: ``admin`` or ``user``.
+            role: The strongest role held.
+            roles: Every role held; defaults to the one in ``role``.
             is_admin: Whether admin routes are permitted.
             is_placeholder: Whether this is the stand-in used while login is off.
             must_change_password: Whether a password change is outstanding.
@@ -96,6 +101,7 @@ class CurrentUser:
         self.name = name
         self.email = email
         self.role = role
+        self.roles = normalize_roles(roles if roles is not None else [role])
         self.is_admin = is_admin
         self.is_placeholder = is_placeholder
         self.must_change_password = must_change_password
@@ -253,9 +259,12 @@ def current_user(
             username=row.username,
             name=row.name,
             email=row.email,
-            role="user",
+            role=row.role,
+            roles=list(row.roles or []),
             # With the switch off nothing is gated by role, which is how the product
-            # behaved before login existed.
+            # behaved before login existed (ADR-022). The roles above say what this
+            # account holds; this says what the deployment is enforcing, which is
+            # nothing.
             is_admin=not settings.admin_auth,
             is_placeholder=True,
         )
@@ -269,6 +278,7 @@ def current_user(
         name=user.name or user.username,
         email=user.email,
         role=user.role,
+        roles=list(user.roles or []),
         is_admin=user.role == "admin",
         must_change_password=user.must_change_password,
     )

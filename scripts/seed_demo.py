@@ -169,6 +169,7 @@ def seed_admin(session: Any, data_dir: Path, fixtures: Path, manifest: dict[str,
                 name="Dana Admin",
                 email="demoadmin@example.com",
                 password_hash=hash_password("demo-administrator"),
+                roles=["user", "admin"],
                 role="admin",
             )
         )
