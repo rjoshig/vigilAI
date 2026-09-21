@@ -132,6 +132,8 @@ class ArtifactTypeOut(ArtifactTypeIn):
     runs_using: int = 0
     #: The validation guide (Phase 6.8b), with examples filled from the samples.
     guide: list[GuideEntry] = Field(default_factory=list)
+    #: What this delivery calls each name the fixed checks look for (Phase 6.21b).
+    layout: list[LayoutEntryWire] = Field(default_factory=list)
     #: The newest definition version (ADR-029); zero before the first save.
     version: int = 0
 
@@ -546,6 +548,74 @@ class RevertIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirm: str = ""
+
+
+class LayoutEntryWire(BaseModel):
+    """One name a delivery spells differently (Phase 6.21b)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Which runs it covers, in the one scope vocabulary (ADR-037). Empty is
+    #: everywhere.
+    scope: str = ""
+    #: ``sheet``, ``column`` or ``label``.
+    kind: str = "sheet"
+    #: The name the fixed checks ask for, e.g. ``Attributes``.
+    wanted: str = Field(min_length=1, max_length=120)
+    #: What this delivery calls it. Several, because one type can be delivered by
+    #: customers who each word it differently.
+    names: list[str] = Field(default_factory=list)
+    note: str = ""
+    added_by: str = ""
+
+
+class LayoutIn(BaseModel):
+    """A layout map, as the admin-ui submits it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entries: list[LayoutEntryWire] = Field(default_factory=list)
+
+
+class LayoutSuggestionOut(BaseModel):
+    """A name the model read for a run, offered to an administrator (ADR-051)."""
+
+    artifact: str = ""
+    kind: str = "sheet"
+    wanted: str = ""
+    found: str = ""
+    #: The model's own number, already past the floor code applies.
+    confidence: float = 0.0
+    reason: str = ""
+    #: How many runs met it. A name read on every delivery from a customer is that
+    #: customer's layout; one read once may be a one-off workbook.
+    seen: int = 0
+    #: The runs it came from, so the delivery can be read before the name is recorded.
+    run_ids: list[int] = Field(default_factory=list)
+    #: True when the artifact type already carries it, so an accepted suggestion
+    #: stops asking to be accepted.
+    already_listed: bool = False
+
+
+class LayoutSuggestionsOut(BaseModel):
+    """Every pending layout suggestion."""
+
+    suggestions: list[LayoutSuggestionOut] = Field(default_factory=list)
+
+
+class LayoutAcceptIn(BaseModel):
+    """Record one read name on its artifact type."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    artifact: str = Field(min_length=1)
+    kind: str = "sheet"
+    wanted: str = Field(min_length=1)
+    found: str = Field(min_length=1)
+    #: Which runs it should apply to. Empty is everywhere, which is the right default
+    #: for a report type only one customer delivers and the wrong one otherwise — so
+    #: the console offers the run's programme first.
+    scope: str = ""
 
 
 class GuideIn(BaseModel):

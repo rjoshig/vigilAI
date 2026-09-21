@@ -154,27 +154,39 @@ column or label did they mean?* — and is the only place in the codebase that a
       list refused, a below-floor answer refused, no client degrading to the
       deterministic answer, and every previously-matching name still matching.
 
-### 6.21b — The layout is admin data, not code · ⬜ not started
+### 6.21b — The layout is admin data, not code · ✅ complete
 
-- [ ] A **layout map** on the artifact type: for each thing the fixed checks look for —
+**Built 2026-09-21.** The map lives on the artifact type as ordered entries — scope,
+kind, the name the checks ask for, the spellings that also mean it — versioned with
+revert like every other definition, and read by the ladder's fourth rung. The
+suggestions sit on the same screen: what the model read, how sure it was, why, and how
+many runs met it, with one button that records it.
+
+**Building the editor found a defect in it.** The spellings box derived its value from
+the parsed list, so every keystroke re-joined the list and ate the space just typed —
+"Accepted total" became "Acceptedtotal". The box keeps its own text now and the list
+is derived from it, never the other way round. The test that caught it is
+`components/layout-editor.test.tsx`.
+
+- [x] A **layout map** on the artifact type: for each thing the fixed checks look for —
       the attribute, state, field and flow sheets; the attribute, min and max columns; the
       `Accepts` / `Rejects` / `Input` labels — what this delivery calls it. Scoped with
       the existing vocabulary (`scopes.py`), versioned through `definition_versions` with
       revert, like every other definition.
-- [ ] Edited on the existing **Artifact types** screen beside the Guide, not on a new
+- [x] Edited on the existing **Artifact types** screen beside the Guide, not on a new
       one. The console already has fifteen items.
-- [ ] Marked **Used for setup, not for runs** where it configures, and **Checked by
+- [x] Marked **Used for setup, not for runs** where it configures, and **Checked by
       code** where it resolves — and `docs/model-context.md` updated in the same commit,
       because a layout name reaches the model in 6.21a's last rung and the register must
       say so.
-- [ ] **When 6.21a's model rung resolves a name, offer it here as a suggestion an
+- [x] **When 6.21a's model rung resolves a name, offer it here as a suggestion an
       administrator accepts with one click** — the shape `GET /admin/keyword-suggestions`
       and its accept endpoint already use. This is how the tool stops needing the model
       call on the second run, and it is the part that makes the product get cheaper as it
       learns rather than more expensive.
-- [ ] A suggestion is never applied on its own. ADR-021 is unchanged: nothing activates
+- [x] A suggestion is never applied on its own. ADR-021 is unchanged: nothing activates
       without a person approving it.
-- [ ] Tests: a layout map resolving a renamed sheet with no model call; scope precedence
+- [x] Tests: a layout map resolving a renamed sheet with no model call; scope precedence
       (programme over everywhere); revert restoring the previous map; a suggestion
       recorded, listed, accepted, and then short-circuiting the model on the next run.
 

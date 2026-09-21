@@ -180,6 +180,12 @@ class Run(Base):
     #: application: an administrator adds them to the word list, or does not. Kept on
     #: the run because that is where the evidence for them is.
     keyword_suggestions: Mapped[Any] = mapped_column(Json, default=dict)
+    #: Names the model read for this run because four deterministic rungs could not
+    #: (Phase 6.21b, ADR-051): one entry per artifact, kind, wanted name and what was
+    #: used. A suggestion, never an application — an administrator records it on the
+    #: artifact type, or does not. Kept on the run, like the keyword suggestions
+    #: above, because that is where the evidence for it is.
+    layout_suggestions: Mapped[Any] = mapped_column(Json, default=list)
     #: Whether suppressions were applied to this delivery. Defaults to no, because
     #: assuming they were applied would let a missing suppression pass unremarked.
     has_suppressions: Mapped[bool] = mapped_column(sa.Boolean, default=False)
@@ -509,6 +515,15 @@ class ArtifactType(Base):
     #: answers to (Phase 6.8b). Empty means the model reads the report as it always
     #: did; a concrete entry also compiles into a shadow check.
     guide_entries: Mapped[Any] = mapped_column(Json, default=list)
+
+    #: What a delivery calls each sheet, column and row label the fixed checks look
+    #: for (Phase 6.21b). Ordered entries, each naming a scope, a kind, the name the
+    #: checks ask for, and the spellings that also mean it. Empty is the ordinary
+    #: state on a new deployment and stays empty for a delivery whose layout the
+    #: ladder resolves in code (ADR-051); it fills as administrators accept what the
+    #: ladder had to reason about, and every entry it gains removes a model call from
+    #: every later run.
+    layout_entries: Mapped[Any] = mapped_column(Json, default=list)
 
     #: Whether the upload slot appears on the new-run form.
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, index=True)

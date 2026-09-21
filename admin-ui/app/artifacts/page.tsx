@@ -37,6 +37,7 @@ import { CapMeter } from "@/components/cap-meter";
 import { Explain, FieldEffect } from "@/components/explain";
 import { DeleteButton } from "@/components/confirm-delete";
 import { GuideEditor } from "@/components/guide-editor";
+import { LayoutEditor } from "@/components/layout-editor";
 import { VersionsPanel } from "@/components/versions-panel";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -86,7 +87,7 @@ const INPUT_GROUPS: { key: InputGroup; label: string; title: string; hint: strin
     key: "report",
     label: "Reports",
     title: "Output reports",
-    hint: "Excel workbooks the delivery produced. Switching a type off removes its upload slot for every user, at once. Named values and validation guides belong here.",
+    hint: "Excel workbooks the delivery produced. Switching a type off removes its upload slot for every user, at once. Named values, validation guides and what this delivery calls each sheet belong here.",
   },
 ];
 
@@ -97,6 +98,7 @@ export default function ArtifactsPage() {
   const [editing, setEditing] = React.useState<string | null>(null);
   const [versions, setVersions] = React.useState<string | null>(null);
   const [guide, setGuide] = React.useState<string | null>(null);
+  const [layout, setLayout] = React.useState<string | null>(null);
   const [selectedValues, setSelectedValues] = React.useState<number[]>([]);
   const [adding, setAdding] = React.useState(false);
   const [newType, setNewType] = React.useState({ ...NEW_TYPE });
@@ -324,6 +326,16 @@ export default function ArtifactsPage() {
                           {guide === type.key ? "Hide guide" : `Guide (${type.guide.length})`}
                         </Button>
                       ) : null}
+                      {type.kind === "report" ? (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          aria-label={`Layout for ${type.label}`}
+                          onClick={() => setLayout(layout === type.key ? null : type.key)}
+                        >
+                          {layout === type.key ? "Hide layout" : `Layout (${type.layout.length})`}
+                        </Button>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="xs"
@@ -358,6 +370,13 @@ export default function ArtifactsPage() {
                     <TR className="hover:bg-transparent">
                       <TD colSpan={4} className="bg-muted/20">
                         <GuideEditor type={type} busy={busy} onSaved={() => void load()} />
+                      </TD>
+                    </TR>
+                  ) : null}
+                  {layout === type.key ? (
+                    <TR className="hover:bg-transparent">
+                      <TD colSpan={4} className="bg-muted/20">
+                        <LayoutEditor type={type} busy={busy} onSaved={() => void load()} />
                       </TD>
                     </TR>
                   ) : null}

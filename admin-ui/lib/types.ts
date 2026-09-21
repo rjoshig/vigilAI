@@ -95,6 +95,8 @@ export interface ArtifactType extends ArtifactTypeIn {
   runs_using: number;
   /** The validation guide, examples filled from the samples. */
   guide: GuideEntry[];
+  /** What this delivery calls each name the fixed checks look for (Phase 6.21b). */
+  layout: LayoutEntry[];
   /** The newest definition version; zero before the first save (ADR-029). */
   version: number;
 }
@@ -987,4 +989,48 @@ export interface PromoteExample {
   rule_id?: string;
   scope?: string;
   note?: string;
+}
+
+/** What kind of name a layout entry covers. The same closed set the resolver uses. */
+export type LayoutKind = "sheet" | "column" | "label";
+
+/**
+ * One name a delivery spells differently (Phase 6.21b).
+ *
+ * Read by the ladder's *fourth* rung, which is the one a person writes: it is reached
+ * only after exact, separator-insensitive and same-words matching have all failed, and
+ * it never overrules the name actually asked for. Recording one turns a delivery the
+ * AI had to reason about into a delivery code resolves, and costs no model call.
+ */
+export interface LayoutEntry {
+  /** Which runs it covers. Empty, or `everywhere`, means all of them. */
+  scope: string;
+  kind: LayoutKind;
+  /** The name the fixed checks ask for, e.g. `Attributes`. */
+  wanted: string;
+  /** What this delivery calls it. Several, because customers word things differently. */
+  names: string[];
+  note: string;
+  added_by: string;
+}
+
+/** A name the AI read for a run, offered to an administrator (ADR-051). */
+export interface LayoutSuggestion {
+  artifact: string;
+  kind: LayoutKind;
+  wanted: string;
+  found: string;
+  /** The AI's own number, already past the floor code applies. */
+  confidence: number;
+  reason: string;
+  /** How many runs met it. Read on every delivery means it is that customer's layout. */
+  seen: number;
+  run_ids: number[];
+  /** True once the artifact type carries it, so an accepted offer stops asking. */
+  already_listed: boolean;
+}
+
+/** What `GET /admin/layout-suggestions` returns. */
+export interface LayoutSuggestions {
+  suggestions: LayoutSuggestion[];
 }

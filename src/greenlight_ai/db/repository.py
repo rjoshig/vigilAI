@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from greenlight_ai import scopes
 from greenlight_ai.checks.field_constraints import FieldConstraintSpec
 from greenlight_ai.training.lifecycle import RUNNING_STATES
+from greenlight_ai.checks import layout as layout_module
 from greenlight_ai.checks.definitions import (
     DEFAULT_CATEGORIES,
     AdminConfig,
@@ -245,6 +246,19 @@ def load_admin_config(
         ).scalars()
     }
 
+    # What this delivery calls each sheet, column and label the fixed checks look
+    # for (Phase 6.21b). Scoped like everything else, so a programme's spelling does
+    # not reach another programme's run.
+    layout = layout_module.load_map(
+        [
+            (row.key, tuple(row.layout_entries or ()))
+            for row in session.execute(sa.select(models.ArtifactType)).scalars()
+        ],
+        customer=customer,
+        programme_code=programme_code,
+        configuration_id=configuration_id,
+    )
+
     return AdminConfig(
         checks=checks,
         compliance_rules=compliance,
@@ -252,6 +266,7 @@ def load_admin_config(
         named_values=named_values,
         field_constraints=field_constraints,
         shadow_rule_refs=frozenset(shadow_refs),
+        layout_map=layout,
     )
 
 
@@ -392,6 +407,21 @@ def save_context(session: Session, run: models.Run, context: RunContext) -> None
         run.keyword_suggestions = {
             code: list(phrases) for code, phrases in context.keyword_suggestions.items()
         }
+    # Names the ladder's fifth rung had to read, kept where the evidence for them is
+    # (Phase 6.21b). A suggestion, never an application — an administrator records
+    # them on the artifact type, or does not (ADR-021).
+    if context.resolver is not None and context.resolver.reasoned:
+        run.layout_suggestions = [
+            layout_module.LayoutSuggestion(
+                artifact=reasoned.artifact,
+                kind=reasoned.kind,
+                wanted=reasoned.wanted,
+                found=reasoned.found,
+                confidence=reasoned.confidence,
+                reason=reasoned.reason,
+            ).model_dump()
+            for reasoned in context.resolver.reasoned
+        ]
 
 
 def _replace_rules(session: Session, run: models.Run, rules: Sequence[Rule]) -> None:

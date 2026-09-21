@@ -59,7 +59,8 @@ from greenlight_ai.checks.expressions import (
     referenced_names,
     validate,
 )
-from greenlight_ai.checks import guides
+from greenlight_ai.checks import guides, layout
+from greenlight_ai.resolve import squashed
 from greenlight_ai.checks.named_values import NamedValue, resolve, to_number
 from greenlight_ai.config import store as config_store
 from greenlight_ai.checks import field_labels
@@ -344,6 +345,7 @@ def _artifact_out(
         sheets=sheets,
         runs_using=in_use,
         guide=[guides.GuideEntry.model_validate(entry) for entry in row.guide_entries or []],
+        layout=[wire.LayoutEntryWire.model_validate(entry) for entry in row.layout_entries or []],
         version=version,
     )
 
@@ -594,6 +596,70 @@ def save_guide(
         actor=user.name,
     )
     versions.record_artifact_version(session, row, user.name, "guide edited")
+    return _artifact_out(
+        row, data_dir, version=versions.latest_version(session, "artifact_type", row.key)
+    )
+
+
+@router.put("/artifact-types/{key}/layout", response_model=wire.ArtifactTypeOut)
+def save_layout(
+    key: str,
+    payload: wire.LayoutIn,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_artifacts),
+) -> wire.ArtifactTypeOut:
+    """Replace an artifact type's layout map (Phase 6.21b, ADR-051).
+
+    What this delivery calls each sheet, column and row label the fixed checks look
+    for. The ladder reads it as its fourth rung, so an entry never overrules the name
+    actually asked for and it costs no model call — recording one turns a delivery the
+    model had to reason about into a delivery code resolves. The save is a version.
+
+    Args:
+        key: The artifact key.
+        payload: The entries.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The calling administrator.
+
+    Returns:
+        The type, with its layout map.
+
+    Raises:
+        HTTPException: 404 when the type does not exist, 422 when an entry names a
+            kind nothing reads or two entries are the same entry.
+    """
+    catalog.seed_defaults(session)
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"artifact type {key!r} not found")
+
+    entries: list[layout.LayoutEntry] = []
+    for item in payload.entries:
+        if item.kind not in layout.KINDS:
+            raise HTTPException(HTTP_422, f"{item.kind!r} is not one of {', '.join(layout.KINDS)}")
+        entries.append(layout.LayoutEntry.model_validate(item.model_dump()))
+
+    ids = [entry.id for entry in entries]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(
+            HTTP_422,
+            "two entries name the same thing in the same scope; put the spellings in one",
+        )
+
+    row.layout_entries = [entry.model_dump() for entry in entries]
+    session.flush()
+    repository.audit(
+        session,
+        "admin.layout_saved",
+        detail=f"{key}:{len(entries)} entries",
+        user_id=user.id,
+        actor=user.name,
+    )
+    versions.record_artifact_version(session, row, user.name, "layout edited")
     return _artifact_out(
         row, data_dir, version=versions.latest_version(session, "artifact_type", row.key)
     )
@@ -3423,6 +3489,172 @@ def demotion_report(
             if row.state == demotion.BLOCKED
         ],
         shadow=True,
+    )
+
+
+@router.get("/layout-suggestions", response_model=wire.LayoutSuggestionsOut)
+def layout_suggestions(
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(current_user),
+) -> wire.LayoutSuggestionsOut:
+    """Names the model read because four deterministic rungs could not (Phase 6.21b).
+
+    Each one comes from a run where a check went looking for a sheet, a column or a
+    row label, the ladder's four deterministic rungs all missed, and the model — shown
+    the names that artifact carries and nothing else — said which one was meant
+    (ADR-051). The check then ran, and the run carries a review-severity record saying
+    so.
+
+    That is a gap in what the tool has been told about a customer's layout rather than
+    a defect in the delivery, and it recurs on every delivery from that customer until
+    somebody closes it. Accepting a suggestion is what closes it: from then on the
+    ladder's fourth rung resolves the name in code and no call is made.
+
+    **Nothing here is in force.** A suggestion is a suggestion until an administrator
+    accepts it (ADR-021).
+
+    Args:
+        session: The request's session.
+        _user: The caller.
+
+    Returns:
+        Every pending suggestion, most-seen first, with the runs it came from.
+    """
+    # A suggestion is already listed when some entry on that type, at any scope, says
+    # this name is spelled that way. Scope is deliberately ignored: an administrator
+    # who recorded it for one programme has decided about it, and asking again on the
+    # next programme's delivery is how a console trains people to click past it.
+    listed: set[tuple[str, str, str, str]] = set()
+    for row in session.execute(sa.select(models.ArtifactType)).scalars():
+        for raw in row.layout_entries or []:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                entry = layout.LayoutEntry.model_validate(raw)
+            except ValueError:
+                continue
+            for name in entry.names:
+                listed.add((row.key, entry.kind, squashed(entry.wanted), name))
+
+    seen: dict[tuple[str, str, str, str], list[int]] = {}
+    best: dict[tuple[str, str, str, str], wire.LayoutSuggestionOut] = {}
+    rows = session.execute(
+        sa.select(models.Run.id, models.Run.layout_suggestions).where(
+            models.Run.layout_suggestions.is_not(None)
+        )
+    ).all()
+    for run_id, suggestions in rows:
+        for raw in suggestions or []:
+            try:
+                read = layout.LayoutSuggestion.model_validate(raw)
+            except ValueError:
+                continue
+            key = (read.artifact, read.kind, read.wanted, read.found)
+            seen.setdefault(key, []).append(int(run_id))
+            # Keep the most confident reading's reason: it is the one worth judging.
+            if key not in best or read.confidence > best[key].confidence:
+                best[key] = wire.LayoutSuggestionOut(
+                    artifact=read.artifact,
+                    kind=read.kind,
+                    wanted=read.wanted,
+                    found=read.found,
+                    confidence=read.confidence,
+                    reason=read.reason,
+                )
+
+    out: list[wire.LayoutSuggestionOut] = []
+    for key, run_ids in seen.items():
+        row_out = best[key]
+        row_out.seen = len(run_ids)
+        row_out.run_ids = sorted(run_ids)[-10:]
+        row_out.already_listed = (key[0], key[1], squashed(key[2]), key[3]) in listed
+        out.append(row_out)
+    out.sort(key=lambda row: (row.already_listed, -row.seen, row.artifact, row.wanted))
+    return wire.LayoutSuggestionsOut(suggestions=out)
+
+
+@router.post("/layout-suggestions/accept", response_model=wire.ArtifactTypeOut)
+def accept_layout_suggestion(
+    payload: wire.LayoutAcceptIn,
+    session: Session = Depends(get_session),
+    data_dir: Path = Depends(get_data_dir),
+    user: CurrentUser = Depends(require_artifacts),
+) -> wire.ArtifactTypeOut:
+    """Record one read name on its artifact type.
+
+    The act that closes the loop: from here the ladder's fourth rung resolves this
+    name in code and the model is not asked again (ADR-051).
+
+    Args:
+        payload: Which artifact, kind, wanted name and spelling, and the scope.
+        session: The request's session.
+        data_dir: The shared volume.
+        user: The caller, recorded in the audit log.
+
+    Returns:
+        The artifact type, with its new entry.
+
+    Raises:
+        HTTPException: 404 when the type does not exist, 422 on an unknown kind.
+    """
+    if payload.kind not in layout.KINDS:
+        raise HTTPException(HTTP_422, f"{payload.kind!r} is not one of {', '.join(layout.KINDS)}")
+    row = session.execute(
+        sa.select(models.ArtifactType).where(models.ArtifactType.key == payload.artifact)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"artifact type {payload.artifact!r} not found"
+        )
+
+    entries = [
+        layout.LayoutEntry.model_validate(entry)
+        for entry in (row.layout_entries or [])
+        if isinstance(entry, dict)
+    ]
+    wanted_id = layout.entry_id(payload.scope, payload.kind, payload.wanted)
+    existing = next((entry for entry in entries if entry.id == wanted_id), None)
+    if existing is None:
+        entries.append(
+            layout.LayoutEntry(
+                scope=scopes.token(payload.scope),
+                kind=payload.kind,
+                wanted=payload.wanted,
+                names=(payload.found,),
+                note="accepted from what the AI read",
+                added_by=user.name,
+            )
+        )
+    elif payload.found not in existing.names:
+        entries = [
+            (
+                entry.model_copy(update={"names": entry.names + (payload.found,)})
+                if entry.id == wanted_id
+                else entry
+            )
+            for entry in entries
+        ]
+
+    row.layout_entries = [entry.model_dump() for entry in entries]
+    session.flush()
+    repository.audit(
+        session,
+        "artifact.layout_accepted",
+        None,
+        f"{payload.artifact} {payload.kind} {payload.wanted!r} -> {payload.found!r}",
+        user_id=user.id,
+        actor=user.name,
+    )
+    versions.record_artifact_version(session, row, user.name, "layout accepted")
+    _LOG.info(
+        "layout %s %s %r accepted as %r",
+        payload.artifact,
+        payload.kind,
+        payload.wanted,
+        payload.found,
+    )
+    return _artifact_out(
+        row, data_dir, version=versions.latest_version(session, "artifact_type", row.key)
     )
 
 
