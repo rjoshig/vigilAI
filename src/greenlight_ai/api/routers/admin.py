@@ -52,7 +52,7 @@ from greenlight_ai.api.deps import (
     require_teaching,
 )
 from greenlight_ai.auth.roles import Capability
-from greenlight_ai.api.uploads import UploadError, store_upload
+from greenlight_ai.api.uploads import UploadError, limit_bytes, store_upload
 from greenlight_ai.checks.expressions import (
     ExpressionError,
     UnresolvedValue,
@@ -519,6 +519,10 @@ def upload_sample(
             # One directory per sample: three samples of one type must not share a
             # path, and an old version's workbook must outlive the sample row (ADR-029).
             f"{TEMPLATE_DIR}/{uuid.uuid4().hex[:12]}",
+            # The console's own limit applies to the console's own uploads. It did not
+            # until now: this call took the module default, so an administrator who
+            # lowered the ceiling saw it enforced on a submitter and not on themselves.
+            max_bytes=limit_bytes(session),
         )
     except UploadError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc

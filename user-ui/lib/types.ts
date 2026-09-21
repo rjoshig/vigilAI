@@ -756,6 +756,8 @@ export interface ChatOpening {
   trimmed: string[];
   aggregates_included: boolean;
   max_questions_per_run: number;
+  /** How many of those are left for this person on this run. */
+  questions_left_on_this_run: number;
   questions_left_today: number;
 }
 

@@ -536,13 +536,15 @@ SETTINGS: Final[tuple[SettingSpec, ...]] = (
     SettingSpec(
         key="chat.max_questions_per_run",
         env="GREENLIGHT_AI_CHAT_MAX_PER_RUN",
-        label="Questions per run",
+        label="Questions per run, per person",
         group="Chat",
         kind="int",
         default=20,
         minimum=1,
         maximum=200,
-        help="How long one conversation may go. Reached, the panel says so rather than " "failing.",
+        help="How many questions one person may ask about one report, counted from the "
+        "call record and so not reset by reopening the panel. Reached, the panel says "
+        "so rather than failing.",
     ),
     SettingSpec(
         key="chat.max_questions_per_day",

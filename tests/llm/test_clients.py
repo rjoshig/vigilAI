@@ -18,6 +18,7 @@ from greenlight_ai.llm import (
     CallLog,
     LLMBudgetExceeded,
     LLMCache,
+    LLMError,
     LLMResponseError,
     LLMSettings,
     LLMTimeoutError,
@@ -433,6 +434,45 @@ def test_an_abandoned_stream_caches_nothing() -> None:
     next(stream)
     stream.close()
     list(client.stream("s", "u", stage="chat_answer"))
+    assert client.call_log.cache_hits == 0
+
+
+def test_a_stream_that_dies_mid_answer_is_still_recorded() -> None:
+    """A call that failed is a call that happened.
+
+    `complete` has always written an `ok=False` row when the transport fails. `stream`
+    wrote its row only after the loop finished, so a stream that died mid-answer left no
+    trace at all: invisible to the usage and spend screens, and free against the caps
+    that are counted from exactly those rows.
+    """
+
+    class Dying(MockClient):
+        def _send_stream(self, system: str, user: str):  # type: ignore[no-untyped-def]
+            yield "The first half of an answer"
+            raise LLMError("the endpoint hung up")
+
+    client = Dying()
+    with pytest.raises(LLMError):
+        list(client.stream("s", "u", stage="chat_answer"))
+
+    (record,) = client.call_log.records
+    assert record.ok is False
+    assert record.stage == "chat_answer"
+    assert record.error == "LLMError"
+    assert record.completion_tokens > 0, "what it managed to send is what it spent"
+
+
+def test_a_stream_that_dies_caches_nothing() -> None:
+    """Recording the failure must not also store the half answer."""
+
+    class Dying(MockClient):
+        def _send_stream(self, system: str, user: str):  # type: ignore[no-untyped-def]
+            yield "half"
+            raise LLMError("the endpoint hung up")
+
+    client = Dying()
+    with pytest.raises(LLMError):
+        list(client.stream("s", "u", stage="chat_answer"))
     assert client.call_log.cache_hits == 0
 
 

@@ -1,7 +1,7 @@
 # Greenlight AI — User training
 
 **Audience:** associates who validate deliveries. **Covers:** the user app at
-`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after Phase 8.
+`http://<host>:3000`. **Last aligned with the code:** 2026-09-21, after the Phase 8 review follow-up.
 
 This document is kept current as a matter of process: `docs/phase-6.5.md` requires it
 to be re-read against the product after every major milestone, and `CLAUDE.md` asks
@@ -560,7 +560,7 @@ has learned is usually given the reviewer role as well, which does show the link
 | "the report chat is switched off" | An administrator has not turned it on for this deployment. |
 | "this run has no frozen report yet" | The chat answers about finished reports only. Freeze the report first. |
 | "you have asked … questions today" | The per-person daily limit an administrator set. |
-| "this conversation has reached … questions" | The per-conversation limit. Close the panel and open it again to start a new one. |
+| "you have asked … questions about this report" | The per-report limit an administrator set. Reopening the panel does not reset it; the report and the run screens show everything the answers were built from. |
 
 <!-- guide 9: Asking the frozen report -->
 ## Asking the frozen report

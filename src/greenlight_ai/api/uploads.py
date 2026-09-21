@@ -15,7 +15,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Final
 
-__all__ = ["UploadError", "StoredFile", "ALLOWED", "MAX_UPLOAD_BYTES", "store_upload", "safe_name"]
+from sqlalchemy.orm import Session
+
+from greenlight_ai.config.store import resolve
+
+__all__ = [
+    "UploadError",
+    "StoredFile",
+    "ALLOWED",
+    "MAX_UPLOAD_BYTES",
+    "limit_bytes",
+    "store_upload",
+    "safe_name",
+]
 
 _LOG: Final = logging.getLogger(__name__)
 
@@ -44,7 +56,10 @@ ALLOWED: Final[dict[str, frozenset[str]]] = {
     ),
 }
 
-#: 50 MiB, matching `GREENLIGHT_AI_MAX_UPLOAD_MB` in `.env.example`.
+#: 50 MiB, matching the built-in default of `uploads.max_mb`. It is the floor an
+#: administrator's setting overrides, never the limit itself: resolve with
+#: :func:`limit_bytes` at the call site (ADR-023) and pass the result to
+#: :func:`store_upload`.
 MAX_UPLOAD_BYTES: Final[int] = 50 * 1024 * 1024
 
 #: Read in 1 MiB blocks so a large workbook is never held in memory twice.
@@ -55,6 +70,25 @@ _UNSAFE: Final = re.compile(r"[^A-Za-z0-9._-]+")
 
 class UploadError(Exception):
     """An upload was rejected. The message is safe to show the user."""
+
+
+def limit_bytes(session: Session) -> int:
+    """The largest upload this deployment accepts, in bytes.
+
+    Resolved where it is used rather than read into a constant (ADR-023), and living
+    here rather than in one router because it had lived in one router: the setting
+    existed in the console from Phase 6.3 and only the submission path ever passed it,
+    so an administrator who lowered the limit found the admin console's own sample
+    upload still taking 50 MiB. Two call sites and one resolver is how that stays
+    fixed.
+
+    Args:
+        session: An open session.
+
+    Returns:
+        The limit in bytes.
+    """
+    return int(resolve(session, "uploads.max_mb").value) * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +155,9 @@ def store_upload(
 
     Raises:
         UploadError: When the extension, the content type, or the size is not allowed.
-            The partial file is removed, so a rejected upload leaves nothing behind.
+            The partial file is removed, so a rejected upload leaves nothing behind —
+            and so does a disk filling up or a client hanging up mid-stream, which are
+            the failures that leave the *largest* partial files behind.
     """
     name = safe_name(filename)
     suffix = Path(name).suffix.lower()
@@ -153,7 +189,10 @@ def store_upload(
                     )
                 digest.update(block)
                 handle.write(block)
-    except UploadError:
+    except BaseException:
+        # Every failure, not only a refusal. `UploadError` was the only one handled, so
+        # a full volume or a client that hung up mid-stream left its partial bytes on
+        # the volume under the name a later, good upload of that kind expects to own.
         target.unlink(missing_ok=True)
         raise
 

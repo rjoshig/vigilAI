@@ -14,7 +14,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+import pytest
 import sqlalchemy as sa
+import starlette.datastructures as datastructures
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -340,3 +342,98 @@ def test_asking_for_another_status_still_excludes_drafts(
 
     rows = client.get(f"{api}/runs?status=queued").json()
     assert rows and all(row["status"] == "queued" for row in rows)
+
+
+# --- the form is closed whatever the answer is ----------------------------------------
+
+
+def _closes_counted(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Count `FormData.close()` calls, which is what releases the spooled files."""
+    closed: list[int] = []
+    original = datastructures.FormData.close
+
+    async def spy(self: Any) -> None:
+        closed.append(id(self))
+        await original(self)
+
+    monkeypatch.setattr(datastructures.FormData, "close", spy)
+    return closed
+
+
+def test_a_rejected_draft_upload_still_closes_its_form(
+    client: TestClient, api: str, submit: Submit, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refusal must release the spooled files, because refusals are the common case.
+
+    Every artifact in a multipart form is a `SpooledTemporaryFile` that reading the form
+    does not close. `POST /runs/{id}/files` reads every artifact off the raw form, so
+    only this endpoint can close them — and it used to do so after the last thing that
+    could refuse, which meant a wrong extension, an oversized file or an unknown slot
+    each stranded a descriptor and a temporary file for the life of the process.
+    """
+    run_id = submit().json()["run_id"]
+    draft_id = _clone(client, api, run_id)["run_id"]
+    closed = _closes_counted(monkeypatch)
+
+    refused = client.post(
+        f"{api}/runs/{draft_id}/files",
+        files={"dirt": ("dirt.txt", b"not a workbook", "text/plain")},
+    )
+    assert refused.status_code == 400
+    assert closed, "a refused upload left its form open"
+
+
+def test_a_draft_upload_with_no_known_slot_still_closes_its_form(
+    client: TestClient, api: str, submit: Submit, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other refusal on this endpoint, which returns before anything is stored."""
+    run_id = submit().json()["run_id"]
+    draft_id = _clone(client, api, run_id)["run_id"]
+    closed = _closes_counted(monkeypatch)
+
+    refused = client.post(
+        f"{api}/runs/{draft_id}/files",
+        files={"not_a_slot": ("x.xlsx", b"x" * 32, "application/vnd.ms-excel")},
+    )
+    assert refused.status_code == 400
+    assert closed, "an upload naming no known slot left its form open"
+
+
+def test_a_refused_submission_still_closes_its_form(
+    client: TestClient, api: str, submit: Submit, fixtures_root: Path, cases: dict[str, Any]
+) -> None:
+    """`POST /runs` refuses on its own account too, and every refusal is a form to close.
+
+    It declares its OSL and config as parameters, so the framework happens to close the
+    form for it today. That is an accident of how the framework reads a body, not a
+    property of this endpoint, and the refusal path is asserted here so an upgrade or a
+    signature change cannot quietly turn it back into a leak.
+    """
+    closed: list[int] = []
+    original = datastructures.FormData.close
+
+    async def spy(self: Any) -> None:
+        closed.append(id(self))
+        await original(self)
+
+    case = cases["baseline_match"]
+    osl = fixtures_root / case["osl"]
+    config = fixtures_root / case["config"]
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(datastructures.FormData, "close", spy)
+        refused = client.post(
+            f"{api}/runs",
+            data={
+                "customer_name": "Acme",
+                "order_number": "ORD-FORM",
+                "configuration_id": "CFG-FORM",
+            },
+            files=[
+                ("osl", (osl.name, osl.read_bytes(), "application/octet-stream")),
+                ("config", (config.name, config.read_bytes(), "application/json")),
+                ("dirt", ("dirt.txt", b"not a workbook", "text/plain")),
+            ],
+        )
+    assert refused.status_code == 400
+    assert closed, "a refused submission left its form open"

@@ -11,7 +11,7 @@ import logging
 from typing import Final
 
 from greenlight_ai.pipeline.context import RunContext
-from greenlight_ai.pipeline.s4_trace import describe_rule
+from greenlight_ai.rules.describe import describe_rule
 from greenlight_ai.rules.normalize import Interval, interval_from_condition
 from greenlight_ai.rules.schema import SET_TYPES, Condition, ConfigElement, Evidence, Finding, Rule
 

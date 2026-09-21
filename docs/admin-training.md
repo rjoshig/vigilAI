@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 8.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after the Phase 8 review follow-up.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -901,7 +901,9 @@ malfunction even when it is right.
 counted like any other, and the section shows how many have been asked in the last
 thirty days beside the caps. **Transcript turns kept** is the main lever: every turn
 re-sends the ones before it. **Questions per person per day** at zero denies the feature
-to everybody, which is how you roll it out to one team first. No conversation can spend
+to everybody, which is how you roll it out to one team first. **Questions per run, per
+person** is how many one person may ask about one report; it is counted from the call
+record rather than from the panel, so reopening the panel does not start it again. No conversation can spend
 a run's token budget, and turning the whole thing off mid-conversation is safe — nothing
 is stored, so there is nothing left to clean up.
 

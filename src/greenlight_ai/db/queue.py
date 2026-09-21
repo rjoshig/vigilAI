@@ -24,7 +24,7 @@ from typing import Any, Final, Mapping, Sequence
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from greenlight_ai.db.models import Job
+from greenlight_ai.db.models import Job, Run
 from greenlight_ai.db.types import utcnow
 
 __all__ = ["JobQueue", "worker_name", "BACKOFF_SECONDS"]
@@ -35,6 +35,14 @@ _LOG: Final = logging.getLogger(__name__)
 #: model timeout or a restart, so the first retry is quick and the last gives a
 #: recovering endpoint real time.
 BACKOFF_SECONDS: Final[tuple[int, ...]] = (10, 60, 300)
+
+#: What a job — and the run it belongs to — is told when no worker survives it. One
+#: sentence in one place, because the row a person reads and the row the queue keeps
+#: must not be able to say different things about the same event.
+_ABANDONED: Final[str] = (
+    "The worker holding this job stopped without reporting, and no attempt remains. "
+    "A job that outlives its workers is not retried again."
+)
 
 
 def worker_name() -> str:
@@ -379,23 +387,66 @@ class JobQueue:
         return int(self._session.execute(statement).scalar_one())
 
     def reclaim_stale(self, older_than_seconds: int = 900) -> int:
-        """Return jobs whose worker died back to the queue.
+        """Return jobs whose worker died back to the queue, while attempts remain.
 
         A worker killed mid-run leaves a row marked ``running`` that nothing will ever
         finish. Reclaiming is what makes "kill a worker and restart" resume rather than
         hang (phase-3 acceptance criterion 4).
+
+        **A job that keeps killing its worker is given up on, like any other failure.**
+        ``max_attempts`` was only ever consulted in :meth:`fail`, which a worker that
+        died never reached — so a job whose payload reliably takes the process down
+        (an out-of-memory parse, a segfault in a native library, a container the
+        scheduler keeps evicting) was reclaimed, re-claimed, and killed the next worker
+        too, for ever, with ``attempts`` climbing past its ceiling and nothing in the
+        product able to say it had stopped trying. It is marked failed here on the same
+        terms `fail` would, so the run reports it and a person sees it.
 
         Args:
             older_than_seconds: How long a claim may be held before it is considered
                 abandoned.
 
         Returns:
-            How many jobs were returned to the queue.
+            How many jobs were returned to the queue. Jobs given up on are not counted:
+            nothing was reclaimed for them.
         """
         cutoff = utcnow() - dt.timedelta(seconds=older_than_seconds)
+        stale = (Job.status == "running", Job.locked_at < cutoff)
+
+        # Read before the update, because a run whose job is given up on has to be told.
+        # `fail` leaves that to the worker, which is where every other dead job is
+        # handled — but the worker is precisely what is missing here, so a run left
+        # `running` with no job and nothing watching would sit on the screen for ever.
+        doomed = [
+            row
+            for row in self._session.execute(
+                sa.select(Job.id, Job.run_id).where(*stale, Job.attempts >= Job.max_attempts)
+            ).all()
+        ]
+        if doomed:
+            self._session.execute(
+                sa.update(Job)
+                .where(Job.id.in_([job_id for job_id, _ in doomed]))
+                .values(
+                    status="failed",
+                    finished_at=utcnow(),
+                    locked_by="",
+                    locked_at=None,
+                    last_error=_ABANDONED,
+                )
+            )
+            run_ids = [run_id for _, run_id in doomed if run_id is not None]
+            if run_ids:
+                self._session.execute(
+                    sa.update(Run)
+                    .where(Run.id.in_(run_ids), Run.status.in_(("queued", "running")))
+                    .values(status="failed", error=_ABANDONED, finished_at=utcnow())
+                )
+            _LOG.error("gave up on %d stale job(s) with no attempts left", len(doomed))
+
         result = self._session.execute(
             sa.update(Job)
-            .where(Job.status == "running", Job.locked_at < cutoff)
+            .where(*stale, Job.attempts < Job.max_attempts)
             .values(status="queued", locked_by="", locked_at=None)
         )
         reclaimed = int(result.rowcount)  # type: ignore[attr-defined]

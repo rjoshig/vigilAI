@@ -14,6 +14,7 @@ from typing import Final, Sequence
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, HTMLResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from greenlight_ai.api import gate
@@ -249,6 +250,19 @@ def finalize(
             generated_by_user_id=user.id,
         )
     )
+    # `final_reports.run_id` is unique, which is what actually guarantees ADR-005: the
+    # check at the top of this function is a read, and two reviewers pressing Finalize
+    # at the same moment both pass it. The constraint refuses the second — and used to
+    # do so as a 500, which reads as "the tool is broken" rather than "somebody got
+    # there first". The answer is the same refusal the check above gives.
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"run {run_id} is already finalized; the report is frozen and is never regenerated",
+        ) from exc
     run.status = "finalized"
     # The shape this delivery carried becomes the shape the configuration is known to
     # deliver, so the next run of the same order has something to fall back on when it

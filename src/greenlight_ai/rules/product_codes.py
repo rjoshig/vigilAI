@@ -217,6 +217,7 @@ class ProductCatalogue:
             "check nothing" and the delivery would pass.
         """
         attributes: list[str] = []
+        seen: set[str] = set()
         by_code: dict[str, tuple[str, ...]] = {}
         unknown: dict[str, str] = {}
 
@@ -233,7 +234,15 @@ class ProductCatalogue:
                 continue
             by_code.setdefault(entry.code, entry.attributes)
             for name in entry.attributes:
-                if name not in attributes:
+                # Squashed, like every other identity question in this module. Matching
+                # on the exact string made ``SCORE_V3`` in one code and ``score-v3`` in
+                # another two attributes, which is the one thing this module's opening
+                # paragraph says they are not: a requirement naming both codes expanded
+                # to a duplicate, and one attribute could raise two findings. The first
+                # code's spelling wins, as the first definition of a code does.
+                key = squashed(name)
+                if key and key not in seen:
+                    seen.add(key)
                     attributes.append(name)
 
         if unknown:

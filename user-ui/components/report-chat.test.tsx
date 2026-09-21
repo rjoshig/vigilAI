@@ -46,6 +46,7 @@ function opening(overrides: Partial<ChatOpening> = {}): ChatOpening {
     trimmed: [],
     aggregates_included: false,
     max_questions_per_run: 20,
+    questions_left_on_this_run: 20,
     questions_left_today: 50,
     ...overrides,
   };

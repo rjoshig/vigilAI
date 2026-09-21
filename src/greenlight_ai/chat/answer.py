@@ -154,7 +154,10 @@ def answer_turn(
     system, user = _prompt(pack, question, turns, chat)
 
     raw: list[str] = []
-    shown: list[str] = []
+    #: How many characters of the answer the caller has already been given. Counted
+    #: rather than re-joined, because every index below is an offset into the text
+    #: **as it streamed** and the count is the only thing that keeps them honest.
+    shown = 0
     tail_started = False
     for piece in client.stream(
         system,
@@ -169,23 +172,31 @@ def answer_turn(
         if CITATION_MARKER in joined:
             tail_started = True
             prose_so_far = joined.partition(CITATION_MARKER)[0]
-            remaining = prose_so_far[len("".join(shown)) :]
+            remaining = prose_so_far[shown:]
             if remaining:
-                shown.append(remaining)
+                shown += len(remaining)
                 yield remaining
             continue
         # Hold back as much as the marker is long, so a marker split across two
         # pieces is never half-shown. A person watching an answer appear must not
         # see the seam of the mechanism that checks it.
         safe = joined[: max(0, len(joined) - len(CITATION_MARKER))]
-        remaining = safe[len("".join(shown)) :]
+        remaining = safe[shown:]
         if remaining:
-            shown.append(remaining)
+            shown += len(remaining)
             yield remaining
 
     whole = "".join(raw)
     prose, ids, unusable = split_answer(whole)
-    remaining = prose[len("".join(shown)) :]
+    # The held-back tail is released against the text **as it streamed**, never against
+    # `prose`. `split_answer` strips, and `shown` counts raw characters: indexing a
+    # stripped string by a raw count skips exactly as many characters as the strip
+    # removed from the front, so an answer that began with a newline and never produced
+    # a marker reached the reader with characters missing from its middle — "consistent
+    # with the spec" as "consistent wth the spec". Silent, and on the very path that
+    # exists to keep a citation-less answer readable.
+    streamed = whole.partition(CITATION_MARKER)[0] if CITATION_MARKER in whole else whole
+    remaining = streamed[shown:]
     if remaining:
         yield remaining
 

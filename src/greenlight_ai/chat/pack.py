@@ -66,11 +66,27 @@ __all__ = [
 
 _LOG: Final = logging.getLogger(__name__)
 
-#: The ceiling on the whole pack. Generous next to a run preamble's 6,000, because this
-#: is one call rather than one per stage and the person is asking about a document they
-#: already have open — but a ceiling, because an answer assembled from forty thousand
-#: characters of context is not more accurate, only slower and dearer.
+#: The ceiling on the whole pack, and enforced as one. Generous next to a run preamble's
+#: 6,000, because this is one call rather than one per stage and the person is asking
+#: about a document they already have open — but a ceiling, because an answer assembled
+#: from forty thousand characters of context is not more accurate, only slower and
+#: dearer.
+#:
+#: It was a ceiling in the docstring and a divisor in the code: every section was fitted
+#: to ``MAX_PACK_CHARS // 6`` and nothing added the sections up, so eight sections and a
+#: report could reach 34,000 characters against a stated 24,000. The per-section share
+#: is still what keeps one section from crowding out the rest; the running budget below
+#: is what makes the total mean what this constant says.
 MAX_PACK_CHARS: Final[int] = 24_000
+
+#: Held back from the budget for the "what was left out" block, which `RunPack.rendered`
+#: appends after the sections. A pack that overran its ceiling while explaining how it
+#: had been trimmed would be a joke at the reader's expense.
+#:
+#: Sized for the worst case rather than the likely one: nine sections can each add a
+#: note, the longest note is 137 characters with the longest section name in it, and
+#: the block carries a heading of its own — so 9 x 137 + 46, rounded up.
+_TRIM_NOTE_RESERVE: Final[int] = 1_500
 
 #: The share of that the frozen report's own text may take. It is the largest single
 #: section and the least surprising one to trim, since the person is looking at it.
@@ -303,9 +319,9 @@ def _findings(session: Session, run_id: int) -> tuple[list[str], list[Citable], 
             for key in ("osl_ref", "config_path", "report_name", "report_sheet", "report_cell")
             if str(evidence.get(key, "")).strip()
         )
-        decision = row.review_status if row.review_status != "undecided" else "undecided"
         lines.append(
-            f"[{row.finding_id}] {row.severity} · {row.type} · decided {decision} · "
+            f"[{row.finding_id}] {row.severity} · {row.type} · "
+            f"decided {row.review_status} · "
             f"found by {row.engine}: {row.title}. {textfit.clip(row.detail, 400, 'finding')}"
             + (f" Evidence: {where}." if where else "")
         )
@@ -495,7 +511,9 @@ def _aggregates(run: models.Run) -> list[str]:
     return lines
 
 
-def _report_text(data_dir: Path | None, stored: models.FinalReport | None) -> str:
+def _report_text(
+    data_dir: Path | None, stored: models.FinalReport | None, cap: int = MAX_REPORT_CHARS
+) -> str:
     """The frozen report's own prose, so it can be quoted back.
 
     The file is **read, never written**. It is the artifact somebody attested to and
@@ -506,12 +524,13 @@ def _report_text(data_dir: Path | None, stored: models.FinalReport | None) -> st
         data_dir: The shared volume, or ``None`` when the caller has no path — in which
             case the section is simply absent and the chat says so when asked.
         stored: The frozen report row.
+        cap: The characters it may take — its own share or whatever the pack has left,
+            whichever is smaller.
 
     Returns:
-        The visible text, tags stripped and whitespace collapsed, within
-        :data:`MAX_REPORT_CHARS`.
+        The visible text, tags stripped and whitespace collapsed, within ``cap``.
     """
-    if stored is None or data_dir is None or not stored.html_path:
+    if stored is None or data_dir is None or not stored.html_path or cap <= 0:
         return ""
     path = Path(stored.html_path)
     if not path.is_absolute():
@@ -522,7 +541,7 @@ def _report_text(data_dir: Path | None, stored: models.FinalReport | None) -> st
         _LOG.info("chat: the frozen report for run %s could not be read (%s)", stored.run_id, exc)
         return ""
     visible = _TAG_RE.sub(" ", _DROP_RE.sub(" ", html))
-    return textfit.clip(visible, MAX_REPORT_CHARS, "the frozen report")
+    return textfit.clip(visible, cap, "the frozen report")
 
 
 # --- assembly -----------------------------------------------------------------------
@@ -580,12 +599,33 @@ def build_pack(
     sections: dict[str, str] = {}
     trimmed: list[str] = []
 
+    budget = MAX_PACK_CHARS - _TRIM_NOTE_RESERVE
+
     def add(name: str, lines: Sequence[str], what: str, cap: int) -> None:
-        """Render one section within its share and note what it lost."""
+        """Render one section within its share *and* what is left of the whole.
+
+        Two ceilings, because they stop different things. The share stops one long
+        section crowding out the rest; the running budget stops the sections together
+        overrunning the pack. A section that arrives with nothing left is named in
+        `trimmed` rather than dropped in silence — an answer built without the coverage
+        section is wrong in a way the reader cannot see, and the one thing the pack owes
+        them is to say what it did not have.
+        """
+        nonlocal budget
         if not lines:
             return
-        block = textfit.fit(lines, what, cap)
+        allowed = min(cap, budget)
+        if allowed <= 0:
+            trimmed.append(
+                f"- '{name}' was left out entirely: the context was already full by the "
+                "time it was reached."
+            )
+            return
+        block = textfit.fit(lines, what, allowed)
         sections[name] = str(block)
+        # The heading `rendered` writes costs its characters too: "## ", the name, and
+        # the newlines around the block.
+        budget -= len(block) + len(name) + 5
         if block.dropped:
             trimmed.append(
                 f"- {block.dropped} of {block.total} {what}(s) were omitted from "
@@ -616,9 +656,13 @@ def build_pack(
             share,
         )
 
-    report_text = _report_text(data_dir, stored)
+    # The report goes last and takes what is left, never more. It is the largest single
+    # section and the least surprising one to trim, since the person is looking at it.
+    report_name = "What the frozen report itself says"
+    report_text = _report_text(data_dir, stored, min(MAX_REPORT_CHARS, budget - len(report_name)))
     if report_text:
-        sections["What the frozen report itself says"] = report_text
+        sections[report_name] = report_text
+        budget -= len(report_text) + len(report_name) + 5
 
     rendered = "\n\n".join(f"## {name}\n{body}" for name, body in sections.items())
     digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()

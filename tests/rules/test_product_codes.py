@@ -140,6 +140,32 @@ class TestConflicts:
     def test_an_attribute_in_one_code_only_is_not_a_conflict(self) -> None:
         assert _catalogue(_code("ABC", "AT01"), _code("DEF", "AGE")).conflicts() == ()
 
+    def test_one_attribute_spelled_two_ways_expands_once(self) -> None:
+        """The module's own headline rule, which `expand` used to break.
+
+        `conflicts` has always asked the identity question through `squashed`, so
+        ``SCORE_V3`` and ``score-v3`` are one term to it and two codes carrying them
+        agree. `expand` asked it with ``!=`` on the raw string, so the same pair
+        expanded to *two* attributes — and a requirement naming both codes could raise
+        two findings about one attribute, while `conflicts` reported nothing to explain
+        why. Two functions in one module disagreeing about what "the same attribute"
+        means is the defect; this pins them together.
+        """
+        catalogue = _catalogue(_code("ABC", "SCORE_V3"), _code("DEF", "score-v3"))
+        expansion = catalogue.expand(["ABC", "DEF"])
+        assert expansion.attributes == ("SCORE_V3",)
+        assert catalogue.conflicts() == ()
+
+    def test_the_spelling_of_the_first_code_named_is_the_one_kept(self) -> None:
+        """The same rule `from_entries` follows, so one order of precedence, not two."""
+        catalogue = _catalogue(_code("DEF", "score-v3"), _code("ABC", "SCORE_V3"))
+        assert catalogue.expand(["DEF", "ABC"]).attributes == ("score-v3",)
+
+    def test_a_delivery_is_not_called_extra_for_either_spelling(self) -> None:
+        """`beyond` already squashed; the point is that all three now agree."""
+        catalogue = _catalogue(_code("ABC", "SCORE_V3"), _code("DEF", "score-v3"))
+        assert catalogue.beyond(["ABC", "DEF"], ["Score-V3"]) == ()
+
 
 class TestTheCatalogue:
     """Building one, and what wins when a code is defined twice."""

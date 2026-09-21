@@ -983,7 +983,14 @@ export const GUIDE: GuideSection[] = [
             "bold": true
           },
           {
-            "text": " at zero denies the feature to everybody, which is how you roll it out to one team first. No conversation can spend a run's token budget, and turning the whole thing off mid-conversation is safe — nothing is stored, so there is nothing left to clean up."
+            "text": " at zero denies the feature to everybody, which is how you roll it out to one team first. "
+          },
+          {
+            "text": "Questions per run, per person",
+            "bold": true
+          },
+          {
+            "text": " is how many one person may ask about one report; it is counted from the call record rather than from the panel, so reopening the panel does not start it again. No conversation can spend a run's token budget, and turning the whole thing off mid-conversation is safe — nothing is stored, so there is nothing left to clean up."
           }
         ]
       }

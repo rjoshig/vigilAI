@@ -56,8 +56,10 @@ self-contained HTML file served into an `iframe`. The chat is therefore a **sibl
 overlay on the page**, never a change to the document. The frozen artifact stays byte-for-
 byte what was attested to.
 
-**`api/` never imports `pipeline/`.** The context helpers that would obviously be reused
-live in `pipeline/guidance.py`, and a router cannot reach them. This is not a technicality
+**`api/` never imports a `pipeline/` stage** (ADR-071). The context helpers that would
+obviously be reused live in `pipeline/guidance.py`, which is a pure leaf a router may
+read — but `fit` and `clip` are needed by `pipeline/` too, and a helper both sides need
+belongs below both of them rather than in one of them. This is not a technicality
 to route around; it is why the design below puts the context builder in its own subpackage
 and lifts the shared helpers down rather than sideways.
 
@@ -263,7 +265,7 @@ layers of ADR-023 resolve it, and the existing screen gains a section.
 | **Model** | `chat.model` | str | *empty* | Which model answers. Empty follows the **Model** section, so nothing changes on upgrade. A cheaper model here never touches validation accuracy, because the model name is part of every cache key |
 | **Max tokens per answer** | `chat.max_tokens` | int | 800 (256–4000) | The ceiling on one answer. Too low truncates mid-sentence, which on a streamed answer is visible and alarming; too high only costs money |
 | **Temperature (%)** | `chat.temperature_pct` | int | 0 (0–100) | Zero repeats itself exactly and caches well. Raising it reads more naturally and makes the same question answerable two ways, which on a QC report is a worse trade than it looks. It is part of the cache key, so raising it re-asks everything |
-| **Questions per run** | `chat.max_questions_per_run` | int | 20 (1–200) | How long one conversation may go. Reached, the panel says so rather than failing |
+| **Questions per run, per person** | `chat.max_questions_per_run` | int | 20 (1–200) | How many questions one person may ask about one report. Counted from the call record, not from the transcript the browser sends, so reopening the panel does not reset it (ADR-072). Reached, the panel says so rather than failing |
 | **Questions per person per day** | `chat.max_questions_per_day` | int | 50 (1–500) | The per-person ceiling, and **the lever for a staged rollout**: set it to zero for people who should not have the feature yet |
 | **Transcript turns kept** | `chat.max_turns` | int | 8 (1–30) | How much history is re-sent with each question. **The main cost lever**, because every turn re-sends the ones before it. Lower it and the chat forgets sooner; raise it and each answer costs more than the last |
 | **Timeout (seconds)** | `chat.timeout_s` | int | 60 (10–300) | How long a stream may stay open before it is abandoned. An abandoned stream stores nothing |
