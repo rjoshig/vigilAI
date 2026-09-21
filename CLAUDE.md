@@ -87,6 +87,7 @@ Before starting phase N, read `docs/phase-N.md` end to end.
 | 6.18 | Trust that is earned, measured, and revocable: findings that learn their own severity from people's verdicts, a maturity level an administrator sets, trustworthiness as a dated number, nothing hidden without a record, and a random sample reviewed in full forever | `docs/phase-6.18.md` | ⬜ not started |
 | 6.19 | Say what helps, and teach it in the product: the "Helps the AI" marker on every field that reaches the model or decides what it is shown, what a failed run will not say, usage counted per person, and a Guide in each app's sidebar | `docs/phase-6.19.md` | 🟡 all built; criterion 5 needs a person (stage 2 of the rollout) |
 | 6.20 | Three roles — user, reviewer, admin — with capabilities rather than role checks, several roles per person, and a console that shows each person only their own job | `docs/phase-6.20.md` | ✅ complete |
+| 6.21 | When the shape is wrong, keep going: one resolver that widens in code then asks the model where a sheet, column or label went; report layout as admin data; anomalies no rule covers; spend made visible; guided decoding | `docs/phase-6.21.md` | ⬜ not started |
 | 7 | Real-world fit: ingest the real files, adapt parsers and prompts, correct the docs | `docs/phase-7.md` | ⬜ dormant — **only on explicit request** |
 
 **This table is part of the docs and goes stale like any other.** Update it in the same

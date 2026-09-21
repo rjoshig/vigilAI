@@ -11,8 +11,8 @@ names, no sample data.
 
 | Field | Value |
 | --- | --- |
-| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/next-steps-pending-jr9tne`, pushed. **Phase 6.20 is complete** — three roles, capabilities enforced by the API, both consoles gated, roles assigned as a set, and the single `role` column dropped. **6.19 part B is built**: each app has a Guide in its sidebar, generated from that audience's training document, switchable with `GREENLIGHT_AI_UI_GUIDE`. 6.14 and 6.17 were closed: both were complete and their tables said otherwise. **Next concrete action: 6.18b**, the maturity level, which waits on real verdicts ([`phase-7.1.md`](phase-7.1.md)) |
+| Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**; **6 in progress**; **6.21 specified, not started**; **7 dormant** (runs only on request, on the target PC) |
+| Branch | `claude/llm-validation-gaps-assessment-4qpv7y`, pushed. **Phase 6.21 is specified and not started** ([`phase-6.21.md`](phase-6.21.md)): a gap assessment against the real-file goal found the tool stops validating when a report's layout drifts, and that the drift-rescue pattern 6.15 proved is applied in two places, neither of them the one that matters. **Next concrete action: 6.21a**, one resolver under `src/greenlight_ai/resolve/`. Previous branch `claude/next-steps-pending-jr9tne`. |
 | Last updated | 2026-09-21 |
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
@@ -27,6 +27,9 @@ are open and each needs somebody other than a session:
 - **The three items under "Outstanding, needs the user"** at the foot of this block: the
   retention decision and sign-off, a model for the golden-set benchmark, and a sanitized
   shape reference.
+- **Phase 6.21** — specified 2026-09-21 and not started. This one needs no-one but a
+  session: it is ordinary build work, and it is what makes [`phase-7.md`](phase-7.md)
+  survivable. Start at 6.21a.
 
 **A branch note.** `CLAUDE.md` says a branch never carries an agent or model name and a
 tool-assigned `claude/*` name is renamed before its first push. This branch was named and
@@ -152,6 +155,90 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (a gap assessment against the real-file goal, and phase 6.21)
+
+**Branch:** `claude/llm-validation-gaps-assessment-4qpv7y` · **Phase:** 6.21 specified,
+not started · **Status:** documentation only. No code changed, no gate moved.
+
+### What was asked
+
+An objective assessment of whether the product does the thing it exists to do: read an
+OSL, a configuration and a set of reports whose format is *slightly off*, notice what
+ordinary code cannot, and hand a person a validation report they can trust — with the
+whole of it driven from the admin console so getting smarter never needs a deploy.
+
+### What the assessment found
+
+**Most of it is built.** Artifact types with scoped samples, the example library, the
+mapping interview, validation guides, scoped rules, the six field markers, the Guides —
+all there, all admin-editable. On the "teach it without engineering" axis this is ahead
+of the commercial document-AI products it was compared against, and the piece those
+products market as their differentiator — a reviewer's correction becoming a worked
+example — has existed here since 6.13.
+
+**The gap is one surface: the report side.** `checks/reports.py` names its sheets and
+columns as Python constants and matches them exactly. A real DIRT whose attribute sheet
+is called anything else produces one `could_not_evaluate` finding per requirement and
+validates nothing. The finalize gate means nothing is silently missed — but a reviewer
+meets a page of non-answers on their first real delivery.
+
+**And the fix is already in the repository, in the wrong two places.** 6.15 built
+"widen in code, then ask the model names-only, then code checks the answer, and it is
+never a pass" for compliance rules; 6.17a and 6.18f repeated it for programme
+classification. Nothing like it exists for sheets, columns or report labels, which is
+where drift actually lands. 6.16d looked at exactly this and left it, correctly, because
+named values fail at *review* severity rather than high. That reasoning holds right up
+until the moment a real file arrives, when the cost stops being a false alarm and becomes
+a tool that says nothing at all.
+
+Four other things, all verified against the call sites rather than remembered:
+
+- **`profile_anomaly` is a dead finding type.** Declared in `rules/schema.py:89` since
+  Phase 2, labelled in `user-ui/lib/display.ts`, used as an example in
+  `llm/prompts/s9_summarize.py` — and constructed nowhere in `src/`. The design doc
+  promises it. Every finding the tool makes traces back to a rule somebody authored.
+- **Nobody can see what a run costs.** Tokens are counted per call, per stage and per
+  day; there is no cost figure, no per-person token accounting, and no meter.
+- **Guided decoding was never wired up.** `design.md` has recommended it since Phase 2.
+  `llm/openai_compat.py` posts `model`, `messages`, `max_tokens`, `temperature` and
+  nothing else. Phase 7 runs on a 20–40B model, where this is the largest reliability
+  lever available for the smallest change.
+- **The PDF OSL flattens tables into paragraphs.** Most `criteria` requirements live in
+  tables, so a PDF OSL yields fewer requirements — and fewer requirements reads as
+  nothing wrong.
+
+Also noted and carried into the phase doc: four separate implementations of "lower, strip
+separators"; `pipeline/run.py:181` asserting a re-check makes no model calls while stages
+6 and 7 are both in `RECHECK_STAGES` and both can; `report/render.py` passing
+`waterfall=[]` so that section of the frozen report has always been empty;
+`<Explain>` used thirteen times in the admin console and never in the user one; and
+`Finding` carrying no confidence, so the model's own number is consumed at a floor and
+thrown away.
+
+### The four decisions the phase rests on
+
+Put to the user, answered the same day: **widen in code then ask the model** when a name
+is not found; **show spend, do not block** — the per-run ceiling stays the only refusal;
+**find anomalies both ways**, code against the configuration's own history and one capped
+model call reading the aggregate shape; and **the OSL may be a PDF and its tables
+matter**, while reports stay Excel and OCR stays out.
+
+### What was written
+
+[`phase-6.21.md`](phase-6.21.md), six lettered parts — one resolver, the layout as admin
+data, anomalies, spend made visible, the model call itself, and showing it — with eight
+acceptance criteria. Registered in both phase tables, the README index and this log.
+
+**No code was written.** The user asked for the phase document first.
+
+### Next concrete action
+
+**6.21a** — `src/greenlight_ai/resolve/`, the one ladder, and the renamed-layout fixture
+that proves it. Then 6.21e, which is a day's work for the largest reliability gain
+available before Phase 7.
 
 ---
 
