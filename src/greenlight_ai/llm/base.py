@@ -292,6 +292,9 @@ class BaseClient(ABC):
           force JSON, and the single-retry contract exists to fix a *validation*
           failure — there is nothing to re-validate here, and re-asking after the
           person has begun reading would replace text on screen.
+        - **A failure is recorded like any other call.** A stream that dies mid-answer
+          writes an `ok=False` row, as `complete` does, so it reaches the usage and
+          spend screens and counts against the caps that are read from those rows.
 
         Args:
             system: The system prompt.
@@ -330,9 +333,30 @@ class BaseClient(ABC):
         self._check_budget(stage)
         started = time.time()
         pieces: list[str] = []
-        for piece in self._send_stream(system, user):
-            pieces.append(piece)
-            yield piece
+        try:
+            for piece in self._send_stream(system, user):
+                pieces.append(piece)
+                yield piece
+        except Exception as exc:
+            # Recorded exactly as `complete` records a transport failure. It was not:
+            # the row was written only after the loop finished, so a stream that died
+            # mid-answer left no trace at all — invisible to the usage and spend
+            # screens, and free against the per-person cap that is counted from these
+            # rows. A call that failed is a call that happened.
+            self.call_log.add(
+                CallRecord(
+                    stage=stage,
+                    provider=self.provider_name,
+                    model=self.model,
+                    prompt_tokens=_estimate_tokens(system) + _estimate_tokens(user),
+                    completion_tokens=_estimate_tokens("".join(pieces)),
+                    latency_ms=int((time.time() - started) * 1000),
+                    cached=False,
+                    ok=False,
+                    error=type(exc).__name__,
+                )
+            )
+            raise
 
         text = "".join(pieces)
         # Reached only when the generator ran to completion, which is what makes

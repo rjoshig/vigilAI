@@ -7,8 +7,9 @@ Configuration fails loudly on bad input, naming the offending key
 
 from __future__ import annotations
 
+import logging
 import os
-from typing import Any, Final, Literal, Mapping
+from typing import Any, Callable, Final, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -20,6 +21,8 @@ Provider = Literal["openai", "anthropic", "mock"]
 GuidedJson = Literal["off", "auto", "on"]
 GUIDED_JSON: Final[tuple[GuidedJson, ...]] = ("off", "auto", "on")
 
+_LOG: Final = logging.getLogger(__name__)
+
 #: Defaults mirror ``.env.example``. Temperature is 0 because extraction must be
 #: reproducible: the same inputs must produce the same findings. It *is* part of the
 #: cache key — ``BaseClient._canonical`` puts it in the hashed content — so changing it
@@ -30,7 +33,12 @@ _DEFAULTS: Final[Mapping[str, str]] = {
     "LLM_API_KEY": "",
     "LLM_MODEL": "mock-model",
     "LLM_MAX_TOKENS": "2000",
-    "LLM_TEMPERATURE": "0",
+    # Whole percent, matching `llm.temperature_pct` in `config/registry.py`, because
+    # the console renders integers. This is the name the running product reads: the
+    # API and the worker resolve settings through ADR-023's layers, so the float
+    # `LLM_TEMPERATURE` below reached the CLI and nothing else. It is still honoured,
+    # with a warning, so an existing `.env` keeps working.
+    "LLM_TEMPERATURE_PCT": "0",
     "LLM_TIMEOUT_S": "120",
     "LLM_MAX_CONCURRENCY": "4",
     "LLM_MAX_TOKENS_PER_RUN": "400000",
@@ -202,7 +210,7 @@ class LLMSettings(BaseModel):
                 api_key=get("LLM_API_KEY"),
                 model=get("LLM_MODEL"),
                 max_tokens=integer("LLM_MAX_TOKENS"),
-                temperature=number("LLM_TEMPERATURE"),
+                temperature=_temperature(get, source),
                 timeout_s=number("LLM_TIMEOUT_S"),
                 max_concurrency=integer("LLM_MAX_CONCURRENCY"),
                 max_tokens_per_run=integer("LLM_MAX_TOKENS_PER_RUN"),
@@ -216,6 +224,63 @@ class LLMSettings(BaseModel):
             )
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
+
+
+def _temperature(get: Callable[[str], str], environ: Mapping[str, str]) -> float:
+    """The sampling temperature, from whichever name the deployment used.
+
+    There were two names for one setting. `config/registry.py` declares
+    ``llm.temperature_pct`` / ``LLM_TEMPERATURE_PCT`` in whole percent, which is what the
+    API and the worker read because they resolve through ADR-023's layers; `.env.example`
+    documented the float ``LLM_TEMPERATURE``, which only this function read and which
+    therefore changed the CLI and nothing else. Someone who set it on a real deployment
+    changed nothing and was told nothing.
+
+    One name wins — the percent one, because it is the one the console and the running
+    product already agree on — and the float is honoured with a warning rather than
+    ignored, so an existing `.env` keeps working and its owner finds out.
+
+    Args:
+        get: Reads a variable, falling back to the built-in default.
+        environ: The environment being read, to tell "set" from "defaulted".
+
+    Returns:
+        The temperature as a fraction, 0.0-1.0 from the percent form.
+
+    Raises:
+        ConfigError: When either value is not a number.
+    """
+    legacy = environ.get("LLM_TEMPERATURE", "").strip()
+    if legacy and not environ.get("LLM_TEMPERATURE_PCT", "").strip():
+        _LOG.warning(
+            "LLM_TEMPERATURE is deprecated and is read here only; the API and the "
+            "worker read LLM_TEMPERATURE_PCT (whole percent). Set LLM_TEMPERATURE_PCT "
+            "to %s instead.",
+            int(float(legacy) * 100) if _is_number(legacy) else "the value you want",
+        )
+        if not _is_number(legacy):
+            raise ConfigError(f"LLM_TEMPERATURE must be a number, got {legacy!r}")
+        return float(legacy)
+    raw = get("LLM_TEMPERATURE_PCT")
+    if not _is_number(raw):
+        raise ConfigError(f"LLM_TEMPERATURE_PCT must be a number, got {raw!r}")
+    return float(raw) / 100.0
+
+
+def _is_number(raw: str) -> bool:
+    """Whether a string parses as a float.
+
+    Args:
+        raw: The candidate.
+
+    Returns:
+        ``True`` when it does.
+    """
+    try:
+        float(raw)
+    except ValueError:
+        return False
+    return True
 
 
 #: The lenses a deployment may switch on (Phase 6.11e). ``single`` is the one-prompt

@@ -144,6 +144,84 @@ def test_a_fresh_claim_is_not_reclaimed(queue: JobQueue) -> None:
     assert queue.reclaim_stale(older_than_seconds=3600) == 0
 
 
+def test_a_job_that_outlives_its_workers_is_given_up_on(queue: JobQueue, session: Session) -> None:
+    """A job that kills the worker holding it must stop being retried, like any other.
+
+    `max_attempts` was consulted only in `fail`, which a worker that died never reached.
+    So a payload that reliably takes the process down — an out-of-memory parse, a
+    segfault in a native library, a container the scheduler keeps evicting — was
+    reclaimed, re-claimed and killed the next worker too, for ever, with `attempts`
+    climbing past its ceiling and nothing able to say the tool had stopped trying.
+    """
+    job = queue.enqueue("run_pipeline", run_id=1, max_attempts=2)
+
+    for _ in range(2):
+        assert queue.claim() is not None
+        assert queue.reclaim_stale(older_than_seconds=0) in (0, 1)
+
+    assert queue.claim() is None, "a job with no attempts left must not be handed out again"
+    session.refresh(job)
+    assert job.status == "failed"
+    assert job.attempts <= job.max_attempts
+    assert "no attempt remains" in job.last_error
+
+
+def test_giving_up_on_a_job_also_fails_its_run(queue: JobQueue, session: Session) -> None:
+    """A run left `running` with no job and nothing watching sits there for ever.
+
+    `fail` leaves marking the run to the worker, which is where every other dead job is
+    handled. The worker is exactly what is missing here, so the queue does it.
+    """
+    run = models.Run(
+        customer_name="Acme",
+        order_number="ORD-DEAD",
+        configuration_id="CFG-DEAD",
+        status="running",
+    )
+    session.add(run)
+    session.flush()
+    queue.enqueue("run_pipeline", run_id=run.id, max_attempts=1)
+
+    queue.claim()
+    queue.reclaim_stale(older_than_seconds=0)
+
+    session.refresh(run)
+    assert run.status == "failed"
+    assert "no attempt remains" in run.error
+    assert run.finished_at is not None
+
+
+def test_a_finished_run_is_not_reopened_by_a_stale_job(queue: JobQueue, session: Session) -> None:
+    """Only a run still queued or running is failed; a finalized one is left alone."""
+    run = models.Run(
+        customer_name="Acme",
+        order_number="ORD-DONE",
+        configuration_id="CFG-DONE",
+        status="finalized",
+    )
+    session.add(run)
+    session.flush()
+    queue.enqueue("run_pipeline", run_id=run.id, max_attempts=1)
+
+    queue.claim()
+    queue.reclaim_stale(older_than_seconds=0)
+
+    session.refresh(run)
+    assert run.status == "finalized"
+
+
+def test_giving_up_does_not_touch_a_job_with_attempts_left(
+    queue: JobQueue, session: Session
+) -> None:
+    """The ordinary case is unchanged: a restart still resumes."""
+    job = queue.enqueue("run_pipeline", run_id=1, max_attempts=3)
+    queue.claim()
+    assert queue.reclaim_stale(older_than_seconds=0) == 1
+    session.refresh(job)
+    assert job.status == "queued"
+    assert job.last_error == ""
+
+
 def test_the_locking_strategy_also_claims(factory: sessionmaker[Session]) -> None:
     """The Postgres path runs against SQLite too; only the SQL differs."""
     with factory() as session:

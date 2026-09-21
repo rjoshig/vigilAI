@@ -551,11 +551,18 @@ export const GUIDE: GuideSection[] = [
         "items": [
           [
             {
-              "text": "Accepting attribute suggestions.",
+              "text": "Recording what a delivery calls things.",
               "bold": true
             },
             {
-              "text": " After a run, Reference data lists what the tool worked out that delivery calls each attribute it could not locate — mostly read straight out of the uploaded record layout, in code, with no AI involved. Each one you accept resolves that name in code on every later run of that configuration, and turns a requirement nothing checked into a requirement that is checked. It is clicking, not writing, which is why it is first."
+              "text": " An alias on Reference data resolves a name in code, on that run and every run after it, at no token cost — and turns a requirement nothing could check into a requirement that is checked. It is the cheapest thing on this list and the one with the widest reach. (The tool also works these out for itself after a run, mostly straight from the uploaded record layout with no AI involved; "
+            },
+            {
+              "text": "accepting those is not yet on a screen in this console",
+              "bold": true
+            },
+            {
+              "text": ", so for now the aliases are the ones you maintain by hand.)"
             }
           ],
           [
@@ -983,7 +990,14 @@ export const GUIDE: GuideSection[] = [
             "bold": true
           },
           {
-            "text": " at zero denies the feature to everybody, which is how you roll it out to one team first. No conversation can spend a run's token budget, and turning the whole thing off mid-conversation is safe — nothing is stored, so there is nothing left to clean up."
+            "text": " at zero denies the feature to everybody, which is how you roll it out to one team first. "
+          },
+          {
+            "text": "Questions per run, per person",
+            "bold": true
+          },
+          {
+            "text": " is how many one person may ask about one report; it is counted from the call record rather than from the panel, so reopening the panel does not start it again. No conversation can spend a run's token budget, and turning the whole thing off mid-conversation is safe — nothing is stored, so there is nothing left to clean up."
           }
         ]
       }
@@ -997,7 +1011,7 @@ export const GUIDE: GuideSection[] = [
         "kind": "text",
         "spans": [
           {
-            "text": "Four settings are shown read-only on the Settings screen, and no console anywhere can change them: the "
+            "text": "Three settings are shown read-only on the Settings screen, and no console anywhere can change them: the "
           },
           {
             "text": "database URL",
@@ -1011,21 +1025,21 @@ export const GUIDE: GuideSection[] = [
             "bold": true
           },
           {
-            "text": ", the "
+            "text": " and the "
           },
           {
             "text": "bind address",
             "bold": true
           },
           {
-            "text": ", and the "
+            "text": ". The "
           },
           {
             "text": "master key",
             "bold": true
           },
           {
-            "text": ". Each one is needed to reach or protect the settings store itself. A database URL that lived in the database could be pointed somewhere else and then never read back; a master key stored under its own encryption cannot decrypt itself. They are environment configuration, changed where the service is deployed and nowhere else."
+            "text": " is not on the screen at all — it is not a setting, it is the thing the secrets in the settings store are encrypted with, and it lives only in the environment. Each one is needed to reach or protect the settings store itself. A database URL that lived in the database could be pointed somewhere else and then never read back; a master key stored under its own encryption cannot decrypt itself. They are environment configuration, changed where the service is deployed and nowhere else."
           }
         ]
       }
@@ -1065,14 +1079,7 @@ export const GUIDE: GuideSection[] = [
           ],
           [
             {
-              "text": "Clear the attribute suggestions. Each one is a name the tool had to work out and will have to work out again on the next delivery. Watch "
-            },
-            {
-              "text": "attribute lookups per run",
-              "bold": true
-            },
-            {
-              "text": " on Usage while you do it: if that number is not falling, the suggestions are not the ones the runs actually need, and the thing to look at is which attributes keep coming back rather than the number itself."
+              "text": "Look at what the runs could not resolve. Each name the tool had to work out is one it will have to work out again on the next delivery, and an alias fixes it for good. The findings that say a column could not be located are where to look; the tool's own suggestions for them are recorded but have no screen in this console yet."
             }
           ]
         ]

@@ -25,11 +25,12 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from greenlight_ai.chat.answer import Answer, answer_turn, split_answer
-from greenlight_ai.chat.pack import build_pack
+from greenlight_ai.chat.pack import MAX_PACK_CHARS, build_pack
 from greenlight_ai.chat.settings import ChatSettings
 from greenlight_ai.config.store import invalidate
 from greenlight_ai.db import models
@@ -56,10 +57,9 @@ def _enable(client: TestClient, api: str, **extra: Any) -> None:
         assert response.status_code == 200, response.text
 
 
-@pytest.fixture()
-def frozen(submit: Submit, worker: Worker, client: TestClient, api: str) -> int:
-    """A run taken all the way to a frozen report, which is the only kind chat sees."""
-    run_id = int(submit("geography_extra_state").json()["run_id"])
+def _freeze(client: TestClient, api: str, worker: Worker, submit: Submit, case: str) -> int:
+    """Take one case all the way to a frozen report, which is the only kind chat sees."""
+    run_id = int(submit(case).json()["run_id"])
     worker.run_once()
     for finding in client.get(f"{api}/runs/{run_id}/findings").json():
         client.patch(
@@ -72,8 +72,15 @@ def frozen(submit: Submit, worker: Worker, client: TestClient, api: str) -> int:
             f"{api}/runs/{run_id}/coverage/acknowledge",
             json={"targets": outstanding, "note": "seen by a test"},
         )
-    assert client.post(f"{api}/runs/{run_id}/finalize").status_code in (200, 201)
+    response = client.post(f"{api}/runs/{run_id}/finalize")
+    assert response.status_code in (200, 201), response.text
     return run_id
+
+
+@pytest.fixture()
+def frozen(submit: Submit, worker: Worker, client: TestClient, api: str) -> int:
+    """A run taken all the way to a frozen report."""
+    return _freeze(client, api, worker, submit, "geography_extra_state")
 
 
 def _ask(client: TestClient, api: str, run_id: int, question: str, **body: Any) -> list[dict]:
@@ -310,6 +317,209 @@ class TestSplittingTheAnswer:
         assert unusable is False
 
 
+class TestThePerRunCapIsTheServersToCount:
+    """A cap counted from what the client chose to send is not a cap (ADR-072).
+
+    `max_questions_per_run` used to be read off the transcript in the request body. A
+    panel that sent an empty transcript started again from zero, so the only thing
+    stopping a conversation running past an administrator's limit was the browser
+    agreeing to stop. It is counted from `llm_calls` now — the same rows the daily cap
+    already used, written by the server for every call in the product.
+    """
+
+    def test_an_empty_transcript_does_not_reset_it(
+        self, client: TestClient, api: str, frozen: int
+    ) -> None:
+        _enable(client, api, **{"chat.max_questions_per_run": 2})
+
+        for index in range(2):
+            events = _ask(client, api, frozen, f"Question {index}?")
+            assert any(event["type"] == "done" for event in events), events
+
+        refused = client.post(
+            f"{api}/runs/{frozen}/chat",
+            # The forgery: a client claiming this is the first question it has asked.
+            json={"question": "And one more?", "transcript": []},
+        )
+        assert refused.status_code == 422
+        assert "does not reset it" in refused.json()["detail"]
+
+    def test_the_opening_says_so_before_somebody_writes_a_question(
+        self, client: TestClient, api: str, frozen: int
+    ) -> None:
+        """The setting's own help line promises the panel says so rather than failing.
+
+        It could not, while the count lived in the POST body: the launcher appeared, the
+        person wrote a question, and the refusal arrived after they had written it.
+        """
+        _enable(client, api, **{"chat.max_questions_per_run": 1})
+        opening = client.get(f"{api}/runs/{frozen}/chat").json()
+        assert opening["enabled"] is True
+        assert opening["questions_left_on_this_run"] == 1
+
+        assert any(event["type"] == "done" for event in _ask(client, api, frozen, "One?"))
+
+        spent = client.get(f"{api}/runs/{frozen}/chat").json()
+        assert spent["enabled"] is False
+        assert "questions about this report" in spent["unavailable_reason"]
+
+    def test_it_is_counted_per_run_not_across_them(
+        self,
+        client: TestClient,
+        api: str,
+        frozen: int,
+        submit: Submit,
+        worker: Worker,
+    ) -> None:
+        """Spending the cap on one report must not close the panel on another."""
+        _enable(client, api, **{"chat.max_questions_per_run": 1})
+        assert any(event["type"] == "done" for event in _ask(client, api, frozen, "First?"))
+        assert (
+            client.post(f"{api}/runs/{frozen}/chat", json={"question": "Second?"}).status_code
+            == 422
+        )
+
+        other = _freeze(client, api, worker, submit, "baseline_match")
+
+        assert any(event["type"] == "done" for event in _ask(client, api, other, "A new report?"))
+
+
+class TestThePackFitsItsCeiling:
+    """`MAX_PACK_CHARS` was a ceiling in the docstring and a divisor in the code.
+
+    Every section was fitted to `MAX_PACK_CHARS // 6` and nothing ever added the
+    sections back up, so eight sections plus the frozen report's own text could reach
+    about 34,000 characters against a stated 24,000 — 40% over, on every question, paid
+    for in latency and tokens. Nothing measured the total, which is why nothing noticed.
+    """
+
+    def test_a_pack_stuffed_from_every_side_still_fits(
+        self, frozen: int, factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        """Every section given far more than its share, and the whole still within it."""
+        with factory() as session:
+            run = session.get(models.Run, frozen)
+            assert run is not None
+            run.notes = "n" * 40_000
+            run.delivery_notes = "d" * 40_000
+            run.config_notes_snapshot = ["c" * 8_000 for _ in range(20)]
+            run.notices = [f"notice {index}: " + "x" * 400 for index in range(80)]
+            run.coverage = [
+                {"rule_id": f"R-{index:03d}", "state": "untraced", "summary": "s" * 400}
+                for index in range(80)
+            ]
+            run.attribute_profile = {f"col_{index}": {"nulls": index} for index in range(400)}
+            for index in range(60):
+                session.add(
+                    models.Finding(
+                        run_id=frozen,
+                        finding_id=f"F-{index + 900:03d}",
+                        type="value_set",
+                        severity="medium",
+                        title=f"A stuffed finding {index}",
+                        detail="detail " * 200,
+                        engine="code",
+                    )
+                )
+            for index in range(60):
+                session.add(
+                    models.CheckDefinitionRow(
+                        name=f"Stuffed check {index}",
+                        kind="expression",
+                        severity="medium",
+                        state="active",
+                        scope="everywhere",
+                        reasoning="reasoning " * 60,
+                    )
+                )
+            session.commit()
+
+            report = session.execute(
+                sa.select(models.FinalReport).where(models.FinalReport.run_id == frozen)
+            ).scalar_one()
+            huge = tmp_path / "huge.html"
+            huge.write_text("<p>" + ("report prose " * 8_000) + "</p>", encoding="utf-8")
+            report.html_path = str(huge)
+            session.commit()
+
+            pack = build_pack(session, frozen, ChatSettings(report_aggregates=True), tmp_path)
+
+        assert len(pack.rendered()) <= MAX_PACK_CHARS, (
+            f"the pack rendered {len(pack.rendered())} characters against a ceiling of "
+            f"{MAX_PACK_CHARS}"
+        )
+        assert pack.trimmed, "a pack that had to trim must say so"
+
+    def test_an_ordinary_pack_is_not_trimmed_at_all(
+        self, frozen: int, factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        """The ceiling must not start trimming the packs the product actually builds."""
+        with factory() as session:
+            pack = build_pack(session, frozen, ChatSettings(), tmp_path)
+        assert pack.trimmed == ()
+        assert len(pack.rendered()) <= MAX_PACK_CHARS
+
+
+class TestWhatIsStreamedIsWhatWasWritten:
+    """The prose the reader sees must be the prose the model wrote, to the character.
+
+    `answer_turn` holds back the last few characters of every piece so a citation marker
+    split across two of them is never half-shown, then releases the remainder once the
+    stream closes. That release used to index into the **stripped** prose with a count of
+    **raw** characters, so an answer that opened with whitespace and never produced a
+    marker reached the reader with as many characters missing from its middle as the
+    strip had removed from its front — silently, and on the one path that exists to keep
+    a citation-less answer readable.
+    """
+
+    def _stream(self, pieces: list[str], pack: Any) -> tuple[str, Answer]:
+        class Fake:
+            def stream(self, system: str, user: str, **_: Any) -> Iterator[str]:
+                yield from pieces
+
+        shown: list[str] = []
+        final: Answer | None = None
+        for item in answer_turn(Fake(), pack, "Why?"):  # type: ignore[arg-type]
+            if isinstance(item, str):
+                shown.append(item)
+            else:
+                final = item
+        assert final is not None
+        return "".join(shown), final
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "The delivery looks consistent with the spec.",
+            "\nThe delivery looks consistent with the spec.",
+            "   ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "\n\n  Leading and trailing whitespace, no tail.  \n",
+            f"\nAll good here.\n\n{CITATION_MARKER}\nNONE",
+            f"  Padded, with a tail.\n{CITATION_MARKER}\nF-001",
+        ],
+    )
+    def test_every_character_of_the_prose_reaches_the_reader(
+        self, raw: str, frozen: int, factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        with factory() as session:
+            pack = build_pack(session, frozen, ChatSettings(), tmp_path)
+        shown, final = self._stream([raw], pack)
+        assert shown.strip() == final.prose.strip()
+        assert CITATION_MARKER not in shown
+
+    def test_it_holds_across_an_awkward_piece_boundary(
+        self, frozen: int, factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        """The marker split across pieces is the case the hold-back exists for."""
+        with factory() as session:
+            pack = build_pack(session, frozen, ChatSettings(), tmp_path)
+        whole = f"\nThe answer.\n{CITATION_MARKER}\nNONE"
+        pieces = [whole[index : index + 3] for index in range(0, len(whole), 3)]
+        shown, final = self._stream(pieces, pack)
+        assert shown.strip() == final.prose.strip() == "The answer."
+        assert CITATION_MARKER not in shown
+
+
 class TestTheCitationsAreCheckedBeforeTheyAreShown:
     """Criteria 9 and 10."""
 
@@ -431,21 +641,21 @@ class TestWhatItCosts:
         assert "limit" in refused.json()["detail"]
 
     def test_the_per_run_cap_is_enforced(self, client: TestClient, api: str, frozen: int) -> None:
+        """Asked from the questions actually put to the model, not from the body.
+
+        This used to send a transcript *claiming* two earlier questions and assert the
+        refusal — which passed while the cap was the client's to count, and asserted the
+        forgery rather than the cap (ADR-072). The questions are really asked now.
+        """
         _enable(client, api, **{"chat.max_questions_per_run": 2})
-        response = client.post(
-            f"{api}/runs/{frozen}/chat",
-            json={
-                "question": "One more?",
-                "transcript": [
-                    {"who": "You", "text": "first"},
-                    {"who": "Assistant", "text": "answer"},
-                    {"who": "You", "text": "second"},
-                    {"who": "Assistant", "text": "answer"},
-                ],
-            },
-        )
-        assert response.status_code == 422
-        assert "2 questions" in response.json()["detail"]
+        for index in range(2):
+            assert any(
+                event["type"] == "done" for event in _ask(client, api, frozen, f"Number {index}?")
+            )
+
+        refused = client.post(f"{api}/runs/{frozen}/chat", json={"question": "One more?"})
+        assert refused.status_code == 422
+        assert "2 questions about this report" in refused.json()["detail"]
 
     def test_it_never_spends_the_run_s_budget(
         self, client: TestClient, api: str, frozen: int, factory: sessionmaker[Session]

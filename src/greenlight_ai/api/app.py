@@ -8,8 +8,9 @@ means a slow model can never make the UI unresponsive (``docs/architecture.md``)
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Final
+from typing import AsyncIterator, Final, Mapping
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,6 +49,40 @@ __all__ = ["create_app", "API_PREFIX"]
 _LOG: Final = logging.getLogger(__name__)
 
 API_PREFIX: Final[str] = "/api/v1"
+
+
+#: The pair a checkout serves on, so `npm run dev` in both UIs works with no `.env`
+#: at all. A deployment on any real hostname replaces them.
+_DEV_ORIGINS: Final[tuple[str, ...]] = ("http://localhost:3000", "http://localhost:3001")
+
+
+def cors_origins(environ: Mapping[str, str] | None = None) -> list[str]:
+    """Which origins a browser may call this API from.
+
+    Read from the environment and **not** from the settings table, for the reason the
+    bind address is not: this middleware is added when the app is built, so a value the
+    console could change at runtime would be one the running process could not honour
+    (ADR-023).
+
+    It was read from nowhere at all. The list was a string literal that was then split
+    on commas — the shape a value takes when an environment read has been inlined —
+    while `docs/deployment.md` went on telling a deployment to set
+    ``GREENLIGHT_AI_CORS_ORIGINS``. Anything served from a real hostname, which is what
+    that document's own reverse-proxy section describes, therefore set the variable,
+    restarted, and watched the API refuse its own two UIs.
+
+    Args:
+        environ: The environment to read, defaulting to the real one. Injectable so a
+            test never has to mutate the process environment.
+
+    Returns:
+        The origins in the order given, or the development pair when nothing is set.
+    """
+    source = os.environ if environ is None else environ
+    raw = source.get("GREENLIGHT_AI_CORS_ORIGINS", "").strip()
+    if not raw:
+        return list(_DEV_ORIGINS)
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 def create_app(
@@ -139,14 +174,9 @@ def create_app(
     # the default Playwright renderer (greenlight_ai/report/pdf.py).
     app.state.pdf_renderer = None
 
-    origins = [
-        origin.strip()
-        for origin in "http://localhost:3000,http://localhost:3001".split(",")
-        if origin.strip()
-    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,
+        allow_origins=cors_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

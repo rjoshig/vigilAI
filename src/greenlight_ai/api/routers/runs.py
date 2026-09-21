@@ -38,7 +38,7 @@ from greenlight_ai.api.deps import (
 from greenlight_ai import availability, spend
 from greenlight_ai.auth.settings import AuthSettings
 from greenlight_ai.checks import artifact_match, field_labels
-from greenlight_ai.api.uploads import UploadError, store_upload
+from greenlight_ai.api.uploads import UploadError, limit_bytes, store_upload
 from greenlight_ai.config.store import resolve
 from greenlight_ai.db import catalog, models, repository, drift
 from greenlight_ai.db.queue import JobQueue
@@ -48,8 +48,8 @@ from greenlight_ai.llm.settings import resolved_llm_settings
 from greenlight_ai.parsers import detect
 from greenlight_ai.parsers.base import NON_REPORT_KINDS, RECORD_LAYOUT_KIND, ParseError
 from greenlight_ai.parsers.reports import parser_for
-from greenlight_ai.pipeline.s4_trace import describe_rule
 from greenlight_ai.report.pdf import renderer_available
+from greenlight_ai.rules.describe import describe_rule
 from greenlight_ai.rules.schema import Rule
 from greenlight_ai.worker.app import TASK_RECHECK, TASK_RUN_PIPELINE
 
@@ -473,7 +473,7 @@ def _store_uploads(
                 data_dir,
                 str(run.id),
                 part=part,
-                max_bytes=_upload_limit(session),
+                max_bytes=limit_bytes(session),
             )
             session.add(
                 models.RunFile(
@@ -490,22 +490,6 @@ def _store_uploads(
     except UploadError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     session.flush()
-
-
-def _upload_limit(session: Session) -> int:
-    """The largest upload this deployment accepts, in bytes.
-
-    Resolved here rather than read into a constant (ADR-023). The setting has existed
-    in the console since Phase 6.3 and nothing ever passed it, so the limit was always
-    the module default however an administrator set it (Phase 6.23c).
-
-    Args:
-        session: An open session.
-
-    Returns:
-        The limit in bytes.
-    """
-    return int(resolve(session, "uploads.max_mb").value) * 1024 * 1024
 
 
 def _finish_submission(
@@ -714,38 +698,42 @@ async def create_run(  # noqa: PLR0913 - a multipart form has many fields by nat
     catalog.seed_defaults(session)
     active = {a.key for a in catalog.load_artifacts(session, active_only=True)}
     form = await request.form()
+    try:
+        uploads = _read_uploads(form, active, osl=osl, config=config)
+        if len(uploads) < 3:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "at least one output report must be uploaded"
+            )
+        queue = _admit(session, request, order_number)
 
-    uploads = _read_uploads(form, active, osl=osl, config=config)
-    if len(uploads) < 3:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "at least one output report must be uploaded"
+        run = models.Run(
+            customer_name=customer_name.strip(),
+            order_number=order_number.strip(),
+            configuration_id=configuration_id.strip(),
+            notes=notes,
+            credit_date=_parse_date(credit_date),
+            status="queued",
+            user_id=user.id,
+            scope=scope.strip().upper(),
+            has_suppressions=has_suppressions,
+            deliverable_count=max(0, deliverable_count),
+            outputs_validated=max(0, outputs_validated),
+            delivery_notes=delivery_notes.strip(),
         )
-    queue = _admit(session, request, order_number)
+        session.add(run)
+        session.flush()
 
-    run = models.Run(
-        customer_name=customer_name.strip(),
-        order_number=order_number.strip(),
-        configuration_id=configuration_id.strip(),
-        notes=notes,
-        credit_date=_parse_date(credit_date),
-        status="queued",
-        user_id=user.id,
-        scope=scope.strip().upper(),
-        has_suppressions=has_suppressions,
-        deliverable_count=max(0, deliverable_count),
-        outputs_validated=max(0, outputs_validated),
-        delivery_notes=delivery_notes.strip(),
-    )
-    session.add(run)
-    session.flush()
-
-    _store_uploads(session, run, uploads, data_dir)
-    # The report slots were read off the raw form, so they are this endpoint's to close
-    # even though the framework closes the two declared ones.
-    await form.close()
-    return _finish_submission(
-        session, run, data_dir, user, queue, rerun_reason, discard_on_duplicate=True
-    )
+        _store_uploads(session, run, uploads, data_dir)
+        return _finish_submission(
+            session, run, data_dir, user, queue, rerun_reason, discard_on_duplicate=True
+        )
+    finally:
+        # The report slots were read off the raw form, so they are this endpoint's to
+        # close even though the framework closes the two declared ones. In a `finally`
+        # because a refusal leaks exactly as a success would: every admission check
+        # above this line rejects some ordinary submission, and each one would strand
+        # a spooled temporary file per artifact.
+        await form.close()
 
 
 def _mismatches_for(session: Session, run_id: int) -> list[models.ArtifactMismatch]:
@@ -1764,27 +1752,32 @@ async def attach_draft_files(
     catalog.seed_defaults(session)
     active = {a.key for a in catalog.load_artifacts(session, active_only=True)}
     form = await request.form()
-    uploads = _read_uploads(form, active)
-    if not uploads:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "no files were supplied")
+    try:
+        uploads = _read_uploads(form, active)
+        if not uploads:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "no files were supplied")
 
-    replaced = {upload[0] for upload in uploads}
-    for kind in replaced:
-        for existing in [f for f in run.files if f.kind == kind]:
-            candidate = data_dir / existing.storage_key
-            if candidate.exists():
-                candidate.unlink()
-            session.delete(existing)
-    session.flush()
+        replaced = {upload[0] for upload in uploads}
+        for kind in replaced:
+            for existing in [f for f in run.files if f.kind == kind]:
+                candidate = data_dir / existing.storage_key
+                if candidate.exists():
+                    candidate.unlink()
+                session.delete(existing)
+        session.flush()
 
-    _store_uploads(session, run, uploads, data_dir)
-    # Every file in the form is a spooled temporary file, and reading a form does not
-    # close them. `POST /runs` takes its OSL and config as declared parameters, which
-    # the framework closes for it; a draft edit reads **every** artifact off the raw
-    # form, so nothing else will. Closing here rather than relying on the garbage
-    # collector: an endpoint that leaks a descriptor per upload runs out of them under
-    # the load a bulk submission puts on it, long before anybody notices the warning.
-    await form.close()
+        _store_uploads(session, run, uploads, data_dir)
+    finally:
+        # Every file in the form is a spooled temporary file, and reading a form does
+        # not close them. `POST /runs` takes its OSL and config as declared parameters,
+        # which the framework closes for it; a draft edit reads **every** artifact off
+        # the raw form, so nothing else will. In a `finally` rather than on the way out:
+        # a rejected upload is the common case, not the rare one — a wrong extension, a
+        # file over the limit, a slot the catalog does not know — and closing only after
+        # the last thing that can refuse meant every refusal stranded a descriptor and a
+        # temporary file. An endpoint that leaks one per upload runs out under the load a
+        # bulk submission puts on it, long before anybody notices the warning.
+        await form.close()
     session.refresh(run)
     repository.audit(
         session,

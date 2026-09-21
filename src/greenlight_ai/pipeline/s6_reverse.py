@@ -33,7 +33,7 @@ from greenlight_ai.llm.prompts import COMPLIANCE_LOCATE_PROMPT
 from greenlight_ai.llm.prompts.schemas import ComplianceLocation
 from greenlight_ai.pipeline.guidance import preamble
 from greenlight_ai.pipeline.context import RunContext
-from greenlight_ai.pipeline.s4_trace import describe_rule
+from greenlight_ai.rules.describe import describe_rule
 from greenlight_ai.rules.schema import Evidence, Finding
 
 __all__ = ["run"]

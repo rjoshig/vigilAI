@@ -12,8 +12,51 @@ names, no sample data.
 | Field | Value |
 | --- | --- |
 | Phases complete | **0–5**, **6.1–6.4**, **6.6–6.18a/f**, **6.20**, **6.22**, **6.23**; **6 in progress**; **6.21 all six parts built** (one criterion needs a real endpoint); **8 built** (two items open — the release tag needs a push, and what a real model does when asked to compute needs a real endpoint); **7 dormant** (runs only on request, on the target PC) |
-| Branch | `claude/eager-turing-8ay4w6`, pushed. **Phase 8 is built** ([`phase-8.md`](phase-8.md), ADR-068 to ADR-070): *Ask this report* on a frozen report, answering from a context pack code assembles from the run id on every turn; the prose streams and every citation is checked against that pack before it is shown; a **Chat** section in the console with nine settings, off by default, capped and counted; nothing stored. **The release tag is cut**: `v0.6.23` on `c392f6c` (before the chat) and `v0.8.0` on `31c6fae` (with it), both pushed. **One item open**: what a real model does when asked to compute, to stray outside the pack, or to change something — the instruction is asserted, and a mock proves nothing about behaviour. **Next concrete action: 6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
+| Branch | `claude/kind-sagan-g0liu3`, pushed. **Phase 6.22 has no administrator screen** — seven endpoints, no client in `admin-ui/`, and until 2026-09-21 three documents described it as though it had one; 6.22c and 6.22d are amber for that reason and the screens are the next real piece of work in that area. Before that, **a review of the whole tree closed fifteen defects** (ADR-071 to ADR-073) — see the entry below; every gate green at 2,151 Python tests. Before that: **Phase 8 is built** ([`phase-8.md`](phase-8.md), ADR-068 to ADR-070): *Ask this report* on a frozen report, answering from a context pack code assembles from the run id on every turn; the prose streams and every citation is checked against that pack before it is shown; a **Chat** section in the console with nine settings, off by default, capped and counted; nothing stored. **The release tag is cut**: `v0.6.23` on `c392f6c` (before the chat) and `v0.8.0` on `31c6fae` (with it), both pushed. **One item open**: what a real model does when asked to compute, to stray outside the pack, or to change something — the instruction is asserted, and a mock proves nothing about behaviour. **Next concrete action: 6.18b** once real verdicts exist ([`phase-7.1.md`](phase-7.1.md)) |
 | Last updated | 2026-09-21 |
+
+**The review of 2026-09-21 closed fifteen defects, and two of them were silent.**
+Two P1s: `POST /runs/{id}/files` closed its multipart form only when the upload
+succeeded, so every refusal — a wrong extension, an oversized file, a slot the catalog
+does not know — stranded a spooled temporary file, which is the *common* case and the
+same leak the Phase 8 entry below records as fixed; and `chat/answer.py` reconciled the
+held-back tail of a streamed answer against the **stripped** prose using a count of
+**raw** characters, so an answer that opened with whitespace and produced no citation
+marker reached the reader with characters missing from its middle — "consistent with the
+spec" as "consistent wth the spec", silently, on the one path that exists to keep a
+citation-less answer readable. Both now have tests that fail without the fix.
+
+**Three of the fixes were the code catching up with a document that was already right.**
+`model-context.md` said the chat's per-run cap was "counted from `llm_calls`" while the
+code counted the transcript the browser sent, so an empty transcript reset it (ADR-072).
+It said the pack was capped "per section and as a whole" while `MAX_PACK_CHARS` was a
+ceiling in the docstring and a divisor in the code — eight sections plus the report
+measured 27,029 characters against a stated 24,000 (now 23,565). And the upload limit's
+own help line promised it was enforced while streaming, which was true of a submitter's
+artifacts and not of the admin console's own sample uploads. **When a doc and the code
+disagree here, check which one is wrong before assuming it is the doc.**
+
+**`api/` never imports `pipeline/` is now a rule rather than a wish (ADR-071).** It was
+stated in four documents, broken in three places, and enforced by nothing. It now says
+what it always meant — the API may import a pure leaf, never a **stage** — and
+`tests/test_architecture.py` enforces it, including that every module on the allow-list
+is itself stage-free. `describe_rule` moved to `rules/describe.py`, because `s4_trace`
+is a stage and that one import was the one the narrowed rule still refused. **The
+allow-list is `API_MAY_IMPORT` in that test; adding to it is a deliberate act.**
+
+**`.env.example` is the whole surface again (ADR-073).** Twenty-nine of the sixty-four
+settings were missing from it, the entire report-chat group among them — which ships off
+and is therefore the one group a deployment must find in order to use at all. A test
+fails now when a setting is added and the file is not. The same ADR retires the second
+name for one setting: `LLM_TEMPERATURE` was documented and `LLM_TEMPERATURE_PCT` was
+read, so setting the documented one changed the CLI and nothing else.
+
+**And the test found a fifteenth defect on its first run.** `.env.example` said
+`GREENLIGHT_AI_UI_THEME_LOCKED=false` while the registry's default has been `true` since
+Phase 6.14e decided it. **This layer overrides the built-in default**, so that was not a
+stale line in a document — it was every deployment that copied the file silently
+unlocking the theme again. The test checks the value beside each name now, and its type
+and bounds, not only that the name is present.
 
 **What is left, and who it needs.** Nothing in the product is half-built. Three things
 are open and each needs somebody other than a session:
@@ -180,6 +223,169 @@ validates, a replay tests, and a person approves into shadow.
 - **On a machine with Docker:** `docker compose up --build` once (Phase 3 criterion 1).
   This is the last unverified criterion in Phases 0–5.
 - Whether a data dictionary exists to seed the alias table from.
+
+---
+
+## Session: 2026-09-21 (the documents, audited against the code)
+
+**Branch:** `claude/kind-sagan-g0liu3`, pushed · **Status:** the three prose documents
+and both in-app Guides brought back into line with the code; one deployment bug and one
+dead end fixed on the way; **6.22c and 6.22d moved to amber**.
+
+**The finding that matters most: phase 6.22 has no administrator-facing screen.**
+`/product-codes`, `/attribute-terms` and `/attribute-suggestions` are seven working
+endpoints with **no client anywhere in `admin-ui/`** — `grep` returns zero hits for any
+of them. The engine reads the dictionary and the catalogue on every run; nobody can
+maintain either from the console. `docs/admin-training.md` described all three as
+screens, in detail, down to *"the screen refuses the save"* and *"nothing is in force
+until you click"* — and the **shipped in-app Guide's number-one recommended action** was
+to accept attribute suggestions, which cannot be done in the product. The documents now
+say what is true, 6.22d is amber rather than ✅, and the gap is written into
+[`phase-6.22.md`](phase-6.22.md) as its own unticked item. **The screens are still to
+build.**
+
+**A held run had one exit, and it was the dishonest one.** The artifact-match card
+offered only *accept*, which asserts the artifacts belong to the delivery on the form,
+with a reason recorded under the submitter's name and printed on the frozen report.
+Somebody who had simply mistyped a configuration id had one button, and pressing it put
+a sentence they did not mean onto a signed document. `POST /runs/{id}/cancel` has
+accepted a held run since holds existed — its guard is `("queued", "held")` — and
+nothing in the product called it. There are two buttons now, and four tests.
+
+**A deployment bug, found by reviewing a document against the code.**
+`docs/deployment.md` documented `GREENLIGHT_AI_CORS_ORIGINS`; `api/app.py` built the
+allow-list from a string literal it then split on commas. Any deployment on a real
+hostname set the variable, restarted, and had the API refuse its own two UIs, with
+nothing failing loudly. Fixed in `48c524a`.
+
+**What was stale, by document.** `presentation-brief.md` was the worst: dated 2026-09-20,
+"built through phase 6.18a", 1,514 tests, and still describing a tool that reconciles
+*three* artifacts — six phases and the whole of phase 8 had landed since. `user-training.md`
+claimed a copy control on Config history that is on the run page, told people to cancel a
+held run when they could not, quoted a refusal string that does not exist, keyed the
+record-layout fallback on the configuration id when it is customer **and** id, said the
+OSL is a Word document when the parser takes PDF, never mentioned drafts at all, and told
+reviewers their comment on a finding might become a rule — it does not; an observation
+does. `admin-training.md` said four settings are never editable (three), that Tool health
+carries per-rule statistics (it does not), and that there are three artifact kinds (four).
+
+**Two habits worth keeping.** First: when a document and the code disagree here, check
+which one is wrong — three of the review's earlier fixes were the *code* catching up with
+`model-context.md`. Second: `scripts/check_docs.sh` catches Guide drift the moment a
+training document changes, which is how every edit in this session stayed in step.
+
+**Still open.** The user Guide has no section on submitting a run, on what to do when one
+is held, or on freezing the report — gaps in coverage rather than untruths, and worth a
+pass of their own. `admin-training.md` does not mention the Notices tab, the Availability
+group, reverse-pass categories, guided decoding, or that the PII tripwire is a switch.
+
+**Next concrete action:** unchanged — 6.18b once real verdicts exist
+([`phase-7.1.md`](phase-7.1.md)) — with the 6.22 console screens now ahead of it in
+anything that touches attribute resolution.
+
+---
+
+## Session: 2026-09-21 (a review of the whole tree, and what it found)
+
+**Branch:** `claude/kind-sagan-g0liu3`, pushed · **Phase:** none — a review of everything
+built so far · **Status:** fifteen defects closed, ADR-071 to ADR-073, every gate green
+at 2,151 Python tests, 143 user-ui and 146 admin-ui.
+
+The tree was read for defects rather than for a phase: every gate was already green
+before a line changed, so nothing here is something a test was going to find. **Each fix
+carries a test that fails without it**, and where that was worth proving it was proved by
+reverting the fix and watching the test go red.
+
+**Two the reader would have seen.**
+
+`POST /runs/{id}/files` read every artifact off the raw multipart form — it declares no
+`UploadFile` parameters, so the framework closes nothing for it — and called
+`form.close()` after the last thing that could refuse. Every refusal therefore stranded a
+`SpooledTemporaryFile` per artifact, and a refusal is the *common* case: a wrong
+extension, a file over the limit, a slot the catalog does not know. `POST /runs` was
+safe only by accident, because its declared parameters make the framework read and close
+the form; its own explicit close was redundant. Both are in a `finally` now and both are
+asserted, the second so that a signature change cannot quietly turn an accident into a
+leak. **The Phase 8 entry below records this leak as fixed. It fixed the happy path.**
+
+`chat/answer.py` holds back the last few characters of every streamed piece so a citation
+marker split across two of them is never half-shown, then releases the remainder when the
+stream closes. The release indexed into the **stripped** prose with a count of **raw**
+characters. An answer that began with whitespace and never produced a marker therefore
+reached the reader with as many characters missing from its middle as the strip had
+removed from its front — `"consistent with the spec"` shown as `"consistent wth the
+spec"`. Silent, and on precisely the path that exists to keep a citation-less answer
+readable. The count is an integer now and the release is reconciled against the text as
+it streamed.
+
+**Three were the code disagreeing with a document that was right.** Worth stating as a
+habit: the register is not automatically the thing to correct.
+
+- `model-context.md` said the chat's caps were "counted from `llm_calls`". The daily one
+  was. The per-run one was counted from the transcript in the request body — the
+  client's own account of how long its conversation had been — so a panel that sent an
+  empty transcript started again from zero (ADR-072). It is counted from the call rows
+  now, which changes what the setting *means*, so the label, the help line, the refusal
+  text and both training documents changed with it: **questions per run, per person**,
+  and reopening the panel does not reset it.
+- The same file said the pack was capped "per section and as a whole". `MAX_PACK_CHARS`
+  was a ceiling in the docstring and a divisor in the code: every section was fitted to
+  `MAX_PACK_CHARS // 6` and nothing added them up. Stuffed from every side the pack
+  measured **27,029** characters against a stated 24,000; it measures 23,565 now, against
+  a running budget, and a section that arrives with nothing left is named in `trimmed`
+  rather than dropped in silence.
+- `uploads.max_mb` promised it was "enforced while streaming". It was, on a submitter's
+  artifacts. The admin console's own sample upload never passed the limit, so an
+  administrator who lowered it saw it enforced on everybody but themselves. The resolver
+  moved into `api/uploads.py` as `limit_bytes`, so there is one of it and two callers.
+
+**One convention became a rule (ADR-071).** `api/` never imports `pipeline/` was stated
+in `CLAUDE.md`, `architecture.md`, `standards/python.md` and `phase-8.md`, broken in
+`runs.py`, `admin.py` and `gate.py`, and enforced by nothing — which is how Phase 8 came
+to build `textfit.py` specifically to honour it while three imports sat there breaking
+it. The rule now says what it always meant: **a pure leaf, never a stage.** A stage owns
+a prompt, a model client and a `RunContext`; importing one into the API process drags all
+of that in, and for `describe_rule` it dragged it in to render one string. So
+`describe_rule` moved down to `rules/describe.py` beside the `Rule` it renders, and
+`tests/test_architecture.py` parses every module under `api/` and fails on a stage
+import, on any leaf outside `API_MAY_IMPORT`, and on any module *on* that list that
+imports a stage itself — so the list narrows the rule rather than holing it.
+
+**And one file was a third of the way out of date (ADR-073).** Twenty-nine of the
+sixty-four settings had no line in `.env.example`, including all nine of the report
+chat's — the group that ships off and therefore the one a deployment has to find in
+order to use at all. They are all in it now, and a test fails when the next one is
+added without it. The same ADR retires `LLM_TEMPERATURE`: it and `LLM_TEMPERATURE_PCT`
+were two names for one value read by two code paths, and `.env.example` documented the
+one the API and the worker do not read, so setting it changed the CLI and said nothing.
+The percent form wins; the float is honoured where it is read, with a warning.
+
+**The rest, briefly.** A job that kills the worker holding it is now given up on —
+`max_attempts` was consulted only in `fail()`, which a worker that died never reached, so
+a poison payload was reclaimed and re-claimed for ever with `attempts` climbing past its
+ceiling. `expand()` and `conflicts()` in `product_codes.py` now answer the identity
+question the same way, so `SCORE_V3` and `score-v3` in two codes are one attribute rather
+than two, which is what that module's opening paragraph has always claimed. A stream that
+dies mid-answer writes an `ok=False` row like `complete` does, instead of leaving no
+trace in the usage figures or the caps counted from them. `store_upload` unlinks its
+partial file on any failure, not only on a refusal. Two reviewers pressing Finalize at
+once get the 409 the unique constraint means rather than a 500. And the tautology in
+`pack.py` is gone.
+
+**One the test found, not the review.** `.env.example` said the theme lock was off while
+the registry has defaulted it on since Phase 6.14e — and because this layer overrides the
+built-in default, every deployment that copied the file was unlocking the theme rather
+than merely documenting it wrongly. The `.env.example` test checks values now, not only
+names.
+
+**Not done, and deliberately.** The two items the review raised and the user did not ask
+for: `actions/setup-python@v5` is still unpinned in `ci.yml` (flagged `TODO(human)` in
+two places; CI is `workflow_dispatch`-only, so the exposure is small), and this branch
+still carries a harness-assigned `claude/*` name, which `CLAUDE.md` forbids and which
+Phase 6.21 hit too.
+
+**Next concrete action:** unchanged — 6.18b once real verdicts exist
+([`phase-7.1.md`](phase-7.1.md)).
 
 ---
 

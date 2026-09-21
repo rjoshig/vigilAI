@@ -14,10 +14,14 @@ from greenlight_ai.llm.prompts import TRACE_PROMPT
 from greenlight_ai.llm.prompts.schemas import TraceResponse
 from greenlight_ai.pipeline.context import RunContext
 from greenlight_ai.pipeline.guidance import guide_block, preamble
+from greenlight_ai.rules.describe import describe_rule, render_value
 from greenlight_ai.rules.normalize import AliasTable
 from greenlight_ai.rules.schema import SET_TYPES, ConfigElement, Rule, Trace
 
-__all__ = ["run", "shortlist", "exact_match", "describe_rule"]
+#: `describe_rule` is **not** re-exported: it lives in `rules/describe.py` so the API
+#: can reach it without reaching a stage (ADR-071), and one home means one import to
+#: read rather than two that can drift.
+__all__ = ["run", "shortlist", "exact_match"]
 
 _LOG: Final = logging.getLogger(__name__)
 
@@ -146,25 +150,8 @@ def _conditions_key(rule: Rule, aliases: AliasTable) -> frozenset[tuple[str, str
         compare equal.
     """
     return frozenset(
-        (aliases.resolve(c.field_name), c.operator, _render(c.value)) for c in rule.conditions
+        (aliases.resolve(c.field_name), c.operator, render_value(c.value)) for c in rule.conditions
     )
-
-
-def _render(value: object) -> str:
-    """Render a condition value for comparison.
-
-    Args:
-        value: The value.
-
-    Returns:
-        A stable string. Whole floats lose their trailing zero so a config's ``755.0``
-        matches an OSL's ``755``.
-    """
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    if isinstance(value, (list, tuple)):
-        return ",".join(_render(v) for v in value)
-    return str(value)
 
 
 def _fields(rule: Rule | None, aliases: AliasTable) -> frozenset[str]:
@@ -253,27 +240,3 @@ def _describe_element(element: ConfigElement) -> str:
     if element.description:
         parts.append(element.description)
     return " — ".join(parts)
-
-
-def describe_rule(rule: Rule | None) -> str:
-    """Render a rule as one line for a prompt or a finding.
-
-    Args:
-        rule: The rule, or ``None``.
-
-    Returns:
-        A short description. Carries field names, operators, and thresholds only, never
-        a sample row (ADR-003).
-    """
-    if rule is None:
-        return "(no rule)"
-    if rule.req_type in SET_TYPES:
-        mode = rule.mode or "include"
-        return f"{rule.req_type} — {mode} {sorted(rule.values)}"
-    if rule.req_type == "waterfall":
-        return f"waterfall — steps {list(rule.steps)}"
-    if rule.req_type == "quantity":
-        return f"quantity — {rule.quantity}"
-    parts = [f"{c.field_name} {c.operator} {_render(c.value)}" for c in rule.conditions]
-    joiner = f" {rule.logic} "
-    return f"{rule.req_type} — {joiner.join(parts)} (action: {rule.action})"

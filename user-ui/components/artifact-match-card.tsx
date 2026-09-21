@@ -14,9 +14,17 @@
  *
  * Once accepted the panel stays, showing what was waived and why, because a reviewer
  * signing the delivery should see it.
+ *
+ * **There are two ways out, and there has to be.** Accepting says the artifacts belong
+ * together. Cancelling says the form was wrong. Only the first was ever offered here,
+ * so somebody who had simply mistyped a configuration id had one button and it asserted
+ * something untrue — and that assertion is printed on the final report over their name.
+ * A hold with one exit is a hold that teaches people to write a reason they do not mean.
+ * `POST /runs/{id}/cancel` has accepted a held run since the hold existed; nothing in
+ * the product called it.
  */
 
-import { AlertTriangle, ArrowRight, Check, Play } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Play, X } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -36,7 +44,7 @@ interface ArtifactMatchCardProps {
   mismatches: ArtifactMismatch[];
   /** True while the run is held: the accept control is only shown then. */
   held: boolean;
-  /** Called once the run has been accepted, so the page re-reads it. */
+  /** Called once the run has been accepted or cancelled, so the page re-reads it. */
   onAccepted?: () => void;
 }
 
@@ -75,6 +83,26 @@ export function ArtifactMatchCard({ runId, mismatches, held, onAccepted }: Artif
       onAccepted?.();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.detail : "Could not accept.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * The other way out: the artifacts are fine and the form was wrong.
+   *
+   * No reason is asked for, because there is nothing to waive — the run is discarded
+   * rather than validated against a premise nobody stands behind. Nothing has been sent
+   * to the model at this point, so it costs what it says it costs.
+   */
+  async function cancel() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.cancelRun(runId);
+      onAccepted?.();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.detail : "Could not cancel the run.");
     } finally {
       setBusy(false);
     }
@@ -167,13 +195,18 @@ export function ArtifactMatchCard({ runId, mismatches, held, onAccepted }: Artif
               placeholder="Pick one above, or write your own."
             />
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => void accept()} disabled={busy}>
                 <Play className="mr-1 h-4 w-4" aria-hidden />
                 {busy ? "Starting…" : "Accept and run"}
               </Button>
+              <Button variant="outline" onClick={() => void cancel()} disabled={busy}>
+                <X className="mr-1 h-4 w-4" aria-hidden />
+                {busy ? "Cancelling…" : "The form was wrong — cancel"}
+              </Button>
               <span className="text-xs text-muted-foreground">
-                Recorded with your name, and shown on the final report.
+                Accepting is recorded with your name and shown on the final report. Cancelling costs
+                nothing: no model call has been made.
               </span>
             </div>
           </div>

@@ -111,6 +111,28 @@ def test_the_run_becomes_finalized(reviewed: int, client: TestClient, api: str) 
     assert detail["finalized"] is True
 
 
+def test_two_reviewers_finalizing_at_once_get_the_same_refusal(
+    reviewed: int, client: TestClient, api: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check at the top of `finalize` is a read, and a read is not a lock (ADR-005).
+
+    Two reviewers pressing Finalize in the same moment both pass it. What actually holds
+    ADR-005 is the unique constraint on `final_reports.run_id` — which refused the second
+    with an `IntegrityError` and a 500, so the one case the constraint exists for read to
+    the reviewer as "the tool is broken" rather than "somebody got there first". The
+    race is simulated here by making the pre-check miss, which is exactly what the loser
+    of it experiences.
+    """
+    from greenlight_ai.api.routers import reports as reports_router
+
+    monkeypatch.setattr(reports_router, "_stored", lambda session, run_id: None)
+    first = client.post(f"{api}/runs/{reviewed}/finalize")
+    assert first.status_code in (200, 201)
+    second = client.post(f"{api}/runs/{reviewed}/finalize")
+    assert second.status_code == 409, second.text
+    assert "never regenerated" in second.json()["detail"]
+
+
 def test_a_second_finalize_is_refused(reviewed: int, client: TestClient, api: str) -> None:
     """ADR-005: never regenerated."""
     assert client.post(f"{api}/runs/{reviewed}/finalize").status_code == 201

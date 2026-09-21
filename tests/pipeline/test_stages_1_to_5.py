@@ -14,7 +14,8 @@ import pytest
 from greenlight_ai.llm import LLMSettings, MockClient
 from greenlight_ai.pipeline.context import STAGE_ORDER, RunContext
 from greenlight_ai.pipeline.run import PipelineError, recheck, run_pipeline
-from greenlight_ai.pipeline.s4_trace import describe_rule, exact_match, shortlist
+from greenlight_ai.pipeline.s4_trace import exact_match, shortlist
+from greenlight_ai.rules.describe import describe_rule
 from greenlight_ai.rules.schema import Condition, ConfigElement, Rule
 
 CORE = ("s1_parse", "s2_extract", "s3_describe", "s4_trace", "s5_compare")

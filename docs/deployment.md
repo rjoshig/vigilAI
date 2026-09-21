@@ -19,7 +19,7 @@ file is gitignored and never contains customer data.
 | --- | --- | --- |
 | `LLM_PROVIDER` | `openai` (also vLLM, TGI, Ollama, gateways) · `anthropic` · `mock` | `mock` |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Endpoint, key, model. Switching model = edit + worker restart | — |
-| `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`, `LLM_TIMEOUT_S` | Per-call limits; temperature stays 0 | 2000 / 0 / 120 |
+| `LLM_MAX_TOKENS`, `LLM_TEMPERATURE_PCT`, `LLM_TIMEOUT_S` | Per-call limits; temperature stays 0 and is whole percent (ADR-073 — the float `LLM_TEMPERATURE` is deprecated and read by the CLI alone) | 2000 / 0 / 120 |
 | `LLM_MAX_CONCURRENCY` | Calls in flight per worker | 4 |
 | `LLM_MAX_TOKENS_PER_RUN` | Budget; a run that exceeds it stops and is flagged | — |
 | `LLM_LOG_PROMPTS` | Log prompt text. **Never true in production** | `false` |
@@ -29,7 +29,7 @@ file is gitignored and never contains customer data.
 | `GREENLIGHT_AI_RETENTION_DAYS` | Purge window | 90 |
 | `GREENLIGHT_AI_MAX_UPLOAD_MB` | Upload size limit | 50 |
 | `GREENLIGHT_AI_API_URL` | Where the UIs proxy `/api/*` | `http://api:8000` |
-| `GREENLIGHT_AI_CORS_ORIGINS` | Allowed origins (the two UI URLs) | localhost dev origins |
+| `GREENLIGHT_AI_CORS_ORIGINS` | Allowed browser origins for the API, comma-separated. **Set it on any real hostname**: unset means the two localhost ports, and a deployment that leaves it has its own UIs refused. Read at startup, never from the console | localhost dev origins |
 | `GREENLIGHT_AI_DRAFT_DAYS` | How long an unsubmitted draft is kept (ADR-065) | 5 |
 | `GREENLIGHT_AI_CHAT` | Ask the frozen report (ADR-068). **Off unless set**, so an install that upgrades gains no outbound model surface by accident. `chat.model` unset means it answers with `LLM_MODEL` | `false` |
 

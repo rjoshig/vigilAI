@@ -2,7 +2,7 @@
 
 **Audience:** whoever operates the tool: enables users, sets the model, tunes limits,
 and turns what reviewers know into rules. **Covers:** the admin console at
-`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after Phase 8.
+`http://<host>:3001`. **Last aligned with the code:** 2026-09-21, after the Phase 8 review follow-up.
 
 Kept current under `docs/phase-6.5.md`: re-read against the product after every major
 milestone, and checked roughly every ten commits per `CLAUDE.md`.
@@ -152,9 +152,11 @@ the check runs.
 
 ## Artifact types
 
-What the tool accepts, in three tabs so the kinds are never confused: **Requirements
+What the tool accepts, in tabs so the kinds are never confused: **Requirements
 (OSL)**, a Word or PDF document; **Solution Canvas (ETL configuration)**, the config
-JSON; and **Reports**, the Excel workbooks. Named values and validation guides live
+JSON; **Record layout**, the delivered file's own schema, which is the one built-in type
+that is **optional** (ADR-060) — a delivery that carries none is checked exactly as it
+was before the slot existed; and **Reports**, the Excel workbooks. Named values and validation guides live
 under Reports, because that is what they point into. Every type shows its definition
 version as `v1.0`, `v1.1`, … (the first save is `v1.0`). For each type:
 
@@ -532,7 +534,9 @@ changed what and from what.
   leaves the console open to anyone who can reach it.
 - **Throughput.** Runs in flight, runs started per window, the window, the longest
   acceptable queue wait, and queued runs per order number.
-- **Uploads and Retention.** The size limit, and how long runs are kept. Shortening
+- **Uploads and Retention.** The size limit, how long runs are kept, and — separately —
+  how long an **unsubmitted draft** is kept, which is five days by default because a
+  half-filled form is not a delivery. Submitting a draft moves it onto the run window. Shortening
   retention asks for a second click: the next sweep deletes anything past the new
   window.
 - **Appearance.** The **default theme** every browser starts on, in both apps, and
@@ -549,61 +553,68 @@ changed what and from what.
 
 ## Reference data
 
-**The attribute dictionary** is the one to keep filled. One entry per attribute — the
-name the OSL uses — and one **spelling** for each way an artifact writes it. When a
-check goes looking for `AT01` and the DIRT carries `debsc_burs_atyrt_at01_1`, a spelling
-recorded here resolves it in code, on that run and every run after it, at no cost.
-Without one the tool is honest rather than wrong — it says it could not tell which
-column is which and names the closest — but a requirement it cannot resolve is a
-requirement nothing checked.
+**What this screen actually has today: three cards.** Attribute aliases, field labels,
+and masked columns. Read the next two paragraphs before the rest of this section,
+because the attribute dictionary, attribute suggestions and product codes described
+below are **built in the engine and have no screen in this console yet**. The pipeline
+uses all three on every run; what is missing is the page an administrator edits them on.
+They are reached through the API (`/api/v1/admin/attribute-terms`,
+`/attribute-suggestions`, `/product-codes`) or by seeding the database directly, which
+in practice means asking whoever runs the deployment.
 
-One name means one attribute. If you try to record a spelling another entry already
-claims, the screen refuses and tells you what to do instead: the two are usually the
-same attribute written two ways, so record the second wording as another **spelling** of
-the first entry rather than as an entry of its own.
+That is a real gap and it is recorded as one rather than smoothed over: an administrator
+reading a page that describes buttons which are not there loses confidence in everything
+else the page says. The concepts below are worth knowing anyway, because they decide what
+a run can resolve and what it cannot.
 
-**Attribute suggestions** is where the filling actually happens, and it costs you almost
-nothing. After a run, the screen lists what the tool worked out that delivery calls each
-attribute it could not locate. Most of those come from the **record layout** the
-delivery uploaded, read in code with no AI involved — the layout declared exactly one
-field resembling what the order asked for, so it said so. The rest come from the AI,
-asked only where the layout was silent, and those carry the reasoning so you can judge
-them. Nothing is in force until you click. Each suggestion shows how many runs met it: a
-mapping seen on every delivery from a customer is that customer's vocabulary; one seen
-once may be a one-off workbook. Accept it and the tool stops asking.
-
-By default accepting records the spelling **for every artifact**, not only the one it
-was seen in, and that default is deliberate: a customer who calls a field one thing in
-their DIRT calls it that in their record layout too, and narrowing it would leave every
-other check still asking the question you just answered. You can narrow it when you have
-reason to.
-
-**Product codes** are for orders written as *"deliver all attributes from ABC"* rather
-than as a list. Record the code and the attributes it contains, and the tool expands it
-itself — in code, never by asking the AI what a code contains, because an AI asked that
-answers plausibly and would be believed. A code the OSL names and this screen does not
-define produces a **high-severity finding**, not a silent pass: an undefined code would
-otherwise expand to no attributes and the delivery would pass because the tool could not
-say what was asked for. An attribute two codes share is one attribute with one output
-name, and the screen refuses a save that would make two codes disagree about it.
-
-**Aliases** are the dictionary's predecessor. They still work and are still read on every
-run beside the dictionary, so nothing that matched before stops matching. When you want
-to tidy up there is a **copy into the dictionary** button that shows you exactly what it
-would write before it writes anything, and it only ever adds.
+**Aliases** are what you have. One line per way an artifact writes an attribute: a check
+goes looking for `AT01`, the DIRT carries `debsc_burs_atyrt_at01_1`, and an alias
+recorded here resolves it in code, on that run and every run after it, at no token cost.
+Without one the tool is honest rather than wrong — it says it could not tell which column
+is which and names the closest — but a requirement it cannot resolve is a requirement
+nothing checked. This is the card that pays for itself fastest.
 
 **Masked columns** name the report columns whose values are replaced before anything
 reaches the model. Add to it whenever a new layout carries personal data. This card is
-**administrators only**, and a reviewer sees the screen without it: the aliases, the
-dictionary and field labels are theirs, and naming a masked column is the one control
-here whose failure is invisible.
+**administrators only**, and a reviewer sees the screen without it: the aliases and the
+field labels are theirs, and naming a masked column is the one control here whose failure
+is invisible.
+
+**Field labels** record what this delivery calls the things the tool already checks.
+
+### Built, and not yet on a screen
+
+**The attribute dictionary** is the alias table's successor: one entry per attribute with
+one **spelling** per way an artifact writes it, so one name means one attribute rather
+than a flat list of pairs. The engine reads it on every run beside the aliases, so
+nothing that matched before stops matching.
+
+**Attribute suggestions** are what the tool worked out a delivery calls each attribute it
+could not locate. Most come from the **record layout** the delivery uploaded, read in
+code with no AI involved — the layout declared exactly one field resembling what the
+order asked for. The rest come from the model, asked only where the layout was silent,
+and carry their reasoning. Each records how many runs met it. **Nothing a suggestion says
+is in force until a person accepts it**; that rule is in the engine, not in a screen, so
+it holds however they are accepted.
+
+**Product codes** are for orders written as *"deliver all attributes from ABC"* rather
+than as a list. The code and its attributes are recorded, and the tool expands it in
+code — never by asking the model what a code contains, because a model asked that answers
+plausibly and would be believed. A code the OSL names and the catalogue does not define
+produces a **high-severity finding**, not a silent pass: an undefined code would
+otherwise expand to no attributes and the delivery would pass because the tool could not
+say what was asked for. An attribute two codes share is one attribute with one output
+name, and a save that would make two codes disagree is refused by the API.
+
 
 ## Usage
 
 Three tabs, because three different questions get asked of this screen.
 
-**Tool health** is runs per day, tokens, cache hit rate, **what it cost**, and the
-per-rule statistics. The cache hit rate is the number to watch: identical content is
+**Tool health** is runs, duration at the median and the 95th percentile, failure rate,
+tokens, cache hit rate, how often the model returned unusable JSON, the false-positive
+rate, the decisions made and **what it cost**. Per-rule statistics are on **Rules**, not
+here. The cache hit rate is the number to watch: identical content is
 never sent to the model twice, and a rate that drops means something is changing prompts
 or inputs on every run.
 
@@ -817,12 +828,13 @@ account that everything is attributed to, it holds every role, and nothing is ga
 
 Six things are worth your time, and they are not equally worth it. In order:
 
-1. **Accepting attribute suggestions.** After a run, Reference data lists what the tool
-   worked out that delivery calls each attribute it could not locate — mostly read
-   straight out of the uploaded record layout, in code, with no AI involved. Each one you
-   accept resolves that name in code on every later run of that configuration, and turns
-   a requirement nothing checked into a requirement that is checked. It is clicking, not
-   writing, which is why it is first.
+1. **Recording what a delivery calls things.** An alias on Reference data resolves a
+   name in code, on that run and every run after it, at no token cost — and turns a
+   requirement nothing could check into a requirement that is checked. It is the
+   cheapest thing on this list and the one with the widest reach. (The tool also works
+   these out for itself after a run, mostly straight from the uploaded record layout
+   with no AI involved; **accepting those is not yet on a screen in this console**, so
+   for now the aliases are the ones you maintain by hand.)
 2. **Worked examples.** One example of a judgement the tool got wrong, at the stage it
    got it wrong, changes its answers on every run afterwards. Nothing else you *write*
    has that reach for that little effort.
@@ -901,16 +913,19 @@ malfunction even when it is right.
 counted like any other, and the section shows how many have been asked in the last
 thirty days beside the caps. **Transcript turns kept** is the main lever: every turn
 re-sends the ones before it. **Questions per person per day** at zero denies the feature
-to everybody, which is how you roll it out to one team first. No conversation can spend
+to everybody, which is how you roll it out to one team first. **Questions per run, per
+person** is how many one person may ask about one report; it is counted from the call
+record rather than from the panel, so reopening the panel does not start it again. No conversation can spend
 a run's token budget, and turning the whole thing off mid-conversation is safe — nothing
 is stored, so there is nothing left to clean up.
 
 <!-- guide 8: What is never editable, and why -->
 ## What is never editable, and why
 
-Four settings are shown read-only on the Settings screen, and no console anywhere can
-change them: the **database URL**, the **data directory**, the **bind address**, and the
-**master key**. Each one is needed to reach or protect the settings store itself. A
+Three settings are shown read-only on the Settings screen, and no console anywhere can
+change them: the **database URL**, the **data directory** and the **bind address**. The
+**master key** is not on the screen at all — it is not a setting, it is the thing the
+secrets in the settings store are encrypted with, and it lives only in the environment. Each one is needed to reach or protect the settings store itself. A
 database URL that lived in the database could be pointed somewhere else and then never
 read back; a master key stored under its own encryption cannot decrypt itself. They are
 environment configuration, changed where the service is deployed and nowhere else.
@@ -925,8 +940,7 @@ environment configuration, changed where the service is deployed and nowhere els
 4. Check the change history on Settings for anything you did not expect.
 5. Confirm the artifact types still match what customers actually send; add a sample
    for any layout that surprised the detector.
-6. Clear the attribute suggestions. Each one is a name the tool had to work out and
-   will have to work out again on the next delivery. Watch **attribute lookups per run**
-   on Usage while you do it: if that number is not falling, the suggestions are not the
-   ones the runs actually need, and the thing to look at is which attributes keep coming
-   back rather than the number itself.
+6. Look at what the runs could not resolve. Each name the tool had to work out is one
+   it will have to work out again on the next delivery, and an alias fixes it for good.
+   The findings that say a column could not be located are where to look; the tool's own
+   suggestions for them are recorded but have no screen in this console yet.

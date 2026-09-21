@@ -106,13 +106,17 @@ mypy src/          # type-check   (strict mode)
 | `pipeline/` | One module per stage 1–9, the orchestrator, resume logic | `parsers/`, `rules/`, `llm/`, `checks/` |
 | `checks/` | Report checks per `req_type`, expression evaluator for admin-defined checks, compliance-rule presence | `rules/` |
 | `db/` | SQLAlchemy models (the tables in `docs/design.md` "Data model"), Alembic migrations, session helpers | nothing internal |
-| `api/` | FastAPI app, routers, Pydantic wire models, the single auth dependency (ADR-008) | `db/`, `worker/` (enqueue only) |
+| `api/` | FastAPI app, routers, Pydantic wire models, the single auth dependency (ADR-008) | `db/`, `chat/`, `worker/` (enqueue only), the pure `pipeline/` leaves ADR-071 names |
 | `worker/` | Procrastinate app, task that runs the pipeline for a run id, retention purge | `pipeline/`, `db/` |
 | `report/` | Jinja2 one-page HTML report, freeze, PDF via Playwright | `db/` |
 | `cli.py` | Command-line entry point (`greenlight-ai run …`) | `pipeline/` |
 
-Keep the arrows pointing down: `api/` never imports `pipeline/`; `pipeline/` never imports
-`api/`. `__init__.py` is for re-exports only.
+Keep the arrows pointing down. `api/` never imports a **pipeline stage** — `run.py` or
+any `sN_*.py`, each of which owns a prompt, a model client and a `RunContext`; it may
+import a pure **leaf** under `pipeline/` (`context`, `coverage`, `guidance`), and that
+allow-list is enforced by `tests/test_architecture.py` (ADR-071). Shared code that both
+sides need moves **down** instead — `textfit.py` and `rules/describe.py` are the two
+worked examples. `pipeline/` never imports `api/`. `__init__.py` is for re-exports only.
 
 ## Testing
 

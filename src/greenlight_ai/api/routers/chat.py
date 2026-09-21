@@ -80,9 +80,15 @@ NOT_SAVED: Final[str] = (
 class ChatQuestion(BaseModel):
     """One question and the conversation it belongs to.
 
-    The transcript comes from the browser because nothing is stored server-side. It is
-    capped here as well as in the panel, so a client that ignores the cap costs its own
-    request rather than the deployment's budget.
+    The transcript comes from the browser because nothing is stored server-side, and its
+    length is capped here as well as in the panel so an oversized body is refused before
+    anything is assembled.
+
+    **The per-run question cap is not counted from it.** Counting the transcript meant
+    counting what the client chose to send: an empty one reset the conversation's count
+    and the cap meant nothing. It is counted from `llm_calls` instead, against this run
+    and this person — the same rows the daily cap already uses, which are written by the
+    server and cannot be argued with.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -124,6 +130,9 @@ class ChatOpening(BaseModel):
     trimmed: list[str] = Field(default_factory=list)
     aggregates_included: bool = False
     max_questions_per_run: int = 0
+    #: How many of those are left for this person on this run, so the panel can say so
+    #: before somebody writes a question it will refuse.
+    questions_left_on_this_run: int = 0
     questions_left_today: int = 0
 
 
@@ -172,6 +181,42 @@ def _frozen_or_refuse(session: Session, run: models.Run) -> None:
             status.HTTP_409_CONFLICT,
             f"run {run.id} has no frozen report; the chat answers about finished reports only",
         )
+
+
+def _asked_about(session: Session, run_id: int, user_id: int | None) -> int:
+    """How many questions this person has already asked about this run.
+
+    Read from `llm_calls` rather than from the transcript the browser sent. The
+    transcript was the client's own account of how long the conversation was, so a
+    client that sent an empty one started again from zero and the per-run cap an
+    administrator set was a suggestion. These rows are the server's.
+
+    Nothing is stored about a conversation and nothing here changes that: a call row
+    already exists for every call in the product, and it says which run and which person
+    without saying anything about what was asked (ADR-070).
+
+    Args:
+        session: The request's session.
+        run_id: The run being asked about.
+        user_id: The asker.
+
+    Returns:
+        The count, cache hits included, for the same reason the daily count includes
+        them: a question answered from the cache still used the feature.
+    """
+    if user_id is None:
+        return 0
+    return int(
+        session.execute(
+            sa.select(sa.func.count())
+            .select_from(models.LlmCall)
+            .where(
+                models.LlmCall.stage == answer_module.STAGE,
+                models.LlmCall.run_id == run_id,
+                models.LlmCall.user_id == user_id,
+            )
+        ).scalar_one()
+    )
 
 
 def _asked_today(session: Session, user_id: int | None) -> int:
@@ -271,6 +316,22 @@ def chat_opening(
             questions_left_today=0,
         )
 
+    # The per-run cap is answerable here now that it is counted from the call rows
+    # rather than from a transcript only the POST body carries. Its own help line says
+    # "reached, the panel says so rather than failing" — which was not true of a cap the
+    # opening could not see: the launcher appeared, the person typed, and the refusal
+    # arrived after they had written the question.
+    asked_here = _asked_about(session, run.id, user.id)
+    if asked_here >= settings.max_questions_per_run:
+        return ChatOpening(
+            enabled=False,
+            unavailable_reason=(
+                f"You have asked {settings.max_questions_per_run} questions about this "
+                "report, which is the limit an administrator has set."
+            ),
+            questions_left_today=left,
+        )
+
     pack = _pack_for(session, run, settings, data_dir)
     return ChatOpening(
         enabled=True,
@@ -279,6 +340,7 @@ def chat_opening(
         trimmed=list(pack.trimmed),
         aggregates_included=pack.aggregates_included,
         max_questions_per_run=settings.max_questions_per_run,
+        questions_left_on_this_run=max(0, settings.max_questions_per_run - asked_here),
         questions_left_today=left,
     )
 
@@ -424,13 +486,13 @@ def chat_answer(
             "which is the limit an administrator has set",
         )
 
-    asked = sum(1 for turn in payload.transcript if str(turn.get("who", "")) != "Assistant")
-    if asked >= settings.max_questions_per_run:
+    if _asked_about(session, run.id, user.id) >= settings.max_questions_per_run:
         raise HTTPException(
             422,
-            f"this conversation has reached {settings.max_questions_per_run} questions, "
-            "which is the limit an administrator has set. Close the panel and open it "
-            "again to start a new one.",
+            f"you have asked {settings.max_questions_per_run} questions about this "
+            "report, which is the limit an administrator has set. Reopening the panel "
+            "does not reset it; the report and the run screens show everything the "
+            "answers were built from.",
         )
 
     return StreamingResponse(

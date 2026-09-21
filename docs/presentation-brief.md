@@ -7,24 +7,33 @@ design documents, and management briefings. Everything here is at the level a us
 a manager needs; engineering detail lives in the repository. Diagrams are in Mermaid
 so they render in most tools and can be redrawn in any.
 
-**As of:** 2026-09-20. The tool is **built through phase 6.18a and 6.18f** and is ahead
-of its first UAT: the pipeline, both apps, the frozen report, the learning loop, and the
-machinery that will let a reviewer stop reading every finding. It has been run end to end
-against a real commercial model, not only the scripted stand-in. Timing figures in
-sections 10 and 11 are expected values to be confirmed in UAT, not measurements — and
-where a number *has* been measured, this document says so and says what it was measured
-on.
+**As of:** 2026-09-21. The tool is **built through phase 6.23, plus phase 8**, and is
+ahead of its first UAT: the pipeline, both apps, the frozen report, the learning loop,
+three roles, the machinery that will let a reviewer stop reading every finding, and — new
+since the last revision of this brief — a chat box on the finished report that answers
+questions about that one run. It has been run end to end against a real commercial model,
+not only the scripted stand-in. **2,169 automated tests**, both applications building,
+every linter and type checker clean.
+
+Timing and cost figures in sections 10 and 11 are expected values to be confirmed in UAT,
+not measurements — and where a number *has* been measured, this document says so and says
+what it was measured on. Section 13 measures the design against published practice for
+building AI systems, including where it falls short; a brief that scored itself full marks
+would not be worth reading.
 
 ---
 
 ## 1. The problem, in one paragraph
 
 Every credit-data delivery is checked by a person before it goes to the customer.
-The check reconciles three things: what the customer asked for (the **OSL**, a Word
+The check reconciles three things, and a fourth where the delivery supplies it: what the
+customer asked for (the **OSL**, a Word
 document called the Order Specification Letter), what the extract was configured to
 do (the **ETL configuration**, a JSON file from the Solution Canvas), and what
 actually came out (the **reports**, Excel workbooks: a data-integrity report called
-the DIRT, field and state distributions, counts, billing). Today an associate reads
+the DIRT, field and state distributions, counts, billing) — and, optionally, the
+delivered file's own schema (the **record layout**), which is what separates "this value
+is wrong" from "this column is not in the file at all". Today an associate reads
 all three, holds them in their head, and looks for disagreements. It takes about three
 to six hours per order, it depends on who is doing it, and a miss reaches the
 customer.
@@ -33,7 +42,11 @@ customer.
 
 It reads the OSL, works out what it requires, traces every requirement into the
 configuration and then into the reports, and shows the associate a list of
-**findings**: the places where the three disagree. The associate decides each finding,
+**findings**: the places where they disagree. Since ADR-060 there is a **fourth**
+artifact where a delivery supplies one — the **record layout**, the delivered file's own
+schema of field names, types and sizes — so the tool can tell "the data is wrong" from
+"the file does not even have that column". A delivery that carries no record layout is
+checked exactly as it was before the slot existed. The associate decides each finding,
 OK or Not OK, and the tool produces a frozen one-page report with a PDF. The judgement
 stays with the person; the reading and the comparing move to the tool.
 
@@ -42,7 +55,8 @@ flowchart LR
     OSL[OSL<br/>what the customer asked for] --> V((Greenlight AI))
     CFG[ETL configuration<br/>what the extract was set to do] --> V
     REP[Output reports<br/>what actually came out] --> V
-    V --> F[Findings<br/>where the three disagree]
+    RL[Record layout<br/>the delivered file's own schema<br/><i>optional</i>] -.-> V
+    V --> F[Findings<br/>where they disagree]
     F --> A[Associate decides<br/>OK / Not OK]
     A --> R[Frozen one-page report<br/>+ PDF]
 ```
@@ -57,7 +71,14 @@ reliable at comparing two lists, adding counts, or checking that 755 is above 75
 the tool never asks it to. The model extracts what a document means into structured
 data; deterministic code compares the data. The result is that every finding is
 exact, repeatable, and explainable: the same inputs always produce the same findings,
-and each finding shows the evidence from all three artefacts side by side.
+and each finding shows the evidence from each artefact side by side — including the
+record layout, where the delivery supplied one.
+
+**One deliberate exception, and it is marked as one.** An administrator may write a
+check that no formula can express — *"does this look like the customer asked for?"* —
+and that one is judged by the model rather than computed. It is the only such surface,
+it is labelled as a judgement on the screen that creates it, and its answer is a review
+item rather than a verdict.
 
 ```mermaid
 flowchart TB
@@ -541,6 +562,100 @@ files, and read findings. What the controls buy them is that the tool answers in
 minute, answers the same way twice, and does not stop working because a budget ran out
 mid-month.
 
+## 11a. Asking the finished report
+
+The report answers the questions its author anticipated. A reviewer's real questions
+arrive afterwards — *why is this one high, did we see this last month, what does the rule
+actually say, what did nobody check* — and until recently the only way to answer them was
+to know the product well enough to find each answer on a different screen.
+
+A finalized report now carries an **Ask this report** panel. It answers about **that one
+run** and nothing else.
+
+**What makes it worth trusting is what it is not allowed to do.**
+
+| It does this | Not this |
+| --- | --- |
+| Answers from a **context pack the server assembles from the run id**, rebuilt on every question | Answers from whatever the browser sent. Nothing the client sends can add a fact |
+| Reads what the tool *derived*: findings, decisions, coverage, rules, the artifact inventory, the report's own text, and the last three runs of that configuration | Reads your rows or your cell values. Not the OSL, not the workbooks. The same check that guards every other prompt guards this one |
+| **Reports** figures | **Computes** them. Ask it to add two numbers and it tells you it reports figures rather than deriving them — every number it quotes was computed by code before the question was asked |
+| Shows a citation **only after the server has checked that identifier exists** in the pack | Shows a plausible-looking reference. A fabricated one is discarded, never dimmed and never displayed |
+| Says so when the answer is not in what it can see | Guesses |
+| Stores nothing — not the question, not the answer, not the conversation | Builds a history somebody has to govern later |
+
+It is **off until an administrator turns it on**, and that is deliberate: an install that
+upgrades should never silently gain an outbound model surface. Nine settings control it,
+including a per-person daily cap that is set to zero to withhold the feature during a
+staged rollout, and a switch — off by default, marked in the console as strongly as
+masked columns are — for whether it may see the per-column figures code computed.
+
+**For a manager the summary is one sentence:** it makes a finished report interrogable in
+plain English without giving the model anything it did not already see during the run,
+and without producing a record anybody has to retain.
+
+## 11b. How easily people find things
+
+An internal tool fails quietly. Nobody files a ticket saying "I could not find it"; they
+just go back to doing it by hand. Five things address that directly, and each exists
+because the alternative was somebody having to already know the answer.
+
+**One search box over the work.** The runs list filters on run number, customer, order,
+configuration id and who submitted it, from one field, with status chips beside it and a
+thirty-day count. Nobody has to learn a query syntax.
+
+**A front door for the console.** There are sixteen places in the admin console where an
+administrator can tell the tool something, and each is genuinely the right home for what
+it holds. Nobody new can be expected to pick. So **Tell the tool** takes a sentence in
+plain English and the model decides which surface it belongs on, drafting it there for a
+person to approve. The specialist screens stay exactly as they were — this adds a way in,
+it does not replace the way through.
+
+**A checklist that is not a wizard.** Setting up a delivery is seven steps with a tick
+beside each one that is done. It hides nothing, forces no order, and every step links to
+the screen that already does that job — and each says *why* it matters, because a reason
+is what makes somebody do a step properly rather than tick it.
+
+**A Guide inside each app**, written for whoever uses that app, generated from the same
+source as the training document so the two cannot drift apart.
+
+**Tooltips on by default.** Every field that reaches the model says so where it stands.
+An administrator cannot read a prompt, so the label is the only account they get of what
+a value does — and a console that says a field is background when it now decides
+something is worse than one that says nothing.
+
+And now the chat above, which is findability of a different kind: not *where is the
+screen* but *where in this report is the thing I am asking about*.
+
+## 11c. Adding a new delivery type, without engineering
+
+A question that decides whether a tool like this survives contact with a real business:
+**what happens when a customer sends a report nobody anticipated?**
+
+The answer here is that report types are **data an administrator edits**, not code a team
+ships. In the admin console: add the type, give it a label and a sentence saying what it
+is for the person uploading it, optionally say in plain words what the AI should look at,
+and upload up to three sample workbooks. The type appears on every submitter's upload
+form immediately. A generic parser reads any workbook that has no purpose-built one, so
+the new type is checked by the admin-defined checks from its first delivery — it simply
+has no fixed built-in check of its own.
+
+Two properties make this safe rather than merely possible:
+
+- **An empty catalogue means "use the defaults", never "accept nothing".** A fresh
+  install behaves exactly as it did before any of this was configurable.
+- **Guidance is additive.** A type with no AI context produces the same prompt the
+  pipeline sent before the feature existed. Configuring nothing changes nothing.
+
+**Try this setup** then runs everything code can run against the stored samples and says
+what happened — which sheets each sample carries, which names resolved, what every check
+would have done — with **no AI call and nothing saved**. It answers *is this wired up*,
+and it says plainly that it cannot tell you whether a check asks the right question.
+
+**What still needs engineering.** A report whose *layout* defeats the generic parser —
+merged headers, a cover sheet the resolver cannot skip, a pivot rather than a table — is
+a parser change. The parsers sit behind interfaces precisely so that this is the only
+code that changes, but it is code.
+
 ## 12. Why certain choices were made
 
 | Choice | Why |
@@ -559,6 +674,145 @@ mid-month.
 | A model's confidence can discard an answer, never authorise one | A model's stated confidence is not a calibrated probability. A system that lets a model skip a human by being sure fails hardest where it is most sure. |
 | The review list shrinks on human verdicts, never on the model's opinion | "Ten people saw this and none of them cared" is evidence. "The AI is 92% sure" is a tone of voice. |
 | The tool may revoke its own trust and never grant it | The safe direction is the only one worth automating. |
+
+## 11d. The case, split by who is asking
+
+The same tool answers two different questions depending on who is in the room. Both
+answers are below, and neither overstates what has been measured.
+
+### For a management audience
+
+| Question | Answer |
+| --- | --- |
+| **What does it change?** | A check that takes three to six hours of an associate's day becomes a review of a list somebody else assembled. The judgement stays with the person; the reading and the cross-referencing move to the tool. |
+| **What does it cost to run?** | A measured full validation: **33 seconds and roughly five cents** — about 30 calls, 30,000 tokens in and 2,800 out. A measured re-run cost a fifth of a cent, because 22 of its 23 calls were cache hits. |
+| **What stops the bill surprising us?** | A per-run token budget that halts rather than overspends; a cache that never sends the same content twice; a monthly warning band; and per-person, per-run spend on screen. Code does the bulk of the work, so the model is used where meaning must be read — the small part. |
+| **Are we locked in?** | No. No vendor library anywhere in the code. Changing model is four fields, and the golden set says immediately whether it was an improvement. |
+| **Does it decide anything?** | No. It never decides a delivery is acceptable, and nothing it learns takes effect until a person approves it. |
+| **What is the risk we are accepting?** | That a reviewer trusts it uniformly instead of correctly. The product's answer is to write its limits down where they are read — including inside the product — and to keep a random sample reviewed in full. |
+| **What is not proven yet?** | Precision and recall against real deliveries. The harness exists; the numbers are a UAT output. Anything in this brief not marked *measured* is an expectation. |
+
+### For a technical audience
+
+| Question | Answer |
+| --- | --- |
+| **Where is the non-determinism?** | Confined to reading meaning. Every comparison is Python. Two of nine stages make no model call; two more call only after a deterministic check has failed. |
+| **How is output handled?** | Pydantic-validated JSON per call, one retry with the validation error appended, constrained decoding where the endpoint supports it, and a record of whether the schema was sent. |
+| **How do you stop regressions?** | A golden set of synthetic OSLs with planted findings, run whenever a prompt or the model changes; prompt version in every cache key; 2,169 tests; an architecture test that enforces the dependency arrows. |
+| **What about PII?** | Masked at parse time from an admin-maintained column list; a tripwire scans every assembled prompt and fails closed; prompt logging off by default. Fixtures are synthetic and no real customer file enters the repository. |
+| **How does it run?** | Five containers. One relational database holds both the data and the job queue — SQLite by default, Postgres for scale — so there is no broker, no Redis and no object store to operate. |
+| **What happens when a parser meets a shape it does not know?** | It widens in code first — exact, separators-as-noise, same-words, a recorded spelling — and only then asks the model *which column did you mean*, checking the answer against the list it offered. A tie at any rung is a failure, not a guess. |
+| **What is the weakest part?** | The parsers. Every layout assumption came from synthetic fixtures; real files have not been seen. That is a known phase, deliberately not started, and the interfaces exist so it is the only code that changes. |
+
+## 12a. Measured against how AI systems are supposed to be built
+
+Most internal AI projects are judged on whether the demo impressed. That is the wrong
+test, and the published frameworks exist because enough organisations failed it. This
+section takes the practices those frameworks actually name and asks, for each, **what in
+this repository implements it** — and where the answer is *nothing yet*, says so.
+
+### The four that matter most to a regulated business
+
+**1. Keep the deterministic work deterministic.** The single most common failure in
+LLM-backed systems is asking the model to compute or compare and believing the answer.
+The rule here is the first line of the design: *the model reads and judges meaning; code
+does every comparison* — every value, set, range, operator, count and sequence is Python.
+Two of the nine stages make no model call at all, and two more call it only where the
+deterministic check has already failed. **Consequence:** the same delivery produces the
+same findings twice, which is what makes a QC tool auditable rather than merely clever.
+
+**2. Ground every answer in supplied context, and check the citations.** Grounding
+research is consistent that a model should answer from material it was handed and that
+every claim should be attributable to it. The report chat is the strict case: the context
+is assembled **by code from the run id** on every turn, so nothing the browser sends can
+introduce a fact; the prose streams; and each identifier the model cites is **checked
+against that context before a citation is displayed**. A fabricated reference is
+discarded rather than shown dimmed. **Consequence:** a reviewer can trust a citation
+because an unverifiable one never reaches the screen.
+
+**3. Constrain the output and validate it.** Every model call in the pipeline returns
+JSON validated against a declared schema, with one retry carrying the validation error
+back; where the endpoint supports constrained decoding the schema is sent with the
+request, and each call records whether it was. **Consequence:** a malformed answer is a
+handled case, not a crash and not a silently mis-parsed finding.
+
+**4. Measure before you trust, and keep measuring.** The practice literature converges on
+a curated golden dataset run as a regression gate, and on precision and recall as the
+frame for a detection tool. Here: a golden set of synthetic OSLs with known planted
+findings, run whenever a prompt or the model changes; a benchmark harness reporting
+precision and recall; and prompt versions baked into every cache key so a prompt change
+cannot silently serve old answers. **Consequence:** "we moved to a better model" becomes
+a measurable claim instead of an impression.
+
+### Governance, in the terms an auditor uses
+
+The [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
+organises AI risk into four functions. The mapping is close enough to be useful:
+
+| NIST function | What it asks for | Where it is, here |
+| --- | --- | --- |
+| **Govern** | Policies, accountability, an oversight culture | Eight hard rules a change is rejected against regardless of tests; 73 decision records, append-only, each saying what was decided and why; three roles with capabilities rather than role checks |
+| **Map** | Know what the system is doing and where it applies | Every OSL requirement traced and given a coverage state — checked, traced-but-unchecked, untraced, or needs-a-person. "Nobody checked this" is a first-class answer, not a silence |
+| **Measure** | Quantify performance and keep quantifying | The golden set, precision and recall, per-rule false-positive rates, cache hit rate, tokens and cost per run, a thirty-day count |
+| **Manage** | Act on what you measured; be able to stop | Approved rules run in **shadow** until their numbers justify activation; a per-run token budget that halts a runaway; queue hold, submission pause and maintenance mode; a fail-closed finalize gate with a written attestation |
+
+**Human oversight is structural, not a checkbox.** The EU AI Act's requirement for
+high-risk systems is that oversight be *real* rather than symbolic. Here a person decides
+every finding; the report cannot be frozen until every high-severity and every review
+finding has been decided and every coverage gap acknowledged, with what they were shown
+stored on the report; and **nothing the tool learns activates without a person approving
+it**. The tool never decides a delivery is acceptable.
+
+**Traceability.** Every model call writes a row — stage, provider, model, tokens,
+latency, retries, whether it was a cache hit, whether it failed. Every consequential
+action writes an audit row with who did it. The frozen report is generated once, hashed,
+and never regenerated.
+
+### Where it falls short, stated rather than buried
+
+- **Log retention is shorter than a high-risk deployer's floor.** Article 12 of the EU AI
+  Act expects deployers of high-risk systems to keep logs for **at least six months** and
+  to be able to reconstruct an individual AI-assisted decision afterwards. This tool's
+  retention default is **90 days**, and when a run is purged its call rows survive but
+  their link to the run is cleared — so the aggregate spend is preserved and the
+  *per-decision reconstruction is not*. If this system is ever scoped as high-risk, that
+  default and that unlinking both need revisiting. It is a setting, so the fix is a
+  decision rather than a project, but it is a decision nobody has taken.
+- **The benchmark numbers do not exist yet.** The harness is built and the golden set is
+  synthetic. Precision and recall against *real* deliveries are a UAT output, and every
+  figure in this brief that is not marked measured is an expectation.
+- **LLM-as-judge is used, with its known bias partly mitigated.** Stage 8 re-reads
+  high-severity findings, optionally through three independent lenses merged by code,
+  where disagreement downgrades to Review rather than resolving itself. The mitigation is
+  real; the practice literature's advice to check judge-human agreement on a labelled
+  sample is not yet done, because the labels come from UAT.
+- **No per-configuration cost ceiling.** The token budget is per run and per deployment,
+  not per customer. A known-expensive delivery cannot be given its own ceiling.
+
+### The design principles worth naming to a technical audience
+
+1. **The expensive, non-deterministic component is the smallest part.** The model reads;
+   everything else is ordinary software that can be tested.
+2. **The provider is a setting.** One adapter, two wire formats, no vendor SDK anywhere.
+   Changing model is four fields.
+3. **Nothing is sent twice.** A content-addressed cache keyed on exactly what was sent
+   plus the model plus the prompt version.
+4. **Fail closed, and say what failed.** A value that cannot be resolved becomes a "could
+   not evaluate" finding, never a silent skip.
+5. **Every number states its own assumptions.** The displaced-hours report names the
+   hours figure as one a person supplied, so a reader can disagree with the assumption
+   rather than the arithmetic. The cost screens show no currency at all until somebody
+   sets a rate, because a cost built on a rate nobody supplied gets quoted back as fact.
+
+That last one is the habit the rest depends on. A tool that overstates its own certainty
+gets trusted uniformly, and uniform trust in a QC tool is precisely the failure it exists
+to prevent.
+
+**Sources:** [NIST AI RMF](https://www.nist.gov/itl/ai-risk-management-framework) ·
+[EU AI Act Article 12, record-keeping](https://artificialintelligenceact.eu/article/12/) ·
+[EU AI Act Article 26, deployer obligations](https://artificialintelligenceact.eu/article/26/) ·
+[Microsoft, Guidelines for Human-AI Interaction](https://www.microsoft.com/en-us/haxtoolkit/ai-guidelines/) ·
+[Grounding and evaluation for LLMs, survey](https://arxiv.org/pdf/2407.12858)
 
 ## 13. Where it runs
 
@@ -599,8 +853,12 @@ against a precision and recall floor measured on real orders.
 
 ## 15. Where the build stands
 
-**Built and tested: phases 0 through 6.18a and 6.18f.** 1,514 automated tests, every
-linter and type checker clean, both applications building.
+**Built and tested: phases 0 through 6.23, plus phase 8.** 2,169 automated tests, every
+linter and type checker clean, both applications building. Since this section was last
+written: three roles with capabilities; a resolver that keeps going when a sheet, column
+or label is not where it was expected; anomalies, spend and guided decoding; the record
+layout as a fourth artifact, product codes and one attribute dictionary; drafts that can
+be finished; and the report chat.
 
 | Done | Still to do |
 | --- | --- |

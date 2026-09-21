@@ -41,7 +41,9 @@ class ChatSettings:
         model: Which model answers. Empty means the pipeline's.
         max_tokens: The ceiling on one answer.
         temperature: 0.0–1.0, derived from the whole-percent row.
-        max_questions_per_run: How long one conversation may go.
+        max_questions_per_run: How many questions one person may ask about one run.
+            Counted from `llm_calls` rather than from the transcript the browser sent,
+            so reopening the panel does not reset it (ADR-072).
         max_questions_per_day: The per-person daily ceiling. Zero denies the feature,
             which is the lever for a staged rollout.
         max_turns: How much transcript is re-sent with each question — the main cost

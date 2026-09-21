@@ -135,6 +135,31 @@ class TestTheUploadLimitIsRead:
         assert response.status_code == 400
         assert "1 MB limit" in response.json()["detail"]
 
+    def test_the_admin_consoles_own_uploads_obey_it_too(self, client: TestClient, api: str) -> None:
+        """A limit an administrator sets applies to the administrator.
+
+        `store_upload` has always taken the ceiling as an argument, and only the
+        submission path ever passed one — so the console's sample-workbook upload took
+        the module default however low the console was set. An administrator lowering
+        the limit saw it enforced on a submitter and not on themselves, while the
+        setting's own help line said it was enforced on every upload.
+        """
+        _set(client, api, "uploads.max_mb", 1)
+        oversized = b"x" * (2 * 1024 * 1024)
+        response = client.post(
+            f"{api}/admin/artifact-types/dirt/samples",
+            data={"label": "Too big"},
+            files={
+                "file": (
+                    "sample.xlsx",
+                    oversized,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert response.status_code == 400
+        assert "1 MB limit" in response.json()["detail"]
+
 
 class TestThePurgeActsOnIt:
     """A window nothing enforces is a promise, not a retention policy."""

@@ -2892,3 +2892,142 @@ show that person, and a capability guarding no data is a row in the table nobody
 explain later (ADR-049). Configuring it needs `MANAGE_SETTINGS`, where every other
 setting already sits. Turning it off mid-conversation is safe: the panel disappears on
 the next load and the endpoint refuses, and there is nothing left behind to clean up.
+
+---
+
+## ADR-071 — `api/` may import a pure pipeline leaf, never a stage
+
+**Status:** accepted · 2026-09-21 · review follow-up
+
+**Context.** `CLAUDE.md`, `architecture.md` and `standards/python.md` have all said since
+Phase 0 that `api/` never imports `pipeline/`. By Phase 8 the code broke it in three
+places: `api/routers/runs.py` imported `describe_rule` from `pipeline/s4_trace.py`,
+`api/gate.py` imported `pipeline/coverage.py`, and `api/routers/admin.py` imported
+`pipeline/guidance.py`. Each was reached for the same reason — a pure function that
+happened to live under `pipeline/` — and nothing checked, so nobody found out until
+somebody read for it. Phase 8 then built `textfit.py` specifically so the chat would not
+break the rule, while three imports sat there breaking it.
+
+The session log raised this on 2026-09-20 and left the decision open: either the rule
+should say what it means, or all three should move.
+
+**Decision.** The rule says what it means. **The API may import a pure leaf under
+`pipeline/`; it may never import a stage.**
+
+A **stage** owns a step of the run: it reaches a prompt, a model client or a
+`RunContext` full of parsed artifacts. `run.py` and `s1_parse` … `s9_summarize` are
+stages. Importing one into the API process drags the prompt registry and the adapter in
+behind it, which is the coupling the original rule was written to prevent — and, for
+`describe_rule`, it dragged all of that in to render one string.
+
+A **leaf** is plain code over plain data — `context.py`, `coverage.py`, `guidance.py`.
+Reading one from a router costs nothing and couples nothing.
+
+Two things follow, and both are done rather than promised:
+
+1. **`describe_rule` moved down.** It renders a `Rule`, so it lives in
+   `rules/describe.py` beside the `Rule` it renders, with `render_value` beside it.
+   `s4_trace`, `s5_compare`, `s6_reverse` and the requirements endpoint all read it from
+   there. It is the one import the narrowed rule still refused, because a stage is
+   exactly what `s4_trace` is.
+2. **A test enforces it.** `tests/test_architecture.py` parses every module under `api/`
+   and fails on any import of a stage, or of any `pipeline/` module outside an explicit
+   allow-list — and separately checks that every module *on* that allow-list is free of
+   stage imports itself, so the list narrows the rule rather than holing it.
+
+**Consequences.** The allow-list is the decision, written down where a change to it is
+visible in a diff. Adding a name to it is a deliberate act that must survive the
+leaf-is-really-a-leaf check, so the ordinary way to satisfy this rule stays the one
+`textfit.py` and `rules/describe.py` both took: move the shared code **down**, to a
+module neither side has to reach across the arrow for.
+
+The narrowing is a narrowing, not a loosening: three imports were legal before this ADR
+under a rule that forbade them, and one of the three is now illegal under a rule that
+allows the other two. A rule a test enforces is a rule; a rule only a document states is
+a wish.
+
+---
+
+## ADR-072 — The per-run chat cap is counted from the call record, not the transcript
+
+**Status:** accepted · 2026-09-21 · review follow-up, amending ADR-070
+
+**Context.** ADR-070 settled that nothing about a conversation is stored, which is why
+the transcript is component state in the browser and is re-sent with every question. Two
+caps guard the feature: `chat.max_questions_per_day`, counted per person from
+`llm_calls`, and `chat.max_questions_per_run`.
+
+The per-run cap was counted by looking at the transcript in the request body and
+counting the turns that were not the assistant's. That is the client's own account of
+how long its conversation has been. A panel that sent an empty transcript started again
+from zero, so the only thing keeping a conversation inside an administrator's limit was
+the browser choosing to stay there — and the panel's own "close it and open it again to
+start a new one" was a documented way to do exactly that. The endpoint's docstring
+claimed the transcript was "capped here as well as in the panel", which was true of its
+*length* and not of the count taken from it.
+
+**Decision.** The per-run cap is counted from `llm_calls`, filtered to the chat stage,
+this run and this person — the same rows the daily cap already uses, written by the
+server for every call in the product.
+
+**This changes what the setting means, so the setting says so.** It is no longer "how
+long one conversation may go", which was only ever true because the count was
+forgeable; it is **how many questions one person may ask about one report**, which is
+what its name said all along. The label is now *Questions per run, per person*, the help
+line says reopening the panel does not reset it, and the refusal says the same thing to
+the person who hits it rather than telling them to reopen the panel.
+
+**Nothing is stored that was not stored already.** A call row exists for every call in
+the product and carries the run and the person, never the question or the answer. ADR-070
+stands: no transcript, no question, no answer, nothing to leak from.
+
+**Consequences.** The cap is now a cap. A reviewer who spends it on one report still has
+the report, the run screens and every other report — the count is per run, so it closes
+one panel and no others. An administrator who wants the old, looser behaviour raises the
+number, which is a lever that now does what the console says it does.
+
+---
+
+## ADR-073 — One environment variable per setting
+
+**Status:** accepted · 2026-09-21 · review follow-up
+
+**Context.** The sampling temperature had two names for one value.
+`config/registry.py` declared `llm.temperature_pct` / `LLM_TEMPERATURE_PCT` in whole
+percent, because the console renders integers and a float field would have needed a kind
+of its own for one row. `LLMSettings.from_env()` read a float `LLM_TEMPERATURE`. The API
+and the worker resolve settings through ADR-023's layers, so they read the percent form;
+the CLI reads `from_env`, so it read the float. `.env.example` documented the float and
+never mentioned the other.
+
+The result: a deployment that set `LLM_TEMPERATURE=0.7` in the file the deployment guide
+tells it to copy changed the CLI, changed nothing about a real run, and was told nothing.
+It has been harmless only because both default to zero and the project has every reason
+to leave it there.
+
+**Decision.** One name per setting, and for this one the name is the percent form,
+because it is the one the console and the running product already agree on.
+`LLMSettings.from_env()` reads `LLM_TEMPERATURE_PCT`. `LLM_TEMPERATURE` is honoured
+where it is read, with a warning naming its replacement, so an existing `.env` keeps
+working and its owner finds out rather than guessing later.
+
+`tests/config/test_registry.py` asserts that no two settings claim one environment
+variable, and — the other half of the same problem — that every setting in the registry
+is named in `.env.example`. Twenty-nine of sixty-four were not, including the whole
+report-chat group, which ships off and is therefore the one group a deployment must find
+in order to use at all. A setting discoverable only by reading `config/registry.py` is
+not configurable by the person who deploys.
+
+**Consequences.** `.env.example` is the whole surface again, which is what its own header
+promises when it says a setting nobody has touched in the console still comes from there.
+Adding a setting now means adding a line to that file, and a test says so at the moment
+it is forgotten rather than at the moment somebody needs it.
+
+**The value beside the name is checked too, and that is the half that bites.** This layer
+*overrides* the built-in default, so a stale value here is not documentation that has
+fallen behind — it is a setting every deployment copying the file is actively changing
+without meaning to. `GREENLIGHT_AI_UI_THEME_LOCKED` is the proof: Phase 6.14e moved the
+default to on deliberately, this file went on saying `false`, and so every deployment
+that followed the deployment guide quietly unlocked the theme again. The test types and
+bounds each value as well, because one outside a setting's own minimum or maximum is one
+the console would refuse and this file would still hand out.
